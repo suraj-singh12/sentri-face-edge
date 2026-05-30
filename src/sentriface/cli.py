@@ -96,6 +96,22 @@ def main() -> int:
     reject = subcommands.add_parser("reject-pending", help="Reject a pending face addition")
     reject.add_argument("pending_id")
 
+    init_scan = subcommands.add_parser("init-scan", help="Scan images and cluster faces for initial setup")
+    init_scan.add_argument("source", type=Path)
+    init_scan.add_argument("--force-bad-quality", action="store_true")
+
+    init_groups = subcommands.add_parser("init-groups", help="List groups in an init session")
+    init_groups.add_argument("session_id")
+
+    init_confirm = subcommands.add_parser("init-confirm", help="Confirm an init group as a new person")
+    init_confirm.add_argument("session_id")
+    init_confirm.add_argument("group_id")
+    init_confirm.add_argument("name")
+
+    init_reject = subcommands.add_parser("init-reject", help="Reject an init group")
+    init_reject.add_argument("session_id")
+    init_reject.add_argument("group_id")
+
     args = parser.parse_args()
     profile = _select_profile(args.profile)
     config = config_for_hardware(profile, data_dir=args.data_dir)
@@ -219,6 +235,40 @@ def main() -> int:
             engine.reject_pending_addition(args.pending_id)
             return _emit(args, {"rejected": 1})
 
+        if args.command == "init-scan":
+            session = engine.create_init_session(
+                args.source,
+                allow_bad_quality=args.force_bad_quality,
+            )
+            groups = engine.list_init_groups(session.session_id)
+            return _emit(
+                args,
+                {
+                    "session_id": session.session_id,
+                    "groups": [_init_group(group) for group in groups],
+                },
+            )
+
+        if args.command == "init-groups":
+            groups = engine.list_init_groups(args.session_id)
+            return _emit(args, {"groups": [_init_group(group) for group in groups]})
+
+        if args.command == "init-confirm":
+            person_id = engine.confirm_init_group(args.session_id, args.group_id, args.name)
+            return _emit(
+                args,
+                {
+                    "session_id": args.session_id,
+                    "group_id": args.group_id,
+                    "person_id": person_id,
+                    "confirmed": "init_group",
+                },
+            )
+
+        if args.command == "init-reject":
+            engine.reject_init_group(args.session_id, args.group_id)
+            return _emit(args, {"session_id": args.session_id, "group_id": args.group_id, "rejected": 1})
+
         return 1
     except SentriFaceError as exc:
         return _emit_error(args, str(exc))
@@ -304,6 +354,24 @@ def _print_human(payload: dict[str, Any]) -> None:
             )
             _print_reasons(item["quality"]["reasons"])
         return
+    if "groups" in payload:
+        if "session_id" in payload:
+            print(f"session_id={payload['session_id']}")
+        groups = payload["groups"]
+        if not groups:
+            print("groups=0")
+            return
+        for group in groups:
+            print(
+                f"group_id={group['group_id']} status={group['status']} "
+                f"faces={len(group['faces'])} avg_quality={group['avg_quality']:.3f}"
+            )
+            for face in group["faces"]:
+                print(
+                    f"  face_id={face['init_face_id']} source={face['source_image']} "
+                    f"quality={face['quality']['status']} quality_score={face['quality']['score']:.3f}"
+                )
+        return
     for key, value in payload.items():
         print(f"{key}={value}")
 
@@ -339,6 +407,25 @@ def _rejected(rejected, index: int) -> dict[str, Any]:
         "index": index,
         "source_image": rejected.source_image,
         "quality": _quality(rejected.quality),
+    }
+
+
+def _init_group(group) -> dict[str, Any]:
+    qualities = [face.quality.score for face in group.faces]
+    avg_quality = sum(qualities) / len(qualities) if qualities else 0.0
+    return {
+        "group_id": group.group_id,
+        "session_id": group.session_id,
+        "status": group.status,
+        "avg_quality": avg_quality,
+        "faces": [
+            {
+                "init_face_id": face.init_face_id,
+                "source_image": face.source_image,
+                "quality": _quality(face.quality),
+            }
+            for face in group.faces
+        ],
     }
 
 

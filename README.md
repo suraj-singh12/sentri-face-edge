@@ -131,6 +131,18 @@ PYTHONPATH=src python3 -m sentriface.cli --runtime onnx queue-add path/to/image.
 images -> detect -> encode -> cluster -> user confirms groups -> save identities
 ```
 
+CLI review flow:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-scan path/to/images
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-groups SESSION_ID
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-confirm SESSION_ID GROUP_ID "Person Name"
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-reject SESSION_ID GROUP_ID
+```
+
+`init-scan` does not create people immediately. It creates a durable review
+session, clusters likely-same-person faces, and waits for confirmation.
+
 ### Add
 
 ```text

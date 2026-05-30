@@ -11,6 +11,9 @@ from sentriface.models import (
     Embedding,
     EmbeddingRecord,
     FaceBox,
+    InitFace,
+    InitGroup,
+    InitSession,
     Match,
     MatchDecision,
     PendingAddition,
@@ -20,7 +23,7 @@ from sentriface.models import (
     utc_now,
 )
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class SQLiteIdentityStore:
@@ -44,6 +47,9 @@ class SQLiteIdentityStore:
             if version == 1:
                 _migrate_1_to_2(conn)
                 version = 2
+            if version == 2:
+                _migrate_2_to_3(conn)
+                version = 3
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -217,6 +223,117 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             conn.execute("DELETE FROM pending_additions WHERE pending_id = ?", (pending_id,))
 
+    def create_init_session(self, source_path: str) -> InitSession:
+        session = InitSession(
+            session_id=str(uuid.uuid4()),
+            source_path=source_path,
+            status="pending",
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO init_sessions(session_id, source_path, status, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (session.session_id, session.source_path, session.status, session.created_at),
+            )
+        return session
+
+    def save_init_faces(self, faces: list[InitFace]) -> None:
+        if not faces:
+            return
+        with self._connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO init_faces(
+                    init_face_id, session_id, group_id, source_image,
+                    box_x, box_y, box_width, box_height, box_confidence,
+                    face_quality_score, landmarks, crop_path, vector,
+                    quality_status, quality_score, quality_reasons, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        face.init_face_id,
+                        face.session_id,
+                        face.group_id,
+                        face.source_image,
+                        face.face.box.x,
+                        face.face.box.y,
+                        face.face.box.width,
+                        face.face.box.height,
+                        face.face.box.confidence,
+                        face.face.quality_score,
+                        json.dumps(face.face.landmarks),
+                        face.face.crop_path,
+                        _pack_embedding(face.vector),
+                        face.quality.status.value,
+                        face.quality.score,
+                        json.dumps(face.quality.reasons),
+                        face.created_at,
+                    )
+                    for face in faces
+                ],
+            )
+
+    def get_init_session(self, session_id: str) -> InitSession | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT session_id, source_path, status, created_at
+                FROM init_sessions
+                WHERE session_id = ?
+                """,
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return InitSession(
+            session_id=row["session_id"],
+            source_path=row["source_path"],
+            status=row["status"],
+            created_at=row["created_at"],
+        )
+
+    def list_init_groups(self, session_id: str) -> list[InitGroup]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT f.*, COALESCE(g.status, 'pending') AS group_status
+                FROM init_faces f
+                LEFT JOIN init_groups g
+                  ON g.session_id = f.session_id AND g.group_id = f.group_id
+                WHERE f.session_id = ?
+                ORDER BY f.group_id, f.created_at
+                """,
+                (session_id,),
+            ).fetchall()
+        groups: dict[str, InitGroup] = {}
+        for row in rows:
+            group_id = row["group_id"]
+            if group_id not in groups:
+                groups[group_id] = InitGroup(
+                    group_id=group_id,
+                    session_id=session_id,
+                    status=row["group_status"],
+                    faces=[],
+                )
+            groups[group_id].faces.append(_init_face_from_row(row))
+        return list(groups.values())
+
+    def mark_init_group_status(self, session_id: str, group_id: str, status: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO init_groups(session_id, group_id, status, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(session_id, group_id)
+                DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at
+                """,
+                (session_id, group_id, status, utc_now()),
+            )
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -298,6 +415,54 @@ def _migrate_1_to_2(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA user_version = 2")
 
 
+def _migrate_2_to_3(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS init_sessions (
+            session_id TEXT PRIMARY KEY,
+            source_path TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS init_faces (
+            init_face_id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            group_id TEXT NOT NULL,
+            source_image TEXT NOT NULL,
+            box_x INTEGER NOT NULL,
+            box_y INTEGER NOT NULL,
+            box_width INTEGER NOT NULL,
+            box_height INTEGER NOT NULL,
+            box_confidence REAL NOT NULL,
+            face_quality_score REAL NOT NULL,
+            landmarks TEXT,
+            crop_path TEXT,
+            vector BLOB NOT NULL,
+            quality_status TEXT NOT NULL,
+            quality_score REAL NOT NULL,
+            quality_reasons TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(session_id) REFERENCES init_sessions(session_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_init_faces_session_group
+        ON init_faces(session_id, group_id);
+
+        CREATE TABLE IF NOT EXISTS init_groups (
+            session_id TEXT NOT NULL,
+            group_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(session_id, group_id),
+            FOREIGN KEY(session_id) REFERENCES init_sessions(session_id)
+        );
+
+        PRAGMA user_version = 3;
+        """
+    )
+
+
 def _pending_from_row(row: sqlite3.Row) -> PendingAddition:
     raw_landmarks = json.loads(row["landmarks"]) if row["landmarks"] else None
     landmarks = tuple(tuple(point) for point in raw_landmarks) if raw_landmarks else None
@@ -330,6 +495,36 @@ def _pending_from_row(row: sqlite3.Row) -> PendingAddition:
         quality=QualityReport(
             status=QualityStatus(row["quality_status"]),
             score=row["pending_quality_score"],
+            reasons=tuple(json.loads(row["quality_reasons"])),
+        ),
+        created_at=row["created_at"],
+    )
+
+
+def _init_face_from_row(row: sqlite3.Row) -> InitFace:
+    raw_landmarks = json.loads(row["landmarks"]) if row["landmarks"] else None
+    landmarks = tuple(tuple(point) for point in raw_landmarks) if raw_landmarks else None
+    return InitFace(
+        init_face_id=row["init_face_id"],
+        session_id=row["session_id"],
+        group_id=row["group_id"],
+        source_image=row["source_image"],
+        face=DetectedFace(
+            box=FaceBox(
+                x=row["box_x"],
+                y=row["box_y"],
+                width=row["box_width"],
+                height=row["box_height"],
+                confidence=row["box_confidence"],
+            ),
+            quality_score=row["face_quality_score"],
+            landmarks=landmarks,
+            crop_path=row["crop_path"],
+        ),
+        vector=_unpack_embedding(row["vector"]),
+        quality=QualityReport(
+            status=QualityStatus(row["quality_status"]),
+            score=row["quality_score"],
             reasons=tuple(json.loads(row["quality_reasons"])),
         ),
         created_at=row["created_at"],

@@ -101,3 +101,31 @@ class RejectedFace:
     source_image: str
     face: DetectedFace
     quality: QualityReport
+
+
+@dataclass(frozen=True)
+class InitFace:
+    init_face_id: str
+    session_id: str
+    group_id: str
+    source_image: str
+    face: DetectedFace
+    vector: Embedding
+    quality: QualityReport
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class InitSession:
+    session_id: str
+    source_path: str
+    status: str
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class InitGroup:
+    group_id: str
+    session_id: str
+    faces: list[InitFace]
+    status: str = "pending"

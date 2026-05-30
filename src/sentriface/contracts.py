@@ -3,7 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from sentriface.models import DetectedFace, Embedding, EmbeddingRecord, PendingAddition, Person
+from sentriface.models import (
+    DetectedFace,
+    Embedding,
+    EmbeddingRecord,
+    InitFace,
+    InitGroup,
+    InitSession,
+    PendingAddition,
+    Person,
+)
 
 
 class FaceDetector(Protocol):
@@ -61,3 +70,18 @@ class IdentityStore(Protocol):
 
     def delete_pending_addition(self, pending_id: str) -> None:
         """Remove a pending addition after review."""
+
+    def create_init_session(self, source_path: str) -> InitSession:
+        """Create a durable initialization review session."""
+
+    def save_init_faces(self, faces: list[InitFace]) -> None:
+        """Persist clustered initialization faces."""
+
+    def get_init_session(self, session_id: str) -> InitSession | None:
+        """Load one initialization session."""
+
+    def list_init_groups(self, session_id: str) -> list[InitGroup]:
+        """List grouped faces in an initialization session."""
+
+    def mark_init_group_status(self, session_id: str, group_id: str, status: str) -> None:
+        """Mark an initialization group reviewed or rejected."""
