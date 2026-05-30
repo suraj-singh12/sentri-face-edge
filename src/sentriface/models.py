@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any
+
+
+Embedding = tuple[float, ...]
+Landmarks = tuple[tuple[float, float], ...]
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+@dataclass(frozen=True)
+class FaceBox:
+    x: int
+    y: int
+    width: int
+    height: int
+    confidence: float
+
+
+@dataclass(frozen=True)
+class DetectedFace:
+    box: FaceBox
+    quality_score: float
+    landmarks: Landmarks | None = None
+    crop_path: str | None = None
+
+
+@dataclass(frozen=True)
+class Person:
+    person_id: str
+    name: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class EmbeddingRecord:
+    embedding_id: str
+    person_id: str
+    vector: Embedding
+    quality_score: float
+    source_image: str | None = None
+    crop_path: str | None = None
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class Match:
+    person_id: str
+    score: float
+    embedding_id: str
+
+
+class MatchDecision(str, Enum):
+    STRONG = "strong"
+    AMBIGUOUS = "ambiguous"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class RecognitionResult:
+    face: DetectedFace
+    matches: list[Match]
+    decision: MatchDecision
+
+
+@dataclass(frozen=True)
+class PendingAddition:
+    pending_id: str
+    source_image: str
+    face: DetectedFace
+    vector: Embedding
+    matches: list[Match]
+    decision: MatchDecision
+    created_at: str = field(default_factory=utc_now)

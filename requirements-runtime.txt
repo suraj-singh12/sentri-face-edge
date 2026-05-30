@@ -1,0 +1,5 @@
+numpy>=1.26,<2.0
+opencv-python-headless>=4.9,<5.0
+onnxruntime>=1.18,<2.0
+
+hnswlib>=0.8
