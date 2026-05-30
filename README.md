@@ -105,6 +105,24 @@ PYTHONPATH=src python3 -m sentriface.cli --runtime onnx confirm-new PENDING_ID "
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx reject-pending PENDING_ID
 ```
 
+Face additions are quality-gated before they enter the pending queue. The engine
+checks detector confidence, face size, blur, brightness, crop validity, and
+landmark availability.
+
+Possible quality states:
+
+```text
+good -> safe to queue/enroll
+warn -> accepted, but reasons are shown
+bad  -> rejected by default
+```
+
+Force a bad-quality face only when you intentionally want it:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx queue-add path/to/image.jpg --force-bad-quality
+```
+
 ## Workflows
 
 ### Init_Add

@@ -16,9 +16,10 @@ class WholeImageFaceDetector:
     def detect(self, image_path: Path) -> list[DetectedFace]:
         if not image_path.exists():
             raise FileNotFoundError(image_path)
+        width, height = _image_size(image_path)
         return [
             DetectedFace(
-                box=FaceBox(x=0, y=0, width=0, height=0, confidence=1.0),
+                box=FaceBox(x=0, y=0, width=width, height=height, confidence=1.0),
                 quality_score=1.0,
                 crop_path=None,
             )
@@ -39,3 +40,15 @@ class HashFaceEmbedder:
         norm = sum(value * value for value in values) ** 0.5 or 1.0
         return tuple(value / norm for value in values)
 
+
+def _image_size(image_path: Path) -> tuple[int, int]:
+    try:
+        import cv2
+
+        image = cv2.imread(str(image_path))
+        if image is not None:
+            height, width = image.shape[:2]
+            return width, height
+    except ImportError:
+        pass
+    return 112, 112

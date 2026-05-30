@@ -15,10 +15,12 @@ from sentriface.models import (
     MatchDecision,
     PendingAddition,
     Person,
+    QualityReport,
+    QualityStatus,
     utc_now,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class SQLiteIdentityStore:
@@ -39,6 +41,9 @@ class SQLiteIdentityStore:
             if version == 0:
                 _migrate_0_to_1(conn)
                 version = 1
+            if version == 1:
+                _migrate_1_to_2(conn)
+                version = 2
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -153,9 +158,10 @@ class SQLiteIdentityStore:
                 INSERT OR REPLACE INTO pending_additions(
                     pending_id, source_image, box_x, box_y, box_width, box_height,
                     box_confidence, quality_score, landmarks, crop_path, vector,
-                    matches, decision, created_at
+                    matches, decision, quality_status, pending_quality_score,
+                    quality_reasons, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     pending.pending_id,
@@ -171,6 +177,9 @@ class SQLiteIdentityStore:
                     _pack_embedding(pending.vector),
                     json.dumps([match.__dict__ for match in pending.matches]),
                     pending.decision.value,
+                    pending.quality.status.value,
+                    pending.quality.score,
+                    json.dumps(pending.quality.reasons),
                     pending.created_at,
                 ),
             )
@@ -181,7 +190,8 @@ class SQLiteIdentityStore:
                 """
                 SELECT pending_id, source_image, box_x, box_y, box_width, box_height,
                        box_confidence, quality_score, landmarks, crop_path, vector,
-                       matches, decision, created_at
+                       matches, decision, quality_status, pending_quality_score,
+                       quality_reasons, created_at
                 FROM pending_additions
                 WHERE pending_id = ?
                 """,
@@ -195,7 +205,8 @@ class SQLiteIdentityStore:
                 """
                 SELECT pending_id, source_image, box_x, box_y, box_width, box_height,
                        box_confidence, quality_score, landmarks, crop_path, vector,
-                       matches, decision, created_at
+                       matches, decision, quality_status, pending_quality_score,
+                       quality_reasons, created_at
                 FROM pending_additions
                 ORDER BY created_at ASC
                 """
@@ -260,12 +271,31 @@ def _migrate_0_to_1(conn: sqlite3.Connection) -> None:
             vector BLOB NOT NULL,
             matches TEXT NOT NULL,
             decision TEXT NOT NULL,
+            quality_status TEXT NOT NULL DEFAULT 'warn',
+            pending_quality_score REAL NOT NULL DEFAULT 0,
+            quality_reasons TEXT NOT NULL DEFAULT '[]',
             created_at TEXT NOT NULL
         );
 
         PRAGMA user_version = 1;
         """
     )
+
+
+def _migrate_1_to_2(conn: sqlite3.Connection) -> None:
+    columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(pending_additions)").fetchall()
+    }
+    if "quality_status" not in columns:
+        conn.execute("ALTER TABLE pending_additions ADD COLUMN quality_status TEXT NOT NULL DEFAULT 'warn'")
+    if "pending_quality_score" not in columns:
+        conn.execute(
+            "ALTER TABLE pending_additions ADD COLUMN pending_quality_score REAL NOT NULL DEFAULT 0"
+        )
+    if "quality_reasons" not in columns:
+        conn.execute("ALTER TABLE pending_additions ADD COLUMN quality_reasons TEXT NOT NULL DEFAULT '[]'")
+    conn.execute("PRAGMA user_version = 2")
 
 
 def _pending_from_row(row: sqlite3.Row) -> PendingAddition:
@@ -297,5 +327,10 @@ def _pending_from_row(row: sqlite3.Row) -> PendingAddition:
         vector=_unpack_embedding(row["vector"]),
         matches=matches,
         decision=MatchDecision(row["decision"]),
+        quality=QualityReport(
+            status=QualityStatus(row["quality_status"]),
+            score=row["pending_quality_score"],
+            reasons=tuple(json.loads(row["quality_reasons"])),
+        ),
         created_at=row["created_at"],
     )

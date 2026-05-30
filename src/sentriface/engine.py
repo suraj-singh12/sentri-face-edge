@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+from sentriface.components.image_ops import load_bgr_image
+from sentriface.components.quality import FaceQualityEvaluator
 from sentriface.config import RuntimeConfig
 from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, IdentityStore
 from sentriface.models import (
@@ -10,6 +12,8 @@ from sentriface.models import (
     MatchDecision,
     PendingAddition,
     Person,
+    QualityStatus,
+    RejectedFace,
     RecognitionResult,
 )
 
@@ -28,6 +32,7 @@ class FaceEngine:
         self.embedder = embedder
         self.index = index
         self.store = store
+        self.quality = FaceQualityEvaluator(config)
 
     def initialize(self) -> None:
         self.store.initialize()
@@ -35,7 +40,9 @@ class FaceEngine:
 
     def recognize(self, image_path: Path) -> list[RecognitionResult]:
         results: list[RecognitionResult] = []
+        image = load_bgr_image(image_path)
         for face in self.detector.detect(image_path):
+            quality = self.quality.evaluate(image, face)
             vector = self.embedder.encode(image_path, face)
             matches = self.index.search(vector, self.config.top_k)
             results.append(
@@ -43,13 +50,34 @@ class FaceEngine:
                     face=face,
                     matches=matches,
                     decision=self._decide(matches),
+                    quality=quality,
                 )
             )
         return results
 
-    def prepare_additions(self, image_path: Path) -> list[PendingAddition]:
+    def prepare_additions(self, image_path: Path, allow_bad_quality: bool = False) -> list[PendingAddition]:
+        prepared = self.prepare_additions_with_rejections(image_path, allow_bad_quality)
+        return prepared.accepted
+
+    def prepare_additions_with_rejections(
+        self,
+        image_path: Path,
+        allow_bad_quality: bool = False,
+    ) -> "PreparedAdditions":
         additions: list[PendingAddition] = []
+        rejected: list[RejectedFace] = []
+        image = load_bgr_image(image_path)
         for face in self.detector.detect(image_path):
+            quality = self.quality.evaluate(image, face)
+            if quality.status == QualityStatus.BAD and not allow_bad_quality:
+                rejected.append(
+                    RejectedFace(
+                        source_image=str(image_path),
+                        face=face,
+                        quality=quality,
+                    )
+                )
+                continue
             vector = self.embedder.encode(image_path, face)
             matches = self.index.search(vector, self.config.top_k)
             additions.append(
@@ -60,15 +88,16 @@ class FaceEngine:
                     vector=vector,
                     matches=matches,
                     decision=self._decide(matches),
+                    quality=quality,
                 )
             )
-        return additions
+        return PreparedAdditions(accepted=additions, rejected=rejected)
 
-    def queue_additions(self, image_path: Path) -> list[PendingAddition]:
-        additions = self.prepare_additions(image_path)
-        for pending in additions:
+    def queue_additions(self, image_path: Path, allow_bad_quality: bool = False) -> "PreparedAdditions":
+        prepared = self.prepare_additions_with_rejections(image_path, allow_bad_quality)
+        for pending in prepared.accepted:
             self.store.save_pending_addition(pending)
-        return additions
+        return prepared
 
     def list_pending_additions(self) -> list[PendingAddition]:
         return self.store.list_pending_additions()
@@ -132,3 +161,9 @@ class FaceEngine:
         if best >= self.config.medium_confidence:
             return MatchDecision.AMBIGUOUS
         return MatchDecision.UNKNOWN
+
+
+class PreparedAdditions:
+    def __init__(self, accepted: list[PendingAddition], rejected: list[RejectedFace]) -> None:
+        self.accepted = accepted
+        self.rejected = rejected

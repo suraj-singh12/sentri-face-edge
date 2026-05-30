@@ -63,11 +63,25 @@ class MatchDecision(str, Enum):
     UNKNOWN = "unknown"
 
 
+class QualityStatus(str, Enum):
+    GOOD = "good"
+    WARN = "warn"
+    BAD = "bad"
+
+
+@dataclass(frozen=True)
+class QualityReport:
+    status: QualityStatus
+    score: float
+    reasons: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True)
 class RecognitionResult:
     face: DetectedFace
     matches: list[Match]
     decision: MatchDecision
+    quality: QualityReport | None = None
 
 
 @dataclass(frozen=True)
@@ -78,4 +92,12 @@ class PendingAddition:
     vector: Embedding
     matches: list[Match]
     decision: MatchDecision
+    quality: QualityReport
     created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class RejectedFace:
+    source_image: str
+    face: DetectedFace
+    quality: QualityReport

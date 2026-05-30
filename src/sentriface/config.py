@@ -22,6 +22,13 @@ class RuntimeConfig:
     top_k: int = 3
     high_confidence: float = 0.62
     medium_confidence: float = 0.48
+    min_detector_confidence: float = 0.55
+    min_face_size: int = 48
+    min_quality_score: float = 0.55
+    warn_quality_score: float = 0.72
+    blur_threshold: float = 35.0
+    dark_threshold: float = 35.0
+    bright_threshold: float = 220.0
     max_workers: int = 1
     max_image_edge: int = 960
     detector_input_size: int = 640

@@ -4,22 +4,35 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 from sentriface.cli import build_dev_engine
-from sentriface.models import MatchDecision
+from sentriface.config import RuntimeConfig
+from sentriface.models import MatchDecision, QualityStatus
 
 
 class EngineWorkflowTest(unittest.TestCase):
+    def _write_image(self, image: Path) -> None:
+        canvas = np.full((160, 160, 3), 128, dtype=np.uint8)
+        cv2.rectangle(canvas, (35, 35), (125, 125), (220, 220, 220), -1)
+        cv2.circle(canvas, (62, 70), 7, (20, 20, 20), -1)
+        cv2.circle(canvas, (98, 70), 7, (20, 20, 20), -1)
+        cv2.ellipse(canvas, (80, 100), (28, 12), 0, 0, 180, (20, 20, 20), 2)
+        cv2.imwrite(str(image), canvas)
+
     def test_add_and_recognize_same_image(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
-            image = temp_path / "face.bin"
-            image.write_bytes(b"fake-image-content")
+            image = temp_path / "face.jpg"
+            self._write_image(image)
 
             engine = build_dev_engine(temp_path / "data")
             engine.initialize()
 
             pending = engine.prepare_additions(image)
             self.assertEqual(len(pending), 1)
+            self.assertEqual(pending[0].quality.status, QualityStatus.WARN)
             person_id = engine.confirm_new_person(pending[0], "Test Person")
 
             results = engine.recognize(image)
@@ -30,19 +43,21 @@ class EngineWorkflowTest(unittest.TestCase):
     def test_queue_and_confirm_pending_existing_person(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
-            image = temp_path / "face.bin"
-            image.write_bytes(b"fake-image-content")
+            image = temp_path / "face.jpg"
+            self._write_image(image)
 
             engine = build_dev_engine(temp_path / "data")
             engine.initialize()
-            pending = engine.queue_additions(image)
+            prepared = engine.queue_additions(image)
+            pending = prepared.accepted
             self.assertEqual(len(pending), 1)
+            self.assertEqual(prepared.rejected, [])
             self.assertEqual(len(engine.list_pending_additions()), 1)
 
             person_id = engine.confirm_pending_as_new_person(pending[0].pending_id, "Test Person")
             self.assertEqual(engine.list_pending_additions(), [])
 
-            second = engine.queue_additions(image)
+            second = engine.queue_additions(image).accepted
             self.assertEqual(second[0].decision, MatchDecision.STRONG)
             embedding_id = engine.confirm_pending_as_existing_person(
                 second[0].pending_id,
@@ -51,6 +66,46 @@ class EngineWorkflowTest(unittest.TestCase):
 
             self.assertTrue(embedding_id)
             self.assertEqual(engine.list_pending_additions(), [])
+
+    def test_bad_quality_face_is_rejected_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image = temp_path / "face.jpg"
+            self._write_image(image)
+
+            config = RuntimeConfig(
+                data_dir=temp_path / "data",
+                min_face_size=999,
+                min_quality_score=0.8,
+            )
+            engine = build_dev_engine(temp_path / "data", config)
+            engine.initialize()
+
+            prepared = engine.queue_additions(image)
+
+            self.assertEqual(prepared.accepted, [])
+            self.assertEqual(len(prepared.rejected), 1)
+            self.assertEqual(prepared.rejected[0].quality.status, QualityStatus.BAD)
+
+    def test_bad_quality_face_can_be_forced(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image = temp_path / "face.jpg"
+            self._write_image(image)
+
+            config = RuntimeConfig(
+                data_dir=temp_path / "data",
+                min_face_size=999,
+                min_quality_score=0.8,
+            )
+            engine = build_dev_engine(temp_path / "data", config)
+            engine.initialize()
+
+            prepared = engine.queue_additions(image, allow_bad_quality=True)
+
+            self.assertEqual(len(prepared.accepted), 1)
+            self.assertEqual(prepared.accepted[0].quality.status, QualityStatus.BAD)
+            self.assertEqual(prepared.rejected, [])
 
 
 if __name__ == "__main__":

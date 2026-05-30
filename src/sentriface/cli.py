@@ -74,9 +74,11 @@ def main() -> int:
     enroll = subcommands.add_parser("enroll", help="Create a person from the first face in an image")
     enroll.add_argument("name")
     enroll.add_argument("image", type=Path)
+    enroll.add_argument("--force-bad-quality", action="store_true")
 
     queue = subcommands.add_parser("queue-add", help="Queue detected faces for review")
     queue.add_argument("image", type=Path)
+    queue.add_argument("--force-bad-quality", action="store_true")
 
     subcommands.add_parser("pending", help="List queued face additions")
 
@@ -141,6 +143,7 @@ def main() -> int:
                         {
                             "index": index,
                             "decision": result.decision.value,
+                            "quality": _quality(result.quality),
                             "matches": _matches(engine, result.matches),
                         }
                         for index, result in enumerate(results, start=1)
@@ -149,14 +152,27 @@ def main() -> int:
             )
 
         if args.command == "enroll":
-            additions = engine.prepare_additions(args.image)
+            additions = engine.prepare_additions(
+                args.image,
+                allow_bad_quality=args.force_bad_quality,
+            )
             if not additions:
                 return _emit(args, {"faces": []}, exit_code=1)
             person_id = engine.confirm_new_person(additions[0], args.name)
-            return _emit(args, {"person_id": person_id, "embeddings": 1})
+            return _emit(
+                args,
+                {
+                    "person_id": person_id,
+                    "embeddings": 1,
+                    "quality": _quality(additions[0].quality),
+                },
+            )
 
         if args.command == "queue-add":
-            additions = engine.queue_additions(args.image)
+            prepared = engine.queue_additions(
+                args.image,
+                allow_bad_quality=args.force_bad_quality,
+            )
             return _emit(
                 args,
                 {
@@ -164,10 +180,12 @@ def main() -> int:
                         {
                             "pending_id": pending.pending_id,
                             "decision": pending.decision.value,
+                            "quality": _quality(pending.quality),
                             "matches": _matches(engine, pending.matches),
                         }
-                        for pending in additions
-                    ]
+                        for pending in prepared.accepted
+                    ],
+                    "rejected": [_rejected(rejected, index) for index, rejected in enumerate(prepared.rejected, start=1)],
                 },
             )
 
@@ -181,6 +199,7 @@ def main() -> int:
                             "pending_id": pending.pending_id,
                             "decision": pending.decision.value,
                             "source_image": pending.source_image,
+                            "quality": _quality(pending.quality),
                             "matches": _matches(engine, pending.matches),
                         }
                         for pending in additions
@@ -256,20 +275,34 @@ def _print_human(payload: dict[str, Any]) -> None:
             print("faces=0")
             return
         for face in faces:
-            print(f"face={face['index']} decision={face['decision']} matches={len(face['matches'])}")
+            print(
+                f"face={face['index']} decision={face['decision']} "
+                f"quality={face['quality']['status']} quality_score={face['quality']['score']:.3f} "
+                f"matches={len(face['matches'])}"
+            )
+            _print_reasons(face["quality"]["reasons"])
             _print_match_rows(face["matches"])
         return
     if "pending" in payload:
         pending = payload["pending"]
-        if not pending:
+        rejected = payload.get("rejected", [])
+        if not pending and not rejected:
             print("pending=0")
             return
         for item in pending:
             print(
                 f"pending_id={item['pending_id']} decision={item['decision']} "
+                f"quality={item['quality']['status']} quality_score={item['quality']['score']:.3f} "
                 f"source={item.get('source_image', '')} matches={len(item['matches'])}"
             )
+            _print_reasons(item["quality"]["reasons"])
             _print_match_rows(item["matches"])
+        for item in rejected:
+            print(
+                f"rejected face={item['index']} quality={item['quality']['status']} "
+                f"quality_score={item['quality']['score']:.3f}"
+            )
+            _print_reasons(item["quality"]["reasons"])
         return
     for key, value in payload.items():
         print(f"{key}={value}")
@@ -289,6 +322,29 @@ def _matches(engine: FaceEngine, matches: list[Match]) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def _quality(report) -> dict[str, Any] | None:
+    if report is None:
+        return None
+    return {
+        "status": report.status.value,
+        "score": report.score,
+        "reasons": list(report.reasons),
+    }
+
+
+def _rejected(rejected, index: int) -> dict[str, Any]:
+    return {
+        "index": index,
+        "source_image": rejected.source_image,
+        "quality": _quality(rejected.quality),
+    }
+
+
+def _print_reasons(reasons: list[str]) -> None:
+    if reasons:
+        print(f"  reasons={','.join(reasons)}")
 
 
 def _print_match_rows(matches: list[dict[str, Any]]) -> None:
