@@ -37,6 +37,7 @@ class Person:
     name: str
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now)
+    deleted_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,20 @@ class Match:
     person_id: str
     score: float
     embedding_id: str
+
+
+@dataclass(frozen=True)
+class PersonMatch:
+    person_id: str
+    score: float
+    embedding_ids: tuple[str, ...]
+    embeddings_matched: int
+
+
+@dataclass(frozen=True)
+class PersonSummary:
+    person: Person
+    embedding_count: int
 
 
 class MatchDecision(str, Enum):
@@ -79,7 +94,7 @@ class QualityReport:
 @dataclass(frozen=True)
 class RecognitionResult:
     face: DetectedFace
-    matches: list[Match]
+    matches: list[PersonMatch]
     decision: MatchDecision
     quality: QualityReport | None = None
 
@@ -90,7 +105,7 @@ class PendingAddition:
     source_image: str
     face: DetectedFace
     vector: Embedding
-    matches: list[Match]
+    matches: list[PersonMatch]
     decision: MatchDecision
     quality: QualityReport
     created_at: str = field(default_factory=utc_now)

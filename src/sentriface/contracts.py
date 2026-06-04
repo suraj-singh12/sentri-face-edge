@@ -12,6 +12,7 @@ from sentriface.models import (
     InitSession,
     PendingAddition,
     Person,
+    PersonSummary,
 )
 
 
@@ -58,6 +59,21 @@ class IdentityStore(Protocol):
 
     def get_person(self, person_id: str) -> Person | None:
         """Load one person by id."""
+
+    def list_persons(self) -> list[PersonSummary]:
+        """List active people with summary counts."""
+
+    def list_embeddings_for_person(self, person_id: str) -> list[EmbeddingRecord]:
+        """List embeddings belonging to one person."""
+
+    def rename_person(self, person_id: str, name: str) -> None:
+        """Rename one person."""
+
+    def delete_person(self, person_id: str) -> None:
+        """Soft-delete one person."""
+
+    def delete_embedding(self, embedding_id: str) -> None:
+        """Delete one embedding record."""
 
     def save_pending_addition(self, pending: PendingAddition) -> None:
         """Persist a pending face addition for later review."""

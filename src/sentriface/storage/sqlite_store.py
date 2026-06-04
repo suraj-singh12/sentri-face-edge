@@ -14,16 +14,17 @@ from sentriface.models import (
     InitFace,
     InitGroup,
     InitSession,
-    Match,
     MatchDecision,
     PendingAddition,
     Person,
+    PersonMatch,
+    PersonSummary,
     QualityReport,
     QualityStatus,
     utc_now,
 )
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class SQLiteIdentityStore:
@@ -50,6 +51,9 @@ class SQLiteIdentityStore:
             if version == 2:
                 _migrate_2_to_3(conn)
                 version = 3
+            if version == 3:
+                _migrate_3_to_4(conn)
+                version = 4
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -78,9 +82,9 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT person_id, name, metadata, created_at
+                SELECT person_id, name, metadata, created_at, deleted_at
                 FROM persons
-                WHERE person_id = ?
+                WHERE person_id = ? AND deleted_at IS NULL
                 """,
                 (person_id,),
             ).fetchone()
@@ -91,7 +95,74 @@ class SQLiteIdentityStore:
             name=row["name"],
             metadata=json.loads(row["metadata"]),
             created_at=row["created_at"],
+            deleted_at=row["deleted_at"],
         )
+
+    def list_persons(self) -> list[PersonSummary]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT p.person_id, p.name, p.metadata, p.created_at, p.deleted_at,
+                       COUNT(e.embedding_id) AS embedding_count
+                FROM persons p
+                LEFT JOIN embeddings e ON e.person_id = p.person_id
+                WHERE p.deleted_at IS NULL
+                GROUP BY p.person_id
+                ORDER BY p.name COLLATE NOCASE
+                """
+            ).fetchall()
+        return [
+            PersonSummary(
+                person=Person(
+                    person_id=row["person_id"],
+                    name=row["name"],
+                    metadata=json.loads(row["metadata"]),
+                    created_at=row["created_at"],
+                    deleted_at=row["deleted_at"],
+                ),
+                embedding_count=row["embedding_count"],
+            )
+            for row in rows
+        ]
+
+    def list_embeddings_for_person(self, person_id: str) -> list[EmbeddingRecord]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT e.embedding_id, e.person_id, e.vector, e.quality_score,
+                       e.source_image, e.crop_path, e.created_at
+                FROM embeddings e
+                JOIN persons p ON p.person_id = e.person_id
+                WHERE e.person_id = ? AND p.deleted_at IS NULL
+                ORDER BY e.created_at ASC
+                """,
+                (person_id,),
+            ).fetchall()
+        return [_embedding_from_row(row) for row in rows]
+
+    def rename_person(self, person_id: str, name: str) -> None:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE persons SET name = ? WHERE person_id = ? AND deleted_at IS NULL",
+                (name, person_id),
+            )
+        if cursor.rowcount == 0:
+            raise KeyError(f"Unknown person: {person_id}")
+
+    def delete_person(self, person_id: str) -> None:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE persons SET deleted_at = ? WHERE person_id = ? AND deleted_at IS NULL",
+                (utc_now(), person_id),
+            )
+        if cursor.rowcount == 0:
+            raise KeyError(f"Unknown person: {person_id}")
+
+    def delete_embedding(self, embedding_id: str) -> None:
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM embeddings WHERE embedding_id = ?", (embedding_id,))
+        if cursor.rowcount == 0:
+            raise KeyError(f"Unknown embedding: {embedding_id}")
 
     def add_embedding(
         self,
@@ -137,23 +208,14 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT embedding_id, person_id, vector, quality_score,
-                       source_image, crop_path, created_at
-                FROM embeddings
+                SELECT e.embedding_id, e.person_id, e.vector, e.quality_score,
+                       e.source_image, e.crop_path, e.created_at
+                FROM embeddings e
+                JOIN persons p ON p.person_id = e.person_id
+                WHERE p.deleted_at IS NULL
                 """
             ).fetchall()
-        return [
-            EmbeddingRecord(
-                embedding_id=row["embedding_id"],
-                person_id=row["person_id"],
-                vector=_unpack_embedding(row["vector"]),
-                quality_score=row["quality_score"],
-                source_image=row["source_image"],
-                crop_path=row["crop_path"],
-                created_at=row["created_at"],
-            )
-            for row in rows
-        ]
+        return [_embedding_from_row(row) for row in rows]
 
     def save_pending_addition(self, pending: PendingAddition) -> None:
         if len(pending.vector) != self.embedding_dim:
@@ -181,7 +243,17 @@ class SQLiteIdentityStore:
                     json.dumps(pending.face.landmarks),
                     pending.face.crop_path,
                     _pack_embedding(pending.vector),
-                    json.dumps([match.__dict__ for match in pending.matches]),
+                    json.dumps(
+                        [
+                            {
+                                "person_id": match.person_id,
+                                "score": match.score,
+                                "embedding_ids": list(match.embedding_ids),
+                                "embeddings_matched": match.embeddings_matched,
+                            }
+                            for match in pending.matches
+                        ]
+                    ),
                     pending.decision.value,
                     pending.quality.status.value,
                     pending.quality.score,
@@ -357,7 +429,8 @@ def _migrate_0_to_1(conn: sqlite3.Connection) -> None:
             person_id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             metadata TEXT NOT NULL DEFAULT '{}',
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            deleted_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS embeddings (
@@ -463,17 +536,20 @@ def _migrate_2_to_3(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_3_to_4(conn: sqlite3.Connection) -> None:
+    columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(persons)").fetchall()
+    }
+    if "deleted_at" not in columns:
+        conn.execute("ALTER TABLE persons ADD COLUMN deleted_at TEXT")
+    conn.execute("PRAGMA user_version = 4")
+
+
 def _pending_from_row(row: sqlite3.Row) -> PendingAddition:
     raw_landmarks = json.loads(row["landmarks"]) if row["landmarks"] else None
     landmarks = tuple(tuple(point) for point in raw_landmarks) if raw_landmarks else None
-    matches = [
-        Match(
-            person_id=item["person_id"],
-            score=item["score"],
-            embedding_id=item["embedding_id"],
-        )
-        for item in json.loads(row["matches"])
-    ]
+    matches = [_person_match_from_json(item) for item in json.loads(row["matches"])]
     return PendingAddition(
         pending_id=row["pending_id"],
         source_image=row["source_image"],
@@ -497,6 +573,31 @@ def _pending_from_row(row: sqlite3.Row) -> PendingAddition:
             score=row["pending_quality_score"],
             reasons=tuple(json.loads(row["quality_reasons"])),
         ),
+        created_at=row["created_at"],
+    )
+
+
+def _person_match_from_json(item: dict) -> PersonMatch:
+    if "embedding_ids" in item:
+        embedding_ids = tuple(item["embedding_ids"])
+    else:
+        embedding_ids = (item["embedding_id"],)
+    return PersonMatch(
+        person_id=item["person_id"],
+        score=item["score"],
+        embedding_ids=embedding_ids,
+        embeddings_matched=item.get("embeddings_matched", len(embedding_ids)),
+    )
+
+
+def _embedding_from_row(row: sqlite3.Row) -> EmbeddingRecord:
+    return EmbeddingRecord(
+        embedding_id=row["embedding_id"],
+        person_id=row["person_id"],
+        vector=_unpack_embedding(row["vector"]),
+        quality_score=row["quality_score"],
+        source_image=row["source_image"],
+        crop_path=row["crop_path"],
         created_at=row["created_at"],
     )
 

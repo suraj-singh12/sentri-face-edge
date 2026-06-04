@@ -15,6 +15,8 @@ from sentriface.models import (
     InitSession,
     PendingAddition,
     Person,
+    PersonMatch,
+    PersonSummary,
     QualityStatus,
     RejectedFace,
     RecognitionResult,
@@ -49,7 +51,7 @@ class FaceEngine:
         for face in self.detector.detect(image_path):
             quality = self.quality.evaluate(image, face)
             vector = self.embedder.encode(image_path, face)
-            matches = self.index.search(vector, self.config.top_k)
+            matches = self._search_unique_people(vector)
             results.append(
                 RecognitionResult(
                     face=face,
@@ -84,7 +86,7 @@ class FaceEngine:
                 )
                 continue
             vector = self.embedder.encode(image_path, face)
-            matches = self.index.search(vector, self.config.top_k)
+            matches = self._search_unique_people(vector)
             additions.append(
                 PendingAddition(
                     pending_id=str(uuid.uuid4()),
@@ -109,6 +111,25 @@ class FaceEngine:
 
     def get_person(self, person_id: str) -> Person | None:
         return self.store.get_person(person_id)
+
+    def list_persons(self) -> list[PersonSummary]:
+        return self.store.list_persons()
+
+    def list_person_embeddings(self, person_id: str):
+        if self.store.get_person(person_id) is None:
+            raise KeyError(f"Unknown person: {person_id}")
+        return self.store.list_embeddings_for_person(person_id)
+
+    def rename_person(self, person_id: str, name: str) -> None:
+        self.store.rename_person(person_id, name)
+
+    def delete_person(self, person_id: str) -> None:
+        self.store.delete_person(person_id)
+        self._rebuild_index()
+
+    def delete_embedding(self, embedding_id: str) -> None:
+        self.store.delete_embedding(embedding_id)
+        self._rebuild_index()
 
     def confirm_new_person(
         self,
@@ -218,7 +239,27 @@ class FaceEngine:
                 return group
         raise KeyError(f"Unknown init group: {group_id}")
 
-    def _decide(self, matches: list[Match]) -> MatchDecision:
+    def _rebuild_index(self) -> None:
+        self.index.rebuild(self.store.list_embeddings())
+
+    def _search_unique_people(self, vector) -> list[PersonMatch]:
+        raw_matches = self.index.search(vector, max(self.config.top_k * 8, self.config.top_k))
+        grouped: dict[str, list[Match]] = {}
+        for match in raw_matches:
+            grouped.setdefault(match.person_id, []).append(match)
+        person_matches = [
+            PersonMatch(
+                person_id=person_id,
+                score=max(match.score for match in matches),
+                embedding_ids=tuple(match.embedding_id for match in matches),
+                embeddings_matched=len(matches),
+            )
+            for person_id, matches in grouped.items()
+        ]
+        person_matches.sort(key=lambda match: match.score, reverse=True)
+        return person_matches[: self.config.top_k]
+
+    def _decide(self, matches: list[PersonMatch]) -> MatchDecision:
         if not matches:
             return MatchDecision.UNKNOWN
         best = matches[0].score

@@ -155,6 +155,23 @@ image -> detect -> encode -> top 3 candidates -> pending suggestion -> user conf
 image -> detect -> encode -> search -> top 3 -> show identity or unknown
 ```
 
+Recognition results are ranked by unique person, not by duplicate embeddings.
+When multiple embeddings from the same person match, they are collapsed into one
+candidate with `embeddings_matched`.
+
+Person management:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx persons
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx person PERSON_ID
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx rename-person PERSON_ID "New Name"
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx delete-person PERSON_ID
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx delete-embedding EMBEDDING_ID
+```
+
+`delete-person` is a soft delete. Embeddings stay in the database for now, but
+deleted people are excluded from active listings and recognition.
+
 ## Storage
 
 ```text

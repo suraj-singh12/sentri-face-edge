@@ -12,7 +12,7 @@ from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardwar
 from sentriface.engine import FaceEngine
 from sentriface.errors import SentriFaceError
 from sentriface.hardware import assess_hardware
-from sentriface.models import Match
+from sentriface.models import PersonMatch
 from sentriface.storage.sqlite_store import SQLiteIdentityStore
 
 
@@ -111,6 +111,21 @@ def main() -> int:
     init_reject = subcommands.add_parser("init-reject", help="Reject an init group")
     init_reject.add_argument("session_id")
     init_reject.add_argument("group_id")
+
+    subcommands.add_parser("persons", help="List active people")
+
+    person = subcommands.add_parser("person", help="Show one person and embeddings")
+    person.add_argument("person_id")
+
+    rename = subcommands.add_parser("rename-person", help="Rename a person")
+    rename.add_argument("person_id")
+    rename.add_argument("name")
+
+    delete_person = subcommands.add_parser("delete-person", help="Soft-delete a person")
+    delete_person.add_argument("person_id")
+
+    delete_embedding = subcommands.add_parser("delete-embedding", help="Delete one embedding")
+    delete_embedding.add_argument("embedding_id")
 
     args = parser.parse_args()
     profile = _select_profile(args.profile)
@@ -269,6 +284,34 @@ def main() -> int:
             engine.reject_init_group(args.session_id, args.group_id)
             return _emit(args, {"session_id": args.session_id, "group_id": args.group_id, "rejected": 1})
 
+        if args.command == "persons":
+            return _emit(args, {"persons": [_person_summary(summary) for summary in engine.list_persons()]})
+
+        if args.command == "person":
+            person = engine.get_person(args.person_id)
+            if person is None:
+                raise KeyError(f"Unknown person: {args.person_id}")
+            embeddings = engine.list_person_embeddings(args.person_id)
+            return _emit(
+                args,
+                {
+                    "person": _person(person),
+                    "embeddings": [_embedding(record) for record in embeddings],
+                },
+            )
+
+        if args.command == "rename-person":
+            engine.rename_person(args.person_id, args.name)
+            return _emit(args, {"person_id": args.person_id, "renamed": args.name})
+
+        if args.command == "delete-person":
+            engine.delete_person(args.person_id)
+            return _emit(args, {"person_id": args.person_id, "deleted": 1})
+
+        if args.command == "delete-embedding":
+            engine.delete_embedding(args.embedding_id)
+            return _emit(args, {"embedding_id": args.embedding_id, "deleted": 1})
+
         return 1
     except SentriFaceError as exc:
         return _emit_error(args, str(exc))
@@ -372,11 +415,42 @@ def _print_human(payload: dict[str, Any]) -> None:
                     f"quality={face['quality']['status']} quality_score={face['quality']['score']:.3f}"
                 )
         return
+    if "persons" in payload:
+        persons = payload["persons"]
+        if not persons:
+            print("persons=0")
+            return
+        for item in persons:
+            print(
+                f"person_id={item['person_id']} name={item['name']} "
+                f"embeddings={item['embedding_count']}"
+            )
+        return
+    if "person" in payload:
+        person = payload["person"]
+        embeddings = payload["embeddings"]
+        print(f"person_id={person['person_id']} name={person['name']} embeddings={len(embeddings)}")
+        for embedding in embeddings:
+            print(
+                f"  embedding_id={embedding['embedding_id']} "
+                f"quality_score={embedding['quality_score']:.3f} "
+                f"source={embedding['source_image']}"
+            )
+        return
+    if "quality" in payload:
+        quality = payload["quality"]
+        for key, value in payload.items():
+            if key == "quality":
+                print(f"quality={quality['status']} quality_score={quality['score']:.3f}")
+                _print_reasons(quality["reasons"])
+            else:
+                print(f"{key}={value}")
+        return
     for key, value in payload.items():
         print(f"{key}={value}")
 
 
-def _matches(engine: FaceEngine, matches: list[Match]) -> list[dict[str, Any]]:
+def _matches(engine: FaceEngine, matches: list[PersonMatch]) -> list[dict[str, Any]]:
     rows = []
     for rank, match in enumerate(matches, start=1):
         person = engine.get_person(match.person_id)
@@ -386,7 +460,8 @@ def _matches(engine: FaceEngine, matches: list[Match]) -> list[dict[str, Any]]:
                 "person_id": match.person_id,
                 "name": person.name if person else "unknown",
                 "score": match.score,
-                "embedding_id": match.embedding_id,
+                "embedding_ids": list(match.embedding_ids),
+                "embeddings_matched": match.embeddings_matched,
             }
         )
     return rows
@@ -438,8 +513,40 @@ def _print_match_rows(matches: list[dict[str, Any]]) -> None:
     for match in matches:
         print(
             f"  match={match['rank']} person_id={match['person_id']} "
-            f"name={match['name']} score={match['score']:.4f} embedding_id={match['embedding_id']}"
+            f"name={match['name']} score={match['score']:.4f} "
+            f"embeddings_matched={match['embeddings_matched']} "
+            f"embedding_ids={','.join(match['embedding_ids'])}"
         )
+
+
+def _person_summary(summary) -> dict[str, Any]:
+    return {
+        "person_id": summary.person.person_id,
+        "name": summary.person.name,
+        "metadata": summary.person.metadata,
+        "created_at": summary.person.created_at,
+        "embedding_count": summary.embedding_count,
+    }
+
+
+def _person(person) -> dict[str, Any]:
+    return {
+        "person_id": person.person_id,
+        "name": person.name,
+        "metadata": person.metadata,
+        "created_at": person.created_at,
+    }
+
+
+def _embedding(record) -> dict[str, Any]:
+    return {
+        "embedding_id": record.embedding_id,
+        "person_id": record.person_id,
+        "quality_score": record.quality_score,
+        "source_image": record.source_image,
+        "crop_path": record.crop_path,
+        "created_at": record.created_at,
+    }
 
 
 if __name__ == "__main__":
