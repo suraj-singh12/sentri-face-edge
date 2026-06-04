@@ -38,6 +38,7 @@ class RuntimeConfig:
     hardware_tier: str = "low"
     detector_model: Path = Path("models/det_500m.onnx")
     recognizer_model: Path = Path("models/w600k_r50.onnx")
+    collect_metrics: bool = False
 
     @property
     def db_path(self) -> Path:

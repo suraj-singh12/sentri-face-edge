@@ -55,6 +55,19 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("error=Model file not found", output.getvalue())
 
+    def test_metrics_are_emitted_with_json(self) -> None:
+        output = io.StringIO()
+
+        with patch("sys.argv", ["sentriface", "--json", "--metrics", "--profile", "low", "init-db"]):
+            with redirect_stdout(output):
+                code = cli.main()
+
+        self.assertEqual(code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertIn("metrics", payload)
+        self.assertIn("timings_ms", payload["metrics"])
+        self.assertIn("counts", payload["metrics"])
+
 
 if __name__ == "__main__":
     unittest.main()

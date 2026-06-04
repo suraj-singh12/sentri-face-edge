@@ -63,6 +63,7 @@ def main() -> int:
     parser.add_argument("--detector-model", type=Path, default=Path("models/det_500m.onnx"))
     parser.add_argument("--recognizer-model", type=Path, default=Path("models/w600k_r50.onnx"))
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON output")
+    parser.add_argument("--metrics", action="store_true", help="Include timing and count metrics")
     subcommands = parser.add_subparsers(dest="command", required=True)
 
     subcommands.add_parser("init-db", help="Create or migrate the local database")
@@ -163,12 +164,13 @@ def main() -> int:
         engine.initialize()
 
         if args.command == "init-db":
-            return _emit(args, {"initialized": str(args.data_dir)})
+            return _emit_engine(args, engine, {"initialized": str(args.data_dir)})
 
         if args.command == "recognize":
             results = engine.recognize(args.image)
-            return _emit(
+            return _emit_engine(
                 args,
+                engine,
                 {
                     "faces": [
                         {
@@ -188,10 +190,11 @@ def main() -> int:
                 allow_bad_quality=args.force_bad_quality,
             )
             if not additions:
-                return _emit(args, {"faces": []}, exit_code=1)
+                return _emit_engine(args, engine, {"faces": []}, exit_code=1)
             person_id = engine.confirm_new_person(additions[0], args.name)
-            return _emit(
+            return _emit_engine(
                 args,
+                engine,
                 {
                     "person_id": person_id,
                     "embeddings": 1,
@@ -204,8 +207,9 @@ def main() -> int:
                 args.image,
                 allow_bad_quality=args.force_bad_quality,
             )
-            return _emit(
+            return _emit_engine(
                 args,
+                engine,
                 {
                     "pending": [
                         {
@@ -222,8 +226,9 @@ def main() -> int:
 
         if args.command == "pending":
             additions = engine.list_pending_additions()
-            return _emit(
+            return _emit_engine(
                 args,
+                engine,
                 {
                     "pending": [
                         {
@@ -240,15 +245,15 @@ def main() -> int:
 
         if args.command == "confirm-new":
             person_id = engine.confirm_pending_as_new_person(args.pending_id, args.name)
-            return _emit(args, {"person_id": person_id, "confirmed": "new"})
+            return _emit_engine(args, engine, {"person_id": person_id, "confirmed": "new"})
 
         if args.command == "confirm-existing":
             embedding_id = engine.confirm_pending_as_existing_person(args.pending_id, args.person_id)
-            return _emit(args, {"embedding_id": embedding_id, "confirmed": "existing"})
+            return _emit_engine(args, engine, {"embedding_id": embedding_id, "confirmed": "existing"})
 
         if args.command == "reject-pending":
             engine.reject_pending_addition(args.pending_id)
-            return _emit(args, {"rejected": 1})
+            return _emit_engine(args, engine, {"rejected": 1})
 
         if args.command == "init-scan":
             session = engine.create_init_session(
@@ -256,8 +261,9 @@ def main() -> int:
                 allow_bad_quality=args.force_bad_quality,
             )
             groups = engine.list_init_groups(session.session_id)
-            return _emit(
+            return _emit_engine(
                 args,
+                engine,
                 {
                     "session_id": session.session_id,
                     "groups": [_init_group(group) for group in groups],
@@ -266,12 +272,13 @@ def main() -> int:
 
         if args.command == "init-groups":
             groups = engine.list_init_groups(args.session_id)
-            return _emit(args, {"groups": [_init_group(group) for group in groups]})
+            return _emit_engine(args, engine, {"groups": [_init_group(group) for group in groups]})
 
         if args.command == "init-confirm":
             person_id = engine.confirm_init_group(args.session_id, args.group_id, args.name)
-            return _emit(
+            return _emit_engine(
                 args,
+                engine,
                 {
                     "session_id": args.session_id,
                     "group_id": args.group_id,
@@ -282,18 +289,19 @@ def main() -> int:
 
         if args.command == "init-reject":
             engine.reject_init_group(args.session_id, args.group_id)
-            return _emit(args, {"session_id": args.session_id, "group_id": args.group_id, "rejected": 1})
+            return _emit_engine(args, engine, {"session_id": args.session_id, "group_id": args.group_id, "rejected": 1})
 
         if args.command == "persons":
-            return _emit(args, {"persons": [_person_summary(summary) for summary in engine.list_persons()]})
+            return _emit_engine(args, engine, {"persons": [_person_summary(summary) for summary in engine.list_persons()]})
 
         if args.command == "person":
             person = engine.get_person(args.person_id)
             if person is None:
                 raise KeyError(f"Unknown person: {args.person_id}")
             embeddings = engine.list_person_embeddings(args.person_id)
-            return _emit(
+            return _emit_engine(
                 args,
+                engine,
                 {
                     "person": _person(person),
                     "embeddings": [_embedding(record) for record in embeddings],
@@ -302,15 +310,15 @@ def main() -> int:
 
         if args.command == "rename-person":
             engine.rename_person(args.person_id, args.name)
-            return _emit(args, {"person_id": args.person_id, "renamed": args.name})
+            return _emit_engine(args, engine, {"person_id": args.person_id, "renamed": args.name})
 
         if args.command == "delete-person":
             engine.delete_person(args.person_id)
-            return _emit(args, {"person_id": args.person_id, "deleted": 1})
+            return _emit_engine(args, engine, {"person_id": args.person_id, "deleted": 1})
 
         if args.command == "delete-embedding":
             engine.delete_embedding(args.embedding_id)
-            return _emit(args, {"embedding_id": args.embedding_id, "deleted": 1})
+            return _emit_engine(args, engine, {"embedding_id": args.embedding_id, "deleted": 1})
 
         return 1
     except SentriFaceError as exc:
@@ -353,6 +361,12 @@ def _emit(args, payload: dict[str, Any], exit_code: int = 0) -> int:
     return exit_code
 
 
+def _emit_engine(args, engine: FaceEngine, payload: dict[str, Any], exit_code: int = 0) -> int:
+    if args.metrics:
+        payload = {**payload, "metrics": engine.metrics_snapshot()}
+    return _emit(args, payload, exit_code)
+
+
 def _emit_error(args, message: str) -> int:
     if args.json:
         print(json.dumps({"error": message}, separators=(",", ":")))
@@ -366,6 +380,8 @@ def _print_human(payload: dict[str, Any]) -> None:
         faces = payload["faces"]
         if not faces:
             print("faces=0")
+            if "metrics" in payload:
+                _print_metrics(payload["metrics"])
             return
         for face in faces:
             print(
@@ -375,12 +391,16 @@ def _print_human(payload: dict[str, Any]) -> None:
             )
             _print_reasons(face["quality"]["reasons"])
             _print_match_rows(face["matches"])
+        if "metrics" in payload:
+            _print_metrics(payload["metrics"])
         return
     if "pending" in payload:
         pending = payload["pending"]
         rejected = payload.get("rejected", [])
         if not pending and not rejected:
             print("pending=0")
+            if "metrics" in payload:
+                _print_metrics(payload["metrics"])
             return
         for item in pending:
             print(
@@ -396,6 +416,8 @@ def _print_human(payload: dict[str, Any]) -> None:
                 f"quality_score={item['quality']['score']:.3f}"
             )
             _print_reasons(item["quality"]["reasons"])
+        if "metrics" in payload:
+            _print_metrics(payload["metrics"])
         return
     if "groups" in payload:
         if "session_id" in payload:
@@ -403,6 +425,8 @@ def _print_human(payload: dict[str, Any]) -> None:
         groups = payload["groups"]
         if not groups:
             print("groups=0")
+            if "metrics" in payload:
+                _print_metrics(payload["metrics"])
             return
         for group in groups:
             print(
@@ -414,17 +438,23 @@ def _print_human(payload: dict[str, Any]) -> None:
                     f"  face_id={face['init_face_id']} source={face['source_image']} "
                     f"quality={face['quality']['status']} quality_score={face['quality']['score']:.3f}"
                 )
+        if "metrics" in payload:
+            _print_metrics(payload["metrics"])
         return
     if "persons" in payload:
         persons = payload["persons"]
         if not persons:
             print("persons=0")
+            if "metrics" in payload:
+                _print_metrics(payload["metrics"])
             return
         for item in persons:
             print(
                 f"person_id={item['person_id']} name={item['name']} "
                 f"embeddings={item['embedding_count']}"
             )
+        if "metrics" in payload:
+            _print_metrics(payload["metrics"])
         return
     if "person" in payload:
         person = payload["person"]
@@ -436,6 +466,8 @@ def _print_human(payload: dict[str, Any]) -> None:
                 f"quality_score={embedding['quality_score']:.3f} "
                 f"source={embedding['source_image']}"
             )
+        if "metrics" in payload:
+            _print_metrics(payload["metrics"])
         return
     if "quality" in payload:
         quality = payload["quality"]
@@ -443,11 +475,21 @@ def _print_human(payload: dict[str, Any]) -> None:
             if key == "quality":
                 print(f"quality={quality['status']} quality_score={quality['score']:.3f}")
                 _print_reasons(quality["reasons"])
+            elif key == "metrics":
+                continue
             else:
                 print(f"{key}={value}")
+        if "metrics" in payload:
+            _print_metrics(payload["metrics"])
+        return
+    if "metrics" in payload:
+        _print_metrics(payload["metrics"])
         return
     for key, value in payload.items():
-        print(f"{key}={value}")
+        if key == "metrics":
+            _print_metrics(value)
+        else:
+            print(f"{key}={value}")
 
 
 def _matches(engine: FaceEngine, matches: list[PersonMatch]) -> list[dict[str, Any]]:
@@ -507,6 +549,13 @@ def _init_group(group) -> dict[str, Any]:
 def _print_reasons(reasons: list[str]) -> None:
     if reasons:
         print(f"  reasons={','.join(reasons)}")
+
+
+def _print_metrics(metrics: dict[str, Any]) -> None:
+    for key, value in metrics.get("timings_ms", {}).items():
+        print(f"metrics.{key}={value:.3f}")
+    for key, value in metrics.get("counts", {}).items():
+        print(f"metrics.{key}={value}")
 
 
 def _print_match_rows(matches: list[dict[str, Any]]) -> None:

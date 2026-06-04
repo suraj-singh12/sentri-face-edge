@@ -65,6 +65,16 @@ Use JSON output for future UI integration:
 PYTHONPATH=src python3 -m sentriface.cli --json profile
 ```
 
+Use metrics output before optimizing:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --metrics --runtime onnx recognize path/to/image.jpg
+```
+
+Metrics include stage timings such as image load, detection, quality scoring,
+embedding, search, DB work, and useful counters such as detected faces and
+accepted/rejected faces.
+
 Run with development placeholders:
 
 ```bash
