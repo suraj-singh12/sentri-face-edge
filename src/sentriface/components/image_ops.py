@@ -65,6 +65,15 @@ def crop_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
     return cv2.resize(crop, (output_size, output_size), interpolation=cv2.INTER_AREA)
 
 
+def save_face_crop(image: Any, face: DetectedFace, output_path: Path, output_size: int = 112) -> str:
+    cv2 = _cv2()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    crop = crop_face(image, face, output_size=output_size)
+    if not cv2.imwrite(str(output_path), crop):
+        raise InputImageError(f"Could not save face crop: {output_path}")
+    return str(output_path)
+
+
 def align_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
     cv2 = _cv2()
     np = _numpy()

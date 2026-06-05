@@ -232,6 +232,7 @@ def main() -> int:
                         {
                             "pending_id": pending.pending_id,
                             "decision": pending.decision.value,
+                            "crop_path": pending.face.crop_path,
                             "quality": _quality(pending.quality),
                             "matches": _matches(engine, pending.matches),
                         }
@@ -252,6 +253,7 @@ def main() -> int:
                             "pending_id": pending.pending_id,
                             "decision": pending.decision.value,
                             "source_image": pending.source_image,
+                            "crop_path": pending.face.crop_path,
                             "quality": _quality(pending.quality),
                             "matches": _matches(engine, pending.matches),
                         }
@@ -512,7 +514,8 @@ def _print_human(payload: dict[str, Any]) -> None:
             print(
                 f"pending_id={item['pending_id']} decision={item['decision']} "
                 f"quality={item['quality']['status']} quality_score={item['quality']['score']:.3f} "
-                f"source={item.get('source_image', '')} matches={len(item['matches'])}"
+                f"source={item.get('source_image', '')} crop={item.get('crop_path')} "
+                f"matches={len(item['matches'])}"
             )
             _print_reasons(item["quality"]["reasons"])
             _print_match_rows(item["matches"])
@@ -542,6 +545,7 @@ def _print_human(payload: dict[str, Any]) -> None:
             for face in group["faces"]:
                 print(
                     f"  face_id={face['init_face_id']} source={face['source_image']} "
+                    f"crop={face['crop_path']} "
                     f"quality={face['quality']['status']} quality_score={face['quality']['score']:.3f}"
                 )
         if "metrics" in payload:
@@ -656,6 +660,7 @@ def _init_group(group) -> dict[str, Any]:
             {
                 "init_face_id": face.init_face_id,
                 "source_image": face.source_image,
+                "crop_path": face.face.crop_path,
                 "quality": _quality(face.quality),
             }
             for face in group.faces

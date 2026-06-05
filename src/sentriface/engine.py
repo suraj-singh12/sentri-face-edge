@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from sentriface.components.image_ops import load_bgr_image
+from sentriface.components.image_ops import load_bgr_image, save_face_crop
 from sentriface.components.quality import FaceQualityEvaluator
 from sentriface.config import RuntimeConfig
 from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, IdentityStore
@@ -116,11 +116,18 @@ class FaceEngine:
             with self.metrics.timer("search_ms"):
                 matches = self._search_unique_people(vector)
             self.metrics.increment("faces_accepted")
+            pending_id = str(uuid.uuid4())
+            with self.metrics.timer("crop_save_ms"):
+                crop_path = save_face_crop(
+                    image,
+                    face,
+                    self.config.face_dir / "pending" / f"{pending_id}.jpg",
+                )
             additions.append(
                 PendingAddition(
-                    pending_id=str(uuid.uuid4()),
+                    pending_id=pending_id,
                     source_image=str(image_path),
-                    face=face,
+                    face=_with_crop_path(face, crop_path),
                     vector=vector,
                     matches=matches,
                     decision=self._decide(matches),
@@ -264,13 +271,20 @@ class FaceEngine:
                     with self.metrics.timer("embed_ms"):
                         vector = self.embedder.encode(image_path, face)
                     self.metrics.increment("faces_accepted")
+                    init_face_id = str(uuid.uuid4())
+                    with self.metrics.timer("crop_save_ms"):
+                        crop_path = save_face_crop(
+                            image,
+                            face,
+                            self.config.face_dir / "init" / session.session_id / f"{init_face_id}.jpg",
+                        )
                     init_faces.append(
                         InitFace(
-                            init_face_id=str(uuid.uuid4()),
+                            init_face_id=init_face_id,
                             session_id=session.session_id,
                             group_id="unassigned",
                             source_image=str(image_path),
-                            face=face,
+                            face=_with_crop_path(face, crop_path),
                             vector=vector,
                             quality=quality,
                         )
@@ -410,3 +424,12 @@ def _assign_groups(faces: list[InitFace], threshold: float) -> list[InitFace]:
 
 def _cosine(left, right) -> float:
     return sum(a * b for a, b in zip(left, right))
+
+
+def _with_crop_path(face, crop_path: str):
+    return type(face)(
+        box=face.box,
+        quality_score=face.quality_score,
+        landmarks=face.landmarks,
+        crop_path=crop_path,
+    )

@@ -28,6 +28,7 @@ class InitWorkflowTest(unittest.TestCase):
 
             self.assertGreaterEqual(len(groups), 2)
             self.assertEqual(sum(len(group.faces) for group in groups), 3)
+            self.assertTrue(Path(groups[0].faces[0].face.crop_path).exists())
 
             first_group = groups[0]
             person_id = engine.confirm_init_group(
@@ -69,4 +70,3 @@ class InitWorkflowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

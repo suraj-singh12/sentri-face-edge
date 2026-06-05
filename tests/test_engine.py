@@ -52,6 +52,7 @@ class EngineWorkflowTest(unittest.TestCase):
             pending = prepared.accepted
             self.assertEqual(len(pending), 1)
             self.assertEqual(prepared.rejected, [])
+            self.assertTrue(Path(pending[0].face.crop_path).exists())
             self.assertEqual(len(engine.list_pending_additions()), 1)
 
             person_id = engine.confirm_pending_as_new_person(pending[0].pending_id, "Test Person")
