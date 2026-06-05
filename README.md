@@ -93,6 +93,17 @@ Override ONNX threads for a normal command:
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx --onnx-threads 2 recognize path/to/image.jpg
 ```
 
+Tune strictness and CPU load without editing code:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx --max-image-edge 720 --high-confidence 0.70 --medium-confidence 0.52 --min-quality-score 0.60 recognize path/to/image.jpg
+```
+
+`high-confidence` controls strong matches, `medium-confidence` controls
+ambiguous candidates, `min-quality-score` controls whether a face may be added,
+and `max-image-edge` controls how aggressively images are downscaled before
+detection.
+
 Run with development placeholders:
 
 ```bash

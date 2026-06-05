@@ -64,6 +64,10 @@ def main() -> int:
     parser.add_argument("--detector-model", type=Path, default=Path("models/det_500m.onnx"))
     parser.add_argument("--recognizer-model", type=Path, default=Path("models/w600k_r50.onnx"))
     parser.add_argument("--onnx-threads", type=int, help="Override ONNX Runtime intra-op threads")
+    parser.add_argument("--max-image-edge", type=int, help="Override image downscale edge before detection")
+    parser.add_argument("--high-confidence", type=float, help="Similarity needed for a strong match")
+    parser.add_argument("--medium-confidence", type=float, help="Similarity needed for an ambiguous match")
+    parser.add_argument("--min-quality-score", type=float, help="Minimum face quality allowed for adding")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON output")
     parser.add_argument("--metrics", action="store_true", help="Include timing and count metrics")
     subcommands = parser.add_subparsers(dest="command", required=True)
@@ -163,16 +167,9 @@ def main() -> int:
     args = parser.parse_args()
     profile = _select_profile(args.profile)
     config = config_for_hardware(profile, data_dir=args.data_dir)
-    config = RuntimeConfig(
-        **{
-            **config.__dict__,
-            "detector_model": args.detector_model,
-            "recognizer_model": args.recognizer_model,
-            "onnx_intra_threads": args.onnx_threads or config.onnx_intra_threads,
-        }
-    )
 
     try:
+        config = _apply_runtime_overrides(config, args)
         if args.command == "profile":
             return _emit(
                 args,
@@ -188,6 +185,9 @@ def main() -> int:
                     "batch_size": config.batch_size,
                     "prefer_small_models": config.prefer_small_models,
                     "index_backend": config.index_backend,
+                    "high_confidence": config.high_confidence,
+                    "medium_confidence": config.medium_confidence,
+                    "min_quality_score": config.min_quality_score,
                     "runtime": args.runtime,
                     "detector_model": str(config.detector_model),
                     "recognizer_model": str(config.recognizer_model),
@@ -442,6 +442,37 @@ def main() -> int:
         return _emit_error(args, str(exc))
     except KeyError as exc:
         return _emit_error(args, str(exc).strip("'"))
+
+
+def _apply_runtime_overrides(config: RuntimeConfig, args: argparse.Namespace) -> RuntimeConfig:
+    values = {
+        **config.__dict__,
+        "detector_model": args.detector_model,
+        "recognizer_model": args.recognizer_model,
+        "onnx_intra_threads": args.onnx_threads or config.onnx_intra_threads,
+        "max_image_edge": args.max_image_edge or config.max_image_edge,
+        "high_confidence": args.high_confidence if args.high_confidence is not None else config.high_confidence,
+        "medium_confidence": args.medium_confidence if args.medium_confidence is not None else config.medium_confidence,
+        "min_quality_score": args.min_quality_score if args.min_quality_score is not None else config.min_quality_score,
+    }
+    _validate_positive_int("onnx threads", values["onnx_intra_threads"])
+    _validate_positive_int("max image edge", values["max_image_edge"])
+    _validate_unit_interval("high confidence", values["high_confidence"])
+    _validate_unit_interval("medium confidence", values["medium_confidence"])
+    _validate_unit_interval("min quality score", values["min_quality_score"])
+    if values["medium_confidence"] > values["high_confidence"]:
+        raise KeyError("Medium confidence must be less than or equal to high confidence")
+    return RuntimeConfig(**values)
+
+
+def _validate_positive_int(name: str, value: int) -> None:
+    if value < 1:
+        raise KeyError(f"{name.title()} must be at least 1")
+
+
+def _validate_unit_interval(name: str, value: float) -> None:
+    if value < 0.0 or value > 1.0:
+        raise KeyError(f"{name.title()} must be between 0 and 1")
 
 
 def _select_profile(profile_name: str):

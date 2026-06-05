@@ -41,6 +41,57 @@ class CliTest(unittest.TestCase):
         self.assertEqual(payload["max_workers"], 1)
         self.assertEqual(payload["onnx_intra_threads"], 1)
 
+    def test_profile_accepts_runtime_threshold_overrides(self) -> None:
+        output = io.StringIO()
+
+        with patch(
+            "sys.argv",
+            [
+                "sentriface",
+                "--json",
+                "--profile",
+                "low",
+                "--high-confidence",
+                "0.7",
+                "--medium-confidence",
+                "0.5",
+                "--min-quality-score",
+                "0.6",
+                "--max-image-edge",
+                "720",
+                "profile",
+            ],
+        ):
+            with redirect_stdout(output):
+                code = cli.main()
+
+        self.assertEqual(code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["high_confidence"], 0.7)
+        self.assertEqual(payload["medium_confidence"], 0.5)
+        self.assertEqual(payload["min_quality_score"], 0.6)
+        self.assertEqual(payload["max_image_edge"], 720)
+
+    def test_invalid_confidence_override_is_user_facing_error(self) -> None:
+        output = io.StringIO()
+
+        with patch(
+            "sys.argv",
+            [
+                "sentriface",
+                "--high-confidence",
+                "0.4",
+                "--medium-confidence",
+                "0.8",
+                "profile",
+            ],
+        ):
+            with redirect_stdout(output):
+                code = cli.main()
+
+        self.assertEqual(code, 1)
+        self.assertIn("Medium confidence must be less than or equal to high confidence", output.getvalue())
+
     def test_missing_onnx_model_is_user_facing_error(self) -> None:
         output = io.StringIO()
 
