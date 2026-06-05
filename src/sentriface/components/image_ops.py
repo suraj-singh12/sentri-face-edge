@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -17,11 +18,20 @@ ARCFACE_TEMPLATE = (
 
 
 def load_bgr_image(image_path: Path) -> Any:
-    cv2 = _cv2()
-    image = cv2.imread(str(image_path))
+    path = image_path.resolve()
+    try:
+        stat = path.stat()
+        image = _cached_imread(str(path), stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        image = _cached_imread(str(path), 0, 0)
     if image is None:
         raise InputImageError(f"Could not read image: {image_path}")
     return image
+
+
+@lru_cache(maxsize=8)
+def _cached_imread(path: str, mtime_ns: int, size: int) -> Any:
+    return _cv2().imread(path)
 
 
 def resize_max_edge(image: Any, max_edge: int) -> tuple[Any, float]:

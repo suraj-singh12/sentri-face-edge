@@ -75,6 +75,12 @@ Metrics include stage timings such as image load, detection, quality scoring,
 embedding, search, DB work, and useful counters such as detected faces and
 accepted/rejected faces.
 
+Run a repeatable recognition benchmark over one image or a folder:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --metrics --runtime onnx benchmark path/to/images --repeat 3
+```
+
 Run with development placeholders:
 
 ```bash

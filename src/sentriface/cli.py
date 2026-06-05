@@ -3,13 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from sentriface.components.dev_components import HashFaceEmbedder, WholeImageFaceDetector
 from sentriface.components.linear_index import LinearFaceIndex
 from sentriface.components.onnx_components import OnnxArcFaceEmbedder, OnnxScrfdDetector
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
-from sentriface.engine import FaceEngine
+from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import SentriFaceError
 from sentriface.hardware import assess_hardware
 from sentriface.models import PersonMatch
@@ -128,6 +129,10 @@ def main() -> int:
     delete_embedding = subcommands.add_parser("delete-embedding", help="Delete one embedding")
     delete_embedding.add_argument("embedding_id")
 
+    benchmark = subcommands.add_parser("benchmark", help="Run repeated recognition benchmark")
+    benchmark.add_argument("source", type=Path)
+    benchmark.add_argument("--repeat", type=int, default=1)
+
     args = parser.parse_args()
     profile = _select_profile(args.profile)
     config = config_for_hardware(profile, data_dir=args.data_dir)
@@ -162,6 +167,8 @@ def main() -> int:
 
         engine = build_dev_engine(args.data_dir, config) if args.runtime == "dev" else build_onnx_engine(config)
         engine.initialize()
+        if args.metrics:
+            engine.reset_metrics()
 
         if args.command == "init-db":
             return _emit_engine(args, engine, {"initialized": str(args.data_dir)})
@@ -320,6 +327,35 @@ def main() -> int:
             engine.delete_embedding(args.embedding_id)
             return _emit_engine(args, engine, {"embedding_id": args.embedding_id, "deleted": 1})
 
+        if args.command == "benchmark":
+            images = _image_paths(args.source)
+            if not images:
+                raise KeyError(f"No supported images found: {args.source}")
+            if args.repeat < 1:
+                raise KeyError("Repeat must be at least 1")
+            started = perf_counter()
+            faces_seen = 0
+            for _ in range(args.repeat):
+                for image_path in images:
+                    faces_seen += len(engine.recognize(image_path))
+            engine.metrics.timings_ms["total_benchmark_ms"] = (perf_counter() - started) * 1000.0
+            engine.metrics.increment("benchmark_images", len(images))
+            engine.metrics.increment("benchmark_repeat", args.repeat)
+            engine.metrics.increment("benchmark_runs", len(images) * args.repeat)
+            engine.metrics.increment("benchmark_faces", faces_seen)
+            return _emit_engine(
+                args,
+                engine,
+                {
+                    "benchmark": {
+                        "images": len(images),
+                        "repeat": args.repeat,
+                        "runs": len(images) * args.repeat,
+                        "faces": faces_seen,
+                    }
+                },
+            )
+
         return 1
     except SentriFaceError as exc:
         return _emit_error(args, str(exc))
@@ -469,6 +505,17 @@ def _print_human(payload: dict[str, Any]) -> None:
         if "metrics" in payload:
             _print_metrics(payload["metrics"])
         return
+    if "benchmark" in payload:
+        benchmark = payload["benchmark"]
+        print(
+            f"benchmark.images={benchmark['images']} "
+            f"benchmark.repeat={benchmark['repeat']} "
+            f"benchmark.runs={benchmark['runs']} "
+            f"benchmark.faces={benchmark['faces']}"
+        )
+        if "metrics" in payload:
+            _print_metrics(payload["metrics"])
+        return
     if "quality" in payload:
         quality = payload["quality"]
         for key, value in payload.items():
@@ -556,6 +603,18 @@ def _print_metrics(metrics: dict[str, Any]) -> None:
         print(f"metrics.{key}={value:.3f}")
     for key, value in metrics.get("counts", {}).items():
         print(f"metrics.{key}={value}")
+
+
+def _image_paths(source: Path) -> list[Path]:
+    if source.is_file():
+        return [source] if source.suffix.lower() in IMAGE_EXTENSIONS else []
+    if not source.exists():
+        raise KeyError(f"Source path does not exist: {source}")
+    return sorted(
+        path
+        for path in source.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+    )
 
 
 def _print_match_rows(matches: list[dict[str, Any]]) -> None:

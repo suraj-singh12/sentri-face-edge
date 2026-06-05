@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import io
 import json
+import tempfile
 import unittest
 from contextlib import redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
+
+import cv2
+import numpy as np
 
 from sentriface import cli
 
@@ -67,6 +72,40 @@ class CliTest(unittest.TestCase):
         self.assertIn("metrics", payload)
         self.assertIn("timings_ms", payload["metrics"])
         self.assertIn("counts", payload["metrics"])
+
+    def test_benchmark_json_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            image = Path(temp) / "face.jpg"
+            canvas = np.full((120, 120, 3), 128, dtype=np.uint8)
+            cv2.imwrite(str(image), canvas)
+            output = io.StringIO()
+
+            with patch(
+                "sys.argv",
+                [
+                    "sentriface",
+                    "--json",
+                    "--metrics",
+                    "--profile",
+                    "low",
+                    "--data-dir",
+                    str(Path(temp) / "data"),
+                    "benchmark",
+                    str(image),
+                    "--repeat",
+                    "2",
+                ],
+            ):
+                with redirect_stdout(output):
+                    code = cli.main()
+
+        self.assertEqual(code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["benchmark"]["images"], 1)
+        self.assertEqual(payload["benchmark"]["repeat"], 2)
+        self.assertEqual(payload["benchmark"]["runs"], 2)
+        self.assertIn("total_benchmark_ms", payload["metrics"]["timings_ms"])
+        self.assertEqual(payload["metrics"]["counts"]["benchmark_runs"], 2)
 
 
 if __name__ == "__main__":
