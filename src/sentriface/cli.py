@@ -69,6 +69,8 @@ def main() -> int:
     subcommands = parser.add_subparsers(dest="command", required=True)
 
     subcommands.add_parser("init-db", help="Create or migrate the local database")
+    backup_db = subcommands.add_parser("backup-db", help="Create a SQLite database backup")
+    backup_db.add_argument("target", type=Path)
     subcommands.add_parser("profile", help="Show detected hardware and selected config")
 
     recognize = subcommands.add_parser("recognize", help="Run recognition")
@@ -202,6 +204,10 @@ def main() -> int:
 
         if args.command == "init-db":
             return _emit_engine(args, engine, {"initialized": str(args.data_dir)})
+
+        if args.command == "backup-db":
+            engine.backup_database(args.target)
+            return _emit_engine(args, engine, {"backup": str(args.target)})
 
         if args.command == "recognize":
             results = engine.recognize(args.image)

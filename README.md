@@ -225,6 +225,12 @@ models/
   recognizer.onnx
 ```
 
+Create a safe SQLite backup before upgrades or bulk cleanup:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx backup-db backups/sentriface.db
+```
+
 SQLite stores metadata, embedding records, thresholds, and paths. Original images and face crops live on disk when needed.
 
 The SQLite database uses `PRAGMA user_version` for schema versioning. Newer

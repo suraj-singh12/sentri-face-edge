@@ -32,6 +32,25 @@ class StorageMigrationTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 store.initialize()
 
+    def test_backup_to_copies_database_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            db_path = temp_path / "sentriface.db"
+            backup_path = temp_path / "backups" / "sentriface-copy.db"
+            store = SQLiteIdentityStore(db_path, embedding_dim=4)
+            store.initialize()
+            person = store.create_person("Backup Person")
+            store.add_embedding(person.person_id, [0.1, 0.2, 0.3, 0.4], quality_score=0.9)
+
+            store.backup_to(backup_path)
+
+            with sqlite3.connect(backup_path) as conn:
+                persons = conn.execute("SELECT COUNT(*) FROM persons").fetchone()[0]
+                embeddings = conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+
+            self.assertEqual(persons, 1)
+            self.assertEqual(embeddings, 1)
+
     def test_v1_database_migrates_to_v2(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"

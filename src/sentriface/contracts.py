@@ -78,6 +78,9 @@ class IdentityStore(Protocol):
     def move_embedding(self, embedding_id: str, person_id: str) -> None:
         """Move one embedding to another person."""
 
+    def backup_to(self, target_path: Path) -> None:
+        """Create a durable copy of the database."""
+
     def save_pending_addition(self, pending: PendingAddition) -> None:
         """Persist a pending face addition for later review."""
 

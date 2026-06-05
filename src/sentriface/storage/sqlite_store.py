@@ -175,6 +175,12 @@ class SQLiteIdentityStore:
         if cursor.rowcount == 0:
             raise KeyError(f"Unknown embedding: {embedding_id}")
 
+    def backup_to(self, target_path: Path) -> None:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as source:
+            with sqlite3.connect(target_path) as target:
+                source.backup(target)
+
     def add_embedding(
         self,
         person_id: str,

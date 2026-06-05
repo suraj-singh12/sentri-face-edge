@@ -206,6 +206,10 @@ class FaceEngine:
         self._rebuild_index()
         return len(embeddings)
 
+    def backup_database(self, target_path: Path) -> None:
+        with self.metrics.timer("db_backup_ms"):
+            self.store.backup_to(target_path)
+
     def confirm_new_person(
         self,
         pending: PendingAddition,
