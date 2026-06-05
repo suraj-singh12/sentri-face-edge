@@ -20,6 +20,81 @@ UI
 
 The first scaffold uses deterministic placeholder components so the storage, workflows, and contracts can run immediately. Real ONNX models will plug into the same interfaces.
 
+## System Diagrams
+
+End-to-end flow:
+
+```mermaid
+flowchart TD
+    Start["User opens local UI or CLI"] --> Mode{"Choose workflow"}
+    Mode --> Recognize["Recognize image or folder"]
+    Mode --> Add["Queue or enroll face"]
+    Mode --> Init["Initial folder scan"]
+    Mode --> Manage["Manage people and DB"]
+
+    Recognize --> DetectR["Detect face(s)"]
+    DetectR --> QualityR["Score quality"]
+    QualityR --> EmbedR["Generate embedding"]
+    EmbedR --> SearchR["Search vector index"]
+    SearchR --> RankR["Collapse matches by unique person"]
+    RankR --> ResultR["Show top candidates, quality, metrics"]
+
+    Add --> DetectA["Detect face(s)"]
+    DetectA --> QualityA{"Quality accepted?"}
+    QualityA -->|No| RejectA["Show rejected face and reasons"]
+    QualityA -->|Yes| EmbedA["Generate embedding"]
+    EmbedA --> SuggestA["Suggest top matches"]
+    SuggestA --> PendingA["Save pending addition"]
+    PendingA --> ReviewA{"Human review"}
+    ReviewA --> NewA["Confirm as new person"]
+    ReviewA --> ExistingA["Confirm as existing person"]
+    ReviewA --> RejectPendingA["Reject pending addition"]
+    NewA --> StoreA["Save person and embedding"]
+    ExistingA --> StoreA
+
+    Init --> ScanI["Scan image folder"]
+    ScanI --> DetectI["Detect and quality-score faces"]
+    DetectI --> EmbedI["Generate embeddings"]
+    EmbedI --> ClusterI["Cluster likely same-person faces"]
+    ClusterI --> ReviewI{"Review group"}
+    ReviewI --> NewI["Confirm group as new person"]
+    ReviewI --> ExistingI["Attach group to existing person"]
+    ReviewI --> RejectI["Reject or reset group"]
+    NewI --> StoreI["Save identities and embeddings"]
+    ExistingI --> StoreI
+
+    Manage --> PeopleM["List, rename, delete people"]
+    Manage --> CleanupM["Move embedding or merge people"]
+    Manage --> BackupM["SQLite backup"]
+```
+
+System design:
+
+```mermaid
+flowchart LR
+    UI["Local Web UI\nstdlib HTTP server"] --> Controller["Application Controller\nsentriface.ui / sentriface.cli"]
+    CLI["CLI"] --> Controller
+    Controller --> Engine["FaceEngine"]
+
+    Engine --> Detector["Face Detection\nSCRFD ONNX or dev detector"]
+    Engine --> Quality["Quality Evaluator\nsize, blur, brightness, landmarks"]
+    Engine --> Embedder["Face Embedding\nArcFace ONNX or dev hash embedder"]
+    Engine --> Index["Vector Index\nlinear cosine now, HNSW/FAISS later"]
+    Engine --> Store["SQLite Identity Store"]
+    Engine --> Files["Filesystem Face Store"]
+    Engine --> Metrics["Metrics Collector"]
+
+    Store --> Persons["persons"]
+    Store --> Embeddings["embeddings"]
+    Store --> Pending["pending_additions"]
+    Store --> InitSessions["init_sessions / init_faces"]
+    Files --> Crops["data/faces/person_id, pending, init"]
+
+    Config["Hardware Assessment\nlow/medium/high profile"] --> Controller
+    Models["Offline ONNX Models\nmodels/det_500m.onnx\nmodels/w600k_r50.onnx"] --> Detector
+    Models --> Embedder
+```
+
 ## CPU-First Defaults
 
 Target runtime stack:
@@ -52,6 +127,16 @@ high   -> 3 workers, batch size 4, larger preprocessing batches
 
 For i3-class systems, the goal is not to max out the CPU. The goal is to keep
 the UI responsive while recognition happens in the background.
+
+Run the local UI:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.ui --runtime dev --data-dir data
+```
+
+Then open `http://127.0.0.1:8765`. Use `--runtime onnx` after the offline ONNX
+models are present. The UI prints debug events to the terminal and keeps the
+latest events visible in the Debug tab.
 
 Check the selected profile:
 

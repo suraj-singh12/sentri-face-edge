@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SentriFace Edge</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>SentriFace Edge</h1>
+        <p id="profileLine">Starting local engine...</p>
+      </div>
+      <div class="actions">
+        <button id="refreshBtn" title="Refresh data">Refresh</button>
+        <button id="backupBtn" title="Create DB backup">Backup DB</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="tabs" aria-label="Views">
+        <button class="tab active" data-view="recognize">Recognize</button>
+        <button class="tab" data-view="add">Add Queue</button>
+        <button class="tab" data-view="people">People</button>
+        <button class="tab" data-view="init">Init Scan</button>
+        <button class="tab" data-view="debug">Debug</button>
+      </nav>
+
+      <section id="recognize" class="view active">
+        <div class="toolbar">
+          <input id="recognizePath" placeholder="Image or folder path" />
+          <button id="recognizeBtn">Recognize</button>
+          <button id="recognizeBatchBtn">Batch</button>
+        </div>
+        <div id="recognizeResults" class="results"></div>
+      </section>
+
+      <section id="add" class="view">
+        <div class="split">
+          <div>
+            <h2>Queue Face</h2>
+            <div class="toolbar stack">
+              <input id="queuePath" placeholder="Image path" />
+              <label class="check"><input id="forceBadQuality" type="checkbox" /> force bad quality</label>
+              <button id="queueBtn">Queue</button>
+            </div>
+            <h2>Enroll Directly</h2>
+            <div class="toolbar stack">
+              <input id="enrollName" placeholder="Person name" />
+              <input id="enrollPath" placeholder="Image path" />
+              <button id="enrollBtn">Enroll</button>
+            </div>
+          </div>
+          <div>
+            <div class="section-head">
+              <h2>Pending Review</h2>
+              <button id="pendingRefreshBtn">Refresh</button>
+            </div>
+            <div id="pendingList" class="results"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="people" class="view">
+        <div class="section-head">
+          <h2>People</h2>
+          <button id="peopleRefreshBtn">Refresh</button>
+        </div>
+        <div id="peopleList" class="grid"></div>
+      </section>
+
+      <section id="init" class="view">
+        <div class="toolbar">
+          <input id="initPath" placeholder="Folder path for initial scan" />
+          <button id="initScanBtn">Scan</button>
+        </div>
+        <div class="toolbar">
+          <input id="initSessionId" placeholder="Session ID" />
+          <button id="initLoadBtn">Load Groups</button>
+        </div>
+        <div id="initGroups" class="results"></div>
+      </section>
+
+      <section id="debug" class="view">
+        <div class="section-head">
+          <h2>Debug Events</h2>
+          <button id="eventsRefreshBtn">Refresh</button>
+        </div>
+        <pre id="debugLog"></pre>
+      </section>
+    </main>
+
+    <div id="toast" role="status"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>
