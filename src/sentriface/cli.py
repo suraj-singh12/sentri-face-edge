@@ -35,11 +35,11 @@ def build_onnx_engine(config: RuntimeConfig) -> FaceEngine:
             model_path=config.detector_model,
             max_image_edge=config.max_image_edge,
             input_size=config.detector_input_size,
-            intra_op_threads=config.max_workers,
+            intra_op_threads=config.onnx_intra_threads,
         ),
         embedder=OnnxArcFaceEmbedder(
             model_path=config.recognizer_model,
-            intra_op_threads=config.max_workers,
+            intra_op_threads=config.onnx_intra_threads,
         ),
         index=LinearFaceIndex(),
         store=SQLiteIdentityStore(config.db_path, config.embedding_dim),
@@ -63,6 +63,7 @@ def main() -> int:
     )
     parser.add_argument("--detector-model", type=Path, default=Path("models/det_500m.onnx"))
     parser.add_argument("--recognizer-model", type=Path, default=Path("models/w600k_r50.onnx"))
+    parser.add_argument("--onnx-threads", type=int, help="Override ONNX Runtime intra-op threads")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON output")
     parser.add_argument("--metrics", action="store_true", help="Include timing and count metrics")
     subcommands = parser.add_subparsers(dest="command", required=True)
@@ -132,6 +133,10 @@ def main() -> int:
     benchmark = subcommands.add_parser("benchmark", help="Run repeated recognition benchmark")
     benchmark.add_argument("source", type=Path)
     benchmark.add_argument("--repeat", type=int, default=1)
+    benchmark.add_argument(
+        "--compare-threads",
+        help="Comma-separated ONNX thread counts to compare, for example 1,2,4",
+    )
 
     args = parser.parse_args()
     profile = _select_profile(args.profile)
@@ -141,6 +146,7 @@ def main() -> int:
             **config.__dict__,
             "detector_model": args.detector_model,
             "recognizer_model": args.recognizer_model,
+            "onnx_intra_threads": args.onnx_threads or config.onnx_intra_threads,
         }
     )
 
@@ -154,6 +160,7 @@ def main() -> int:
                     "memory_gb": profile.memory_gb,
                     "reason": profile.reason,
                     "max_workers": config.max_workers,
+                    "onnx_intra_threads": config.onnx_intra_threads,
                     "max_image_edge": config.max_image_edge,
                     "detector_input_size": config.detector_input_size,
                     "batch_size": config.batch_size,
@@ -164,6 +171,9 @@ def main() -> int:
                     "recognizer_model": str(config.recognizer_model),
                 },
             )
+
+        if args.command == "benchmark" and args.compare_threads:
+            return _run_thread_comparison(args, config)
 
         engine = build_dev_engine(args.data_dir, config) if args.runtime == "dev" else build_onnx_engine(config)
         engine.initialize()
@@ -411,7 +421,67 @@ def _emit_error(args, message: str) -> int:
     return 1
 
 
+def _run_thread_comparison(args, base_config: RuntimeConfig) -> int:
+    if args.runtime != "onnx":
+        return _emit_error(args, "--compare-threads requires --runtime onnx")
+    thread_counts = [
+        int(value.strip())
+        for value in args.compare_threads.split(",")
+        if value.strip()
+    ]
+    if not thread_counts or any(value < 1 for value in thread_counts):
+        return _emit_error(args, "Thread counts must be positive integers")
+
+    images = _image_paths(args.source)
+    if not images:
+        return _emit_error(args, f"No supported images found: {args.source}")
+    if args.repeat < 1:
+        return _emit_error(args, "Repeat must be at least 1")
+
+    results = []
+    for threads in thread_counts:
+        config = RuntimeConfig(**{**base_config.__dict__, "onnx_intra_threads": threads})
+        engine = build_onnx_engine(config)
+        engine.initialize()
+        engine.reset_metrics()
+        started = perf_counter()
+        faces_seen = 0
+        for _ in range(args.repeat):
+            for image_path in images:
+                faces_seen += len(engine.recognize(image_path))
+        engine.metrics.timings_ms["total_benchmark_ms"] = (perf_counter() - started) * 1000.0
+        engine.metrics.increment("benchmark_images", len(images))
+        engine.metrics.increment("benchmark_repeat", args.repeat)
+        engine.metrics.increment("benchmark_runs", len(images) * args.repeat)
+        engine.metrics.increment("benchmark_faces", faces_seen)
+        results.append(
+            {
+                "onnx_intra_threads": threads,
+                "benchmark": {
+                    "images": len(images),
+                    "repeat": args.repeat,
+                    "runs": len(images) * args.repeat,
+                    "faces": faces_seen,
+                },
+                "metrics": engine.metrics_snapshot(),
+            }
+        )
+    return _emit(args, {"thread_comparison": results})
+
+
 def _print_human(payload: dict[str, Any]) -> None:
+    if "thread_comparison" in payload:
+        for item in payload["thread_comparison"]:
+            print(f"onnx_intra_threads={item['onnx_intra_threads']}")
+            benchmark = item["benchmark"]
+            print(
+                f"benchmark.images={benchmark['images']} "
+                f"benchmark.repeat={benchmark['repeat']} "
+                f"benchmark.runs={benchmark['runs']} "
+                f"benchmark.faces={benchmark['faces']}"
+            )
+            _print_metrics(item["metrics"])
+        return
     if "faces" in payload:
         faces = payload["faces"]
         if not faces:

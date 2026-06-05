@@ -30,6 +30,7 @@ class RuntimeConfig:
     dark_threshold: float = 35.0
     bright_threshold: float = 220.0
     max_workers: int = 1
+    onnx_intra_threads: int = 1
     max_image_edge: int = 960
     detector_input_size: int = 640
     batch_size: int = 1
@@ -63,6 +64,7 @@ def config_for_hardware(
         return RuntimeConfig(
             data_dir=data_dir,
             max_workers=3,
+            onnx_intra_threads=4,
             max_image_edge=1280,
             batch_size=4,
             prefer_small_models=False,
@@ -73,6 +75,7 @@ def config_for_hardware(
         return RuntimeConfig(
             data_dir=data_dir,
             max_workers=2,
+            onnx_intra_threads=2,
             max_image_edge=1120,
             batch_size=2,
             prefer_small_models=False,
@@ -82,6 +85,7 @@ def config_for_hardware(
     return RuntimeConfig(
         data_dir=data_dir,
         max_workers=1,
+        onnx_intra_threads=1,
         max_image_edge=880,
         batch_size=1,
         prefer_small_models=True,

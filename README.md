@@ -81,6 +81,18 @@ Run a repeatable recognition benchmark over one image or a folder:
 PYTHONPATH=src python3 -m sentriface.cli --metrics --runtime onnx benchmark path/to/images --repeat 3
 ```
 
+Compare ONNX Runtime thread counts on the target machine:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx benchmark path/to/images --repeat 3 --compare-threads 1,2,4
+```
+
+Override ONNX threads for a normal command:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx --onnx-threads 2 recognize path/to/image.jpg
+```
+
 Run with development placeholders:
 
 ```bash

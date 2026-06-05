@@ -39,6 +39,7 @@ class CliTest(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["tier"], "low")
         self.assertEqual(payload["max_workers"], 1)
+        self.assertEqual(payload["onnx_intra_threads"], 1)
 
     def test_missing_onnx_model_is_user_facing_error(self) -> None:
         output = io.StringIO()
@@ -106,6 +107,31 @@ class CliTest(unittest.TestCase):
         self.assertEqual(payload["benchmark"]["runs"], 2)
         self.assertIn("total_benchmark_ms", payload["metrics"]["timings_ms"])
         self.assertEqual(payload["metrics"]["counts"]["benchmark_runs"], 2)
+
+    def test_compare_threads_requires_onnx_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            image = Path(temp) / "face.jpg"
+            canvas = np.full((120, 120, 3), 128, dtype=np.uint8)
+            cv2.imwrite(str(image), canvas)
+            output = io.StringIO()
+
+            with patch(
+                "sys.argv",
+                [
+                    "sentriface",
+                    "--runtime",
+                    "dev",
+                    "benchmark",
+                    str(image),
+                    "--compare-threads",
+                    "1,2",
+                ],
+            ):
+                with redirect_stdout(output):
+                    code = cli.main()
+
+        self.assertEqual(code, 1)
+        self.assertIn("--compare-threads requires --runtime onnx", output.getvalue())
 
 
 if __name__ == "__main__":
