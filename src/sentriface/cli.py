@@ -80,6 +80,9 @@ def main() -> int:
     recognize = subcommands.add_parser("recognize", help="Run recognition")
     recognize.add_argument("image", type=Path)
 
+    recognize_batch = subcommands.add_parser("recognize-batch", help="Run recognition on an image or folder")
+    recognize_batch.add_argument("source", type=Path)
+
     enroll = subcommands.add_parser("enroll", help="Create a person from the first face in an image")
     enroll.add_argument("name")
     enroll.add_argument("image", type=Path)
@@ -214,15 +217,23 @@ def main() -> int:
             return _emit_engine(
                 args,
                 engine,
+                {"faces": _recognition_faces(engine, results)},
+            )
+
+        if args.command == "recognize-batch":
+            images = _image_paths(args.source)
+            if not images:
+                raise KeyError(f"No supported images found: {args.source}")
+            return _emit_engine(
+                args,
+                engine,
                 {
-                    "faces": [
+                    "batch": [
                         {
-                            "index": index,
-                            "decision": result.decision.value,
-                            "quality": _quality(result.quality),
-                            "matches": _matches(engine, result.matches),
+                            "image": str(image_path),
+                            "faces": _recognition_faces(engine, engine.recognize(image_path)),
                         }
-                        for index, result in enumerate(results, start=1)
+                        for image_path in images
                     ]
                 },
             )
@@ -584,6 +595,24 @@ def _print_human(payload: dict[str, Any]) -> None:
             )
             _print_metrics(item["metrics"])
         return
+    if "batch" in payload:
+        for item in payload["batch"]:
+            print(f"image={item['image']} faces={len(item['faces'])}")
+            for face in item["faces"]:
+                print(
+                    f"  face={face['index']} decision={face['decision']} "
+                    f"quality={face['quality']['status']} quality_score={face['quality']['score']:.3f} "
+                    f"matches={len(face['matches'])}"
+                )
+                _print_reasons(face["quality"]["reasons"])
+                for match in face["matches"]:
+                    print(
+                        f"    match={match['rank']} person_id={match['person_id']} "
+                        f"name={match['name']} score={match['score']:.4f}"
+                    )
+        if "metrics" in payload:
+            _print_metrics(payload["metrics"])
+        return
     if "faces" in payload:
         faces = payload["faces"]
         if not faces:
@@ -711,6 +740,18 @@ def _print_human(payload: dict[str, Any]) -> None:
             _print_metrics(value)
         else:
             print(f"{key}={value}")
+
+
+def _recognition_faces(engine: FaceEngine, results) -> list[dict[str, Any]]:
+    return [
+        {
+            "index": index,
+            "decision": result.decision.value,
+            "quality": _quality(result.quality),
+            "matches": _matches(engine, result.matches),
+        }
+        for index, result in enumerate(results, start=1)
+    ]
 
 
 def _matches(engine: FaceEngine, matches: list[PersonMatch]) -> list[dict[str, Any]]:

@@ -110,6 +110,12 @@ Run with development placeholders:
 PYTHONPATH=src python3 -m sentriface.cli --runtime dev recognize path/to/image.jpg
 ```
 
+Run recognition over a folder:
+
+```bash
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx recognize-batch path/to/images
+```
+
 Run with real CPU ONNX components after placing models on disk:
 
 ```bash

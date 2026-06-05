@@ -159,6 +159,37 @@ class CliTest(unittest.TestCase):
         self.assertIn("total_benchmark_ms", payload["metrics"]["timings_ms"])
         self.assertEqual(payload["metrics"]["counts"]["benchmark_runs"], 2)
 
+    def test_recognize_batch_json_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            images = temp_path / "images"
+            images.mkdir()
+            canvas = np.full((120, 120, 3), 128, dtype=np.uint8)
+            cv2.imwrite(str(images / "a.jpg"), canvas)
+            cv2.imwrite(str(images / "b.jpg"), canvas)
+            output = io.StringIO()
+
+            with patch(
+                "sys.argv",
+                [
+                    "sentriface",
+                    "--json",
+                    "--profile",
+                    "low",
+                    "--data-dir",
+                    str(temp_path / "data"),
+                    "recognize-batch",
+                    str(images),
+                ],
+            ):
+                with redirect_stdout(output):
+                    code = cli.main()
+
+        self.assertEqual(code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(len(payload["batch"]), 2)
+        self.assertEqual(payload["batch"][0]["faces"][0]["decision"], "unknown")
+
     def test_compare_threads_requires_onnx_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             image = Path(temp) / "face.jpg"
