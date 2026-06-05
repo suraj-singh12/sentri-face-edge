@@ -164,6 +164,17 @@ class SQLiteIdentityStore:
         if cursor.rowcount == 0:
             raise KeyError(f"Unknown embedding: {embedding_id}")
 
+    def move_embedding(self, embedding_id: str, person_id: str) -> None:
+        if self.get_person(person_id) is None:
+            raise KeyError(f"Unknown person: {person_id}")
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE embeddings SET person_id = ? WHERE embedding_id = ?",
+                (person_id, embedding_id),
+            )
+        if cursor.rowcount == 0:
+            raise KeyError(f"Unknown embedding: {embedding_id}")
+
     def add_embedding(
         self,
         person_id: str,

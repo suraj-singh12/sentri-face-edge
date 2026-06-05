@@ -64,8 +64,75 @@ class PersonManagementTest(unittest.TestCase):
             self.assertEqual(engine.list_person_embeddings(person_id), [])
             self.assertEqual(engine.recognize(image)[0].matches, [])
 
-    def _write_image(self, image: Path) -> None:
-        canvas = np.full((160, 160, 3), 128, dtype=np.uint8)
+    def test_move_embedding_reassigns_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_a = temp_path / "face-a.jpg"
+            image_b = temp_path / "face-b.jpg"
+            self._write_image(image_a, shade=128)
+            self._write_image(image_b, shade=145)
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            person_a = engine.confirm_new_person(engine.prepare_additions(image_a)[0], "Person A")
+            person_b = engine.confirm_new_person(engine.prepare_additions(image_b)[0], "Person B")
+            embedding = engine.list_person_embeddings(person_a)[0]
+
+            engine.move_embedding(embedding.embedding_id, person_b)
+
+            self.assertEqual(engine.list_person_embeddings(person_a), [])
+            self.assertEqual(len(engine.list_person_embeddings(person_b)), 2)
+            self.assertEqual(engine.recognize(image_a)[0].matches[0].person_id, person_b)
+
+    def test_merge_persons_moves_embeddings_and_deletes_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_a = temp_path / "face-a.jpg"
+            image_b = temp_path / "face-b.jpg"
+            self._write_image(image_a, shade=128)
+            self._write_image(image_b, shade=145)
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            source = engine.confirm_new_person(engine.prepare_additions(image_a)[0], "Source")
+            target = engine.confirm_new_person(engine.prepare_additions(image_b)[0], "Target")
+
+            moved = engine.merge_persons(source, target)
+
+            self.assertEqual(moved, 1)
+            self.assertIsNone(engine.get_person(source))
+            self.assertEqual(len(engine.list_person_embeddings(target)), 2)
+            self.assertEqual(engine.recognize(image_a)[0].matches[0].person_id, target)
+
+    def test_merge_persons_rejects_same_person(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image = temp_path / "face.jpg"
+            self._write_image(image)
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            person_id = engine.confirm_new_person(engine.prepare_additions(image)[0], "Person A")
+
+            with self.assertRaises(KeyError):
+                engine.merge_persons(person_id, person_id)
+
+    def test_move_embedding_rejects_unknown_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image = temp_path / "face.jpg"
+            self._write_image(image)
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            person_id = engine.confirm_new_person(engine.prepare_additions(image)[0], "Person A")
+            embedding = engine.list_person_embeddings(person_id)[0]
+
+            with self.assertRaises(KeyError):
+                engine.move_embedding(embedding.embedding_id, "missing-person")
+
+    def _write_image(self, image: Path, shade: int = 128) -> None:
+        canvas = np.full((160, 160, 3), shade, dtype=np.uint8)
         cv2.rectangle(canvas, (35, 35), (125, 125), (220, 220, 220), -1)
         cv2.circle(canvas, (62, 70), 7, (20, 20, 20), -1)
         cv2.circle(canvas, (98, 70), 7, (20, 20, 20), -1)
@@ -75,4 +142,3 @@ class PersonManagementTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -195,10 +195,15 @@ PYTHONPATH=src python3 -m sentriface.cli --runtime onnx person PERSON_ID
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx rename-person PERSON_ID "New Name"
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx delete-person PERSON_ID
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx delete-embedding EMBEDDING_ID
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx move-embedding EMBEDDING_ID TARGET_PERSON_ID
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx merge-persons SOURCE_PERSON_ID TARGET_PERSON_ID
 ```
 
 `delete-person` is a soft delete. Embeddings stay in the database for now, but
 deleted people are excluded from active listings and recognition.
+Use `move-embedding` when one sample was attached to the wrong person. Use
+`merge-persons` when two person records are actually the same identity; source
+embeddings are moved to the target and the source person is soft-deleted.
 
 ## Storage
 

@@ -187,6 +187,25 @@ class FaceEngine:
             self.store.delete_embedding(embedding_id)
         self._rebuild_index()
 
+    def move_embedding(self, embedding_id: str, person_id: str) -> None:
+        with self.metrics.timer("db_move_embedding_ms"):
+            self.store.move_embedding(embedding_id, person_id)
+        self._rebuild_index()
+
+    def merge_persons(self, source_person_id: str, target_person_id: str) -> int:
+        if source_person_id == target_person_id:
+            raise KeyError("Source and target person must be different")
+        if self.store.get_person(source_person_id) is None:
+            raise KeyError(f"Unknown source person: {source_person_id}")
+        if self.store.get_person(target_person_id) is None:
+            raise KeyError(f"Unknown target person: {target_person_id}")
+        embeddings = self.store.list_embeddings_for_person(source_person_id)
+        for embedding in embeddings:
+            self.store.move_embedding(embedding.embedding_id, target_person_id)
+        self.store.delete_person(source_person_id)
+        self._rebuild_index()
+        return len(embeddings)
+
     def confirm_new_person(
         self,
         pending: PendingAddition,

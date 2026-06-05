@@ -130,6 +130,14 @@ def main() -> int:
     delete_embedding = subcommands.add_parser("delete-embedding", help="Delete one embedding")
     delete_embedding.add_argument("embedding_id")
 
+    move_embedding = subcommands.add_parser("move-embedding", help="Move one embedding to another person")
+    move_embedding.add_argument("embedding_id")
+    move_embedding.add_argument("person_id")
+
+    merge_persons = subcommands.add_parser("merge-persons", help="Merge source person into target person")
+    merge_persons.add_argument("source_person_id")
+    merge_persons.add_argument("target_person_id")
+
     benchmark = subcommands.add_parser("benchmark", help="Run repeated recognition benchmark")
     benchmark.add_argument("source", type=Path)
     benchmark.add_argument("--repeat", type=int, default=1)
@@ -338,6 +346,31 @@ def main() -> int:
         if args.command == "delete-embedding":
             engine.delete_embedding(args.embedding_id)
             return _emit_engine(args, engine, {"embedding_id": args.embedding_id, "deleted": 1})
+
+        if args.command == "move-embedding":
+            engine.move_embedding(args.embedding_id, args.person_id)
+            return _emit_engine(
+                args,
+                engine,
+                {
+                    "embedding_id": args.embedding_id,
+                    "person_id": args.person_id,
+                    "moved": 1,
+                },
+            )
+
+        if args.command == "merge-persons":
+            moved = engine.merge_persons(args.source_person_id, args.target_person_id)
+            return _emit_engine(
+                args,
+                engine,
+                {
+                    "source_person_id": args.source_person_id,
+                    "target_person_id": args.target_person_id,
+                    "embeddings_moved": moved,
+                    "merged": 1,
+                },
+            )
 
         if args.command == "benchmark":
             images = _image_paths(args.source)

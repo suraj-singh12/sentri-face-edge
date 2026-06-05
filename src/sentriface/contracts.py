@@ -75,6 +75,9 @@ class IdentityStore(Protocol):
     def delete_embedding(self, embedding_id: str) -> None:
         """Delete one embedding record."""
 
+    def move_embedding(self, embedding_id: str, person_id: str) -> None:
+        """Move one embedding to another person."""
+
     def save_pending_addition(self, pending: PendingAddition) -> None:
         """Persist a pending face addition for later review."""
 
