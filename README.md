@@ -165,11 +165,16 @@ CLI review flow:
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-scan path/to/images
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-groups SESSION_ID
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-confirm SESSION_ID GROUP_ID "Person Name"
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-confirm-existing SESSION_ID GROUP_ID PERSON_ID
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-reject SESSION_ID GROUP_ID
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-reset SESSION_ID GROUP_ID
 ```
 
 `init-scan` does not create people immediately. It creates a durable review
 session, clusters likely-same-person faces, and waits for confirmation.
+`init-confirm-existing` adds the group as new embeddings for an active person.
+`init-reset` moves a reviewed group back to pending; it does not remove
+embeddings that were already confirmed.
 
 ### Add
 

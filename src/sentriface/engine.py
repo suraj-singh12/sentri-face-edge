@@ -344,10 +344,36 @@ class FaceEngine:
             self.store.mark_init_group_status(session_id, group_id, "confirmed")
         return person.person_id
 
+    def confirm_init_group_existing(self, session_id: str, group_id: str, person_id: str) -> int:
+        group = self._get_init_group(session_id, group_id)
+        if group.status != "pending":
+            raise KeyError(f"Init group is not pending: {group_id}")
+        if self.store.get_person(person_id) is None:
+            raise KeyError(f"Unknown person: {person_id}")
+        for face in group.faces:
+            with self.metrics.timer("db_add_embedding_ms"):
+                record = self.store.add_embedding(
+                    person_id=person_id,
+                    vector=face.vector,
+                    quality_score=face.quality.score,
+                    source_image=face.source_image,
+                    crop_path=face.face.crop_path,
+                )
+            with self.metrics.timer("index_add_ms"):
+                self.index.add(record)
+        with self.metrics.timer("db_mark_init_group_ms"):
+            self.store.mark_init_group_status(session_id, group_id, "confirmed")
+        return len(group.faces)
+
     def reject_init_group(self, session_id: str, group_id: str) -> None:
         self._get_init_group(session_id, group_id)
         with self.metrics.timer("db_mark_init_group_ms"):
             self.store.mark_init_group_status(session_id, group_id, "rejected")
+
+    def reset_init_group(self, session_id: str, group_id: str) -> None:
+        self._get_init_group(session_id, group_id)
+        with self.metrics.timer("db_mark_init_group_ms"):
+            self.store.mark_init_group_status(session_id, group_id, "pending")
 
     def _get_init_group(self, session_id: str, group_id: str) -> InitGroup:
         for group in self.list_init_groups(session_id):

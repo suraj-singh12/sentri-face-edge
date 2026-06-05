@@ -59,6 +59,46 @@ class InitWorkflowTest(unittest.TestCase):
             updated = engine.list_init_groups(session.session_id)[0]
             self.assertEqual(updated.status, "rejected")
 
+    def test_init_confirm_existing_person(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_dir = temp_path / "images"
+            image_dir.mkdir()
+            seed = temp_path / "seed.jpg"
+            self._write_image(seed, shade=120)
+            self._write_image(image_dir / "person_a_2.jpg", shade=120)
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            person_id = engine.confirm_new_person(engine.prepare_additions(seed)[0], "Existing")
+
+            session = engine.create_init_session(image_dir)
+            group = engine.list_init_groups(session.session_id)[0]
+            added = engine.confirm_init_group_existing(session.session_id, group.group_id, person_id)
+
+            self.assertEqual(added, 1)
+            self.assertEqual(len(engine.list_person_embeddings(person_id)), 2)
+            updated = engine.list_init_groups(session.session_id)[0]
+            self.assertEqual(updated.status, "confirmed")
+
+    def test_init_reset_group_to_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_dir = temp_path / "images"
+            image_dir.mkdir()
+            self._write_image(image_dir / "person_a.jpg", shade=120)
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+
+            session = engine.create_init_session(image_dir)
+            group = engine.list_init_groups(session.session_id)[0]
+            engine.reject_init_group(session.session_id, group.group_id)
+            engine.reset_init_group(session.session_id, group.group_id)
+
+            updated = engine.list_init_groups(session.session_id)[0]
+            self.assertEqual(updated.status, "pending")
+
     def _write_image(self, image: Path, shade: int) -> None:
         canvas = np.full((160, 160, 3), shade, dtype=np.uint8)
         cv2.rectangle(canvas, (35, 35), (125, 125), (220, 220, 220), -1)

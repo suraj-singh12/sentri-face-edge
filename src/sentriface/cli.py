@@ -111,9 +111,21 @@ def main() -> int:
     init_confirm.add_argument("group_id")
     init_confirm.add_argument("name")
 
+    init_confirm_existing = subcommands.add_parser(
+        "init-confirm-existing",
+        help="Confirm an init group as embeddings for an existing person",
+    )
+    init_confirm_existing.add_argument("session_id")
+    init_confirm_existing.add_argument("group_id")
+    init_confirm_existing.add_argument("person_id")
+
     init_reject = subcommands.add_parser("init-reject", help="Reject an init group")
     init_reject.add_argument("session_id")
     init_reject.add_argument("group_id")
+
+    init_reset = subcommands.add_parser("init-reset", help="Reset an init group to pending")
+    init_reset.add_argument("session_id")
+    init_reset.add_argument("group_id")
 
     subcommands.add_parser("persons", help="List active people")
 
@@ -314,9 +326,27 @@ def main() -> int:
                 },
             )
 
+        if args.command == "init-confirm-existing":
+            embeddings = engine.confirm_init_group_existing(args.session_id, args.group_id, args.person_id)
+            return _emit_engine(
+                args,
+                engine,
+                {
+                    "session_id": args.session_id,
+                    "group_id": args.group_id,
+                    "person_id": args.person_id,
+                    "embeddings": embeddings,
+                    "confirmed": "init_group_existing",
+                },
+            )
+
         if args.command == "init-reject":
             engine.reject_init_group(args.session_id, args.group_id)
             return _emit_engine(args, engine, {"session_id": args.session_id, "group_id": args.group_id, "rejected": 1})
+
+        if args.command == "init-reset":
+            engine.reset_init_group(args.session_id, args.group_id)
+            return _emit_engine(args, engine, {"session_id": args.session_id, "group_id": args.group_id, "status": "pending"})
 
         if args.command == "persons":
             return _emit_engine(args, engine, {"persons": [_person_summary(summary) for summary in engine.list_persons()]})
