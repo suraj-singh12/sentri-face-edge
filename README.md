@@ -146,6 +146,9 @@ choose image -> enroll person -> recognize same image -> inspect match and metri
 
 The main UI actions accept file picker input. Path fields remain available as an
 advanced fallback for local folders and scripted testing.
+Uploaded files under 1 MB are saved unchanged. Uploaded files over 1 MB are
+only size-reduced before they are passed to the engine; face quality decisions
+still happen inside the engine.
 
 Check the selected profile:
 

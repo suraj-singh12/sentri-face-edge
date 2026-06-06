@@ -28,6 +28,8 @@ from sentriface.models import (
 )
 
 STATIC_DIR = Path(__file__).with_name("ui_static")
+UPLOAD_RESIZE_LIMIT_BYTES = 1_000_000
+UPLOAD_MAX_EDGE = 1600
 
 
 class SentriFaceUiServer(ThreadingHTTPServer):
@@ -100,8 +102,13 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                     _required(payload, "filename"),
                     _required(payload, "data"),
                 )
-                self.server.log_event("upload", filename=payload.get("filename"), path=str(saved_path))
-                self._json({"path": str(saved_path)})
+                self.server.log_event(
+                    "upload",
+                    filename=payload.get("filename"),
+                    path=str(saved_path),
+                    stored_size=saved_path.stat().st_size,
+                )
+                self._json({"path": str(saved_path), "stored_size": saved_path.stat().st_size})
                 return
             if parsed.path == "/api/recognize":
                 image_path = Path(_required(payload, "path"))
@@ -372,11 +379,73 @@ def _save_upload(data_dir: Path, filename: str, data_url: str) -> Path:
         raise KeyError("Invalid upload data") from exc
     if not data:
         raise KeyError("Upload is empty")
+    if len(data) > UPLOAD_RESIZE_LIMIT_BYTES:
+        data, suffix = _reduce_upload_image(data)
     upload_dir = data_dir / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     target = upload_dir / f"{uuid.uuid4().hex}{suffix}"
     target.write_bytes(data)
     return target
+
+
+def _reduce_upload_image(data: bytes) -> tuple[bytes, str]:
+    cv2 = _cv2()
+    np = _numpy()
+    encoded = np.frombuffer(data, dtype=np.uint8)
+    image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+    if image is None:
+        raise KeyError("Could not decode uploaded image for size reduction")
+
+    height, width = image.shape[:2]
+    longest = max(height, width)
+    if longest > UPLOAD_MAX_EDGE:
+        scale = UPLOAD_MAX_EDGE / float(longest)
+        image = cv2.resize(
+            image,
+            (max(1, int(width * scale)), max(1, int(height * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+
+    for quality in (92, 88, 84, 80, 76, 72, 68):
+        ok, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+        if not ok:
+            raise KeyError("Could not encode uploaded image")
+        reduced = buffer.tobytes()
+        if len(reduced) <= UPLOAD_RESIZE_LIMIT_BYTES:
+            return reduced, ".jpg"
+
+    while len(reduced) > UPLOAD_RESIZE_LIMIT_BYTES:
+        height, width = image.shape[:2]
+        if max(height, width) <= 640:
+            return reduced, ".jpg"
+        image = cv2.resize(
+            image,
+            (max(1, int(width * 0.85)), max(1, int(height * 0.85))),
+            interpolation=cv2.INTER_AREA,
+        )
+        ok, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 76])
+        if not ok:
+            raise KeyError("Could not encode uploaded image")
+        reduced = buffer.tobytes()
+    return reduced, ".jpg"
+
+
+def _cv2() -> Any:
+    try:
+        import cv2
+
+        return cv2
+    except ImportError as exc:
+        raise RuntimeError("OpenCV is required for upload size reduction") from exc
+
+
+def _numpy() -> Any:
+    try:
+        import numpy
+
+        return numpy
+    except ImportError as exc:
+        raise RuntimeError("NumPy is required for upload size reduction") from exc
 
 
 def _recognition(engine: FaceEngine, result: RecognitionResult, index: int) -> dict[str, Any]:

@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 from sentriface.cli import build_dev_engine
-from sentriface.ui import _pending, _person_summary, _recognition, _save_upload
+from sentriface.ui import UPLOAD_RESIZE_LIMIT_BYTES, _pending, _person_summary, _recognition, _save_upload
 
 
 class UiSerializationTest(unittest.TestCase):
@@ -59,6 +59,23 @@ class UiSerializationTest(unittest.TestCase):
             self.assertTrue(saved.exists())
             self.assertEqual(saved.parent, data_dir / "uploads")
             self.assertEqual(saved.read_bytes(), b"fake image bytes")
+
+    def test_upload_save_reduces_large_image(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            rng = np.random.default_rng(123)
+            image = rng.integers(0, 255, (1800, 1800, 3), dtype=np.uint8)
+            ok, encoded_image = cv2.imencode(".png", image)
+            self.assertTrue(ok)
+            original = encoded_image.tobytes()
+            self.assertGreater(len(original), UPLOAD_RESIZE_LIMIT_BYTES)
+            encoded = base64.b64encode(original).decode("ascii")
+
+            saved = _save_upload(data_dir, "large.png", f"data:image/png;base64,{encoded}")
+
+            self.assertTrue(saved.exists())
+            self.assertEqual(saved.suffix, ".jpg")
+            self.assertLessEqual(saved.stat().st_size, UPLOAD_RESIZE_LIMIT_BYTES)
 
     def test_upload_save_rejects_unsupported_type(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
