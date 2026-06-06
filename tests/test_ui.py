@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,7 +9,7 @@ import cv2
 import numpy as np
 
 from sentriface.cli import build_dev_engine
-from sentriface.ui import _pending, _person_summary, _recognition
+from sentriface.ui import _pending, _person_summary, _recognition, _save_upload
 
 
 class UiSerializationTest(unittest.TestCase):
@@ -47,6 +48,22 @@ class UiSerializationTest(unittest.TestCase):
             self.assertEqual(person_payload["embedding_count"], 1)
             self.assertIn("crop_path", pending_payload)
             self.assertIn("quality", pending_payload)
+
+    def test_upload_save_writes_image_inside_data_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            encoded = base64.b64encode(b"fake image bytes").decode("ascii")
+
+            saved = _save_upload(data_dir, "face.jpg", f"data:image/jpeg;base64,{encoded}")
+
+            self.assertTrue(saved.exists())
+            self.assertEqual(saved.parent, data_dir / "uploads")
+            self.assertEqual(saved.read_bytes(), b"fake image bytes")
+
+    def test_upload_save_rejects_unsupported_type(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaises(KeyError):
+                _save_upload(Path(temp), "note.txt", "bm90IGFuIGltYWdl")
 
     def _write_image(self, image: Path) -> None:
         canvas = np.full((160, 160, 3), 128, dtype=np.uint8)

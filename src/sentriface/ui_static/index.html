@@ -28,8 +28,11 @@
       </nav>
 
       <section id="recognize" class="view active">
-        <div class="toolbar">
-          <input id="recognizePath" placeholder="Image or folder path" />
+        <div class="toolbar stack">
+          <label class="field-label" for="recognizeFile">Choose image</label>
+          <input id="recognizeFile" type="file" accept="image/*" />
+          <label class="field-label" for="recognizePath">Or use image/folder path</label>
+          <input id="recognizePath" placeholder="Optional local image or folder path" />
           <button id="recognizeBtn">Recognize</button>
           <button id="recognizeBatchBtn">Batch</button>
         </div>
@@ -41,14 +44,20 @@
           <div>
             <h2>Queue Face</h2>
             <div class="toolbar stack">
-              <input id="queuePath" placeholder="Image path" />
+              <label class="field-label" for="queueFile">Choose image</label>
+              <input id="queueFile" type="file" accept="image/*" />
+              <label class="field-label" for="queuePath">Or use image path</label>
+              <input id="queuePath" placeholder="Optional local image path" />
               <label class="check"><input id="forceBadQuality" type="checkbox" /> force bad quality</label>
               <button id="queueBtn">Queue</button>
             </div>
             <h2>Enroll Directly</h2>
             <div class="toolbar stack">
               <input id="enrollName" placeholder="Person name" />
-              <input id="enrollPath" placeholder="Image path" />
+              <label class="field-label" for="enrollFile">Choose image</label>
+              <input id="enrollFile" type="file" accept="image/*" />
+              <label class="field-label" for="enrollPath">Or use image path</label>
+              <input id="enrollPath" placeholder="Optional local image path" />
               <button id="enrollBtn">Enroll</button>
             </div>
           </div>

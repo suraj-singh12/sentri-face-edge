@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
+import uuid
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -91,6 +94,15 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             payload = self._read_json()
+            if parsed.path == "/api/upload":
+                saved_path = _save_upload(
+                    self.server.config.data_dir,
+                    _required(payload, "filename"),
+                    _required(payload, "data"),
+                )
+                self.server.log_event("upload", filename=payload.get("filename"), path=str(saved_path))
+                self._json({"path": str(saved_path)})
+                return
             if parsed.path == "/api/recognize":
                 image_path = Path(_required(payload, "path"))
                 self.server.engine.reset_metrics()
@@ -344,6 +356,27 @@ def _image_paths(source: Path) -> list[Path]:
     if not source.exists():
         raise KeyError(f"Source path does not exist: {source}")
     return sorted(path for path in source.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
+
+
+def _save_upload(data_dir: Path, filename: str, data_url: str) -> Path:
+    suffix = Path(filename).suffix.lower()
+    if suffix not in IMAGE_EXTENSIONS:
+        raise KeyError(f"Unsupported upload type: {suffix or filename}")
+    if "," in data_url:
+        _, encoded = data_url.split(",", 1)
+    else:
+        encoded = data_url
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    except binascii.Error as exc:
+        raise KeyError("Invalid upload data") from exc
+    if not data:
+        raise KeyError("Upload is empty")
+    upload_dir = data_dir / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    target = upload_dir / f"{uuid.uuid4().hex}{suffix}"
+    target.write_bytes(data)
+    return target
 
 
 def _recognition(engine: FaceEngine, result: RecognitionResult, index: int) -> dict[str, Any]:

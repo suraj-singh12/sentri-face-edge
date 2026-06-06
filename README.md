@@ -138,6 +138,15 @@ Then open `http://127.0.0.1:8765`. Use `--runtime onnx` after the offline ONNX
 models are present. The UI prints debug events to the terminal and keeps the
 latest events visible in the Debug tab.
 
+Browser flow:
+
+```text
+choose image -> enroll person -> recognize same image -> inspect match and metrics
+```
+
+The main UI actions accept file picker input. Path fields remain available as an
+advanced fallback for local folders and scripted testing.
+
 Check the selected profile:
 
 ```bash

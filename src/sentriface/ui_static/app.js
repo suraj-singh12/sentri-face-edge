@@ -61,14 +61,16 @@ async function loadEvents() {
 }
 
 async function recognizeOne() {
-  const payload = await apiPost("/api/recognize", { path: $("recognizePath").value });
+  const path = await resolveImagePath("recognizeFile", "recognizePath");
+  const payload = await apiPost("/api/recognize", { path });
   $("recognizeResults").innerHTML = renderFaces(payload.faces, payload.metrics);
   toast(`Recognized ${payload.faces.length} face(s)`);
   await loadEvents();
 }
 
 async function recognizeBatch() {
-  const payload = await apiPost("/api/recognize-batch", { path: $("recognizePath").value });
+  const path = await resolveImagePath("recognizeFile", "recognizePath");
+  const payload = await apiPost("/api/recognize-batch", { path });
   $("recognizeResults").innerHTML = payload.batch.map((item) => `
     <div class="card">
       <div class="card-head">
@@ -85,8 +87,9 @@ async function recognizeBatch() {
 }
 
 async function queueAdd() {
+  const path = await resolveImagePath("queueFile", "queuePath");
   const payload = await apiPost("/api/queue-add", {
-    path: $("queuePath").value,
+    path,
     force_bad_quality: $("forceBadQuality").checked,
   });
   toast(`Queued ${payload.pending.length}, rejected ${payload.rejected.length}`);
@@ -95,8 +98,9 @@ async function queueAdd() {
 }
 
 async function enroll() {
+  const path = await resolveImagePath("enrollFile", "enrollPath");
   const payload = await apiPost("/api/enroll", {
-    path: $("enrollPath").value,
+    path,
     name: $("enrollName").value,
   });
   toast(`Enrolled person ${payload.person_id}`);
@@ -275,6 +279,40 @@ function renderMetrics(metrics) {
 function renderThumb(path) {
   if (!path) return "";
   return `<img src="/media?path=${encodeURIComponent(path)}" alt="face crop" />`;
+}
+
+async function resolveImagePath(fileInputId, pathInputId) {
+  const fileInput = $(fileInputId);
+  if (fileInput.files && fileInput.files.length) {
+    const path = await uploadFile(fileInput.files[0]);
+    $(pathInputId).value = path;
+    return path;
+  }
+  const path = $(pathInputId).value.trim();
+  if (!path) {
+    toast("Choose an image or enter a path");
+    throw new Error("Missing image");
+  }
+  return path;
+}
+
+async function uploadFile(file) {
+  toast(`Uploading ${file.name}`);
+  const data = await readFileAsDataUrl(file);
+  const payload = await apiPost("/api/upload", {
+    filename: file.name,
+    data,
+  });
+  return payload.path;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 async function apiGet(path) {
