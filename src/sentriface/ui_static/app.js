@@ -13,6 +13,8 @@ const state = {
   toast: "",
 };
 
+const DUPLICATE_MATCH_SCORE = 0.9999;
+
 const root = document.getElementById("root");
 
 const React = {
@@ -584,14 +586,30 @@ async function recognizeBatch() {
 async function recognitionAccept() {
   const best = state.recognition?.face?.matches?.[0];
   if (!state.recognition?.inputPath || !best) return;
-  await apiPost("/api/recognition-accept-existing", {
+  if (isDuplicateMatch(best)) {
+    state.recognitionAccepted = true;
+    showToast(`Duplicate image of ${best.name}`);
+    render();
+    return;
+  }
+  const payload = await apiPost("/api/recognition-accept-existing", {
     path: state.recognition.inputPath,
     person_id: best.person_id,
   });
+  if (payload.duplicate) {
+    state.recognitionAccepted = true;
+    showToast(`Duplicate image of ${payload.name || best.name}`);
+    render();
+    return;
+  }
   state.recognitionAccepted = true;
   showToast(`Accepted as ${best.name}`);
   await Promise.all([loadPeople(), loadEvents()]);
   render();
+}
+
+function isDuplicateMatch(match) {
+  return match.score >= DUPLICATE_MATCH_SCORE;
 }
 
 async function recognitionNew() {

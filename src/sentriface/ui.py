@@ -30,6 +30,7 @@ from sentriface.models import (
 STATIC_DIR = Path(__file__).with_name("ui_static")
 UPLOAD_RESIZE_LIMIT_BYTES = 1_000_000
 UPLOAD_MAX_EDGE = 1600
+DUPLICATE_MATCH_SCORE = 0.9999
 
 
 class SentriFaceUiServer(ThreadingHTTPServer):
@@ -171,6 +172,18 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                 additions = self.server.engine.prepare_additions(image_path)
                 if not additions:
                     raise KeyError("No acceptable faces found")
+                if _has_duplicate_embedding(additions[0].vector, self.server.engine.list_person_embeddings(person_id)):
+                    person = self.server.engine.get_person(person_id)
+                    self.server.log_event("recognition-duplicate", path=str(image_path), person_id=person_id)
+                    self._json(
+                        {
+                            "duplicate": True,
+                            "person_id": person_id,
+                            "name": person.name if person else person_id,
+                            "metrics": self.server.engine.metrics_snapshot(),
+                        }
+                    )
+                    return
                 embedding_id = self.server.engine.confirm_existing_person(additions[0], person_id)
                 self.server.log_event("recognition-accept-existing", path=str(image_path), person_id=person_id)
                 self._json({"embedding_id": embedding_id, "metrics": self.server.engine.metrics_snapshot()})
@@ -622,6 +635,14 @@ def _representative_image(embeddings: list[EmbeddingRecord]) -> str | None:
         if record.source_image:
             return record.source_image
     return None
+
+
+def _has_duplicate_embedding(vector: tuple[float, ...], embeddings: list[EmbeddingRecord]) -> bool:
+    return any(_cosine(vector, record.vector) >= DUPLICATE_MATCH_SCORE for record in embeddings)
+
+
+def _cosine(left: tuple[float, ...], right: tuple[float, ...]) -> float:
+    return sum(a * b for a, b in zip(left, right))
 
 
 def _box(face) -> dict[str, Any]:

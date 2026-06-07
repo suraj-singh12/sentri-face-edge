@@ -9,8 +9,10 @@ import cv2
 import numpy as np
 
 from sentriface.cli import build_dev_engine
+from sentriface.models import EmbeddingRecord
 from sentriface.ui import (
     UPLOAD_RESIZE_LIMIT_BYTES,
+    _has_duplicate_embedding,
     _pending,
     _person_summary,
     _recognition,
@@ -20,6 +22,19 @@ from sentriface.ui import (
 
 
 class UiSerializationTest(unittest.TestCase):
+    def test_duplicate_embedding_detection_uses_near_exact_score(self) -> None:
+        embeddings = [
+            EmbeddingRecord(
+                embedding_id="embedding-1",
+                person_id="person-1",
+                vector=(1.0, 0.0, 0.0, 0.0),
+                quality_score=0.9,
+            )
+        ]
+
+        self.assertTrue(_has_duplicate_embedding((1.0, 0.0, 0.0, 0.0), embeddings))
+        self.assertFalse(_has_duplicate_embedding((0.0, 1.0, 0.0, 0.0), embeddings))
+
     def test_recognition_payload_contains_debuggable_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
