@@ -114,9 +114,16 @@ function PeopleView() {
 
 function InitView() {
   return `
-    <div class="toolbar stack">
-      ${PathField("initPath", "Folder path for initial scan", "Folder path for initial scan")}
-      <button class="primary" data-action="init-scan">Scan</button>
+    <div class="workflow-panel">
+      <div>
+        <h2>Initial Face Grouping</h2>
+        <p class="muted">Choose a folder of images, scan faces, then review grouped identities.</p>
+      </div>
+      <div class="toolbar stack">
+        ${FolderField("initFolder", "Choose folder")}
+        ${PathField("initPath", "Or use folder path", "Optional local folder path")}
+        <button class="primary" data-action="init-scan">Scan Folder</button>
+      </div>
     </div>
     <div class="toolbar stack">
       ${PathField("initSessionId", "Session ID", "Session ID")}
@@ -141,6 +148,16 @@ function FileField(id, label) {
     <label class="field-label" for="${id}">${label}</label>
     <div class="input-action">
       <input id="${id}" type="file" accept="image/*" />
+      <button type="button" data-action="clear-file" data-target="${id}">Clear</button>
+    </div>
+  `;
+}
+
+function FolderField(id, label) {
+  return `
+    <label class="field-label" for="${id}">${label}</label>
+    <div class="input-action">
+      <input id="${id}" type="file" accept="image/*" webkitdirectory directory multiple />
       <button type="button" data-action="clear-file" data-target="${id}">Clear</button>
     </div>
   `;
@@ -446,7 +463,8 @@ async function rejectPending(pendingId) {
 }
 
 async function initScan() {
-  const payload = await apiPost("/api/init-scan", { path: valueOf("initPath") });
+  const path = await resolveFolderPath("initFolder", "initPath");
+  const payload = await apiPost("/api/init-scan", { path });
   state.initSessionId = payload.session_id;
   state.initGroups = payload.groups;
   showToast(`Init session created with ${payload.groups.length} group(s)`);
@@ -519,6 +537,34 @@ async function uploadFile(file) {
   const data = await readFileAsDataUrl(file);
   const payload = await apiPost("/api/upload", { filename: file.name, data });
   console.debug("[sentriface-ui] uploaded", payload);
+  return payload.path;
+}
+
+async function resolveFolderPath(fileInputId, pathInputId) {
+  const fileInput = document.getElementById(fileInputId);
+  if (fileInput?.files?.length) {
+    const path = await uploadFolder(Array.from(fileInput.files));
+    const pathInput = document.getElementById(pathInputId);
+    if (pathInput) pathInput.value = path;
+    return path;
+  }
+  const path = valueOf(pathInputId);
+  if (!path) {
+    showToast("Choose a folder or enter a folder path");
+    throw new Error("Missing folder");
+  }
+  return path;
+}
+
+async function uploadFolder(files) {
+  showToast(`Uploading ${files.length} file(s)`);
+  const payloadFiles = await Promise.all(files.map(async (file) => ({
+    filename: file.name,
+    relative_path: file.webkitRelativePath || file.name,
+    data: await readFileAsDataUrl(file),
+  })));
+  const payload = await apiPost("/api/upload-batch", { files: payloadFiles });
+  console.debug("[sentriface-ui] uploaded folder", payload);
   return payload.path;
 }
 

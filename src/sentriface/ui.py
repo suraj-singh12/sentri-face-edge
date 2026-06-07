@@ -110,6 +110,14 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                 )
                 self._json({"path": str(saved_path), "stored_size": saved_path.stat().st_size})
                 return
+            if parsed.path == "/api/upload-batch":
+                saved_dir, count = _save_upload_batch(
+                    self.server.config.data_dir,
+                    payload.get("files", []),
+                )
+                self.server.log_event("upload-batch", path=str(saved_dir), files=count)
+                self._json({"path": str(saved_dir), "files": count})
+                return
             if parsed.path == "/api/recognize":
                 image_path = Path(_required(payload, "path"))
                 self.server.engine.reset_metrics()
@@ -365,7 +373,7 @@ def _image_paths(source: Path) -> list[Path]:
     return sorted(path for path in source.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
 
 
-def _save_upload(data_dir: Path, filename: str, data_url: str) -> Path:
+def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Path = Path("uploads")) -> Path:
     suffix = Path(filename).suffix.lower()
     if suffix not in IMAGE_EXTENSIONS:
         raise KeyError(f"Unsupported upload type: {suffix or filename}")
@@ -381,11 +389,43 @@ def _save_upload(data_dir: Path, filename: str, data_url: str) -> Path:
         raise KeyError("Upload is empty")
     if len(data) > UPLOAD_RESIZE_LIMIT_BYTES:
         data, suffix = _reduce_upload_image(data)
-    upload_dir = data_dir / "uploads"
+    upload_dir = data_dir / upload_subdir
     upload_dir.mkdir(parents=True, exist_ok=True)
     target = upload_dir / f"{uuid.uuid4().hex}{suffix}"
     target.write_bytes(data)
     return target
+
+
+def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]]) -> tuple[Path, int]:
+    if not files:
+        raise KeyError("No files selected")
+    batch_subdir = Path("uploads") / "batches" / uuid.uuid4().hex
+    batch_dir = data_dir / batch_subdir
+    count = 0
+    for item in files:
+        filename = _required(item, "filename")
+        relative_path = str(item.get("relative_path") or filename)
+        data_url = _required(item, "data")
+        suffix = Path(filename).suffix.lower()
+        if suffix not in IMAGE_EXTENSIONS:
+            continue
+        safe_path = _safe_relative_upload_path(relative_path)
+        saved = _save_upload(data_dir, safe_path.name, data_url, batch_subdir / safe_path.parent)
+        count += int(saved.exists())
+    if count == 0:
+        raise KeyError("No supported image files selected")
+    return batch_dir, count
+
+
+def _safe_relative_upload_path(relative_path: str) -> Path:
+    parts = [
+        part
+        for part in Path(relative_path).parts
+        if part not in {"", ".", ".."} and not Path(part).is_absolute()
+    ]
+    if not parts:
+        raise KeyError("Invalid upload path")
+    return Path(*parts)
 
 
 def _reduce_upload_image(data: bytes) -> tuple[bytes, str]:

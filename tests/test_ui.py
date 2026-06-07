@@ -9,7 +9,14 @@ import cv2
 import numpy as np
 
 from sentriface.cli import build_dev_engine
-from sentriface.ui import UPLOAD_RESIZE_LIMIT_BYTES, _pending, _person_summary, _recognition, _save_upload
+from sentriface.ui import (
+    UPLOAD_RESIZE_LIMIT_BYTES,
+    _pending,
+    _person_summary,
+    _recognition,
+    _save_upload,
+    _save_upload_batch,
+)
 
 
 class UiSerializationTest(unittest.TestCase):
@@ -81,6 +88,38 @@ class UiSerializationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             with self.assertRaises(KeyError):
                 _save_upload(Path(temp), "note.txt", "bm90IGFuIGltYWdl")
+
+    def test_upload_batch_writes_supported_images(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            first = base64.b64encode(b"first image").decode("ascii")
+            second = base64.b64encode(b"second image").decode("ascii")
+
+            batch_dir, count = _save_upload_batch(
+                data_dir,
+                [
+                    {
+                        "filename": "a.jpg",
+                        "relative_path": "folder/a.jpg",
+                        "data": f"data:image/jpeg;base64,{first}",
+                    },
+                    {
+                        "filename": "b.png",
+                        "relative_path": "folder/nested/b.png",
+                        "data": f"data:image/png;base64,{second}",
+                    },
+                    {
+                        "filename": "skip.txt",
+                        "relative_path": "folder/skip.txt",
+                        "data": "c2tpcA==",
+                    },
+                ],
+            )
+
+            self.assertEqual(count, 2)
+            self.assertEqual(len(list((batch_dir / "folder").glob("*.jpg"))), 1)
+            self.assertEqual(len(list((batch_dir / "folder" / "nested").glob("*.png"))), 1)
+            self.assertFalse((batch_dir / "folder" / "skip.txt").exists())
 
     def _write_image(self, image: Path) -> None:
         canvas = np.full((160, 160, 3), 128, dtype=np.uint8)
