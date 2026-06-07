@@ -73,7 +73,7 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                 self._json(self._profile())
                 return
             if parsed.path == "/api/persons":
-                self._json({"persons": [_person_summary(item) for item in self.server.engine.list_persons()]})
+                self._json({"persons": [_person_summary(item, self.server.engine) for item in self.server.engine.list_persons()]})
                 return
             if parsed.path == "/api/person":
                 person_id = _query_value(parsed.query, "person_id")
@@ -579,8 +579,13 @@ def _person(person: Person) -> dict[str, Any]:
     }
 
 
-def _person_summary(summary: PersonSummary) -> dict[str, Any]:
-    return {**_person(summary.person), "embedding_count": summary.embedding_count}
+def _person_summary(summary: PersonSummary, engine: FaceEngine | None = None) -> dict[str, Any]:
+    embeddings = engine.list_person_embeddings(summary.person.person_id) if engine else []
+    return {
+        **_person(summary.person),
+        "embedding_count": summary.embedding_count,
+        "representative_image": _representative_image(embeddings),
+    }
 
 
 def _embedding(record: EmbeddingRecord) -> dict[str, Any]:

@@ -65,10 +65,11 @@ class UiSerializationTest(unittest.TestCase):
             prepared = engine.queue_additions(image)
             pending_payload = _pending(engine, prepared.accepted[0])
             person_id = engine.confirm_pending_as_new_person(pending_payload["pending_id"], "Queued Person")
-            person_payload = _person_summary(engine.list_persons()[0])
+            person_payload = _person_summary(engine.list_persons()[0], engine)
 
             self.assertEqual(person_payload["person_id"], person_id)
             self.assertEqual(person_payload["embedding_count"], 1)
+            self.assertTrue(person_payload["representative_image"])
             self.assertIn("crop_path", pending_payload)
             self.assertIn("quality", pending_payload)
 

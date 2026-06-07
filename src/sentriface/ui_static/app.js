@@ -2,6 +2,8 @@ const state = {
   activeView: "recognize",
   profile: null,
   people: [],
+  peopleGallery: null,
+  peopleGalleryImage: null,
   pending: [],
   events: [],
   recognition: null,
@@ -100,12 +102,13 @@ function AddView() {
 }
 
 function PeopleView() {
+  if (state.peopleGallery) return PeopleGalleryView(state.peopleGallery);
   return `
     <div class="section-head">
       <h2>People</h2>
       <button data-action="load-people">Refresh</button>
     </div>
-    <div class="grid">${state.people.length ? state.people.map(PersonCard).join("") : EmptyCard("No people enrolled yet.")}</div>
+    <div class="people-grid">${state.people.length ? state.people.map(PersonCard).join("") : EmptyCard("No people enrolled yet.")}</div>
   `;
 }
 
@@ -208,15 +211,49 @@ function PendingCard(item) {
 
 function PersonCard(person) {
   return `
-    <div class="card">
+    <button class="person-card" data-action="people-open" data-person-id="${escapeHtml(person.person_id)}">
+      <div class="person-photo-frame">
+        ${person.representative_image ? `<img src="/media?path=${encodeURIComponent(person.representative_image)}" alt="${escapeHtml(person.name)}" />` : `<span class="muted">No image</span>`}
+      </div>
       <div class="card-head">
         <div>
           <div class="title">${escapeHtml(person.name)}</div>
-          <div class="muted">${escapeHtml(person.person_id)}</div>
+          <div class="muted person-id">${escapeHtml(person.person_id)}</div>
         </div>
         <span class="pill">${person.embedding_count} embedding(s)</span>
       </div>
       <div class="muted">Created ${escapeHtml(person.created_at)}</div>
+    </button>
+  `;
+}
+
+function PeopleGalleryView(payload) {
+  const images = payload.embeddings
+    .map((record) => record.crop_path || record.source_image)
+    .filter(Boolean);
+  const selectedImage = state.peopleGalleryImage;
+  return `
+    <div class="people-viewer">
+      <div class="section-head">
+        <div>
+          <h2>${escapeHtml(payload.person.name)}</h2>
+          <div class="muted">${images.length} image(s) | ${escapeHtml(payload.person.person_id)}</div>
+        </div>
+        <button data-action="people-back">Back</button>
+      </div>
+      ${selectedImage ? `
+        <div class="people-full-frame">
+          <img src="/media?path=${encodeURIComponent(selectedImage)}" alt="${escapeHtml(payload.person.name)}" />
+        </div>
+      ` : `
+        <div class="people-gallery-grid">
+          ${images.length ? images.map((path) => `
+            <button class="people-gallery-thumb" data-action="people-gallery-image" data-image-path="${escapeHtml(path)}">
+              <img src="/media?path=${encodeURIComponent(path)}" alt="${escapeHtml(payload.person.name)}" />
+            </button>
+          `).join("") : EmptyCard("No images saved for this person.")}
+        </div>
+      `}
     </div>
   `;
 }
@@ -497,6 +534,9 @@ async function handleAction(target) {
     if (action === "recognition-gallery") await recognitionGallery(target.dataset.personId);
     if (action === "recognition-gallery-back") recognitionGalleryBack();
     if (action === "recognition-gallery-image") recognitionGalleryImage(target.dataset.imagePath);
+    if (action === "people-open") await peopleOpen(target.dataset.personId);
+    if (action === "people-back") peopleBack();
+    if (action === "people-gallery-image") peopleGalleryImage(target.dataset.imagePath);
     if (action === "confirm-new") await confirmNew(target.dataset.pendingId);
     if (action === "confirm-existing") await confirmExisting(target.dataset.pendingId);
     if (action === "reject-pending") await rejectPending(target.dataset.pendingId);
@@ -521,6 +561,28 @@ async function loadProfile() {
 async function loadPeople() {
   const payload = await apiGet("/api/persons");
   state.people = payload.persons;
+  render();
+}
+
+async function peopleOpen(personId) {
+  if (!personId) return;
+  state.peopleGallery = await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`);
+  state.peopleGalleryImage = null;
+  render();
+}
+
+function peopleGalleryImage(path) {
+  if (!path) return;
+  state.peopleGalleryImage = path;
+  render();
+}
+
+function peopleBack() {
+  if (state.peopleGalleryImage) {
+    state.peopleGalleryImage = null;
+  } else {
+    state.peopleGallery = null;
+  }
   render();
 }
 

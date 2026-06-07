@@ -258,6 +258,111 @@ button[data-action="init-scan"]:hover {
   gap: 10px;
 }
 
+.people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.person-card {
+  display: grid;
+  gap: 10px;
+  height: auto;
+  min-height: 0;
+  padding: 12px;
+  text-align: left;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(18, 32, 45, 0.04);
+}
+
+.person-card:hover {
+  transform: none;
+  border-color: var(--accent);
+}
+
+.person-photo-frame {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7fafb;
+}
+
+.person-photo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.person-card .card-head {
+  margin-bottom: 0;
+}
+
+.person-id {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.people-viewer {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 250px);
+  min-height: 470px;
+  overflow: hidden;
+}
+
+.people-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.people-gallery-thumb {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f7fafb;
+}
+
+.people-gallery-thumb:hover {
+  transform: none;
+}
+
+.people-gallery-thumb img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.people-full-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7fafb;
+}
+
+.people-full-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .results {
   display: grid;
   gap: 10px;
