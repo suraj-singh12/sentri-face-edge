@@ -265,7 +265,10 @@ button[data-action="init-scan"]:hover {
 
 .recognition-workbench {
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 14px;
+  height: calc(100vh - 250px);
+  min-height: 470px;
 }
 
 .recognition-stage {
@@ -273,6 +276,8 @@ button[data-action="init-scan"]:hover {
   grid-template-columns: minmax(420px, 1.3fr) minmax(320px, 0.7fr);
   gap: 16px;
   align-items: start;
+  height: 100%;
+  min-height: 0;
 }
 
 .compare-pane {
@@ -291,7 +296,9 @@ button[data-action="init-scan"]:hover {
 }
 
 .match-pane {
-  min-height: 0;
+  height: 100%;
+  min-height: 25vh;
+  overflow: hidden;
 }
 
 .pane-head {
@@ -340,7 +347,7 @@ button[data-action="init-scan"]:hover {
 }
 
 .input-frame {
-  height: clamp(300px, 42vh, 430px);
+  height: 25vh;
 }
 
 .input-frame .load-image-panel {
@@ -438,11 +445,16 @@ button[data-action="init-scan"]:hover {
 }
 
 .gallery-panel {
+  flex: 1 1 auto;
+  min-height: 0;
   margin-top: 2px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #f8fafb;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .gallery-panel .section-head {
@@ -457,16 +469,48 @@ button[data-action="init-scan"]:hover {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
   gap: 8px;
-  max-height: 190px;
+  min-height: 0;
   overflow: auto;
 }
 
-.gallery-grid img {
+.gallery-thumb {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.gallery-thumb:hover {
+  transform: none;
+}
+
+.gallery-grid img,
+.gallery-full-frame img {
   width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
   border: 1px solid var(--line);
   border-radius: 8px;
+  background: #f7fafb;
+}
+
+.gallery-grid img {
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-full-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.gallery-full-frame img {
+  height: 100%;
+  object-fit: contain;
 }
 
 .card {

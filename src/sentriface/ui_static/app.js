@@ -6,6 +6,7 @@ const state = {
   events: [],
   recognition: null,
   recognitionGallery: null,
+  recognitionGalleryImage: null,
   recognitionAccepted: false,
   initGroups: [],
   initSessionId: "",
@@ -284,8 +285,7 @@ function RecognitionDecision() {
               <div class="muted">${recognition?.face ? `Face ${recognition.face.index}` : "No result yet."}</div>
             </div>
           </div>
-          ${BestMatchPanel(best, recognition?.face)}
-          ${state.recognitionGallery ? GalleryPanel(state.recognitionGallery) : ""}
+          ${state.recognitionGallery ? GalleryPanel(state.recognitionGallery) : BestMatchPanel(best, recognition?.face)}
         </div>
       </div>
       <div class="decision-actions">
@@ -362,15 +362,26 @@ function GalleryPanel(payload) {
   const images = payload.embeddings
     .map((record) => record.crop_path || record.source_image)
     .filter(Boolean);
+  const selectedImage = state.recognitionGalleryImage;
   return `
     <div class="gallery-panel">
       <div class="section-head">
         <h2>${escapeHtml(payload.person.name)} Photos</h2>
-        <button data-action="recognition-gallery-close">Close</button>
+        <button data-action="recognition-gallery-back">Back</button>
       </div>
-      <div class="gallery-grid">
-        ${images.length ? images.map((path) => `<img src="/media?path=${encodeURIComponent(path)}" alt="${escapeHtml(payload.person.name)}" />`).join("") : EmptyCard("No photos saved for this person.")}
-      </div>
+      ${selectedImage ? `
+        <div class="gallery-full-frame">
+          <img src="/media?path=${encodeURIComponent(selectedImage)}" alt="${escapeHtml(payload.person.name)}" />
+        </div>
+      ` : `
+        <div class="gallery-grid">
+          ${images.length ? images.map((path) => `
+            <button class="gallery-thumb" data-action="recognition-gallery-image" data-image-path="${escapeHtml(path)}">
+              <img src="/media?path=${encodeURIComponent(path)}" alt="${escapeHtml(payload.person.name)}" />
+            </button>
+          `).join("") : EmptyCard("No photos saved for this person.")}
+        </div>
+      `}
     </div>
   `;
 }
@@ -482,7 +493,8 @@ async function handleAction(target) {
     if (action === "recognition-new") await recognitionNew();
     if (action === "recognition-clear") recognitionClear();
     if (action === "recognition-gallery") await recognitionGallery(target.dataset.personId);
-    if (action === "recognition-gallery-close") recognitionGalleryClose();
+    if (action === "recognition-gallery-back") recognitionGalleryBack();
+    if (action === "recognition-gallery-image") recognitionGalleryImage(target.dataset.imagePath);
     if (action === "confirm-new") await confirmNew(target.dataset.pendingId);
     if (action === "confirm-existing") await confirmExisting(target.dataset.pendingId);
     if (action === "reject-pending") await rejectPending(target.dataset.pendingId);
@@ -542,6 +554,7 @@ async function runRecognition(path) {
     metrics: payload.metrics,
   };
   state.recognitionGallery = null;
+  state.recognitionGalleryImage = null;
   state.recognitionAccepted = false;
   showToast(`Recognized ${payload.faces.length} face(s)`);
   await loadEvents();
@@ -556,6 +569,7 @@ async function recognizeBatch() {
   const path = await resolveImagePath("recognizeFile", "recognizePath");
   const payload = await apiPost("/api/recognize-batch", { path });
   state.recognitionGallery = null;
+  state.recognitionGalleryImage = null;
   state.recognitionAccepted = false;
   state.recognition = {
     inputPath: path,
@@ -598,6 +612,7 @@ function recognitionClear() {
   clearFile("recognizeFile");
   state.recognition = null;
   state.recognitionGallery = null;
+  state.recognitionGalleryImage = null;
   state.recognitionAccepted = false;
   render();
 }
@@ -605,11 +620,22 @@ function recognitionClear() {
 async function recognitionGallery(personId) {
   if (!personId) return;
   state.recognitionGallery = await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`);
+  state.recognitionGalleryImage = null;
   render();
 }
 
-function recognitionGalleryClose() {
-  state.recognitionGallery = null;
+function recognitionGalleryImage(path) {
+  if (!path) return;
+  state.recognitionGalleryImage = path;
+  render();
+}
+
+function recognitionGalleryBack() {
+  if (state.recognitionGalleryImage) {
+    state.recognitionGalleryImage = null;
+  } else {
+    state.recognitionGallery = null;
+  }
   render();
 }
 
