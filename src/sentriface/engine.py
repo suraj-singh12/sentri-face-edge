@@ -307,6 +307,20 @@ class FaceEngine:
         source_path: Path,
         allow_bad_quality: bool = False,
     ) -> InitSession:
+        return self._create_init_session(source_path, allow_bad_quality).session
+
+    def create_queue_session(
+        self,
+        source_path: Path,
+        allow_bad_quality: bool = False,
+    ) -> "QueueSessionResult":
+        return self._create_init_session(source_path, allow_bad_quality)
+
+    def _create_init_session(
+        self,
+        source_path: Path,
+        allow_bad_quality: bool = False,
+    ) -> "QueueSessionResult":
         with self.metrics.timer("total_init_scan_ms"):
             with self.metrics.timer("db_create_init_session_ms"):
                 session = self.store.create_init_session(str(source_path))
@@ -347,12 +361,25 @@ class FaceEngine:
                             quality=quality,
                         )
                     )
+            with self.metrics.timer("search_ms"):
+                matches_by_face_id = {
+                    face.init_face_id: self._search_unique_people(face.vector)
+                    for face in init_faces
+                }
             with self.metrics.timer("cluster_ms"):
-                grouped = _assign_groups(init_faces, threshold=self.config.high_confidence)
+                grouped = _assign_groups(
+                    init_faces,
+                    threshold=self.config.high_confidence,
+                    matches_by_face_id=matches_by_face_id,
+                )
             self.metrics.increment("init_groups", len({face.group_id for face in grouped}))
             with self.metrics.timer("db_save_init_faces_ms"):
                 self.store.save_init_faces(grouped)
-            return session
+            return QueueSessionResult(
+                session=session,
+                groups=_groups_from_faces(session.session_id, grouped),
+                matches_by_face_id=matches_by_face_id,
+            )
 
     def list_init_groups(self, session_id: str) -> list[InitGroup]:
         with self.metrics.timer("db_get_init_session_ms"):
@@ -404,21 +431,21 @@ class FaceEngine:
             self.store.mark_init_group_status(session_id, group_id, "confirmed")
         return len(group.faces)
 
-    def confirm_init_faces(self, session_id: str, group_id: str, init_face_ids: list[str], name: str) -> tuple[str, list[str]]:
+    def confirm_init_faces(self, session_id: str, group_id: str, init_face_ids: list[str], name: str) -> tuple[str, list[dict]]:
         faces = self._selected_init_faces(session_id, group_id, init_face_ids)
         with self.metrics.timer("db_create_person_ms"):
             person = self.store.create_person(name=name)
-        embedding_ids = self._add_init_face_embeddings(person.person_id, faces)
+        accepted = self._add_init_face_embeddings(person.person_id, faces)
         self._remove_reviewed_init_faces(session_id, group_id, init_face_ids)
-        return person.person_id, embedding_ids
+        return person.person_id, accepted
 
-    def confirm_init_faces_existing(self, session_id: str, group_id: str, init_face_ids: list[str], person_id: str) -> list[str]:
+    def confirm_init_faces_existing(self, session_id: str, group_id: str, init_face_ids: list[str], person_id: str) -> list[dict]:
         if self.store.get_person(person_id) is None:
             raise KeyError(f"Unknown person: {person_id}")
         faces = self._selected_init_faces(session_id, group_id, init_face_ids)
-        embedding_ids = self._add_init_face_embeddings(person_id, faces)
+        accepted = self._add_init_face_embeddings(person_id, faces)
         self._remove_reviewed_init_faces(session_id, group_id, init_face_ids)
-        return embedding_ids
+        return accepted
 
     def discard_init_faces(self, session_id: str, group_id: str, init_face_ids: list[str]) -> None:
         self._selected_init_faces(session_id, group_id, init_face_ids)
@@ -452,12 +479,12 @@ class FaceEngine:
             raise KeyError("One or more selected images are no longer in this group")
         return faces
 
-    def _add_init_face_embeddings(self, person_id: str, faces: list[InitFace]) -> list[str]:
-        embedding_ids: list[str] = []
+    def _add_init_face_embeddings(self, person_id: str, faces: list[InitFace]) -> list[dict]:
+        accepted: list[dict] = []
         for face in faces:
             duplicate = _duplicate_embedding(face.vector, self.store.list_embeddings_for_person(person_id))
             if duplicate:
-                embedding_ids.append(duplicate.embedding_id)
+                accepted.append(_accepted_init_face(face, duplicate.embedding_id, duplicate=True))
                 continue
             with self.metrics.timer("db_add_embedding_ms"):
                 record = self.store.add_embedding(
@@ -469,8 +496,8 @@ class FaceEngine:
                 )
             with self.metrics.timer("index_add_ms"):
                 self.index.add(record)
-            embedding_ids.append(record.embedding_id)
-        return embedding_ids
+            accepted.append(_accepted_init_face(face, record.embedding_id, duplicate=False))
+        return accepted
 
     def _remove_reviewed_init_faces(
         self,
@@ -530,6 +557,18 @@ class PreparedAdditions:
         self.rejected = rejected
 
 
+class QueueSessionResult:
+    def __init__(
+        self,
+        session: InitSession,
+        groups: list[InitGroup],
+        matches_by_face_id: dict[str, list[PersonMatch]],
+    ) -> None:
+        self.session = session
+        self.groups = groups
+        self.matches_by_face_id = matches_by_face_id
+
+
 def _iter_images(source_path: Path) -> list[Path]:
     if source_path.is_file():
         return [source_path] if source_path.suffix.lower() in IMAGE_EXTENSIONS else []
@@ -542,9 +581,26 @@ def _iter_images(source_path: Path) -> list[Path]:
     )
 
 
-def _assign_groups(faces: list[InitFace], threshold: float) -> list[InitFace]:
+def _assign_groups(
+    faces: list[InitFace],
+    threshold: float,
+    matches_by_face_id: dict[str, list[PersonMatch]] | None = None,
+) -> list[InitFace]:
+    known_groups: dict[str, list[InitFace]] = {}
+    unknown_faces: list[InitFace] = []
+    if matches_by_face_id is not None:
+        for face in faces:
+            matches = matches_by_face_id.get(face.init_face_id, [])
+            best = matches[0] if matches else None
+            if best and best.score >= threshold:
+                known_groups.setdefault(best.person_id, []).append(face)
+            else:
+                unknown_faces.append(face)
+    else:
+        unknown_faces = faces
+
     groups: list[list[InitFace]] = []
-    for face in faces:
+    for face in unknown_faces:
         best_group_index = None
         best_score = -1.0
         for index, group in enumerate(groups):
@@ -558,7 +614,7 @@ def _assign_groups(faces: list[InitFace], threshold: float) -> list[InitFace]:
             groups[best_group_index].append(face)
 
     assigned: list[InitFace] = []
-    for index, group in enumerate(groups, start=1):
+    for index, group in enumerate([*known_groups.values(), *groups], start=1):
         group_id = f"group_{index:04d}"
         for face in group:
             assigned.append(
@@ -574,6 +630,25 @@ def _assign_groups(faces: list[InitFace], threshold: float) -> list[InitFace]:
                 )
             )
     return assigned
+
+
+def _groups_from_faces(session_id: str, faces: list[InitFace]) -> list[InitGroup]:
+    groups: dict[str, InitGroup] = {}
+    for face in faces:
+        if face.group_id not in groups:
+            groups[face.group_id] = InitGroup(group_id=face.group_id, session_id=session_id, faces=[])
+        groups[face.group_id].faces.append(face)
+    return list(groups.values())
+
+
+def _accepted_init_face(face: InitFace, embedding_id: str, duplicate: bool) -> dict:
+    return {
+        "face_id": face.init_face_id,
+        "embedding_id": embedding_id,
+        "image_id": Path(face.source_image).name,
+        "image_path": face.source_image,
+        "duplicate": duplicate,
+    }
 
 
 def _cosine(left, right) -> float:

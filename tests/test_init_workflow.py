@@ -8,9 +8,37 @@ import cv2
 import numpy as np
 
 from sentriface.cli import build_dev_engine
+from sentriface.engine import _assign_groups
+from sentriface.models import DetectedFace, FaceBox, InitFace, PersonMatch, QualityReport, QualityStatus
 
 
 class InitWorkflowTest(unittest.TestCase):
+    def test_queue_groups_merge_faces_with_same_strong_known_match(self) -> None:
+        faces = [
+            self._init_face("face_1", (1.0, 0.0)),
+            self._init_face("face_2", (0.0, 1.0)),
+        ]
+
+        split_without_known_match = _assign_groups(faces, threshold=0.9)
+        grouped_with_known_match = _assign_groups(
+            faces,
+            threshold=0.9,
+            matches_by_face_id={
+                face.init_face_id: [
+                    PersonMatch(
+                        person_id="person-known",
+                        score=1.0,
+                        embedding_ids=("embedding-known",),
+                        embeddings_matched=1,
+                    )
+                ]
+                for face in faces
+            },
+        )
+
+        self.assertEqual(len({face.group_id for face in split_without_known_match}), 2)
+        self.assertEqual(len({face.group_id for face in grouped_with_known_match}), 1)
+
     def test_init_scan_groups_and_confirms(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
@@ -151,6 +179,20 @@ class InitWorkflowTest(unittest.TestCase):
         cv2.circle(canvas, (98, 70), 7, (20, 20, 20), -1)
         cv2.ellipse(canvas, (80, 100), (28, 12), 0, 0, 180, (20, 20, 20), 2)
         cv2.imwrite(str(image), canvas)
+
+    def _init_face(self, init_face_id: str, vector: tuple[float, ...]) -> InitFace:
+        return InitFace(
+            init_face_id=init_face_id,
+            session_id="session",
+            group_id="unassigned",
+            source_image=f"{init_face_id}.jpg",
+            face=DetectedFace(
+                box=FaceBox(x=0, y=0, width=100, height=100, confidence=1.0),
+                quality_score=1.0,
+            ),
+            vector=vector,
+            quality=QualityReport(status=QualityStatus.GOOD, score=1.0),
+        )
 
 
 if __name__ == "__main__":

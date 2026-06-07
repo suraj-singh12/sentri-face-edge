@@ -36,7 +36,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 18px 28px;
+  padding: 18px max(22px, calc((100vw - 1240px) / 2 + 22px));
   background: rgba(255, 255, 255, 0.92);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(12px);
@@ -75,8 +75,13 @@ h2 {
 }
 
 .section-head {
+  min-height: 40px;
   justify-content: space-between;
   margin-bottom: 10px;
+}
+
+.section-head h2 {
+  margin-bottom: 0;
 }
 
 .layout {
@@ -252,24 +257,74 @@ button[data-action="enroll"]:hover {
   display: grid;
   grid-template-columns: minmax(300px, 360px) 1fr;
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
+  transition: grid-template-columns 220ms ease, gap 220ms ease;
+}
+
+.queue-layout.is-reviewing {
+  grid-template-columns: 0 minmax(0, 1fr);
+  gap: 0;
 }
 
 .queue-sidebar {
   display: grid;
   gap: 14px;
+  align-content: start;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 180ms ease, transform 220ms ease, visibility 220ms ease;
+}
+
+.queue-layout.is-reviewing .queue-sidebar {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(-12px);
+  pointer-events: none;
 }
 
 .queue-dropzone {
   display: grid;
   place-items: center;
   gap: 8px;
-  min-height: 150px;
+  width: 100%;
+  min-height: 168px;
   padding: 18px;
   border: 1px dashed #8fb7c8;
   border-radius: 10px;
   background: #f7fbfc;
+  cursor: pointer;
   text-align: center;
+}
+
+.queue-dropzone:hover,
+.queue-dropzone:focus {
+  border-color: var(--accent);
+  background: #eef6fb;
+  outline: none;
+  transform: none;
+}
+
+.queue-dropzone.open {
+  border-style: solid;
+  background: #eef6fb;
+}
+
+.queue-picker-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.queue-picker-actions button {
+  min-width: 120px;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-color: #bfd4e6;
+  font-weight: 750;
 }
 
 .queue-session {
@@ -284,6 +339,7 @@ button[data-action="enroll"]:hover {
 .queue-main,
 .queue-review {
   min-width: 0;
+  width: 100%;
 }
 
 .queue-groups {
@@ -324,7 +380,7 @@ button[data-action="enroll"]:hover {
 
 .queue-review-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(420px, 1fr) minmax(320px, 0.7fr);
   gap: 16px;
   align-items: start;
 }
@@ -368,12 +424,29 @@ button[data-action="enroll"]:hover {
 
 .queue-match-pane {
   min-height: 0;
+  align-self: start;
 }
 
 .queue-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   margin-top: 12px;
+}
+
+.queue-followup-panel {
+  margin-top: 16px;
+}
+
+.queue-followup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+}
+
+.queue-followup-panel .recognition-followup {
+  margin-top: 10px;
 }
 
 .grid {
@@ -545,6 +618,7 @@ button[data-action="enroll"]:hover {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  min-height: 44px;
   margin-bottom: 12px;
 }
 
@@ -707,6 +781,7 @@ button[data-action="enroll"]:hover {
   display: flex;
   gap: 10px;
   margin: 0;
+  align-items: stretch;
 }
 
 .decision-actions button {
@@ -777,6 +852,7 @@ button[data-action="enroll"]:hover {
 }
 
 .gallery-panel .section-head {
+  min-height: 40px;
   margin-bottom: 8px;
 }
 
@@ -931,17 +1007,6 @@ button[data-action="enroll"]:hover {
   object-fit: cover;
   border-radius: 6px;
   border: 1px solid var(--line);
-}
-
-.check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-}
-
-.check input {
-  width: auto;
 }
 
 #debugLog {

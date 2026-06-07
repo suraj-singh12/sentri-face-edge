@@ -271,36 +271,43 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/queue-scan":
                 source = Path(_required(payload, "path"))
                 self.server.engine.reset_metrics()
-                session = self.server.engine.create_init_session(source, bool(payload.get("force_bad_quality", False)))
-                groups = self.server.engine.list_init_groups(session.session_id)
-                self.server.log_event("queue-scan", path=str(source), session_id=session.session_id, groups=len(groups))
+                queue_result = self.server.engine.create_queue_session(source, bool(payload.get("force_bad_quality", False)))
+                self.server.log_event(
+                    "queue-scan",
+                    path=str(source),
+                    session_id=queue_result.session.session_id,
+                    groups=len(queue_result.groups),
+                )
                 self._json(
                     {
-                        "session_id": session.session_id,
-                        "groups": [_init_group(self.server.engine, group) for group in groups],
+                        "session_id": queue_result.session.session_id,
+                        "groups": [
+                            _init_group(self.server.engine, group, queue_result.matches_by_face_id)
+                            for group in queue_result.groups
+                        ],
                         "metrics": self.server.engine.metrics_snapshot(),
                     }
                 )
                 return
             if parsed.path == "/api/queue-confirm-new":
-                person_id, embedding_ids = self.server.engine.confirm_init_faces(
+                person_id, accepted = self.server.engine.confirm_init_faces(
                     _required(payload, "session_id"),
                     _required(payload, "group_id"),
                     list(payload.get("face_ids", [])),
                     _required(payload, "name"),
                 )
-                self.server.log_event("queue-confirm-new", person_id=person_id, embeddings=len(embedding_ids))
-                self._json({"person_id": person_id, "embedding_ids": embedding_ids})
+                self.server.log_event("queue-confirm-new", person_id=person_id, embeddings=len(accepted))
+                self._json({"person_id": person_id, "accepted": accepted, "embedding_ids": [item["embedding_id"] for item in accepted]})
                 return
             if parsed.path == "/api/queue-confirm-existing":
-                embedding_ids = self.server.engine.confirm_init_faces_existing(
+                accepted = self.server.engine.confirm_init_faces_existing(
                     _required(payload, "session_id"),
                     _required(payload, "group_id"),
                     list(payload.get("face_ids", [])),
                     _required(payload, "person_id"),
                 )
-                self.server.log_event("queue-confirm-existing", person_id=payload.get("person_id"), embeddings=len(embedding_ids))
-                self._json({"embedding_ids": embedding_ids})
+                self.server.log_event("queue-confirm-existing", person_id=payload.get("person_id"), embeddings=len(accepted))
+                self._json({"accepted": accepted, "embedding_ids": [item["embedding_id"] for item in accepted]})
                 return
             if parsed.path == "/api/queue-discard":
                 self.server.engine.discard_init_faces(
@@ -640,8 +647,15 @@ def _embedding(record: EmbeddingRecord) -> dict[str, Any]:
     }
 
 
-def _init_group(engine: FaceEngine, group: InitGroup) -> dict[str, Any]:
-    face_matches = [engine.matches_for_vector(face.vector) for face in group.faces]
+def _init_group(
+    engine: FaceEngine,
+    group: InitGroup,
+    matches_by_face_id: dict[str, list[PersonMatch]] | None = None,
+) -> dict[str, Any]:
+    face_matches = [
+        matches_by_face_id.get(face.init_face_id, []) if matches_by_face_id is not None else engine.matches_for_vector(face.vector)
+        for face in group.faces
+    ]
     best_by_person: dict[str, PersonMatch] = {}
     for matches in face_matches:
         for match in matches:
