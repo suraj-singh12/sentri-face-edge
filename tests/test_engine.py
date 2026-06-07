@@ -21,6 +21,18 @@ class EngineWorkflowTest(unittest.TestCase):
         cv2.ellipse(canvas, (80, 100), (28, 12), 0, 0, 180, (20, 20, 20), 2)
         cv2.imwrite(str(image), canvas)
 
+    def test_initialize_creates_missing_runtime_storage(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "missing-data"
+
+            engine = build_dev_engine(data_dir)
+            engine.initialize()
+
+            self.assertTrue(data_dir.exists())
+            self.assertTrue((data_dir / "sentriface.db").exists())
+            self.assertTrue((data_dir / "faces").exists())
+            self.assertTrue((data_dir / "index").exists())
+
     def test_add_and_recognize_same_image(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)

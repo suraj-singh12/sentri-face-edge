@@ -44,6 +44,10 @@ class FaceEngine:
         self.metrics = MetricsCollector()
 
     def initialize(self) -> None:
+        with self.metrics.timer("storage_prepare_ms"):
+            self.config.data_dir.mkdir(parents=True, exist_ok=True)
+            self.config.face_dir.mkdir(parents=True, exist_ok=True)
+            self.config.index_dir.mkdir(parents=True, exist_ok=True)
         with self.metrics.timer("db_initialize_ms"):
             self.store.initialize()
         with self.metrics.timer("db_list_embeddings_ms"):

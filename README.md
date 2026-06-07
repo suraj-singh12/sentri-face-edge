@@ -137,6 +137,9 @@ PYTHONPATH=src python3 -m sentriface.ui --runtime dev --data-dir data
 Then open `http://127.0.0.1:8765`. Use `--runtime onnx` after the offline ONNX
 models are present. The UI prints debug events to the terminal and keeps the
 latest events visible in the Debug tab.
+Starting the app automatically creates the `data/` folder, SQLite DB, face crop
+folder, and index folder if they are missing. You do not need to run `init-db`
+before launching the UI.
 
 Browser flow:
 
