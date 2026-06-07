@@ -62,14 +62,6 @@ function View(name, body) {
 
 function RecognizeView() {
   return `
-    <div class="toolbar stack">
-      ${FileField("recognizeFile", "Choose image")}
-      ${PathField("recognizePath", "Or use image/folder path", "Optional local image or folder path")}
-      <div class="button-row">
-        <button class="primary" data-action="recognize">Recognize</button>
-        <button data-action="recognize-batch">Batch</button>
-      </div>
-    </div>
     ${RecognitionDecision()}
   `;
 }
@@ -270,15 +262,17 @@ function RecognitionDecision() {
   const accepted = state.recognitionAccepted;
   const acceptLabel = best ? `Accept as ${escapeHtml(best.name)}` : "Accept";
   return `
+    <input id="recognizeFile" class="hidden-file" type="file" accept="image/*" />
     <div class="recognition-stage">
       <div class="compare-pane">
         <div class="pane-head">
           <div>
             <div class="title">Input Image</div>
-            <div class="muted">${recognition?.inputPath ? escapeHtml(recognition.inputPath) : "Choose an image and run recognition."}</div>
+            <div class="muted">${recognition?.inputPath ? escapeHtml(recognition.inputPath) : "Load one photo to recognize."}</div>
           </div>
+          ${recognition?.inputPath ? `<button data-action="recognition-load">Load Another</button>` : ""}
         </div>
-        ${recognition?.inputPath ? `<img class="preview-image" src="/media?path=${encodeURIComponent(recognition.inputPath)}" alt="input image" />` : EmptyCard("No input image loaded.")}
+        ${recognition?.inputPath ? `<img class="preview-image" src="/media?path=${encodeURIComponent(recognition.inputPath)}" alt="input image" />` : LoadImagePanel()}
       </div>
       <div class="compare-pane">
         <div class="pane-head">
@@ -297,6 +291,15 @@ function RecognitionDecision() {
     </div>
     ${state.recognitionGallery ? GalleryPanel(state.recognitionGallery) : ""}
     ${recognition?.metrics ? Metrics(recognition.metrics) : ""}
+  `;
+}
+
+function LoadImagePanel() {
+  return `
+    <button class="load-image-panel" data-action="recognition-load">
+      <span class="load-image-title">Load Image</span>
+      <span class="muted">Recognition starts immediately after the photo is selected.</span>
+    </button>
   `;
 }
 
@@ -346,7 +349,7 @@ function CandidateCard(match) {
 }
 
 function recognitionText(match) {
-  if (match.score > 0.62) return `Looks ${escapeHtml(match.name)}`;
+  if (match.score >= 0.62) return `Looks ${escapeHtml(match.name)}`;
   if (match.score > 0.42) return `Maybe ${escapeHtml(match.name)}`;
   return `Can't say ${escapeHtml(match.name)}, but this is the closest we have`;
 }
@@ -448,6 +451,10 @@ function bindEvents() {
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => handleAction(button));
   });
+  const recognizeFile = document.getElementById("recognizeFile");
+  if (recognizeFile) {
+    recognizeFile.addEventListener("change", () => recognizeLoadedImage());
+  }
 }
 
 async function handleAction(target) {
@@ -460,6 +467,7 @@ async function handleAction(target) {
     if (action === "load-events") await loadEvents();
     if (action === "recognize") await recognizeOne();
     if (action === "recognize-batch") await recognizeBatch();
+    if (action === "recognition-load") openRecognitionFile();
     if (action === "queue-add") await queueAdd();
     if (action === "enroll") await enroll();
     if (action === "init-scan") await initScan();
@@ -512,6 +520,17 @@ async function loadEvents() {
 
 async function recognizeOne() {
   const path = await resolveImagePath("recognizeFile", "recognizePath");
+  await runRecognition(path);
+}
+
+async function recognizeLoadedImage() {
+  const fileInput = document.getElementById("recognizeFile");
+  if (!fileInput?.files?.length) return;
+  const path = await uploadFile(fileInput.files[0]);
+  await runRecognition(path);
+}
+
+async function runRecognition(path) {
   const payload = await apiPost("/api/recognize", { path });
   state.recognition = {
     inputPath: path,
@@ -523,6 +542,10 @@ async function recognizeOne() {
   showToast(`Recognized ${payload.faces.length} face(s)`);
   await loadEvents();
   render();
+}
+
+function openRecognitionFile() {
+  document.getElementById("recognizeFile")?.click();
 }
 
 async function recognizeBatch() {
@@ -569,7 +592,6 @@ async function recognitionNew() {
 
 function recognitionClear() {
   clearFile("recognizeFile");
-  clearInput("recognizePath");
   state.recognition = null;
   state.recognitionGallery = null;
   state.recognitionAccepted = false;

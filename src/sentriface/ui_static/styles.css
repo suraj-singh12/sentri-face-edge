@@ -9,6 +9,7 @@
   --accent-dark: #095e58;
   --accent-soft: #e8f6f4;
   --blue: #245f8f;
+  --blue-dark: #194f78;
   --blue-soft: #eaf2f9;
   --warn: #9a5b00;
   --bad: #a43333;
@@ -150,6 +151,10 @@ input[type="file"] {
   padding: 7px 10px;
 }
 
+.hidden-file {
+  display: none;
+}
+
 .field-label {
   color: var(--muted);
   font-size: 12px;
@@ -180,8 +185,7 @@ button.primary,
 button[data-action="recognize"],
 button[data-action="queue-add"],
 button[data-action="enroll"],
-button[data-action="init-scan"],
-.accept-btn {
+button[data-action="init-scan"] {
   background: var(--accent);
   border-color: var(--accent);
   color: #ffffff;
@@ -191,9 +195,18 @@ button.primary:hover,
 button[data-action="recognize"]:hover,
 button[data-action="queue-add"]:hover,
 button[data-action="enroll"]:hover,
-button[data-action="init-scan"]:hover,
-.accept-btn:hover {
+button[data-action="init-scan"]:hover {
   background: var(--accent-dark);
+}
+
+.accept-btn {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #ffffff;
+}
+
+.accept-btn:hover {
+  background: var(--blue-dark);
 }
 
 .danger-btn {
@@ -273,6 +286,36 @@ button[data-action="init-scan"]:hover,
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 12px;
+}
+
+.pane-head button {
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-color: #bfd4e6;
+}
+
+.load-image-panel {
+  flex: 1 1 auto;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 300px;
+  padding: 24px;
+  border: 1px dashed #aebdca;
+  background: #f8fafb;
+  text-align: center;
+}
+
+.load-image-panel:hover {
+  background: #eef6fb;
+  transform: none;
+}
+
+.load-image-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--blue);
 }
 
 .preview-image,
