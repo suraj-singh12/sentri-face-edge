@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  root: "src/sentriface/ui_frontend",
   plugins: [react()],
   server: {
     proxy: {
@@ -11,7 +10,7 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: "../ui_static",
+    outDir: "../src/sentriface/ui_static",
     emptyOutDir: true
   }
 });

@@ -94,10 +94,10 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/events":
                 self._json({"events": self.server.events[-80:]})
                 return
-            if parsed.path == "/api/init-groups":
+            if parsed.path == "/api/queue-groups":
                 session_id = _query_value(parsed.query, "session_id")
                 groups = self.server.engine.list_init_groups(session_id)
-                self._json({"groups": [_init_group(group) for group in groups]})
+                self._json({"groups": [_init_group(self.server.engine, group) for group in groups]})
                 return
             if parsed.path == "/media":
                 self._media(_query_value(parsed.query, "path"))
@@ -172,12 +172,14 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                 additions = self.server.engine.prepare_additions(image_path)
                 if not additions:
                     raise KeyError("No acceptable faces found")
-                if _has_duplicate_embedding(additions[0].vector, self.server.engine.list_person_embeddings(person_id)):
+                duplicate = _duplicate_embedding(additions[0].vector, self.server.engine.list_person_embeddings(person_id))
+                if duplicate:
                     person = self.server.engine.get_person(person_id)
                     self.server.log_event("recognition-duplicate", path=str(image_path), person_id=person_id)
                     self._json(
                         {
                             "duplicate": True,
+                            "embedding_id": duplicate.embedding_id,
                             "person_id": person_id,
                             "name": person.name if person else person_id,
                             "metrics": self.server.engine.metrics_snapshot(),
@@ -196,15 +198,38 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                 if not additions:
                     raise KeyError("No acceptable faces found")
                 person_id = self.server.engine.confirm_new_person(additions[0], name)
+                embedding = self.server.engine.list_person_embeddings(person_id)[-1]
                 self.server.log_event("recognition-new", path=str(image_path), person_id=person_id)
-                self._json({"person_id": person_id, "metrics": self.server.engine.metrics_snapshot()})
+                self._json(
+                    {
+                        "person_id": person_id,
+                        "embedding_id": embedding.embedding_id,
+                        "metrics": self.server.engine.metrics_snapshot(),
+                    }
+                )
                 return
             if parsed.path == "/api/recognition-followup":
+                detail_id = self.server.engine.add_recognition_detail(
+                    embedding_id=_required(payload, "embedding_id"),
+                    person_id=_required(payload, "person_id"),
+                    image_id=_required(payload, "image_id"),
+                    image_path=payload.get("image_path"),
+                    name=_required(payload, "name"),
+                    decision=_required(payload, "decision"),
+                    seen_date=_required(payload, "date"),
+                    seen_time=_required(payload, "time"),
+                    place_seen=_required(payload, "place_seen"),
+                    individual_count=int(_required(payload, "individual_count")),
+                    event_occasion=_required(payload, "event_occasion"),
+                )
                 self.server.log_event(
                     "recognition-followup",
+                    detail_id=detail_id,
                     path=_required(payload, "path"),
+                    image_id=_required(payload, "image_id"),
+                    embedding_id=_required(payload, "embedding_id"),
                     name=_required(payload, "name"),
-                    person_id=payload.get("person_id"),
+                    person_id=_required(payload, "person_id"),
                     decision=_required(payload, "decision"),
                     date=_required(payload, "date"),
                     time=_required(payload, "time"),
@@ -212,7 +237,7 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                     individual_count=int(_required(payload, "individual_count")),
                     event_occasion=_required(payload, "event_occasion"),
                 )
-                self._json({"confirmed": True})
+                self._json({"confirmed": True, "detail_id": detail_id})
                 return
             if parsed.path == "/api/enroll":
                 image_path = Path(_required(payload, "path"))
@@ -243,6 +268,49 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                     }
                 )
                 return
+            if parsed.path == "/api/queue-scan":
+                source = Path(_required(payload, "path"))
+                self.server.engine.reset_metrics()
+                session = self.server.engine.create_init_session(source, bool(payload.get("force_bad_quality", False)))
+                groups = self.server.engine.list_init_groups(session.session_id)
+                self.server.log_event("queue-scan", path=str(source), session_id=session.session_id, groups=len(groups))
+                self._json(
+                    {
+                        "session_id": session.session_id,
+                        "groups": [_init_group(self.server.engine, group) for group in groups],
+                        "metrics": self.server.engine.metrics_snapshot(),
+                    }
+                )
+                return
+            if parsed.path == "/api/queue-confirm-new":
+                person_id, embedding_ids = self.server.engine.confirm_init_faces(
+                    _required(payload, "session_id"),
+                    _required(payload, "group_id"),
+                    list(payload.get("face_ids", [])),
+                    _required(payload, "name"),
+                )
+                self.server.log_event("queue-confirm-new", person_id=person_id, embeddings=len(embedding_ids))
+                self._json({"person_id": person_id, "embedding_ids": embedding_ids})
+                return
+            if parsed.path == "/api/queue-confirm-existing":
+                embedding_ids = self.server.engine.confirm_init_faces_existing(
+                    _required(payload, "session_id"),
+                    _required(payload, "group_id"),
+                    list(payload.get("face_ids", [])),
+                    _required(payload, "person_id"),
+                )
+                self.server.log_event("queue-confirm-existing", person_id=payload.get("person_id"), embeddings=len(embedding_ids))
+                self._json({"embedding_ids": embedding_ids})
+                return
+            if parsed.path == "/api/queue-discard":
+                self.server.engine.discard_init_faces(
+                    _required(payload, "session_id"),
+                    _required(payload, "group_id"),
+                    list(payload.get("face_ids", [])),
+                )
+                self.server.log_event("queue-discard", group_id=payload.get("group_id"), faces=len(payload.get("face_ids", [])))
+                self._json({"discarded": len(payload.get("face_ids", []))})
+                return
             if parsed.path == "/api/confirm-new":
                 pending_id = _required(payload, "pending_id")
                 name = _required(payload, "name")
@@ -263,55 +331,13 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                 self.server.log_event("reject-pending", pending_id=pending_id)
                 self._json({"rejected": 1})
                 return
-            if parsed.path == "/api/init-scan":
-                source = Path(_required(payload, "path"))
-                self.server.engine.reset_metrics()
-                session = self.server.engine.create_init_session(source, bool(payload.get("force_bad_quality", False)))
-                groups = self.server.engine.list_init_groups(session.session_id)
-                self.server.log_event("init-scan", path=str(source), session_id=session.session_id, groups=len(groups))
-                self._json(
-                    {
-                        "session_id": session.session_id,
-                        "groups": [_init_group(group) for group in groups],
-                        "metrics": self.server.engine.metrics_snapshot(),
-                    }
-                )
-                return
-            if parsed.path == "/api/init-confirm":
-                person_id = self.server.engine.confirm_init_group(
-                    _required(payload, "session_id"),
-                    _required(payload, "group_id"),
-                    _required(payload, "name"),
-                )
-                self.server.log_event("init-confirm", person_id=person_id)
-                self._json({"person_id": person_id})
-                return
-            if parsed.path == "/api/init-confirm-existing":
-                count = self.server.engine.confirm_init_group_existing(
-                    _required(payload, "session_id"),
-                    _required(payload, "group_id"),
-                    _required(payload, "person_id"),
-                )
-                self.server.log_event("init-confirm-existing", embeddings=count)
-                self._json({"embeddings": count})
-                return
-            if parsed.path == "/api/init-reject":
-                self.server.engine.reject_init_group(_required(payload, "session_id"), _required(payload, "group_id"))
-                self.server.log_event("init-reject", group_id=payload.get("group_id"))
-                self._json({"rejected": 1})
-                return
-            if parsed.path == "/api/init-reset":
-                self.server.engine.reset_init_group(_required(payload, "session_id"), _required(payload, "group_id"))
-                self.server.log_event("init-reset", group_id=payload.get("group_id"))
-                self._json({"status": "pending"})
-                return
             if parsed.path == "/api/backup-db":
                 target = Path(_required(payload, "path"))
                 self.server.engine.backup_database(target)
                 self.server.log_event("backup-db", path=str(target))
                 self._json({"backup": str(target)})
                 return
-            self.send_error(HTTPStatus.NOT_FOUND, "Unknown endpoint")
+            self._json({"error": "Unknown endpoint"}, status=HTTPStatus.NOT_FOUND)
         except Exception as exc:  # noqa: BLE001 - local UI should surface errors clearly.
             self._error(exc)
 
@@ -614,11 +640,20 @@ def _embedding(record: EmbeddingRecord) -> dict[str, Any]:
     }
 
 
-def _init_group(group: InitGroup) -> dict[str, Any]:
+def _init_group(engine: FaceEngine, group: InitGroup) -> dict[str, Any]:
+    face_matches = [engine.matches_for_vector(face.vector) for face in group.faces]
+    best_by_person: dict[str, PersonMatch] = {}
+    for matches in face_matches:
+        for match in matches:
+            current = best_by_person.get(match.person_id)
+            if current is None or match.score > current.score:
+                best_by_person[match.person_id] = match
+    group_matches = sorted(best_by_person.values(), key=lambda match: match.score, reverse=True)[: engine.config.top_k]
     return {
         "group_id": group.group_id,
         "session_id": group.session_id,
         "status": group.status,
+        "matches": [_match(engine, match, rank) for rank, match in enumerate(group_matches, 1)],
         "faces": [
             {
                 "init_face_id": face.init_face_id,
@@ -626,8 +661,9 @@ def _init_group(group: InitGroup) -> dict[str, Any]:
                 "crop_path": face.face.crop_path,
                 "box": _box(face.face),
                 "quality": _quality(face.quality),
+                "matches": [_match(engine, match, rank) for rank, match in enumerate(face_matches[index], 1)],
             }
-            for face in group.faces
+            for index, face in enumerate(group.faces)
         ],
     }
 
@@ -658,7 +694,14 @@ def _representative_image(embeddings: list[EmbeddingRecord]) -> str | None:
 
 
 def _has_duplicate_embedding(vector: tuple[float, ...], embeddings: list[EmbeddingRecord]) -> bool:
-    return any(_cosine(vector, record.vector) >= DUPLICATE_MATCH_SCORE for record in embeddings)
+    return _duplicate_embedding(vector, embeddings) is not None
+
+
+def _duplicate_embedding(vector: tuple[float, ...], embeddings: list[EmbeddingRecord]) -> EmbeddingRecord | None:
+    for record in embeddings:
+        if _cosine(vector, record.vector) >= DUPLICATE_MATCH_SCORE:
+            return record
+    return None
 
 
 def _cosine(left: tuple[float, ...], right: tuple[float, ...]) -> float:

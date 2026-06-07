@@ -99,6 +99,51 @@ class InitWorkflowTest(unittest.TestCase):
             updated = engine.list_init_groups(session.session_id)[0]
             self.assertEqual(updated.status, "pending")
 
+    def test_queue_selected_faces_leave_remaining_group_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_dir = temp_path / "images"
+            image_dir.mkdir()
+            self._write_image(image_dir / "person_a_1.jpg", shade=120)
+            self._write_image(image_dir / "person_a_2.jpg", shade=120)
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+
+            session = engine.create_init_session(image_dir)
+            group = max(engine.list_init_groups(session.session_id), key=lambda item: len(item.faces))
+            self.assertGreaterEqual(len(group.faces), 2)
+
+            selected = [group.faces[0].init_face_id]
+            person_id, embedding_ids = engine.confirm_init_faces(session.session_id, group.group_id, selected, "Queue Person")
+
+            self.assertTrue(person_id)
+            self.assertEqual(len(embedding_ids), 1)
+            updated = [item for item in engine.list_init_groups(session.session_id) if item.group_id == group.group_id][0]
+            self.assertEqual(updated.status, "pending")
+            self.assertEqual(len(updated.faces), len(group.faces) - 1)
+
+    def test_queue_discard_selected_faces_removes_only_selected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_dir = temp_path / "images"
+            image_dir.mkdir()
+            self._write_image(image_dir / "person_a_1.jpg", shade=120)
+            self._write_image(image_dir / "person_a_2.jpg", shade=120)
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+
+            session = engine.create_init_session(image_dir)
+            group = max(engine.list_init_groups(session.session_id), key=lambda item: len(item.faces))
+            self.assertGreaterEqual(len(group.faces), 2)
+
+            engine.discard_init_faces(session.session_id, group.group_id, [group.faces[0].init_face_id])
+
+            updated = [item for item in engine.list_init_groups(session.session_id) if item.group_id == group.group_id][0]
+            self.assertEqual(updated.status, "pending")
+            self.assertEqual(len(updated.faces), len(group.faces) - 1)
+
     def _write_image(self, image: Path, shade: int) -> None:
         canvas = np.full((160, 160, 3), shade, dtype=np.uint8)
         cv2.rectangle(canvas, (35, 35), (125, 125), (220, 220, 220), -1)

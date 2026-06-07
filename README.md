@@ -28,8 +28,7 @@ End-to-end flow:
 flowchart TD
     Start["User opens local UI or CLI"] --> Mode{"Choose workflow"}
     Mode --> Recognize["Recognize image or folder"]
-    Mode --> Add["Queue or enroll face"]
-    Mode --> Init["Initial folder scan"]
+    Mode --> Add["Queue grouped faces or enroll face"]
     Mode --> Manage["Manage people and DB"]
 
     Recognize --> DetectR["Detect face(s)"]
@@ -46,22 +45,11 @@ flowchart TD
     EmbedA --> SuggestA["Suggest top matches"]
     SuggestA --> PendingA["Save pending addition"]
     PendingA --> ReviewA{"Human review"}
-    ReviewA --> NewA["Confirm as new person"]
-    ReviewA --> ExistingA["Confirm as existing person"]
-    ReviewA --> RejectPendingA["Reject pending addition"]
+    ReviewA --> NewA["Confirm selected images as new person"]
+    ReviewA --> ExistingA["Confirm selected images as existing person"]
+    ReviewA --> RejectPendingA["Discard selected images"]
     NewA --> StoreA["Save person and embedding"]
     ExistingA --> StoreA
-
-    Init --> ScanI["Scan image folder"]
-    ScanI --> DetectI["Detect and quality-score faces"]
-    DetectI --> EmbedI["Generate embeddings"]
-    EmbedI --> ClusterI["Cluster likely same-person faces"]
-    ClusterI --> ReviewI{"Review group"}
-    ReviewI --> NewI["Confirm group as new person"]
-    ReviewI --> ExistingI["Attach group to existing person"]
-    ReviewI --> RejectI["Reject or reset group"]
-    NewI --> StoreI["Save identities and embeddings"]
-    ExistingI --> StoreI
 
     Manage --> PeopleM["List, rename, delete people"]
     Manage --> CleanupM["Move embedding or merge people"]
@@ -149,16 +137,21 @@ choose image -> enroll person -> recognize same image -> inspect match and metri
 
 The main UI actions accept file picker input. Path fields remain available as an
 advanced fallback for local folders and scripted testing.
-Init Scan accepts a folder picker and uploads selected images into a local batch
-directory before grouping faces.
+Queue accepts image/folder pickers, dragged images/folders, or a local path. It
+uploads selected files into a local batch directory, creates embeddings, groups
+similar photos, and lets the reviewer accept or discard selected images from
+each group.
 Uploaded files under 1 MB are saved unchanged. Uploaded files over 1 MB are
 only size-reduced before they are passed to the engine; face quality decisions
 still happen inside the engine.
-The browser UI source lives in `src/sentriface/ui_frontend` and is built with
-React + Vite into `src/sentriface/ui_static`, which is what the Python UI server
-serves. After editing the frontend, rebuild the static bundle:
+Frontend source lives in `frontend/` and is handled by React + Vite. Backend/API
+code lives in `src/sentriface` and is handled by Python. The frontend has its
+own `frontend/package.json` and `frontend/vite.config.js`. Vite builds into
+`src/sentriface/ui_static`, which is the compiled static bundle served by the
+Python UI server. After editing the frontend, rebuild the static bundle:
 
 ```bash
+cd frontend
 npm run build
 ```
 
@@ -279,28 +272,14 @@ PYTHONPATH=src python3 -m sentriface.cli --runtime onnx queue-add path/to/image.
 
 ## Workflows
 
-### Init_Add
+### Queue
 
 ```text
-images -> detect -> encode -> cluster -> user confirms groups -> save identities
+images/folders -> detect -> encode -> cluster -> select images -> accept or discard -> update identities
 ```
 
-CLI review flow:
-
-```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-scan path/to/images
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-groups SESSION_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-confirm SESSION_ID GROUP_ID "Person Name"
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-confirm-existing SESSION_ID GROUP_ID PERSON_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-reject SESSION_ID GROUP_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx init-reset SESSION_ID GROUP_ID
-```
-
-`init-scan` does not create people immediately. It creates a durable review
-session, clusters likely-same-person faces, and waits for confirmation.
-`init-confirm-existing` adds the group as new embeddings for an active person.
-`init-reset` moves a reviewed group back to pending; it does not remove
-embeddings that were already confirmed.
+Queue groups similar photos and keeps unselected images in their group after an
+accept/discard action. The remaining group is re-scored against the updated DB.
 
 ### Add
 

@@ -21,10 +21,11 @@ from sentriface.models import (
     PersonSummary,
     QualityReport,
     QualityStatus,
+    RecognitionDetail,
     utc_now,
 )
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class SQLiteIdentityStore:
@@ -54,6 +55,9 @@ class SQLiteIdentityStore:
             if version == 3:
                 _migrate_3_to_4(conn)
                 version = 4
+            if version == 4:
+                _migrate_4_to_5(conn)
+                version = 5
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -174,6 +178,78 @@ class SQLiteIdentityStore:
             )
         if cursor.rowcount == 0:
             raise KeyError(f"Unknown embedding: {embedding_id}")
+
+    def add_recognition_detail(
+        self,
+        embedding_id: str,
+        person_id: str,
+        image_id: str,
+        name: str,
+        decision: str,
+        seen_date: str,
+        seen_time: str,
+        place_seen: str,
+        individual_count: int,
+        event_occasion: str,
+        image_path: str | None = None,
+    ) -> RecognitionDetail:
+        detail = RecognitionDetail(
+            detail_id=str(uuid.uuid4()),
+            embedding_id=embedding_id,
+            person_id=person_id,
+            image_id=image_id,
+            image_path=image_path,
+            name=name,
+            decision=decision,
+            seen_date=seen_date,
+            seen_time=seen_time,
+            place_seen=place_seen,
+            individual_count=individual_count,
+            event_occasion=event_occasion,
+            created_at=utc_now(),
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO recognition_details(
+                    detail_id, embedding_id, person_id, image_id, image_path,
+                    name, decision, seen_date, seen_time, place_seen,
+                    individual_count, event_occasion, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    detail.detail_id,
+                    detail.embedding_id,
+                    detail.person_id,
+                    detail.image_id,
+                    detail.image_path,
+                    detail.name,
+                    detail.decision,
+                    detail.seen_date,
+                    detail.seen_time,
+                    detail.place_seen,
+                    detail.individual_count,
+                    detail.event_occasion,
+                    detail.created_at,
+                ),
+            )
+        return detail
+
+    def list_recognition_details_for_embedding(self, embedding_id: str) -> list[RecognitionDetail]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT detail_id, embedding_id, person_id, image_id, image_path,
+                       name, decision, seen_date, seen_time, place_seen,
+                       individual_count, event_occasion, created_at
+                FROM recognition_details
+                WHERE embedding_id = ?
+                ORDER BY created_at ASC
+                """,
+                (embedding_id,),
+            ).fetchall()
+        return [_recognition_detail_from_row(row) for row in rows]
 
     def backup_to(self, target_path: Path) -> None:
         target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -423,6 +499,12 @@ class SQLiteIdentityStore:
                 (session_id, group_id, status, utc_now()),
             )
 
+    def delete_init_faces(self, init_face_ids: list[str]) -> None:
+        if not init_face_ids:
+            return
+        with self._connect() as conn:
+            conn.executemany("DELETE FROM init_faces WHERE init_face_id = ?", [(face_id,) for face_id in init_face_ids])
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -563,6 +645,41 @@ def _migrate_3_to_4(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA user_version = 4")
 
 
+def _migrate_4_to_5(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS recognition_details (
+            detail_id TEXT PRIMARY KEY,
+            embedding_id TEXT NOT NULL,
+            person_id TEXT NOT NULL,
+            image_id TEXT NOT NULL,
+            image_path TEXT,
+            name TEXT NOT NULL,
+            decision TEXT NOT NULL,
+            seen_date TEXT NOT NULL,
+            seen_time TEXT NOT NULL,
+            place_seen TEXT NOT NULL,
+            individual_count INTEGER NOT NULL,
+            event_occasion TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(embedding_id) REFERENCES embeddings(embedding_id),
+            FOREIGN KEY(person_id) REFERENCES persons(person_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_recognition_details_embedding
+        ON recognition_details(embedding_id);
+
+        CREATE INDEX IF NOT EXISTS idx_recognition_details_person
+        ON recognition_details(person_id);
+
+        CREATE INDEX IF NOT EXISTS idx_recognition_details_image
+        ON recognition_details(image_id);
+
+        PRAGMA user_version = 5;
+        """
+    )
+
+
 def _pending_from_row(row: sqlite3.Row) -> PendingAddition:
     raw_landmarks = json.loads(row["landmarks"]) if row["landmarks"] else None
     landmarks = tuple(tuple(point) for point in raw_landmarks) if raw_landmarks else None
@@ -615,6 +732,24 @@ def _embedding_from_row(row: sqlite3.Row) -> EmbeddingRecord:
         quality_score=row["quality_score"],
         source_image=row["source_image"],
         crop_path=row["crop_path"],
+        created_at=row["created_at"],
+    )
+
+
+def _recognition_detail_from_row(row: sqlite3.Row) -> RecognitionDetail:
+    return RecognitionDetail(
+        detail_id=row["detail_id"],
+        embedding_id=row["embedding_id"],
+        person_id=row["person_id"],
+        image_id=row["image_id"],
+        image_path=row["image_path"],
+        name=row["name"],
+        decision=row["decision"],
+        seen_date=row["seen_date"],
+        seen_time=row["seen_time"],
+        place_seen=row["place_seen"],
+        individual_count=row["individual_count"],
+        event_occasion=row["event_occasion"],
         created_at=row["created_at"],
     )
 

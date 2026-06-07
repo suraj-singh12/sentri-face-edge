@@ -1,17 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
-import "./styles.css";
 
 const DUPLICATE_MATCH_SCORE = 0.9999;
-const VIEWS = ["recognize", "add", "people", "init", "debug"];
+const HIGH_CONFIDENCE_MATCH_SCORE = 0.9;
+const VIEWS = ["recognize", "queue", "people", "debug"];
 
-function App() {
+export default function SentriFaceApp() {
   const [activeView, setActiveView] = useState("recognize");
   const [profile, setProfile] = useState(null);
   const [people, setPeople] = useState([]);
   const [peopleGallery, setPeopleGallery] = useState(null);
   const [peopleGalleryImage, setPeopleGalleryImage] = useState(null);
-  const [pending, setPending] = useState([]);
+  const [queueGroups, setQueueGroups] = useState([]);
+  const [queueSessionId, setQueueSessionId] = useState("");
+  const [queueSelectedGroup, setQueueSelectedGroup] = useState(null);
+  const [queueSelectedFaces, setQueueSelectedFaces] = useState([]);
   const [events, setEvents] = useState([]);
   const [recognition, setRecognition] = useState(null);
   const [recognitionGallery, setRecognitionGallery] = useState(null);
@@ -19,20 +21,16 @@ function App() {
   const [recognitionAccepted, setRecognitionAccepted] = useState(false);
   const [recognitionFollowup, setRecognitionFollowup] = useState(null);
   const [recognitionFollowupDone, setRecognitionFollowupDone] = useState(false);
-  const [initGroups, setInitGroups] = useState([]);
-  const [initSessionId, setInitSessionId] = useState("");
   const [toast, setToast] = useState("");
   const [forceBadQuality, setForceBadQuality] = useState(false);
 
   const recognizeFileRef = useRef(null);
-  const queueFileRef = useRef(null);
+  const queueImageFileRef = useRef(null);
+  const queueFolderFileRef = useRef(null);
   const queuePathRef = useRef(null);
   const enrollNameRef = useRef(null);
   const enrollFileRef = useRef(null);
   const enrollPathRef = useRef(null);
-  const initFolderRef = useRef(null);
-  const initPathRef = useRef(null);
-  const initSessionRef = useRef(null);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -42,7 +40,10 @@ function App() {
   }, []);
 
   const readResponse = useCallback(async (response) => {
-    const payload = await response.json();
+    const contentType = response.headers.get("Content-Type") || "";
+    const payload = contentType.includes("application/json")
+      ? await response.json()
+      : { error: await response.text() || response.statusText };
     console.debug("[sentriface-ui] response", response.status, payload);
     if (!response.ok) {
       showToast(payload.error || "Request failed");
@@ -67,9 +68,8 @@ function App() {
 
   const loadProfile = useCallback(async () => setProfile(await apiGet("/api/profile")), [apiGet]);
   const loadPeople = useCallback(async () => setPeople((await apiGet("/api/persons")).persons), [apiGet]);
-  const loadPending = useCallback(async () => setPending((await apiGet("/api/pending")).pending), [apiGet]);
   const loadEvents = useCallback(async () => setEvents((await apiGet("/api/events")).events), [apiGet]);
-  const refreshAll = useCallback(async () => Promise.all([loadProfile(), loadPeople(), loadPending(), loadEvents()]), [loadProfile, loadPeople, loadPending, loadEvents]);
+  const refreshAll = useCallback(async () => Promise.all([loadProfile(), loadPeople(), loadEvents()]), [loadProfile, loadPeople, loadEvents]);
 
   useEffect(() => {
     refreshAll().catch((error) => console.error(error));
@@ -119,11 +119,118 @@ function App() {
     await runRecognition(await uploadFile(file));
   }, [runRecognition, uploadFile]);
 
-  const queueAdd = async () => {
-    const path = await resolveImagePath(queueFileRef, queuePathRef, uploadFile, showToast);
-    const payload = await apiPost("/api/queue-add", { path, force_bad_quality: forceBadQuality });
-    showToast(`Queued ${payload.pending.length}, rejected ${payload.rejected.length}`);
-    await Promise.all([loadPending(), loadEvents()]);
+  const scanQueuePath = useCallback(async (path) => {
+    const payload = await apiPost("/api/queue-scan", { path, force_bad_quality: forceBadQuality });
+    setQueueSessionId(payload.session_id);
+    setQueueGroups(payload.groups);
+    setQueueSelectedGroup(null);
+    setQueueSelectedFaces([]);
+    showToast(`Queued ${payload.groups.length} group(s)`);
+    await loadEvents();
+  }, [apiPost, forceBadQuality, loadEvents, showToast]);
+
+  const queueScan = async () => {
+    const imageFile = queueImageFileRef.current?.files?.[0];
+    if (imageFile) {
+      await scanQueuePath(await uploadFile(imageFile));
+      return;
+    }
+    const folderFiles = Array.from(queueFolderFileRef.current?.files || []);
+    if (folderFiles.length) {
+      await scanQueuePath(await uploadFolder(folderFiles));
+      return;
+    }
+    const path = queuePathRef.current?.value.trim();
+    if (!path) {
+      showToast("Drop images, choose a folder, or enter a path");
+      throw new Error("Missing queue source");
+    }
+    await scanQueuePath(path);
+  };
+
+  const queueDrop = async (event) => {
+    event.preventDefault();
+    const files = await droppedImageFiles(event.dataTransfer);
+    if (!files.length) {
+      showToast("Drop image files or a folder");
+      return;
+    }
+    await scanQueuePath(files.length === 1 ? await uploadFile(files[0]) : await uploadFolder(files));
+  };
+
+  const loadQueueGroups = useCallback(async (sessionId = queueSessionId) => {
+    if (!sessionId) return;
+    const payload = await apiGet(`/api/queue-groups?session_id=${encodeURIComponent(sessionId)}`);
+    setQueueGroups(payload.groups);
+    setQueueSelectedGroup((current) => {
+      if (!current) return current;
+      return payload.groups.find((group) => group.group_id === current.group_id) || null;
+    });
+  }, [apiGet, queueSessionId]);
+
+  const openQueueGroup = (group) => {
+    setQueueSelectedGroup(group);
+    setQueueSelectedFaces([]);
+  };
+
+  const toggleQueueFace = (faceId) => {
+    setQueueSelectedFaces((current) => (
+      current.includes(faceId) ? current.filter((item) => item !== faceId) : [...current, faceId]
+    ));
+  };
+
+  const selectedQueueFaceIds = () => {
+    if (!queueSelectedFaces.length) {
+      showToast("Select images first");
+      throw new Error("No queue images selected");
+    }
+    return queueSelectedFaces;
+  };
+
+  const queueAcceptExisting = async () => {
+    const best = queueSelectedGroup?.matches?.[0];
+    if (!queueSelectedGroup || !best) return;
+    const faceIds = selectedQueueFaceIds();
+    showToast(`Updating ${best.name}`);
+    const payload = await apiPost("/api/queue-confirm-existing", {
+      session_id: queueSelectedGroup.session_id,
+      group_id: queueSelectedGroup.group_id,
+      face_ids: faceIds,
+      person_id: best.person_id,
+    });
+    showToast(`Updated ${best.name} (${payload.embedding_ids.length})`);
+    setQueueSelectedFaces([]);
+    await Promise.all([loadQueueGroups(queueSelectedGroup.session_id), loadPeople(), loadEvents()]);
+  };
+
+  const queueNewPerson = async () => {
+    if (!queueSelectedGroup) return;
+    const faceIds = selectedQueueFaceIds();
+    const name = window.prompt("New person name");
+    if (!name) return;
+    showToast(`Saving ${name}`);
+    const payload = await apiPost("/api/queue-confirm-new", {
+      session_id: queueSelectedGroup.session_id,
+      group_id: queueSelectedGroup.group_id,
+      face_ids: faceIds,
+      name,
+    });
+    showToast(`Updated ${name} (${payload.embedding_ids.length})`);
+    setQueueSelectedFaces([]);
+    await Promise.all([loadQueueGroups(queueSelectedGroup.session_id), loadPeople(), loadEvents()]);
+  };
+
+  const queueDiscard = async () => {
+    if (!queueSelectedGroup) return;
+    const faceIds = selectedQueueFaceIds();
+    await apiPost("/api/queue-discard", {
+      session_id: queueSelectedGroup.session_id,
+      group_id: queueSelectedGroup.group_id,
+      face_ids: faceIds,
+    });
+    showToast(`Discarded ${faceIds.length} image(s)`);
+    setQueueSelectedFaces([]);
+    await Promise.all([loadQueueGroups(queueSelectedGroup.session_id), loadEvents()]);
   };
 
   const enroll = async () => {
@@ -135,23 +242,6 @@ function App() {
     await Promise.all([loadPeople(), loadEvents()]);
     console.debug("[sentriface-ui] enrolled", payload);
   };
-
-  const initScan = async () => {
-    const path = await resolveFolderPath(initFolderRef, initPathRef, uploadFolder, showToast);
-    const payload = await apiPost("/api/init-scan", { path });
-    setInitSessionId(payload.session_id);
-    setInitGroups(payload.groups);
-    if (initSessionRef.current) initSessionRef.current.value = payload.session_id;
-    showToast(`Init session created with ${payload.groups.length} group(s)`);
-    await loadEvents();
-  };
-
-  const loadInitGroups = useCallback(async () => {
-    const sessionId = initSessionRef.current?.value.trim() || initSessionId;
-    const payload = await apiGet(`/api/init-groups?session_id=${encodeURIComponent(sessionId)}`);
-    setInitSessionId(sessionId);
-    setInitGroups(payload.groups);
-  }, [apiGet, initSessionId]);
 
   const peopleOpen = async (personId) => {
     if (!personId) return;
@@ -169,13 +259,23 @@ function App() {
     if (!recognition?.inputPath || !best) return;
     if (best.score >= DUPLICATE_MATCH_SCORE) {
       setRecognitionAccepted(true);
-      openRecognitionFollowup(best.name, best.person_id, "existing");
+      openRecognitionFollowup({
+        name: best.name,
+        personId: best.person_id,
+        embeddingId: best.embedding_ids[0],
+        decision: "duplicate",
+      });
       showToast(`Duplicate image of ${best.name}`);
       return;
     }
     const payload = await apiPost("/api/recognition-accept-existing", { path: recognition.inputPath, person_id: best.person_id });
     setRecognitionAccepted(true);
-    openRecognitionFollowup(payload.name || best.name, best.person_id, "existing");
+    openRecognitionFollowup({
+      name: payload.name || best.name,
+      personId: best.person_id,
+      embeddingId: payload.embedding_id,
+      decision: "existing",
+    });
     showToast(payload.duplicate ? `Duplicate image of ${payload.name || best.name}` : `Accepted as ${best.name}`);
     await Promise.all([loadPeople(), loadEvents()]);
   };
@@ -184,9 +284,14 @@ function App() {
     if (!recognition?.inputPath) return;
     const name = window.prompt("New person name");
     if (!name) return;
-    await apiPost("/api/recognition-new", { path: recognition.inputPath, name });
+    const payload = await apiPost("/api/recognition-new", { path: recognition.inputPath, name });
     setRecognitionAccepted(true);
-    openRecognitionFollowup(name, null, "new");
+    openRecognitionFollowup({
+      name,
+      personId: payload.person_id,
+      embeddingId: payload.embedding_id,
+      decision: "new",
+    });
     showToast(`Saved as ${name}`);
     await Promise.all([loadPeople(), loadEvents()]);
   };
@@ -201,7 +306,7 @@ function App() {
     setRecognitionFollowupDone(false);
   };
 
-  const openRecognitionFollowup = (name, personId, decision) => {
+  const openRecognitionFollowup = ({ name, personId, embeddingId, decision }) => {
     const { date, time } = currentDateTimeParts();
     setRecognitionFollowup({
       date,
@@ -211,6 +316,8 @@ function App() {
       eventOccasion: "",
       name,
       personId,
+      embeddingId,
+      imageId: imageIdFromPath(recognition?.inputPath || ""),
       decision,
     });
     setRecognitionFollowupDone(false);
@@ -220,6 +327,19 @@ function App() {
     setRecognitionFollowup((current) => current ? { ...current, [field]: value } : current);
   };
 
+  const clearRecognitionFollowupForm = () => {
+    const { date, time } = currentDateTimeParts();
+    setRecognitionFollowup((current) => current ? {
+      ...current,
+      date,
+      time,
+      placeSeen: "",
+      individualCount: "",
+      eventOccasion: "",
+    } : current);
+    setRecognitionFollowupDone(false);
+  };
+
   const confirmRecognitionFollowup = async (event) => {
     event.preventDefault();
     if (!recognitionFollowup || !recognition?.inputPath) return;
@@ -227,6 +347,9 @@ function App() {
       path: recognition.inputPath,
       name: recognitionFollowup.name,
       person_id: recognitionFollowup.personId,
+      embedding_id: recognitionFollowup.embeddingId,
+      image_id: recognitionFollowup.imageId,
+      image_path: recognition.inputPath,
       decision: recognitionFollowup.decision,
       date: recognitionFollowup.date,
       time: recognitionFollowup.time,
@@ -235,6 +358,7 @@ function App() {
       event_occasion: recognitionFollowup.eventOccasion,
     });
     setRecognitionFollowupDone(true);
+    setRecognitionFollowup(null);
     showToast("Recognition details confirmed");
     await loadEvents();
   };
@@ -248,56 +372,6 @@ function App() {
   const recognitionGalleryBack = () => {
     if (recognitionGalleryImage) setRecognitionGalleryImage(null);
     else setRecognitionGallery(null);
-  };
-
-  const confirmNew = async (pendingId) => {
-    const name = window.prompt("New person name");
-    if (!name) return;
-    await apiPost("/api/confirm-new", { pending_id: pendingId, name });
-    showToast("Pending face confirmed as new person");
-    await Promise.all([loadPeople(), loadPending(), loadEvents()]);
-  };
-
-  const confirmExisting = async (pendingId) => {
-    const personId = window.prompt("Existing person ID");
-    if (!personId) return;
-    await apiPost("/api/confirm-existing", { pending_id: pendingId, person_id: personId });
-    showToast("Pending face added to existing person");
-    await Promise.all([loadPeople(), loadPending(), loadEvents()]);
-  };
-
-  const rejectPending = async (pendingId) => {
-    await apiPost("/api/reject-pending", { pending_id: pendingId });
-    showToast("Pending face rejected");
-    await Promise.all([loadPending(), loadEvents()]);
-  };
-
-  const initConfirm = async (sessionId, groupId) => {
-    const name = window.prompt("New person name");
-    if (!name) return;
-    await apiPost("/api/init-confirm", { session_id: sessionId, group_id: groupId, name });
-    showToast("Init group confirmed");
-    await Promise.all([loadInitGroups(), loadPeople(), loadEvents()]);
-  };
-
-  const initConfirmExisting = async (sessionId, groupId) => {
-    const personId = window.prompt("Existing person ID");
-    if (!personId) return;
-    await apiPost("/api/init-confirm-existing", { session_id: sessionId, group_id: groupId, person_id: personId });
-    showToast("Init group added");
-    await Promise.all([loadInitGroups(), loadPeople(), loadEvents()]);
-  };
-
-  const initReject = async (sessionId, groupId) => {
-    await apiPost("/api/init-reject", { session_id: sessionId, group_id: groupId });
-    showToast("Init group rejected");
-    await Promise.all([loadInitGroups(), loadEvents()]);
-  };
-
-  const initReset = async (sessionId, groupId) => {
-    await apiPost("/api/init-reset", { session_id: sessionId, group_id: groupId });
-    showToast("Init group reset");
-    await Promise.all([loadInitGroups(), loadEvents()]);
   };
 
   const backupDb = async () => {
@@ -317,6 +391,7 @@ function App() {
   };
 
   const best = recognition?.face?.matches?.[0] || null;
+  const isHighConfidenceMatch = Boolean(best && best.score >= HIGH_CONFIDENCE_MATCH_SCORE);
 
   return (
     <>
@@ -375,32 +450,43 @@ function App() {
               <button className="accept-btn" onClick={guarded(recognitionAccept)} disabled={!best || recognitionAccepted}>
                 {best ? `Accept as ${best.name}` : "Accept"}
               </button>
-              <button onClick={guarded(recognitionNew)} disabled={!recognition || recognitionAccepted}>New Person</button>
+              <button onClick={guarded(recognitionNew)} disabled={!recognition || recognitionAccepted || isHighConfidenceMatch}>New Person</button>
               <button className="danger-btn" onClick={recognitionClear}>Clear</button>
             </div>
-            {recognitionFollowup && (
-              <RecognitionFollowupForm
-                values={recognitionFollowup}
-                confirmed={recognitionFollowupDone}
-                onChange={updateRecognitionFollowup}
-                onSubmit={guarded(confirmRecognitionFollowup)}
-                onClear={recognitionClear}
-              />
-            )}
           </div>
+          {recognitionFollowup && (
+            <RecognitionFollowupForm
+              values={recognitionFollowup}
+              confirmed={recognitionFollowupDone}
+              onChange={updateRecognitionFollowup}
+              onSubmit={guarded(confirmRecognitionFollowup)}
+              onClear={clearRecognitionFollowupForm}
+            />
+          )}
           {recognition?.metrics && <Metrics metrics={recognition.metrics} />}
         </View>
 
-        <View name="add" activeView={activeView}>
-          <div className="split">
-            <div>
-              <h2>Queue Face</h2>
-              <div className="toolbar stack">
-                <FileField id="queueFile" label="Choose image" inputRef={queueFileRef} />
-                <PathField id="queuePath" label="Or use image path" placeholder="Optional local image path" inputRef={queuePathRef} />
-                <label className="check"><input type="checkbox" checked={forceBadQuality} onChange={(event) => setForceBadQuality(event.target.checked)} /> force bad quality</label>
-                <button className="primary" onClick={guarded(queueAdd)}>Queue</button>
+        <View name="queue" activeView={activeView}>
+          <div className="queue-layout">
+            <div className="queue-sidebar">
+              <div className="queue-dropzone" onDrop={guarded(queueDrop)} onDragOver={(event) => event.preventDefault()}>
+                <div className="title">Drag & Drop Image / Folder</div>
+                <div className="muted">Create embeddings, group similar photos, then review each group.</div>
               </div>
+              <div className="toolbar stack">
+                <FileField id="queueImageFile" label="Choose image" inputRef={queueImageFileRef} />
+                <FolderField id="queueFolderFile" label="Choose folder" inputRef={queueFolderFileRef} />
+                <PathField id="queuePath" label="Or use image/folder path" placeholder="Optional local path" inputRef={queuePathRef} />
+                <label className="check"><input type="checkbox" checked={forceBadQuality} onChange={(event) => setForceBadQuality(event.target.checked)} /> force bad quality</label>
+                <button className="primary" onClick={guarded(queueScan)}>Create Queue</button>
+              </div>
+              {queueSessionId && (
+                <div className="queue-session">
+                  <div className="muted">Session</div>
+                  <div className="person-id">{queueSessionId}</div>
+                  <button onClick={guarded(() => loadQueueGroups(queueSessionId))}>Refresh Groups</button>
+                </div>
+              )}
               <h2>Enroll Directly</h2>
               <div className="toolbar stack">
                 <TextField id="enrollName" label="Person name" placeholder="Person name" inputRef={enrollNameRef} />
@@ -409,16 +495,23 @@ function App() {
                 <button className="primary" onClick={guarded(enroll)}>Enroll</button>
               </div>
             </div>
-            <div>
-              <div className="section-head">
-                <h2>Pending Review</h2>
-                <button onClick={guarded(loadPending)}>Refresh</button>
-              </div>
-              <div className="results">
-                {pending.length ? pending.map((item) => (
-                  <PendingCard key={item.pending_id} item={item} onNew={guarded(confirmNew)} onExisting={guarded(confirmExisting)} onReject={guarded(rejectPending)} />
-                )) : <EmptyCard text="No pending additions." />}
-              </div>
+            <div className="queue-main">
+              {queueSelectedGroup ? (
+                <QueueGroupReview
+                  group={queueSelectedGroup}
+                  selectedFaces={queueSelectedFaces}
+                  onToggleFace={toggleQueueFace}
+                  onAcceptExisting={guarded(queueAcceptExisting)}
+                  onNewPerson={guarded(queueNewPerson)}
+                  onDiscard={guarded(queueDiscard)}
+                  onBack={() => {
+                    setQueueSelectedGroup(null);
+                    setQueueSelectedFaces([]);
+                  }}
+                />
+              ) : (
+                <QueueGroupList groups={queueGroups} onOpen={openQueueGroup} />
+              )}
             </div>
           </div>
         </View>
@@ -437,36 +530,6 @@ function App() {
               </div>
             </>
           )}
-        </View>
-
-        <View name="init" activeView={activeView}>
-          <div className="workflow-panel">
-            <div>
-              <h2>Initial Face Grouping</h2>
-              <p className="muted">Choose a folder of images, scan faces, then review grouped identities.</p>
-            </div>
-            <div className="toolbar stack">
-              <FolderField id="initFolder" label="Choose folder" inputRef={initFolderRef} />
-              <PathField id="initPath" label="Or use folder path" placeholder="Optional local folder path" inputRef={initPathRef} />
-              <button className="primary" onClick={guarded(initScan)}>Scan Folder</button>
-            </div>
-          </div>
-          <div className="toolbar stack">
-            <PathField id="initSessionId" label="Session ID" placeholder="Session ID" inputRef={initSessionRef} defaultValue={initSessionId} />
-            <button onClick={guarded(loadInitGroups)}>Load Groups</button>
-          </div>
-          <div className="results">
-            {initGroups.length ? initGroups.map((group) => (
-              <InitGroupCard
-                key={`${group.session_id}-${group.group_id}`}
-                group={group}
-                onConfirm={guarded(initConfirm)}
-                onExisting={guarded(initConfirmExisting)}
-                onReject={guarded(initReject)}
-                onReset={guarded(initReset)}
-              />
-            )) : <EmptyCard text="No init groups loaded." />}
-          </div>
         </View>
 
         <View name="debug" activeView={activeView}>
@@ -527,28 +590,6 @@ function TextField(props) {
   return <PathField {...props} />;
 }
 
-function PendingCard({ item, onNew, onExisting, onReject }) {
-  return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <div className="title">{item.pending_id}</div>
-          <div className="muted">{item.source_image}</div>
-        </div>
-        <span className={`pill ${item.decision}`}>{item.decision}</span>
-      </div>
-      <Thumb path={item.crop_path} />
-      <Quality quality={item.quality} />
-      <Matches matches={item.matches} />
-      <div className="row">
-        <button onClick={() => onNew(item.pending_id)}>New</button>
-        <button onClick={() => onExisting(item.pending_id)}>Existing</button>
-        <button onClick={() => onReject(item.pending_id)}>Reject</button>
-      </div>
-    </div>
-  );
-}
-
 function PersonCard({ person, onOpen }) {
   return (
     <button className="person-card" onClick={() => onOpen(person.person_id)}>
@@ -593,22 +634,84 @@ function PeopleGalleryView({ payload, selectedImage, onImage, onBack }) {
   );
 }
 
-function InitGroupCard({ group, onConfirm, onExisting, onReject, onReset }) {
+function QueueGroupList({ groups, onOpen }) {
+  const pendingGroups = groups.filter((group) => group.status === "pending" && group.faces.length);
   return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <div className="title">{group.group_id}</div>
-          <div className="muted">session {group.session_id} | {group.faces.length} face(s)</div>
-        </div>
-        <span className="pill">{group.status}</span>
+    <>
+      <div className="section-head">
+        <h2>Queue Groups</h2>
+        <span className="pill">{pendingGroups.length} active</span>
       </div>
-      <div className="thumbs">{group.faces.map((face) => <Thumb key={face.init_face_id} path={face.crop_path} />)}</div>
-      <div className="row">
-        <button onClick={() => onConfirm(group.session_id, group.group_id)}>New</button>
-        <button onClick={() => onExisting(group.session_id, group.group_id)}>Existing</button>
-        <button onClick={() => onReject(group.session_id, group.group_id)}>Reject</button>
-        <button onClick={() => onReset(group.session_id, group.group_id)}>Reset</button>
+      <div className="queue-groups">
+        {pendingGroups.length ? pendingGroups.map((group) => {
+          const best = group.matches?.[0] || null;
+          return (
+            <button key={`${group.session_id}-${group.group_id}`} className="queue-group-card" onClick={() => onOpen(group)}>
+              <div className="card-head">
+                <div>
+                  <div className="title">{best ? recognitionText(best) : "New person"}</div>
+                  <div className="muted">{group.group_id} | {group.faces.length} image(s)</div>
+                </div>
+                {best && <span className="pill strong">{best.score.toFixed(3)}</span>}
+              </div>
+              <div className="queue-card-thumbs">
+                {group.faces.slice(0, 6).map((face) => <Thumb key={face.init_face_id} path={face.crop_path || face.source_image} />)}
+              </div>
+            </button>
+          );
+        }) : <EmptyCard text="No queue groups loaded." />}
+      </div>
+    </>
+  );
+}
+
+function QueueGroupReview({ group, selectedFaces, onToggleFace, onAcceptExisting, onNewPerson, onDiscard, onBack }) {
+  const best = group.matches?.[0] || null;
+  const selectedCount = selectedFaces.length;
+  return (
+    <div className="queue-review">
+      <div className="section-head">
+        <div>
+          <h2>{group.group_id}</h2>
+          <div className="muted">{group.faces.length} image(s) left | {selectedCount} selected</div>
+        </div>
+        <button onClick={onBack}>Back</button>
+      </div>
+      <div className="queue-review-grid">
+        <div>
+          <div className="queue-select-grid">
+            {group.faces.map((face) => {
+              const selected = selectedFaces.includes(face.init_face_id);
+              return (
+                <button
+                  key={face.init_face_id}
+                  className={`queue-face-tile ${selected ? "selected" : ""}`}
+                  onClick={() => onToggleFace(face.init_face_id)}
+                >
+                  <img src={mediaUrl(face.crop_path || face.source_image)} alt="queue face" />
+                  <span>{selected ? "Selected" : "Select"}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="compare-pane queue-match-pane">
+          <div className="pane-head">
+            <div>
+              <div className="title">Suggested Match</div>
+              <div className="muted">Select images before accepting.</div>
+            </div>
+          </div>
+          <BestMatchPanel best={best} face={{ index: 1 }} onGallery={() => {}} />
+          <div className="decision-actions queue-actions">
+            <button className="accept-btn" onClick={onAcceptExisting} disabled={!best || !selectedCount}>
+              {best ? `Accept as ${best.name}` : "Accept"}
+            </button>
+            <button onClick={onNewPerson} disabled={!selectedCount}>New Person</button>
+            <button onClick={onDiscard} disabled={!selectedCount}>Discard</button>
+            <button className="danger-btn" onClick={onBack}>Back</button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -720,12 +823,6 @@ function GalleryPanel({ payload, selectedImage, onImage, onBack }) {
   );
 }
 
-function Quality({ quality }) {
-  if (!quality) return null;
-  const reasons = quality.reasons.length ? ` | ${quality.reasons.join(", ")}` : "";
-  return <div className="muted"><span className={`pill ${quality.status}`}>{quality.status}</span> score {quality.score.toFixed(3)}{reasons}</div>;
-}
-
 function InputImageQuality({ quality }) {
   const reasons = quality.reasons.length ? quality.reasons.join(", ") : "";
   return (
@@ -745,20 +842,6 @@ function MatchIdentitySummary({ match }) {
     <div className="match-identity">
       <div className="match-score">score: {match.score.toFixed(4)}</div>
       <div className="match-group-id">Group-id: {match.person_id}</div>
-    </div>
-  );
-}
-
-function Matches({ matches }) {
-  if (!matches.length) return <div className="muted">No matches.</div>;
-  return (
-    <div className="matches">
-      {matches.map((match) => (
-        <div key={`${match.rank}-${match.person_id}`} className="match">
-          <div className="title">#{match.rank} {match.name} <span className="muted">{match.score.toFixed(4)}</span></div>
-          <div className="muted">{match.person_id} | {match.embeddings_matched} embedding(s)</div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -800,19 +883,39 @@ async function resolveImagePath(fileRef, pathRef, uploadFile, showToast) {
   return path;
 }
 
-async function resolveFolderPath(fileRef, pathRef, uploadFolder, showToast) {
-  const files = Array.from(fileRef.current?.files || []);
-  if (files.length) {
-    const path = await uploadFolder(files);
-    if (pathRef.current) pathRef.current.value = path;
-    return path;
+async function droppedImageFiles(dataTransfer) {
+  const items = Array.from(dataTransfer?.items || []);
+  if (items.length && items[0].webkitGetAsEntry) {
+    const files = [];
+    await Promise.all(items.map(async (item) => {
+      const entry = item.webkitGetAsEntry();
+      if (entry) await collectEntryFiles(entry, files);
+    }));
+    return files.filter((file) => file.type.startsWith("image/") || /\.(jpe?g|png|bmp|webp)$/i.test(file.name));
   }
-  const path = pathRef.current?.value.trim();
-  if (!path) {
-    showToast("Choose a folder or enter a folder path");
-    throw new Error("Missing folder");
+  return Array.from(dataTransfer?.files || []).filter((file) => file.type.startsWith("image/"));
+}
+
+async function collectEntryFiles(entry, files) {
+  if (entry.isFile) {
+    files.push(await entryFile(entry));
+    return;
   }
-  return path;
+  if (!entry.isDirectory) return;
+  const reader = entry.createReader();
+  let batch = await readEntries(reader);
+  while (batch.length) {
+    await Promise.all(batch.map((item) => collectEntryFiles(item, files)));
+    batch = await readEntries(reader);
+  }
+}
+
+function entryFile(entry) {
+  return new Promise((resolve, reject) => entry.file(resolve, reject));
+}
+
+function readEntries(reader) {
+  return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
 }
 
 function clearInput(ref) {
@@ -831,6 +934,11 @@ function mediaUrl(path) {
   return `/media?path=${encodeURIComponent(path)}`;
 }
 
+function imageIdFromPath(path) {
+  const parts = String(path || "").split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) || "unknown-image";
+}
+
 function currentDateTimeParts() {
   const now = new Date();
   const date = [
@@ -846,9 +954,12 @@ function currentDateTimeParts() {
 }
 
 function recognitionText(match) {
-  if (match.score >= 0.62) return `Looks ${match.name}`;
-  if (match.score > 0.42) return `Maybe ${match.name}`;
-  return `Can't say ${match.name}, but this is the closest we have`;
+  // if (match.score >= HIGH_CONFIDENCE_MATCH_SCORE) return `That's ${match.name}`;
+  if (match.score >= 0.60) return `That's ${match.name}`;
+  if (match.score >= 0.50) return `Likely ${match.name}`;
+  if(match.score >= 0.40) return `Perhaps ${match.name}`;
+  if (match.score < 0.30) return "New person";
+  else return `No Match Found`
 }
 
 function profileLine(profile) {
@@ -859,11 +970,8 @@ function profileLine(profile) {
 function tabLabel(view) {
   return {
     recognize: "Recognize",
-    add: "Add Queue",
+    queue: "Queue",
     people: "People",
-    init: "Init Scan",
     debug: "Debug"
   }[view];
 }
-
-createRoot(document.getElementById("root")).render(<App />);

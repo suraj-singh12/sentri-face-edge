@@ -52,6 +52,23 @@ class EmbeddingRecord:
 
 
 @dataclass(frozen=True)
+class RecognitionDetail:
+    detail_id: str
+    embedding_id: str
+    person_id: str
+    image_id: str
+    name: str
+    decision: str
+    seen_date: str
+    seen_time: str
+    place_seen: str
+    individual_count: int
+    event_occasion: str
+    image_path: str | None = None
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
 class Match:
     person_id: str
     score: float

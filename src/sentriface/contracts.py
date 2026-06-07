@@ -13,6 +13,7 @@ from sentriface.models import (
     PendingAddition,
     Person,
     PersonSummary,
+    RecognitionDetail,
 )
 
 
@@ -78,6 +79,22 @@ class IdentityStore(Protocol):
     def move_embedding(self, embedding_id: str, person_id: str) -> None:
         """Move one embedding to another person."""
 
+    def add_recognition_detail(
+        self,
+        embedding_id: str,
+        person_id: str,
+        image_id: str,
+        name: str,
+        decision: str,
+        seen_date: str,
+        seen_time: str,
+        place_seen: str,
+        individual_count: int,
+        event_occasion: str,
+        image_path: str | None = None,
+    ) -> RecognitionDetail:
+        """Persist visit/event details for a recognition tied to an embedding."""
+
     def backup_to(self, target_path: Path) -> None:
         """Create a durable copy of the database."""
 
@@ -104,6 +121,9 @@ class IdentityStore(Protocol):
 
     def list_init_groups(self, session_id: str) -> list[InitGroup]:
         """List grouped faces in an initialization session."""
+
+    def delete_init_faces(self, init_face_ids: list[str]) -> None:
+        """Remove reviewed faces from an initialization/queue group."""
 
     def mark_init_group_status(self, session_id: str, group_id: str, status: str) -> None:
         """Mark an initialization group reviewed or rejected."""

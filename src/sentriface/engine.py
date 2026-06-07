@@ -24,6 +24,7 @@ from sentriface.models import (
 )
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+DUPLICATE_MATCH_SCORE = 0.9999
 
 
 class FaceEngine:
@@ -195,6 +196,36 @@ class FaceEngine:
         with self.metrics.timer("db_move_embedding_ms"):
             self.store.move_embedding(embedding_id, person_id)
         self._rebuild_index()
+
+    def add_recognition_detail(
+        self,
+        embedding_id: str,
+        person_id: str,
+        image_id: str,
+        name: str,
+        decision: str,
+        seen_date: str,
+        seen_time: str,
+        place_seen: str,
+        individual_count: int,
+        event_occasion: str,
+        image_path: str | None = None,
+    ) -> str:
+        with self.metrics.timer("db_add_recognition_detail_ms"):
+            detail = self.store.add_recognition_detail(
+                embedding_id=embedding_id,
+                person_id=person_id,
+                image_id=image_id,
+                image_path=image_path,
+                name=name,
+                decision=decision,
+                seen_date=seen_date,
+                seen_time=seen_time,
+                place_seen=place_seen,
+                individual_count=individual_count,
+                event_occasion=event_occasion,
+            )
+        return detail.detail_id
 
     def merge_persons(self, source_person_id: str, target_person_id: str) -> int:
         if source_person_id == target_person_id:
@@ -373,6 +404,26 @@ class FaceEngine:
             self.store.mark_init_group_status(session_id, group_id, "confirmed")
         return len(group.faces)
 
+    def confirm_init_faces(self, session_id: str, group_id: str, init_face_ids: list[str], name: str) -> tuple[str, list[str]]:
+        faces = self._selected_init_faces(session_id, group_id, init_face_ids)
+        with self.metrics.timer("db_create_person_ms"):
+            person = self.store.create_person(name=name)
+        embedding_ids = self._add_init_face_embeddings(person.person_id, faces)
+        self._remove_reviewed_init_faces(session_id, group_id, init_face_ids)
+        return person.person_id, embedding_ids
+
+    def confirm_init_faces_existing(self, session_id: str, group_id: str, init_face_ids: list[str], person_id: str) -> list[str]:
+        if self.store.get_person(person_id) is None:
+            raise KeyError(f"Unknown person: {person_id}")
+        faces = self._selected_init_faces(session_id, group_id, init_face_ids)
+        embedding_ids = self._add_init_face_embeddings(person_id, faces)
+        self._remove_reviewed_init_faces(session_id, group_id, init_face_ids)
+        return embedding_ids
+
+    def discard_init_faces(self, session_id: str, group_id: str, init_face_ids: list[str]) -> None:
+        self._selected_init_faces(session_id, group_id, init_face_ids)
+        self._remove_reviewed_init_faces(session_id, group_id, init_face_ids, empty_status="rejected")
+
     def reject_init_group(self, session_id: str, group_id: str) -> None:
         self._get_init_group(session_id, group_id)
         with self.metrics.timer("db_mark_init_group_ms"):
@@ -389,11 +440,61 @@ class FaceEngine:
                 return group
         raise KeyError(f"Unknown init group: {group_id}")
 
+    def _selected_init_faces(self, session_id: str, group_id: str, init_face_ids: list[str]) -> list[InitFace]:
+        if not init_face_ids:
+            raise KeyError("Select at least one image")
+        group = self._get_init_group(session_id, group_id)
+        if group.status != "pending":
+            raise KeyError(f"Queue group is not pending: {group_id}")
+        selected = {face_id for face_id in init_face_ids if face_id}
+        faces = [face for face in group.faces if face.init_face_id in selected]
+        if len(faces) != len(selected):
+            raise KeyError("One or more selected images are no longer in this group")
+        return faces
+
+    def _add_init_face_embeddings(self, person_id: str, faces: list[InitFace]) -> list[str]:
+        embedding_ids: list[str] = []
+        for face in faces:
+            duplicate = _duplicate_embedding(face.vector, self.store.list_embeddings_for_person(person_id))
+            if duplicate:
+                embedding_ids.append(duplicate.embedding_id)
+                continue
+            with self.metrics.timer("db_add_embedding_ms"):
+                record = self.store.add_embedding(
+                    person_id=person_id,
+                    vector=face.vector,
+                    quality_score=face.quality.score,
+                    source_image=face.source_image,
+                    crop_path=face.face.crop_path,
+                )
+            with self.metrics.timer("index_add_ms"):
+                self.index.add(record)
+            embedding_ids.append(record.embedding_id)
+        return embedding_ids
+
+    def _remove_reviewed_init_faces(
+        self,
+        session_id: str,
+        group_id: str,
+        init_face_ids: list[str],
+        empty_status: str = "confirmed",
+    ) -> None:
+        with self.metrics.timer("db_delete_init_faces_ms"):
+            self.store.delete_init_faces(init_face_ids)
+        remaining = [group for group in self.list_init_groups(session_id) if group.group_id == group_id]
+        status = empty_status if not remaining or not remaining[0].faces else "pending"
+        with self.metrics.timer("db_mark_init_group_ms"):
+            self.store.mark_init_group_status(session_id, group_id, status)
+
     def _rebuild_index(self) -> None:
         with self.metrics.timer("db_list_embeddings_ms"):
             embeddings = self.store.list_embeddings()
         with self.metrics.timer("index_rebuild_ms"):
             self.index.rebuild(embeddings)
+
+    def matches_for_vector(self, vector) -> list[PersonMatch]:
+        with self.metrics.timer("search_ms"):
+            return self._search_unique_people(vector)
 
     def _search_unique_people(self, vector) -> list[PersonMatch]:
         raw_matches = self.index.search(vector, max(self.config.top_k * 8, self.config.top_k))
@@ -477,6 +578,13 @@ def _assign_groups(faces: list[InitFace], threshold: float) -> list[InitFace]:
 
 def _cosine(left, right) -> float:
     return sum(a * b for a, b in zip(left, right))
+
+
+def _duplicate_embedding(vector, embeddings) -> object | None:
+    for record in embeddings:
+        if _cosine(vector, record.vector) >= DUPLICATE_MATCH_SCORE:
+            return record
+    return None
 
 
 def _with_crop_path(face, crop_path: str):
