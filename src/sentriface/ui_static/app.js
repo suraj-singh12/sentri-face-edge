@@ -263,33 +263,37 @@ function RecognitionDecision() {
   const acceptLabel = best ? `Accept as ${escapeHtml(best.name)}` : "Accept";
   return `
     <input id="recognizeFile" class="hidden-file" type="file" accept="image/*" />
-    <div class="recognition-stage">
-      <div class="compare-pane">
-        <div class="pane-head">
-          <div>
-            <div class="title">Input Image</div>
-            <div class="muted">${recognition?.inputPath ? escapeHtml(recognition.inputPath) : "Load one photo to recognize."}</div>
+    <div class="recognition-workbench">
+      <div class="recognition-stage">
+        <div class="compare-pane input-pane">
+          <div class="pane-head">
+            <div>
+              <div class="title">Input Image</div>
+              <div class="muted">${recognition?.inputPath ? escapeHtml(recognition.inputPath) : "Load one photo to recognize."}</div>
+            </div>
+            ${recognition?.inputPath ? `<button data-action="recognition-load">Load Another</button>` : ""}
           </div>
-          ${recognition?.inputPath ? `<button data-action="recognition-load">Load Another</button>` : ""}
-        </div>
-        ${recognition?.inputPath ? `<img class="preview-image" src="/media?path=${encodeURIComponent(recognition.inputPath)}" alt="input image" />` : LoadImagePanel()}
-      </div>
-      <div class="compare-pane">
-        <div class="pane-head">
-          <div>
-            <div class="title">Best Match</div>
-            <div class="muted">${recognition?.face ? `Face ${recognition.face.index}` : "No result yet."}</div>
+          <div class="image-frame input-frame">
+            ${recognition?.inputPath ? `<img class="preview-image" src="/media?path=${encodeURIComponent(recognition.inputPath)}" alt="input image" />` : LoadImagePanel()}
           </div>
         </div>
-        ${BestMatchPanel(best, recognition?.face)}
+        <div class="compare-pane match-pane">
+          <div class="pane-head">
+            <div>
+              <div class="title">Best Match</div>
+              <div class="muted">${recognition?.face ? `Face ${recognition.face.index}` : "No result yet."}</div>
+            </div>
+          </div>
+          ${BestMatchPanel(best, recognition?.face)}
+          ${state.recognitionGallery ? GalleryPanel(state.recognitionGallery) : ""}
+        </div>
+      </div>
+      <div class="decision-actions">
+        <button class="accept-btn" data-action="recognition-accept" ${!best || accepted ? "disabled" : ""}>${acceptLabel}</button>
+        <button data-action="recognition-new" ${!recognition || accepted ? "disabled" : ""}>New Person</button>
+        <button class="danger-btn" data-action="recognition-clear">Clear</button>
       </div>
     </div>
-    <div class="decision-actions">
-      <button class="accept-btn" data-action="recognition-accept" ${!best || accepted ? "disabled" : ""}>${acceptLabel}</button>
-      <button data-action="recognition-new" ${!recognition || accepted ? "disabled" : ""}>New Person</button>
-      <button class="danger-btn" data-action="recognition-clear">Clear</button>
-    </div>
-    ${state.recognitionGallery ? GalleryPanel(state.recognitionGallery) : ""}
     ${recognition?.metrics ? Metrics(recognition.metrics) : ""}
   `;
 }
@@ -307,7 +311,7 @@ function BestMatchPanel(best, face) {
   if (!face) return EmptyCard("No recognition response.");
   if (!best) {
     return `
-      <div class="card">
+      <div class="best-match">
         <div class="decision-copy">No known person is close enough.</div>
         ${Quality(face.quality)}
       </div>
