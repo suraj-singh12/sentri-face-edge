@@ -572,16 +572,6 @@ function BestMatchPanel({ best, face, onGallery }) {
   if (!best) {
     return <div className="best-match"><div className="decision-copy">No known person is close enough.</div></div>;
   }
-  if (best.score <= 0.42) {
-    const closest = face.matches.slice(0, 2);
-    return (
-      <div className="best-match">
-        <div className="decision-copy">{recognitionText(best)}</div>
-        <div className="muted">Showing closest {closest.length} candidate(s)</div>
-        <div className="closest-grid">{closest.map((match) => <CandidateCard key={match.person_id} match={match} onGallery={onGallery} />)}</div>
-      </div>
-    );
-  }
   return (
     <div className="best-match">
       <div className="decision-copy">{recognitionText(best)}</div>
@@ -590,17 +580,6 @@ function BestMatchPanel({ best, face, onGallery }) {
       </button>
       <MatchIdentitySummary match={best} />
     </div>
-  );
-}
-
-function CandidateCard({ match, onGallery }) {
-  return (
-    <button className="candidate-card" onClick={() => onGallery(match.person_id)}>
-      {match.representative_image ? <img src={mediaUrl(match.representative_image)} alt={match.name} /> : <span className="muted">No photo</span>}
-      <span className="title">{match.name}</span>
-      <span className="candidate-score">score: {match.score.toFixed(4)}</span>
-      <span className="candidate-id">Group-id: {match.person_id}</span>
-    </button>
   );
 }
 
