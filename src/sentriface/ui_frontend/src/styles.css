@@ -398,7 +398,7 @@ button[data-action="init-scan"]:hover {
 
 .input-pane {
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .match-pane {
@@ -478,9 +478,45 @@ button[data-action="init-scan"]:hover {
   display: block;
 }
 
+.input-quality {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.input-quality hr {
+  width: 100%;
+  height: 1px;
+  margin: 0;
+  border: 0;
+  background: var(--line);
+}
+
+.quality-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.quality-score {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.quality-reasons {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .best-match {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   align-content: start;
 }
 
@@ -500,6 +536,30 @@ button[data-action="init-scan"]:hover {
 
 .match-photo {
   display: block;
+}
+
+.match-identity {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #b7dcd7;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+
+.match-score {
+  color: var(--accent-dark);
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.match-group-id {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .closest-grid {
@@ -532,10 +592,34 @@ button[data-action="init-scan"]:hover {
   border-radius: 8px;
 }
 
+.candidate-score {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid #b7dcd7;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.candidate-id {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
 .decision-copy {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1.2;
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .decision-actions {
@@ -695,6 +779,15 @@ button[data-action="init-scan"]:hover {
   border-radius: 8px;
   background: #f8fafb;
   border: 1px solid #e5e9ed;
+}
+
+.thumb {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7fafb;
 }
 
 .thumbs {
