@@ -199,6 +199,21 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                 self.server.log_event("recognition-new", path=str(image_path), person_id=person_id)
                 self._json({"person_id": person_id, "metrics": self.server.engine.metrics_snapshot()})
                 return
+            if parsed.path == "/api/recognition-followup":
+                self.server.log_event(
+                    "recognition-followup",
+                    path=_required(payload, "path"),
+                    name=_required(payload, "name"),
+                    person_id=payload.get("person_id"),
+                    decision=_required(payload, "decision"),
+                    date=_required(payload, "date"),
+                    time=_required(payload, "time"),
+                    place_seen=_required(payload, "place_seen"),
+                    individual_count=int(_required(payload, "individual_count")),
+                    event_occasion=_required(payload, "event_occasion"),
+                )
+                self._json({"confirmed": True})
+                return
             if parsed.path == "/api/enroll":
                 image_path = Path(_required(payload, "path"))
                 name = _required(payload, "name")

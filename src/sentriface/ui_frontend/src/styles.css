@@ -592,6 +592,53 @@ button[data-action="init-scan"]:hover {
   font-weight: 750;
 }
 
+.decision-actions.accepted button:not(.danger-btn) {
+  opacity: 0.24;
+}
+
+.recognition-followup {
+  width: min(760px, 100%);
+  margin: 4px auto 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(18, 32, 45, 0.04);
+}
+
+.followup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.followup-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.followup-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.followup-wide {
+  grid-column: 1 / -1;
+}
+
+.followup-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.followup-actions button {
+  min-width: 130px;
+  font-weight: 800;
+}
+
 .gallery-panel {
   flex: 1 1 auto;
   min-height: 0;
@@ -836,6 +883,15 @@ button[data-action="init-scan"]:hover {
 
   .recognition-stage {
     grid-template-columns: 1fr;
+  }
+
+  .followup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .followup-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .tabs {

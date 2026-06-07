@@ -17,6 +17,8 @@ function App() {
   const [recognitionGallery, setRecognitionGallery] = useState(null);
   const [recognitionGalleryImage, setRecognitionGalleryImage] = useState(null);
   const [recognitionAccepted, setRecognitionAccepted] = useState(false);
+  const [recognitionFollowup, setRecognitionFollowup] = useState(null);
+  const [recognitionFollowupDone, setRecognitionFollowupDone] = useState(false);
   const [initGroups, setInitGroups] = useState([]);
   const [initSessionId, setInitSessionId] = useState("");
   const [toast, setToast] = useState("");
@@ -105,6 +107,8 @@ function App() {
     setRecognitionGallery(null);
     setRecognitionGalleryImage(null);
     setRecognitionAccepted(false);
+    setRecognitionFollowup(null);
+    setRecognitionFollowupDone(false);
     showToast(`Recognized ${payload.faces.length} face(s)`);
     await loadEvents();
   }, [apiPost, loadEvents, showToast]);
@@ -165,11 +169,13 @@ function App() {
     if (!recognition?.inputPath || !best) return;
     if (best.score >= DUPLICATE_MATCH_SCORE) {
       setRecognitionAccepted(true);
+      openRecognitionFollowup(best.name, best.person_id, "existing");
       showToast(`Duplicate image of ${best.name}`);
       return;
     }
     const payload = await apiPost("/api/recognition-accept-existing", { path: recognition.inputPath, person_id: best.person_id });
     setRecognitionAccepted(true);
+    openRecognitionFollowup(payload.name || best.name, best.person_id, "existing");
     showToast(payload.duplicate ? `Duplicate image of ${payload.name || best.name}` : `Accepted as ${best.name}`);
     await Promise.all([loadPeople(), loadEvents()]);
   };
@@ -180,6 +186,7 @@ function App() {
     if (!name) return;
     await apiPost("/api/recognition-new", { path: recognition.inputPath, name });
     setRecognitionAccepted(true);
+    openRecognitionFollowup(name, null, "new");
     showToast(`Saved as ${name}`);
     await Promise.all([loadPeople(), loadEvents()]);
   };
@@ -190,6 +197,46 @@ function App() {
     setRecognitionGallery(null);
     setRecognitionGalleryImage(null);
     setRecognitionAccepted(false);
+    setRecognitionFollowup(null);
+    setRecognitionFollowupDone(false);
+  };
+
+  const openRecognitionFollowup = (name, personId, decision) => {
+    const { date, time } = currentDateTimeParts();
+    setRecognitionFollowup({
+      date,
+      time,
+      placeSeen: "",
+      individualCount: "",
+      eventOccasion: "",
+      name,
+      personId,
+      decision,
+    });
+    setRecognitionFollowupDone(false);
+  };
+
+  const updateRecognitionFollowup = (field, value) => {
+    setRecognitionFollowup((current) => current ? { ...current, [field]: value } : current);
+  };
+
+  const confirmRecognitionFollowup = async (event) => {
+    event.preventDefault();
+    if (!recognitionFollowup || !recognition?.inputPath) return;
+    await apiPost("/api/recognition-followup", {
+      path: recognition.inputPath,
+      name: recognitionFollowup.name,
+      person_id: recognitionFollowup.personId,
+      decision: recognitionFollowup.decision,
+      date: recognitionFollowup.date,
+      time: recognitionFollowup.time,
+      place_seen: recognitionFollowup.placeSeen,
+      individual_count: Number(recognitionFollowup.individualCount),
+      event_occasion: recognitionFollowup.eventOccasion,
+    });
+    setRecognitionFollowupDone(true);
+    showToast("Recognition details confirmed");
+    await loadEvents();
   };
 
   const openRecognitionGallery = async (personId) => {
@@ -324,13 +371,22 @@ function App() {
                   : <BestMatchPanel best={best} face={recognition?.face} onGallery={guarded(openRecognitionGallery)} />}
               </div>
             </div>
-            <div className="decision-actions">
+            <div className={`decision-actions ${recognitionAccepted ? "accepted" : ""}`}>
               <button className="accept-btn" onClick={guarded(recognitionAccept)} disabled={!best || recognitionAccepted}>
                 {best ? `Accept as ${best.name}` : "Accept"}
               </button>
               <button onClick={guarded(recognitionNew)} disabled={!recognition || recognitionAccepted}>New Person</button>
               <button className="danger-btn" onClick={recognitionClear}>Clear</button>
             </div>
+            {recognitionFollowup && (
+              <RecognitionFollowupForm
+                values={recognitionFollowup}
+                confirmed={recognitionFollowupDone}
+                onChange={updateRecognitionFollowup}
+                onSubmit={guarded(confirmRecognitionFollowup)}
+                onClear={recognitionClear}
+              />
+            )}
           </div>
           {recognition?.metrics && <Metrics metrics={recognition.metrics} />}
         </View>
@@ -567,6 +623,64 @@ function LoadImagePanel({ onClick }) {
   );
 }
 
+function RecognitionFollowupForm({ values, confirmed, onChange, onSubmit, onClear }) {
+  return (
+    <form className="recognition-followup" onSubmit={onSubmit}>
+      <div className="followup-grid">
+        <label>
+          <span>Date</span>
+          <input
+            required
+            type="date"
+            value={values.date}
+            onChange={(event) => onChange("date", event.target.value)}
+          />
+        </label>
+        <label>
+          <span>Time</span>
+          <input
+            required
+            type="time"
+            value={values.time}
+            onChange={(event) => onChange("time", event.target.value)}
+          />
+        </label>
+        <label>
+          <span>Place Seen</span>
+          <input
+            required
+            value={values.placeSeen}
+            onChange={(event) => onChange("placeSeen", event.target.value)}
+          />
+        </label>
+        <label>
+          <span>With how many indl</span>
+          <input
+            required
+            min="0"
+            step="1"
+            type="number"
+            value={values.individualCount}
+            onChange={(event) => onChange("individualCount", event.target.value)}
+          />
+        </label>
+        <label className="followup-wide">
+          <span>Event/Occasion</span>
+          <input
+            required
+            value={values.eventOccasion}
+            onChange={(event) => onChange("eventOccasion", event.target.value)}
+          />
+        </label>
+      </div>
+      <div className="followup-actions">
+        <button className="primary" type="submit" disabled={confirmed}>Confirm</button>
+        <button className="danger-btn" type="button" onClick={onClear}>Clear</button>
+      </div>
+    </form>
+  );
+}
+
 function BestMatchPanel({ best, face, onGallery }) {
   if (!face) return <EmptyCard text="No recognition response." />;
   if (!best) {
@@ -715,6 +829,20 @@ function galleryImages(payload) {
 
 function mediaUrl(path) {
   return `/media?path=${encodeURIComponent(path)}`;
+}
+
+function currentDateTimeParts() {
+  const now = new Date();
+  const date = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+  const time = [
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+  ].join(":");
+  return { date, time };
 }
 
 function recognitionText(match) {
