@@ -4,7 +4,9 @@ const state = {
   people: [],
   pending: [],
   events: [],
-  recognizeResults: "",
+  recognition: null,
+  recognitionGallery: null,
+  recognitionAccepted: false,
   initGroups: [],
   initSessionId: "",
   toast: "",
@@ -68,7 +70,7 @@ function RecognizeView() {
         <button data-action="recognize-batch">Batch</button>
       </div>
     </div>
-    <div class="results">${state.recognizeResults || ""}</div>
+    ${RecognitionDecision()}
   `;
 }
 
@@ -262,6 +264,87 @@ function Faces(faces, metrics) {
   return body + (metrics ? Metrics(metrics) : "");
 }
 
+function RecognitionDecision() {
+  const recognition = state.recognition;
+  const best = recognition?.face?.matches?.[0] || null;
+  const accepted = state.recognitionAccepted;
+  const acceptLabel = best ? `Accept as ${escapeHtml(best.name)}` : "Accept";
+  return `
+    <div class="recognition-stage">
+      <div class="compare-pane">
+        <div class="pane-head">
+          <div>
+            <div class="title">Input Image</div>
+            <div class="muted">${recognition?.inputPath ? escapeHtml(recognition.inputPath) : "Choose an image and run recognition."}</div>
+          </div>
+        </div>
+        ${recognition?.inputPath ? `<img class="preview-image" src="/media?path=${encodeURIComponent(recognition.inputPath)}" alt="input image" />` : EmptyCard("No input image loaded.")}
+      </div>
+      <div class="compare-pane">
+        <div class="pane-head">
+          <div>
+            <div class="title">Best Match</div>
+            <div class="muted">${recognition?.face ? `Face ${recognition.face.index}` : "No result yet."}</div>
+          </div>
+        </div>
+        ${BestMatchPanel(best, recognition?.face)}
+      </div>
+    </div>
+    <div class="decision-actions">
+      <button class="accept-btn" data-action="recognition-accept" ${!best || accepted ? "disabled" : ""}>${acceptLabel}</button>
+      <button data-action="recognition-new" ${!recognition || accepted ? "disabled" : ""}>New Person</button>
+      <button class="danger-btn" data-action="recognition-clear">Clear</button>
+    </div>
+    ${state.recognitionGallery ? GalleryPanel(state.recognitionGallery) : ""}
+    ${recognition?.metrics ? Metrics(recognition.metrics) : ""}
+  `;
+}
+
+function BestMatchPanel(best, face) {
+  if (!face) return EmptyCard("No recognition response.");
+  if (!best) {
+    return `
+      <div class="card">
+        <div class="decision-copy">No known person is close enough.</div>
+        ${Quality(face.quality)}
+      </div>
+    `;
+  }
+  return `
+    <div class="best-match">
+      <div class="decision-copy">${recognitionText(best)}</div>
+      <div class="muted">score ${best.score.toFixed(4)} | ${escapeHtml(best.person_id)}</div>
+      <button class="match-photo-button" data-action="recognition-gallery" data-person-id="${escapeHtml(best.person_id)}">
+        ${best.representative_image ? `<img class="match-photo" src="/media?path=${encodeURIComponent(best.representative_image)}" alt="${escapeHtml(best.name)}" />` : `<span>No photo</span>`}
+      </button>
+      ${Quality(face.quality)}
+    </div>
+  `;
+}
+
+function recognitionText(match) {
+  if (match.score > 0.62) return `Looks ${escapeHtml(match.name)}`;
+  if (match.score > 0.42) return `Maybe ${escapeHtml(match.name)}`;
+  return `Can't say ${escapeHtml(match.name)}, but this is the closest we have`;
+}
+
+function GalleryPanel(payload) {
+  const images = payload.embeddings
+    .map((record) => record.crop_path || record.source_image)
+    .filter(Boolean);
+  return `
+    <div class="gallery-panel">
+      <div class="section-head">
+        <h2>${escapeHtml(payload.person.name)} Photos</h2>
+        <button data-action="recognition-gallery-close">Close</button>
+      </div>
+      <div class="gallery-grid">
+        ${images.length ? images.map((path) => `<img src="/media?path=${encodeURIComponent(path)}" alt="${escapeHtml(payload.person.name)}" />`).join("") : EmptyCard("No photos saved for this person.")}
+      </div>
+    </div>
+  `;
+}
+
 function BatchResults(batch, metrics) {
   return batch.map((item) => `
     <div class="card">
@@ -360,6 +443,11 @@ async function handleAction(target) {
     if (action === "init-load") await loadInitGroups();
     if (action === "clear-input") clearInput(target.dataset.target);
     if (action === "clear-file") clearFile(target.dataset.target);
+    if (action === "recognition-accept") await recognitionAccept();
+    if (action === "recognition-new") await recognitionNew();
+    if (action === "recognition-clear") recognitionClear();
+    if (action === "recognition-gallery") await recognitionGallery(target.dataset.personId);
+    if (action === "recognition-gallery-close") recognitionGalleryClose();
     if (action === "confirm-new") await confirmNew(target.dataset.pendingId);
     if (action === "confirm-existing") await confirmExisting(target.dataset.pendingId);
     if (action === "reject-pending") await rejectPending(target.dataset.pendingId);
@@ -402,7 +490,13 @@ async function loadEvents() {
 async function recognizeOne() {
   const path = await resolveImagePath("recognizeFile", "recognizePath");
   const payload = await apiPost("/api/recognize", { path });
-  state.recognizeResults = Faces(payload.faces, payload.metrics);
+  state.recognition = {
+    inputPath: path,
+    face: payload.faces[0] || null,
+    metrics: payload.metrics,
+  };
+  state.recognitionGallery = null;
+  state.recognitionAccepted = false;
   showToast(`Recognized ${payload.faces.length} face(s)`);
   await loadEvents();
   render();
@@ -411,9 +505,62 @@ async function recognizeOne() {
 async function recognizeBatch() {
   const path = await resolveImagePath("recognizeFile", "recognizePath");
   const payload = await apiPost("/api/recognize-batch", { path });
-  state.recognizeResults = BatchResults(payload.batch, payload.metrics);
+  state.recognitionGallery = null;
+  state.recognitionAccepted = false;
+  state.recognition = {
+    inputPath: path,
+    face: payload.batch[0]?.faces?.[0] || null,
+    metrics: payload.metrics,
+  };
   showToast(`Processed ${payload.batch.length} image(s)`);
   await loadEvents();
+  render();
+}
+
+async function recognitionAccept() {
+  const best = state.recognition?.face?.matches?.[0];
+  if (!state.recognition?.inputPath || !best) return;
+  await apiPost("/api/recognition-accept-existing", {
+    path: state.recognition.inputPath,
+    person_id: best.person_id,
+  });
+  state.recognitionAccepted = true;
+  showToast(`Accepted as ${best.name}`);
+  await Promise.all([loadPeople(), loadEvents()]);
+  render();
+}
+
+async function recognitionNew() {
+  if (!state.recognition?.inputPath) return;
+  const name = prompt("New person name");
+  if (!name) return;
+  await apiPost("/api/recognition-new", {
+    path: state.recognition.inputPath,
+    name,
+  });
+  state.recognitionAccepted = true;
+  showToast(`Saved as ${name}`);
+  await Promise.all([loadPeople(), loadEvents()]);
+  render();
+}
+
+function recognitionClear() {
+  clearFile("recognizeFile");
+  clearInput("recognizePath");
+  state.recognition = null;
+  state.recognitionGallery = null;
+  state.recognitionAccepted = false;
+  render();
+}
+
+async function recognitionGallery(personId) {
+  if (!personId) return;
+  state.recognitionGallery = await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`);
+  render();
+}
+
+function recognitionGalleryClose() {
+  state.recognitionGallery = null;
   render();
 }
 

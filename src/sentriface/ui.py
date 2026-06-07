@@ -74,6 +74,19 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/persons":
                 self._json({"persons": [_person_summary(item) for item in self.server.engine.list_persons()]})
                 return
+            if parsed.path == "/api/person":
+                person_id = _query_value(parsed.query, "person_id")
+                person = self.server.engine.get_person(person_id)
+                if person is None:
+                    raise KeyError(f"Unknown person: {person_id}")
+                embeddings = self.server.engine.list_person_embeddings(person_id)
+                self._json(
+                    {
+                        "person": _person(person),
+                        "embeddings": [_embedding(record) for record in embeddings],
+                    }
+                )
+                return
             if parsed.path == "/api/pending":
                 self._json({"pending": [_pending(self.server.engine, item) for item in self.server.engine.list_pending_additions()]})
                 return
@@ -148,6 +161,30 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                 ]
                 self.server.log_event("recognize-batch", path=str(source), images=len(images))
                 self._json({"batch": batch, "metrics": self.server.engine.metrics_snapshot()})
+                return
+            if parsed.path == "/api/recognition-accept-existing":
+                image_path = Path(_required(payload, "path"))
+                person_id = _required(payload, "person_id")
+                if self.server.engine.get_person(person_id) is None:
+                    raise KeyError(f"Unknown person: {person_id}")
+                self.server.engine.reset_metrics()
+                additions = self.server.engine.prepare_additions(image_path)
+                if not additions:
+                    raise KeyError("No acceptable faces found")
+                embedding_id = self.server.engine.confirm_existing_person(additions[0], person_id)
+                self.server.log_event("recognition-accept-existing", path=str(image_path), person_id=person_id)
+                self._json({"embedding_id": embedding_id, "metrics": self.server.engine.metrics_snapshot()})
+                return
+            if parsed.path == "/api/recognition-new":
+                image_path = Path(_required(payload, "path"))
+                name = _required(payload, "name")
+                self.server.engine.reset_metrics()
+                additions = self.server.engine.prepare_additions(image_path)
+                if not additions:
+                    raise KeyError("No acceptable faces found")
+                person_id = self.server.engine.confirm_new_person(additions[0], name)
+                self.server.log_event("recognition-new", path=str(image_path), person_id=person_id)
+                self._json({"person_id": person_id, "metrics": self.server.engine.metrics_snapshot()})
                 return
             if parsed.path == "/api/enroll":
                 image_path = Path(_required(payload, "path"))
@@ -564,6 +601,8 @@ def _init_group(group: InitGroup) -> dict[str, Any]:
 
 def _match(engine: FaceEngine, match: PersonMatch, rank: int) -> dict[str, Any]:
     person = engine.get_person(match.person_id)
+    embeddings = engine.list_person_embeddings(match.person_id) if person else []
+    representative = _representative_image(embeddings)
     return {
         "rank": rank,
         "person_id": match.person_id,
@@ -571,7 +610,18 @@ def _match(engine: FaceEngine, match: PersonMatch, rank: int) -> dict[str, Any]:
         "score": match.score,
         "embedding_ids": list(match.embedding_ids),
         "embeddings_matched": match.embeddings_matched,
+        "representative_image": representative,
     }
+
+
+def _representative_image(embeddings: list[EmbeddingRecord]) -> str | None:
+    for record in embeddings:
+        if record.crop_path:
+            return record.crop_path
+    for record in embeddings:
+        if record.source_image:
+            return record.source_image
+    return None
 
 
 def _box(face) -> dict[str, Any]:

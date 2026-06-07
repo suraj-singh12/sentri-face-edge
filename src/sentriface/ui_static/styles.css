@@ -170,11 +170,18 @@ button:hover {
   transform: translateY(-1px);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+  transform: none;
+}
+
 button.primary,
 button[data-action="recognize"],
 button[data-action="queue-add"],
 button[data-action="enroll"],
-button[data-action="init-scan"] {
+button[data-action="init-scan"],
+.accept-btn {
   background: var(--accent);
   border-color: var(--accent);
   color: #ffffff;
@@ -184,8 +191,15 @@ button.primary:hover,
 button[data-action="recognize"]:hover,
 button[data-action="queue-add"]:hover,
 button[data-action="enroll"]:hover,
-button[data-action="init-scan"]:hover {
+button[data-action="init-scan"]:hover,
+.accept-btn:hover {
   background: var(--accent-dark);
+}
+
+.danger-btn {
+  background: #fff0f0;
+  border-color: #dfa2a2;
+  color: #a43333;
 }
 
 .toolbar {
@@ -234,6 +248,104 @@ button[data-action="init-scan"]:hover {
 .results {
   display: grid;
   gap: 10px;
+}
+
+.recognition-stage {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.compare-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(18, 32, 45, 0.04);
+}
+
+.pane-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.preview-image,
+.match-photo {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #f7fafb;
+  object-fit: contain;
+}
+
+.preview-image {
+  flex: 1 1 auto;
+  max-height: 520px;
+}
+
+.best-match {
+  display: grid;
+  gap: 10px;
+}
+
+.match-photo-button {
+  min-height: 220px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #f7fafb;
+}
+
+.match-photo-button:hover {
+  transform: none;
+}
+
+.match-photo {
+  display: block;
+  height: 300px;
+}
+
+.decision-copy {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.decision-actions {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.decision-actions button {
+  min-width: 140px;
+}
+
+.gallery-panel {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.gallery-grid img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 
 .card {
@@ -397,6 +509,10 @@ button[data-action="init-scan"]:hover {
   }
 
   .workflow-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .recognition-stage {
     grid-template-columns: 1fr;
   }
 

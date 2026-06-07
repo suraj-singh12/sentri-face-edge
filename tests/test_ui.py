@@ -35,6 +35,7 @@ class UiSerializationTest(unittest.TestCase):
 
             self.assertEqual(payload["decision"], "strong")
             self.assertEqual(payload["matches"][0]["person_id"], person_id)
+            self.assertTrue(payload["matches"][0]["representative_image"])
             self.assertIn("box", payload)
             self.assertIn("quality", payload)
 
