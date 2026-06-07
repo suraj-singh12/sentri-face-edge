@@ -148,20 +148,20 @@ button:hover {
 }
 
 button.primary,
-#recognizeBtn,
-#queueBtn,
-#enrollBtn,
-#initScanBtn {
+button[data-action="recognize"],
+button[data-action="queue-add"],
+button[data-action="enroll"],
+button[data-action="init-scan"] {
   background: var(--accent);
   border-color: var(--accent);
   color: #ffffff;
 }
 
 button.primary:hover,
-#recognizeBtn:hover,
-#queueBtn:hover,
-#enrollBtn:hover,
-#initScanBtn:hover {
+button[data-action="recognize"]:hover,
+button[data-action="queue-add"]:hover,
+button[data-action="enroll"]:hover,
+button[data-action="init-scan"]:hover {
   background: var(--accent-dark);
 }
 
@@ -172,6 +172,25 @@ button.primary:hover,
 .toolbar.stack {
   align-items: stretch;
   flex-direction: column;
+}
+
+.input-action,
+.button-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-action input {
+  min-width: 0;
+}
+
+.input-action button {
+  min-width: 74px;
+}
+
+.button-row button {
+  flex: 1 1 0;
 }
 
 .split {

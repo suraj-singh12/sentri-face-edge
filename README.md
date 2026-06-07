@@ -149,6 +149,8 @@ advanced fallback for local folders and scripted testing.
 Uploaded files under 1 MB are saved unchanged. Uploaded files over 1 MB are
 only size-reduced before they are passed to the engine; face quality decisions
 still happen inside the engine.
+The current browser UI is componentized in `src/sentriface/ui_static/app.js`
+and runs without npm or a build step, keeping the local UI dependency-light.
 
 Check the selected profile:
 
