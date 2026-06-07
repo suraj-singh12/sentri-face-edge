@@ -310,6 +310,19 @@ function BestMatchPanel(best, face) {
       </div>
     `;
   }
+  if (best.score <= 0.42) {
+    const closest = face.matches.slice(0, 2);
+    return `
+      <div class="best-match">
+        <div class="decision-copy">${recognitionText(best)}</div>
+        <div class="muted">Showing closest ${closest.length} candidate(s)</div>
+        <div class="closest-grid">
+          ${closest.map((match) => CandidateCard(match)).join("")}
+        </div>
+        ${Quality(face.quality)}
+      </div>
+    `;
+  }
   return `
     <div class="best-match">
       <div class="decision-copy">${recognitionText(best)}</div>
@@ -319,6 +332,16 @@ function BestMatchPanel(best, face) {
       </button>
       ${Quality(face.quality)}
     </div>
+  `;
+}
+
+function CandidateCard(match) {
+  return `
+    <button class="candidate-card" data-action="recognition-gallery" data-person-id="${escapeHtml(match.person_id)}">
+      ${match.representative_image ? `<img src="/media?path=${encodeURIComponent(match.representative_image)}" alt="${escapeHtml(match.name)}" />` : `<span class="muted">No photo</span>`}
+      <span class="title">${escapeHtml(match.name)}</span>
+      <span class="muted">score ${match.score.toFixed(4)}</span>
+    </button>
   `;
 }
 

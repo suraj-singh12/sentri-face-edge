@@ -311,6 +311,36 @@ button[data-action="init-scan"]:hover,
   height: 300px;
 }
 
+.closest-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.candidate-card {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  height: auto;
+  min-height: 0;
+  padding: 10px;
+  text-align: left;
+  border-radius: 10px;
+  background: #f8fafb;
+}
+
+.candidate-card:hover {
+  transform: none;
+}
+
+.candidate-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
 .decision-copy {
   font-size: 22px;
   font-weight: 800;
@@ -513,6 +543,10 @@ button[data-action="init-scan"]:hover,
   }
 
   .recognition-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .closest-grid {
     grid-template-columns: 1fr;
   }
 
