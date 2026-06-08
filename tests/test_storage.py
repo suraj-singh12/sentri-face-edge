@@ -76,6 +76,10 @@ class StorageMigrationTest(unittest.TestCase):
                 place_seen="Gate 1",
                 individual_count=2,
                 event_occasion="Briefing",
+                rank="Maj",
+                country="India",
+                importance="Important",
+                added_by="Analyst A",
             )
 
             details = store.list_recognition_details_for_embedding(embedding.embedding_id)
@@ -86,6 +90,10 @@ class StorageMigrationTest(unittest.TestCase):
             self.assertEqual(details[0].image_id, "image-a.jpg")
             self.assertEqual(details[0].name, "Seen Person")
             self.assertEqual(details[0].individual_count, 2)
+            self.assertEqual(details[0].rank, "Maj")
+            self.assertEqual(details[0].country, "India")
+            self.assertEqual(details[0].importance, "Important")
+            self.assertEqual(details[0].added_by, "Analyst A")
 
     def test_v1_database_migrates_to_v2(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -200,6 +208,62 @@ class StorageMigrationTest(unittest.TestCase):
 
             self.assertEqual(version, SCHEMA_VERSION)
             self.assertIn("recognition_details", tables)
+
+    def test_v5_database_migrates_to_v6(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            db_path = Path(temp) / "sentriface.db"
+            with sqlite3.connect(db_path) as conn:
+                conn.executescript(
+                    """
+                    CREATE TABLE persons (
+                        person_id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        metadata TEXT NOT NULL DEFAULT '{}',
+                        created_at TEXT NOT NULL,
+                        deleted_at TEXT
+                    );
+                    CREATE TABLE embeddings (
+                        embedding_id TEXT PRIMARY KEY,
+                        person_id TEXT NOT NULL,
+                        vector BLOB NOT NULL,
+                        quality_score REAL NOT NULL,
+                        source_image TEXT,
+                        crop_path TEXT,
+                        created_at TEXT NOT NULL
+                    );
+                    CREATE TABLE recognition_details (
+                        detail_id TEXT PRIMARY KEY,
+                        embedding_id TEXT NOT NULL,
+                        person_id TEXT NOT NULL,
+                        image_id TEXT NOT NULL,
+                        image_path TEXT,
+                        name TEXT NOT NULL,
+                        decision TEXT NOT NULL,
+                        seen_date TEXT NOT NULL,
+                        seen_time TEXT NOT NULL,
+                        place_seen TEXT NOT NULL,
+                        individual_count INTEGER NOT NULL,
+                        event_occasion TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 5;
+                    """
+                )
+
+            SQLiteIdentityStore(db_path).initialize()
+
+            with sqlite3.connect(db_path) as conn:
+                version = conn.execute("PRAGMA user_version").fetchone()[0]
+                columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(recognition_details)").fetchall()
+                }
+
+            self.assertEqual(version, SCHEMA_VERSION)
+            self.assertIn("rank", columns)
+            self.assertIn("country", columns)
+            self.assertIn("importance", columns)
+            self.assertIn("added_by", columns)
 
 
 if __name__ == "__main__":

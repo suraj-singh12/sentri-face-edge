@@ -92,6 +92,10 @@ class IdentityStore(Protocol):
         individual_count: int,
         event_occasion: str,
         image_path: str | None = None,
+        rank: str | None = None,
+        country: str | None = None,
+        importance: str | None = None,
+        added_by: str | None = None,
     ) -> RecognitionDetail:
         """Persist visit/event details for a recognition tied to an embedding."""
 

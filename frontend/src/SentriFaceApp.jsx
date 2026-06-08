@@ -7,6 +7,7 @@ const MATCH_TEXT_THRESHOLDS = {
   possible: 0.40,
   newPerson: 0.30,
 };
+const NEW_PERSON_IMPORTANCE_OPTIONS = ["Important", "Regular", "Suspicious"];
 const VIEWS = ["recognize", "queue", "people", "debug"];
 
 export default function SentriFaceApp() {
@@ -225,17 +226,15 @@ export default function SentriFaceApp() {
   const queueNewPerson = async () => {
     if (!queueSelectedGroup) return;
     const faceIds = selectedQueueFaceIds();
-    const name = window.prompt("New person name");
-    if (!name) return;
     setQueueAccepted(true);
     openQueueFollowup({
-      name,
+      name: "",
       personId: "",
       decision: "new",
       action: "new",
       faceIds,
     });
-    showToast(`Fill details for ${name}`);
+    showToast("Fill new person details");
   };
 
   const queueDiscard = async () => {
@@ -259,9 +258,13 @@ export default function SentriFaceApp() {
     setQueueFollowup({
       date,
       time,
+      rank: "",
       placeSeen: "",
       individualCount: "",
       eventOccasion: "",
+      country: "",
+      importance: action === "new" ? "Regular" : "",
+      addedBy: "",
       name,
       personId,
       decision,
@@ -281,9 +284,14 @@ export default function SentriFaceApp() {
       ...current,
       date,
       time,
+      rank: "",
       placeSeen: "",
       individualCount: "",
       eventOccasion: "",
+      country: "",
+      importance: current.action === "new" ? "Regular" : "",
+      addedBy: "",
+      name: current.action === "new" ? "" : current.name,
     } : current);
     setQueueFollowupDone(false);
   };
@@ -316,9 +324,13 @@ export default function SentriFaceApp() {
       decision: queueFollowup.decision,
       date: queueFollowup.date,
       time: queueFollowup.time,
+      rank: queueFollowup.rank,
+      country: queueFollowup.country,
+      importance: queueFollowup.importance,
       place_seen: queueFollowup.placeSeen,
       individual_count: Number(queueFollowup.individualCount),
       event_occasion: queueFollowup.eventOccasion,
+      added_by: queueFollowup.addedBy,
     })));
     setQueueFollowupDone(true);
     setQueueFollowup(null);
@@ -376,16 +388,14 @@ export default function SentriFaceApp() {
 
   const recognitionNew = async () => {
     if (!recognition?.inputPath) return;
-    const name = window.prompt("New person name");
-    if (!name) return;
     setRecognitionAccepted(true);
     openRecognitionFollowup({
-      name,
+      name: "",
       personId: "",
       decision: "new",
       action: "new",
     });
-    showToast(`Fill details for ${name}`);
+    showToast("Fill new person details");
   };
 
   const recognitionClear = () => {
@@ -403,9 +413,13 @@ export default function SentriFaceApp() {
     setRecognitionFollowup({
       date,
       time,
+      rank: "",
       placeSeen: "",
       individualCount: "",
       eventOccasion: "",
+      country: "",
+      importance: action === "new" ? "Regular" : "",
+      addedBy: "",
       name,
       personId,
       embeddingId,
@@ -426,9 +440,14 @@ export default function SentriFaceApp() {
       ...current,
       date,
       time,
+      rank: "",
       placeSeen: "",
       individualCount: "",
       eventOccasion: "",
+      country: "",
+      importance: current.action === "new" ? "Regular" : "",
+      addedBy: "",
+      name: current.action === "new" ? "" : current.name,
     } : current);
     setRecognitionFollowupDone(false);
   };
@@ -465,9 +484,13 @@ export default function SentriFaceApp() {
       decision: recognitionFollowup.decision,
       date: recognitionFollowup.date,
       time: recognitionFollowup.time,
+      rank: recognitionFollowup.rank,
+      country: recognitionFollowup.country,
+      importance: recognitionFollowup.importance,
       place_seen: recognitionFollowup.placeSeen,
       individual_count: Number(recognitionFollowup.individualCount),
       event_occasion: recognitionFollowup.eventOccasion,
+      added_by: recognitionFollowup.addedBy,
     });
     setRecognitionFollowupDone(true);
     setRecognitionFollowup(null);
@@ -506,9 +529,6 @@ export default function SentriFaceApp() {
   const isExistingPerson = topMostMatch?.score > MATCH_TEXT_THRESHOLDS.newPerson;
   const shouldFadeRecognitionNewPerson = hasCertainMatch(topMostMatch);
 
-  useEffect(() => {
-    console.log('best ', topMostMatch);
-  }, topMostMatch)
   return (
     <>
       <header className="topbar">
@@ -800,7 +820,7 @@ function QueueGroupList({ groups, onOpen }) {
         {pendingGroups.length ? pendingGroups.map((group) => {
           const best = group?.matches?.[0] || null;
           const recogText = recognitionText(best);
-          const NoMatchFound = recogText === recognitionText(MATCH_TEXT_THRESHOLDS.newPerson);
+          const noMatchFound = isNewPersonSuggestion(best);
           return (
             <button key={`${group.session_id}-${group.group_id}`} className="queue-group-card" onClick={() => onOpen(group)}>
               <div className="card-head">
@@ -811,7 +831,7 @@ function QueueGroupList({ groups, onOpen }) {
                 {best && <span className="pill strong">{best.score.toFixed(3)}</span>}
               </div>
               <div className="queue-card-thumbs">
-                {!NoMatchFound && group.faces.slice(0, 6).map((face) => <Thumb key={face.init_face_id} path={face.crop_path || face.source_image} />)}
+                {!noMatchFound && group.faces.slice(0, 6).map((face) => <Thumb key={face.init_face_id} path={face.crop_path || face.source_image} />)}
               </div>
             </button>
           );
@@ -923,6 +943,107 @@ function LoadImagePanel({ onClick }) {
 }
 
 function RecognitionFollowupForm({ values, confirmed, onChange, onSubmit, onClear }) {
+  if (values.action === "new") {
+    return (
+      <form className="recognition-followup new-person-followup" onSubmit={onSubmit}>
+        <div className="followup-grid new-person-grid">
+          <label>
+            <span>Rank</span>
+            <input
+              required
+              value={values.rank}
+              onChange={(event) => onChange("rank", event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Name</span>
+            <input
+              required
+              value={values.name}
+              onChange={(event) => onChange("name", event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Country</span>
+            <input
+              required
+              value={values.country}
+              onChange={(event) => onChange("country", event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Importance (Strat pt of view)</span>
+            <select
+              required
+              value={values.importance}
+              onChange={(event) => onChange("importance", event.target.value)}
+            >
+              {NEW_PERSON_IMPORTANCE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Place Seen</span>
+            <input
+              required
+              value={values.placeSeen}
+              onChange={(event) => onChange("placeSeen", event.target.value)}
+            />
+          </label>
+          <label>
+            <span>With how many indl</span>
+            <input
+              required
+              min="0"
+              step="1"
+              type="number"
+              value={values.individualCount}
+              onChange={(event) => onChange("individualCount", event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Date</span>
+            <input
+              required
+              type="date"
+              value={values.date}
+              onChange={(event) => onChange("date", event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Time</span>
+            <input
+              required
+              type="time"
+              value={values.time}
+              onChange={(event) => onChange("time", event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Event/Occasion</span>
+            <input
+              required
+              value={values.eventOccasion}
+              onChange={(event) => onChange("eventOccasion", event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Added by</span>
+            <input
+              required
+              placeholder="Your Name"
+              value={values.addedBy}
+              onChange={(event) => onChange("addedBy", event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="followup-actions">
+          <button className="primary" type="submit" disabled={confirmed}>Confirm</button>
+          <button className="danger-btn" type="button" onClick={onClear}>Clear</button>
+        </div>
+      </form>
+    );
+  }
+
   return (
     <form className="recognition-followup" onSubmit={onSubmit}>
       <div className="followup-grid">
@@ -986,11 +1107,11 @@ function BestMatchPanel({ best, face, onGallery }) {
     return <div className="best-match"><div className="decision-copy">No known person is close enough.</div></div>;
   }
   const recogText = recognitionText(best);
-  const NoMatchFound = recogText === recognitionText(MATCH_TEXT_THRESHOLDS.newPerson);
+  const noMatchFound = isNewPersonSuggestion(best);
   return (
     <div className="best-match">
       <div className="decision-copy">{recogText}</div>
-      { !NoMatchFound && 
+      { !noMatchFound && 
       <>
         <button className="match-photo-button" onClick={() => onGallery(best.person_id)}>
             {best.representative_image ? <img className="match-photo" src={mediaUrl(best.representative_image)} alt={best.name} /> : <span>No photo</span>}
@@ -1137,6 +1258,7 @@ function currentDateTimeParts() {
 }
 
 function recognitionText(match) {
+  if (!match) return "New Person !";
   if (hasCertainMatch(match)) return `That's ${match.name}`;
   if (match.score >= MATCH_TEXT_THRESHOLDS.likely) return `Likely ${match.name}`;
   if (match.score >= MATCH_TEXT_THRESHOLDS.possible) return `Perhaps ${match.name}`;
@@ -1146,6 +1268,10 @@ function recognitionText(match) {
 
 function hasCertainMatch(match) {
   return Boolean(match && match.score >= MATCH_TEXT_THRESHOLDS.certain);
+}
+
+function isNewPersonSuggestion(match) {
+  return !match || match.score <= MATCH_TEXT_THRESHOLDS.newPerson;
 }
 
 function profileLine(profile) {

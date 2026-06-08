@@ -210,6 +210,10 @@ class FaceEngine:
         individual_count: int,
         event_occasion: str,
         image_path: str | None = None,
+        rank: str | None = None,
+        country: str | None = None,
+        importance: str | None = None,
+        added_by: str | None = None,
     ) -> str:
         with self.metrics.timer("db_add_recognition_detail_ms"):
             detail = self.store.add_recognition_detail(
@@ -224,6 +228,10 @@ class FaceEngine:
                 place_seen=place_seen,
                 individual_count=individual_count,
                 event_occasion=event_occasion,
+                rank=rank,
+                country=country,
+                importance=importance,
+                added_by=added_by,
             )
         return detail.detail_id
 

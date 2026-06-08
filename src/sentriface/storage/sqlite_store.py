@@ -25,7 +25,7 @@ from sentriface.models import (
     utc_now,
 )
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class SQLiteIdentityStore:
@@ -58,6 +58,9 @@ class SQLiteIdentityStore:
             if version == 4:
                 _migrate_4_to_5(conn)
                 version = 5
+            if version == 5:
+                _migrate_5_to_6(conn)
+                version = 6
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -192,6 +195,10 @@ class SQLiteIdentityStore:
         individual_count: int,
         event_occasion: str,
         image_path: str | None = None,
+        rank: str | None = None,
+        country: str | None = None,
+        importance: str | None = None,
+        added_by: str | None = None,
     ) -> RecognitionDetail:
         detail = RecognitionDetail(
             detail_id=str(uuid.uuid4()),
@@ -206,6 +213,10 @@ class SQLiteIdentityStore:
             place_seen=place_seen,
             individual_count=individual_count,
             event_occasion=event_occasion,
+            rank=rank,
+            country=country,
+            importance=importance,
+            added_by=added_by,
             created_at=utc_now(),
         )
         with self._connect() as conn:
@@ -214,9 +225,10 @@ class SQLiteIdentityStore:
                 INSERT INTO recognition_details(
                     detail_id, embedding_id, person_id, image_id, image_path,
                     name, decision, seen_date, seen_time, place_seen,
-                    individual_count, event_occasion, created_at
+                    individual_count, event_occasion, rank, country,
+                    importance, added_by, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     detail.detail_id,
@@ -231,6 +243,10 @@ class SQLiteIdentityStore:
                     detail.place_seen,
                     detail.individual_count,
                     detail.event_occasion,
+                    detail.rank,
+                    detail.country,
+                    detail.importance,
+                    detail.added_by,
                     detail.created_at,
                 ),
             )
@@ -242,7 +258,8 @@ class SQLiteIdentityStore:
                 """
                 SELECT detail_id, embedding_id, person_id, image_id, image_path,
                        name, decision, seen_date, seen_time, place_seen,
-                       individual_count, event_occasion, created_at
+                       individual_count, event_occasion, rank, country,
+                       importance, added_by, created_at
                 FROM recognition_details
                 WHERE embedding_id = ?
                 ORDER BY created_at ASC
@@ -680,6 +697,20 @@ def _migrate_4_to_5(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_5_to_6(conn: sqlite3.Connection) -> None:
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(recognition_details)").fetchall()}
+    additions = {
+        "rank": "ALTER TABLE recognition_details ADD COLUMN rank TEXT",
+        "country": "ALTER TABLE recognition_details ADD COLUMN country TEXT",
+        "importance": "ALTER TABLE recognition_details ADD COLUMN importance TEXT",
+        "added_by": "ALTER TABLE recognition_details ADD COLUMN added_by TEXT",
+    }
+    for column, statement in additions.items():
+        if column not in columns:
+            conn.execute(statement)
+    conn.execute("PRAGMA user_version = 6")
+
+
 def _pending_from_row(row: sqlite3.Row) -> PendingAddition:
     raw_landmarks = json.loads(row["landmarks"]) if row["landmarks"] else None
     landmarks = tuple(tuple(point) for point in raw_landmarks) if raw_landmarks else None
@@ -750,6 +781,10 @@ def _recognition_detail_from_row(row: sqlite3.Row) -> RecognitionDetail:
         place_seen=row["place_seen"],
         individual_count=row["individual_count"],
         event_occasion=row["event_occasion"],
+        rank=row["rank"],
+        country=row["country"],
+        importance=row["importance"],
+        added_by=row["added_by"],
         created_at=row["created_at"],
     )
 

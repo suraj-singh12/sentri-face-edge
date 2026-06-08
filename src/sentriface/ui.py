@@ -221,6 +221,10 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                     place_seen=_required(payload, "place_seen"),
                     individual_count=int(_required(payload, "individual_count")),
                     event_occasion=_required(payload, "event_occasion"),
+                    rank=payload.get("rank"),
+                    country=payload.get("country"),
+                    importance=payload.get("importance"),
+                    added_by=payload.get("added_by"),
                 )
                 self.server.log_event(
                     "recognition-followup",
@@ -236,6 +240,10 @@ class SentriFaceUiHandler(SimpleHTTPRequestHandler):
                     place_seen=_required(payload, "place_seen"),
                     individual_count=int(_required(payload, "individual_count")),
                     event_occasion=_required(payload, "event_occasion"),
+                    rank=payload.get("rank"),
+                    country=payload.get("country"),
+                    importance=payload.get("importance"),
+                    added_by=payload.get("added_by"),
                 )
                 self._json({"confirmed": True, "detail_id": detail_id})
                 return

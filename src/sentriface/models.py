@@ -65,6 +65,10 @@ class RecognitionDetail:
     individual_count: int
     event_occasion: str
     image_path: str | None = None
+    rank: str | None = None
+    country: str | None = None
+    importance: str | None = None
+    added_by: str | None = None
     created_at: str = field(default_factory=utc_now)
 
 
