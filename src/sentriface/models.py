@@ -73,6 +73,22 @@ class RecognitionDetail:
 
 
 @dataclass(frozen=True)
+class PersonChange:
+    change_id: str
+    person_id: str
+    previous_name: str
+    new_name: str
+    previous_rank: str | None = None
+    new_rank: str | None = None
+    previous_country: str | None = None
+    new_country: str | None = None
+    previous_importance: str | None = None
+    new_importance: str | None = None
+    editor_name: str = ""
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
 class Match:
     person_id: str
     score: float

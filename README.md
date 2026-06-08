@@ -60,7 +60,7 @@ System design:
 
 ```mermaid
 flowchart LR
-    UI["Local Web UI\nstdlib HTTP server"] --> Controller["Application Controller\nsentriface.ui / sentriface.cli"]
+    UI["React Web UI\nserved static bundle"] --> Controller["Python API Server\nsentriface.api_server / sentriface.cli"]
     CLI["CLI"] --> Controller
     Controller --> Engine["FaceEngine"]
 
@@ -119,7 +119,7 @@ the UI responsive while recognition happens in the background.
 Run the local UI:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.ui --runtime dev --data-dir data
+PYTHONPATH=src python3 -m sentriface.api_server --runtime dev --data-dir data
 ```
 
 Then open `http://127.0.0.1:8765`. Use `--runtime onnx` after the offline ONNX

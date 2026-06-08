@@ -514,13 +514,177 @@ button[data-action="enroll"]:hover {
   overflow: hidden;
 }
 
+.people-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+  gap: 16px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.people-image-pane,
+.people-info-pane {
+  min-height: 0;
+  overflow: auto;
+}
+
+.people-image-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.people-info-pane {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.people-pane-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.people-pane-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.people-info-content,
+.people-edit-form,
+.people-change-list {
+  display: grid;
+  gap: 12px;
+}
+
+.summary-banner {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #b7dcd7;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.identity-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.people-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.people-field-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.people-field-grid span,
+.info-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.info-row {
+  display: grid;
+  gap: 6px;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid #e3e9ee;
+  border-radius: 8px;
+  background: #fbfcfd;
+  overflow-wrap: anywhere;
+}
+
+.change-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.42fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.info-value {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.seen-at-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e3e9ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.panel-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.seen-at-list {
+  display: grid;
+  gap: 10px;
+}
+
+.seen-at-card {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid #eef1f3;
+  border-radius: 8px;
+  background: #f8fafb;
+  overflow-wrap: anywhere;
+}
+
+.seen-place {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.3;
+}
+
+.seen-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.change-section {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
 .people-gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 10px;
   min-height: 0;
-  overflow: auto;
-  padding-right: 4px;
 }
 
 .people-gallery-thumb {
@@ -536,6 +700,11 @@ button[data-action="enroll"]:hover {
   transform: none;
 }
 
+.people-gallery-thumb.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(13, 118, 110, 0.12);
+}
+
 .people-gallery-thumb img {
   display: block;
   width: 100%;
@@ -545,7 +714,7 @@ button[data-action="enroll"]:hover {
 
 .people-full-frame {
   position: relative;
-  flex: 1 1 auto;
+  flex: 0 0 52%;
   width: 100%;
   max-width: 100%;
   max-height: 100%;
@@ -1064,7 +1233,10 @@ button[data-action="enroll"]:hover {
 
   .queue-layout,
   .queue-review-grid,
-  .recognition-stage {
+  .recognition-stage,
+  .people-detail-layout,
+  .identity-summary-grid,
+  .people-field-grid {
     grid-template-columns: 1fr;
   }
 

@@ -17,6 +17,7 @@ from sentriface.models import (
     MatchDecision,
     PendingAddition,
     Person,
+    PersonChange,
     PersonMatch,
     PersonSummary,
     QualityReport,
@@ -25,7 +26,7 @@ from sentriface.models import (
     utc_now,
 )
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 class SQLiteIdentityStore:
@@ -61,6 +62,9 @@ class SQLiteIdentityStore:
             if version == 5:
                 _migrate_5_to_6(conn)
                 version = 6
+            if version == 6:
+                _migrate_6_to_7(conn)
+                version = 7
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -156,6 +160,101 @@ class SQLiteIdentityStore:
         if cursor.rowcount == 0:
             raise KeyError(f"Unknown person: {person_id}")
 
+    def update_person_profile(
+        self,
+        person_id: str,
+        name: str,
+        rank: str | None,
+        country: str | None,
+        importance: str | None,
+        editor_name: str,
+    ) -> PersonChange:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT person_id, name, metadata
+                FROM persons
+                WHERE person_id = ? AND deleted_at IS NULL
+                """,
+                (person_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            previous_metadata = json.loads(row["metadata"])
+            previous_name = row["name"]
+            next_metadata = {
+                **previous_metadata,
+                "rank": rank or "",
+                "country": country or "",
+                "importance": importance or "",
+            }
+            change = PersonChange(
+                change_id=str(uuid.uuid4()),
+                person_id=person_id,
+                previous_name=previous_name,
+                new_name=name,
+                previous_rank=previous_metadata.get("rank") or "",
+                new_rank=rank or "",
+                previous_country=previous_metadata.get("country") or "",
+                new_country=country or "",
+                previous_importance=previous_metadata.get("importance") or "",
+                new_importance=importance or "",
+                editor_name=editor_name,
+                created_at=utc_now(),
+            )
+            conn.execute(
+                """
+                UPDATE persons
+                SET name = ?, metadata = ?
+                WHERE person_id = ? AND deleted_at IS NULL
+                """,
+                (
+                    name,
+                    json.dumps(next_metadata, separators=(",", ":")),
+                    person_id,
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO person_change_history(
+                    change_id, person_id, previous_name, new_name,
+                    previous_rank, new_rank, previous_country, new_country,
+                    previous_importance, new_importance, editor_name, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    change.change_id,
+                    change.person_id,
+                    change.previous_name,
+                    change.new_name,
+                    change.previous_rank,
+                    change.new_rank,
+                    change.previous_country,
+                    change.new_country,
+                    change.previous_importance,
+                    change.new_importance,
+                    change.editor_name,
+                    change.created_at,
+                ),
+            )
+        return change
+
+    def list_person_changes(self, person_id: str) -> list[PersonChange]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT change_id, person_id, previous_name, new_name,
+                       previous_rank, new_rank, previous_country, new_country,
+                       previous_importance, new_importance, editor_name, created_at
+                FROM person_change_history
+                WHERE person_id = ?
+                ORDER BY created_at DESC
+                """,
+                (person_id,),
+            ).fetchall()
+        return [_person_change_from_row(row) for row in rows]
+
     def delete_person(self, person_id: str) -> None:
         with self._connect() as conn:
             cursor = conn.execute(
@@ -250,6 +349,27 @@ class SQLiteIdentityStore:
                     detail.created_at,
                 ),
             )
+            profile_updates = {
+                key: value
+                for key, value in {
+                    "rank": rank,
+                    "country": country,
+                    "importance": importance,
+                }.items()
+                if value
+            }
+            if profile_updates:
+                row = conn.execute(
+                    "SELECT metadata FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                    (person_id,),
+                ).fetchone()
+                if row is not None:
+                    metadata = json.loads(row["metadata"])
+                    metadata.update(profile_updates)
+                    conn.execute(
+                        "UPDATE persons SET metadata = ? WHERE person_id = ? AND deleted_at IS NULL",
+                        (json.dumps(metadata, separators=(",", ":")), person_id),
+                    )
         return detail
 
     def list_recognition_details_for_embedding(self, embedding_id: str) -> list[RecognitionDetail]:
@@ -265,6 +385,22 @@ class SQLiteIdentityStore:
                 ORDER BY created_at ASC
                 """,
                 (embedding_id,),
+            ).fetchall()
+        return [_recognition_detail_from_row(row) for row in rows]
+
+    def list_recognition_details_for_person(self, person_id: str) -> list[RecognitionDetail]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT detail_id, embedding_id, person_id, image_id, image_path,
+                       name, decision, seen_date, seen_time, place_seen,
+                       individual_count, event_occasion, rank, country,
+                       importance, added_by, created_at
+                FROM recognition_details
+                WHERE person_id = ?
+                ORDER BY seen_date DESC, seen_time DESC, created_at DESC
+                """,
+                (person_id,),
             ).fetchall()
         return [_recognition_detail_from_row(row) for row in rows]
 
@@ -711,6 +847,33 @@ def _migrate_5_to_6(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA user_version = 6")
 
 
+def _migrate_6_to_7(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS person_change_history (
+            change_id TEXT PRIMARY KEY,
+            person_id TEXT NOT NULL,
+            previous_name TEXT NOT NULL,
+            new_name TEXT NOT NULL,
+            previous_rank TEXT,
+            new_rank TEXT,
+            previous_country TEXT,
+            new_country TEXT,
+            previous_importance TEXT,
+            new_importance TEXT,
+            editor_name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(person_id) REFERENCES persons(person_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_person_change_history_person
+        ON person_change_history(person_id);
+
+        PRAGMA user_version = 7;
+        """
+    )
+
+
 def _pending_from_row(row: sqlite3.Row) -> PendingAddition:
     raw_landmarks = json.loads(row["landmarks"]) if row["landmarks"] else None
     landmarks = tuple(tuple(point) for point in raw_landmarks) if raw_landmarks else None
@@ -785,6 +948,23 @@ def _recognition_detail_from_row(row: sqlite3.Row) -> RecognitionDetail:
         country=row["country"],
         importance=row["importance"],
         added_by=row["added_by"],
+        created_at=row["created_at"],
+    )
+
+
+def _person_change_from_row(row: sqlite3.Row) -> PersonChange:
+    return PersonChange(
+        change_id=row["change_id"],
+        person_id=row["person_id"],
+        previous_name=row["previous_name"],
+        new_name=row["new_name"],
+        previous_rank=row["previous_rank"],
+        new_rank=row["new_rank"],
+        previous_country=row["previous_country"],
+        new_country=row["new_country"],
+        previous_importance=row["previous_importance"],
+        new_importance=row["new_importance"],
+        editor_name=row["editor_name"],
         created_at=row["created_at"],
     )
 

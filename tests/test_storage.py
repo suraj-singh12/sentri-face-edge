@@ -95,6 +95,37 @@ class StorageMigrationTest(unittest.TestCase):
             self.assertEqual(details[0].importance, "Important")
             self.assertEqual(details[0].added_by, "Analyst A")
 
+    def test_person_profile_update_keeps_change_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            db_path = Path(temp) / "sentriface.db"
+            store = SQLiteIdentityStore(db_path, embedding_dim=4)
+            store.initialize()
+            person = store.create_person(
+                "Original Name",
+                metadata={"rank": "abc", "country": "India", "importance": "Regular"},
+            )
+
+            change = store.update_person_profile(
+                person_id=person.person_id,
+                name="Updated Name",
+                rank="pqr",
+                country="Nepal",
+                importance="Important",
+                editor_name="Editor One",
+            )
+            updated = store.get_person(person.person_id)
+            changes = store.list_person_changes(person.person_id)
+
+            self.assertEqual(updated.name, "Updated Name")
+            self.assertEqual(updated.metadata["rank"], "pqr")
+            self.assertEqual(updated.metadata["country"], "Nepal")
+            self.assertEqual(updated.metadata["importance"], "Important")
+            self.assertEqual(len(changes), 1)
+            self.assertEqual(changes[0].change_id, change.change_id)
+            self.assertEqual(changes[0].previous_rank, "abc")
+            self.assertEqual(changes[0].new_rank, "pqr")
+            self.assertEqual(changes[0].editor_name, "Editor One")
+
     def test_v1_database_migrates_to_v2(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"
@@ -264,6 +295,65 @@ class StorageMigrationTest(unittest.TestCase):
             self.assertIn("country", columns)
             self.assertIn("importance", columns)
             self.assertIn("added_by", columns)
+
+    def test_v6_database_migrates_to_v7(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            db_path = Path(temp) / "sentriface.db"
+            with sqlite3.connect(db_path) as conn:
+                conn.executescript(
+                    """
+                    CREATE TABLE persons (
+                        person_id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        metadata TEXT NOT NULL DEFAULT '{}',
+                        created_at TEXT NOT NULL,
+                        deleted_at TEXT
+                    );
+                    CREATE TABLE embeddings (
+                        embedding_id TEXT PRIMARY KEY,
+                        person_id TEXT NOT NULL,
+                        vector BLOB NOT NULL,
+                        quality_score REAL NOT NULL,
+                        source_image TEXT,
+                        crop_path TEXT,
+                        created_at TEXT NOT NULL
+                    );
+                    CREATE TABLE recognition_details (
+                        detail_id TEXT PRIMARY KEY,
+                        embedding_id TEXT NOT NULL,
+                        person_id TEXT NOT NULL,
+                        image_id TEXT NOT NULL,
+                        image_path TEXT,
+                        name TEXT NOT NULL,
+                        decision TEXT NOT NULL,
+                        seen_date TEXT NOT NULL,
+                        seen_time TEXT NOT NULL,
+                        place_seen TEXT NOT NULL,
+                        individual_count INTEGER NOT NULL,
+                        event_occasion TEXT NOT NULL,
+                        rank TEXT,
+                        country TEXT,
+                        importance TEXT,
+                        added_by TEXT,
+                        created_at TEXT NOT NULL
+                    );
+                    PRAGMA user_version = 6;
+                    """
+                )
+
+            SQLiteIdentityStore(db_path).initialize()
+
+            with sqlite3.connect(db_path) as conn:
+                version = conn.execute("PRAGMA user_version").fetchone()[0]
+                tables = {
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    ).fetchall()
+                }
+
+            self.assertEqual(version, SCHEMA_VERSION)
+            self.assertIn("person_change_history", tables)
 
 
 if __name__ == "__main__":

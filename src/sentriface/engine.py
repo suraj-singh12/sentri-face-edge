@@ -16,6 +16,7 @@ from sentriface.models import (
     InitSession,
     PendingAddition,
     Person,
+    PersonChange,
     PersonMatch,
     PersonSummary,
     QualityStatus,
@@ -181,6 +182,37 @@ class FaceEngine:
     def rename_person(self, person_id: str, name: str) -> None:
         with self.metrics.timer("db_rename_person_ms"):
             self.store.rename_person(person_id, name)
+
+    def update_person_profile(
+        self,
+        person_id: str,
+        name: str,
+        rank: str | None,
+        country: str | None,
+        importance: str | None,
+        editor_name: str,
+    ) -> PersonChange:
+        with self.metrics.timer("db_update_person_profile_ms"):
+            return self.store.update_person_profile(
+                person_id=person_id,
+                name=name,
+                rank=rank,
+                country=country,
+                importance=importance,
+                editor_name=editor_name,
+            )
+
+    def list_person_changes(self, person_id: str) -> list[PersonChange]:
+        if self.store.get_person(person_id) is None:
+            raise KeyError(f"Unknown person: {person_id}")
+        with self.metrics.timer("db_list_person_changes_ms"):
+            return self.store.list_person_changes(person_id)
+
+    def list_recognition_details_for_person(self, person_id: str):
+        if self.store.get_person(person_id) is None:
+            raise KeyError(f"Unknown person: {person_id}")
+        with self.metrics.timer("db_list_recognition_details_for_person_ms"):
+            return self.store.list_recognition_details_for_person(person_id)
 
     def delete_person(self, person_id: str) -> None:
         with self.metrics.timer("db_delete_person_ms"):

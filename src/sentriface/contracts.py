@@ -12,6 +12,7 @@ from sentriface.models import (
     InitSession,
     PendingAddition,
     Person,
+    PersonChange,
     PersonSummary,
     RecognitionDetail,
 )
@@ -70,6 +71,20 @@ class IdentityStore(Protocol):
     def rename_person(self, person_id: str, name: str) -> None:
         """Rename one person."""
 
+    def update_person_profile(
+        self,
+        person_id: str,
+        name: str,
+        rank: str | None,
+        country: str | None,
+        importance: str | None,
+        editor_name: str,
+    ) -> PersonChange:
+        """Update editable person profile fields and keep a change record."""
+
+    def list_person_changes(self, person_id: str) -> list[PersonChange]:
+        """List profile changes for one person, newest first."""
+
     def delete_person(self, person_id: str) -> None:
         """Soft-delete one person."""
 
@@ -78,6 +93,9 @@ class IdentityStore(Protocol):
 
     def move_embedding(self, embedding_id: str, person_id: str) -> None:
         """Move one embedding to another person."""
+
+    def list_recognition_details_for_person(self, person_id: str) -> list[RecognitionDetail]:
+        """Load recognition details for all embeddings of one person."""
 
     def add_recognition_detail(
         self,

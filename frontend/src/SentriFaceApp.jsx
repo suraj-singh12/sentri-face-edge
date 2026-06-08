@@ -357,6 +357,23 @@ export default function SentriFaceApp() {
     setPeopleGalleryImage(null);
   };
 
+  const savePeopleProfile = async (values) => {
+    const editorName = window.prompt("Editor's name");
+    if (!editorName) return false;
+    await apiPost("/api/person-update", {
+      person_id: values.personId,
+      name: values.name,
+      rank: values.rank,
+      country: values.country,
+      importance: values.importance,
+      editor_name: editorName,
+    });
+    setPeopleGallery(await apiGet(`/api/person?person_id=${encodeURIComponent(values.personId)}`));
+    showToast("Person details updated");
+    await Promise.all([loadPeople(), loadEvents()]);
+    return true;
+  };
+
   const peopleBack = () => {
     if (peopleGalleryImage) setPeopleGalleryImage(null);
     else setPeopleGallery(null);
@@ -654,7 +671,13 @@ export default function SentriFaceApp() {
 
         <View name="people" activeView={activeView}>
           {peopleGallery ? (
-            <PeopleGalleryView payload={peopleGallery} selectedImage={peopleGalleryImage} onImage={setPeopleGalleryImage} onBack={peopleBack} />
+            <PeopleGalleryView
+              payload={peopleGallery}
+              selectedImage={peopleGalleryImage}
+              onImage={setPeopleGalleryImage}
+              onBack={peopleBack}
+              onSave={savePeopleProfile}
+            />
           ) : (
             <>
               <div className="section-head">
@@ -704,30 +727,209 @@ function PersonCard({ person, onOpen }) {
   );
 }
 
-function PeopleGalleryView({ payload, selectedImage, onImage, onBack }) {
-  const images = galleryImages(payload);
+function PeopleGalleryView({ payload, selectedImage, onImage, onBack, onSave }) {
+  const imageRecords = galleryImageRecords(payload);
+  const [mode, setMode] = useState("info");
+  const selectedRecord = selectedImage
+    ? imageRecords.find((record) => record.path === selectedImage)
+    : null;
+  const selectedDetails = selectedRecord
+    ? detailsForEmbedding(payload.details || [], selectedRecord.embeddingId)
+    : payload.details || [];
+  const profile = personProfile(payload, selectedDetails, Boolean(selectedRecord));
+  const [editValues, setEditValues] = useState(profile);
+
+  useEffect(() => {
+    setEditValues(profile);
+    setMode("info");
+  }, [payload.person.person_id, payload.person.name, payload.person.metadata]);
+
+  const updateEditValue = (field, value) => setEditValues((current) => ({ ...current, [field]: value }));
+  const saveEdit = async (event) => {
+    event.preventDefault();
+    try {
+      if (await onSave(editValues)) setMode("info");
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
     <div className="people-viewer">
       <div className="section-head">
         <div>
           <h2>{payload.person.name}</h2>
-          <div className="muted">{images.length} image(s) | {payload.person.person_id}</div>
+          <div className="muted">{imageRecords.length} image(s) | {payload.person.person_id}</div>
         </div>
         <button onClick={onBack}>Back</button>
       </div>
-      {selectedImage ? (
-        <div className="people-full-frame"><img src={mediaUrl(selectedImage)} alt={payload.person.name} /></div>
-      ) : (
-        <div className="people-gallery-grid">
-          {images.length ? images.map((path) => (
-            <button key={path} className="people-gallery-thumb" onClick={() => onImage(path)}>
-              <img src={mediaUrl(path)} alt={payload.person.name} />
-            </button>
-          )) : <EmptyCard text="No images saved for this person." />}
+      <div className="people-detail-layout">
+        <div className="people-image-pane">
+          {selectedImage && (
+            <div className="people-full-frame"><img src={mediaUrl(selectedImage)} alt={payload.person.name} /></div>
+          )}
+          <div className="people-gallery-grid">
+            {imageRecords.length ? imageRecords.map((record) => (
+              <button key={record.embeddingId} className={`people-gallery-thumb ${selectedImage === record.path ? "selected" : ""}`} onClick={() => onImage(record.path)}>
+                <img src={mediaUrl(record.path)} alt={payload.person.name} />
+              </button>
+            )) : <EmptyCard text="No images saved for this person." />}
+          </div>
         </div>
-      )}
+        <div className="people-info-pane">
+          {mode === "changes" ? (
+            <PeopleChangesPanel payload={payload} profile={profile} onBack={() => setMode("info")} />
+          ) : mode === "edit" ? (
+            <form className="people-edit-form" onSubmit={saveEdit}>
+              <div className="people-pane-head">
+                <div>
+                  <div className="title">Edit Details</div>
+                  <div className="muted">Editor name is asked before saving.</div>
+                </div>
+                <div className="people-pane-actions">
+                  <button className="primary" type="submit">Save</button>
+                  <button type="button" onClick={() => setMode("info")}>Cancel</button>
+                </div>
+              </div>
+              <PeopleEditableFields values={editValues} onChange={updateEditValue} />
+            </form>
+          ) : (
+            <>
+              <div className="people-pane-head">
+                <div>
+                  <div className="title">Info</div>
+                  <div className="muted">{selectedRecord ? selectedRecord.embeddingId : payload.person.person_id}</div>
+                </div>
+                <div className="people-pane-actions">
+                  <button onClick={() => setMode("changes")}>Changes</button>
+                  <button className="primary" onClick={() => setMode("edit")}>Edit</button>
+                </div>
+              </div>
+              <PeopleInfoFields profile={profile} details={selectedDetails} selectedRecord={selectedRecord} />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
+}
+
+function PeopleEditableFields({ values, onChange }) {
+  return (
+    <div className="people-field-grid">
+      <label>
+        <span>Rank</span>
+        <input required value={values.rank} onChange={(event) => onChange("rank", event.target.value)} />
+      </label>
+      <label>
+        <span>Name</span>
+        <input required value={values.name} onChange={(event) => onChange("name", event.target.value)} />
+      </label>
+      <label>
+        <span>Country</span>
+        <input required value={values.country} onChange={(event) => onChange("country", event.target.value)} />
+      </label>
+      <label>
+        <span>Importance (Strat pt of view)</span>
+        <select required value={values.importance} onChange={(event) => onChange("importance", event.target.value)}>
+          {NEW_PERSON_IMPORTANCE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function PeopleInfoFields({ profile, details }) {
+  return (
+    <div className="people-info-content">
+      <div className="summary-banner">
+        <span>{profile.scopeLabel}</span>
+      </div>
+      <div className="identity-summary-grid">
+        <InfoLine label="Rank" value={profile.rank} />
+        <InfoLine label="Name" value={profile.name} />
+        <InfoLine label="Country" value={profile.country} />
+        <InfoLine label="Importance" value={profile.importance} />
+      </div>
+      <div className="seen-at-panel">
+        <div className="panel-title">Seen At</div>
+        <SeenAtList details={details} />
+      </div>
+    </div>
+  );
+}
+
+function PeopleChangesPanel({ payload, profile, onBack }) {
+  const changes = payload.changes || [];
+  return (
+    <>
+      <div className="people-pane-head">
+        <div>
+          <div className="title">Changes</div>
+          <div className="muted">Latest changes first</div>
+        </div>
+        <button onClick={onBack}>Back</button>
+      </div>
+      <div className="people-change-list">
+        <section className="change-section">
+          <PeopleInfoFields profile={profile} details={payload.details || []} />
+        </section>
+        {changes.length ? changes.map((change) => (
+          <section key={change.change_id} className="change-section">
+            <div className="muted">{change.created_at}</div>
+            <ChangeLine label="Rank" from={change.previous_rank} to={change.new_rank} editor={change.editor_name} />
+            <ChangeLine label="Name" from={change.previous_name} to={change.new_name} editor={change.editor_name} />
+            <ChangeLine label="Country" from={change.previous_country} to={change.new_country} editor={change.editor_name} />
+            <ChangeLine label="Importance (Strat pt of view)" from={change.previous_importance} to={change.new_importance} editor={change.editor_name} />
+          </section>
+        )) : <EmptyCard text="No changes recorded yet." />}
+      </div>
+    </>
+  );
+}
+
+function InfoLine({ label, value }) {
+  return (
+    <div className="info-row">
+      <span className="info-label">{label}</span>
+      <span className="info-value">{value || "-"}</span>
+    </div>
+  );
+}
+
+function ChangeLine({ label, from, to, editor }) {
+  if ((from || "") === (to || "")) return null;
+  return (
+    <div className="change-row">
+      <span className="info-label">{label}</span>
+      <span>{from || "-"} -&gt; {to || "-"} <span className="muted">(By {editor || "-"})</span></span>
+    </div>
+  );
+}
+
+function SeenAtList({ details }) {
+  const items = (details || []).filter((detail) => detail.place_seen || detail.date || detail.time || detail.event_occasion || detail.added_by);
+  if (!items.length) return <div className="muted">No seen-at details saved.</div>;
+  return (
+    <div className="seen-at-list">
+      {items.map((detail) => (
+        <div key={detail.detail_id} className="seen-at-card">
+          <div className="seen-place">{detail.place_seen || "-"}</div>
+          <div className="seen-meta">
+            <span>[AT] {formatSeenDateTime(detail)}</span>
+            <span>[Event] {detail.event_occasion || "-"}</span>
+            <span>[Added by] - {detail.added_by || "-"}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatSeenDateTime(detail) {
+  const date = detail.date || "-";
+  const time = detail.time || "-";
+  return `${date} & ${time}`;
 }
 
 function QueueInputPanel({
@@ -1232,6 +1434,34 @@ function clearFile(ref) {
 
 function galleryImages(payload) {
   return payload.embeddings.map((record) => record.crop_path || record.source_image).filter(Boolean);
+}
+
+function galleryImageRecords(payload) {
+  return payload.embeddings
+    .map((record) => ({
+      embeddingId: record.embedding_id,
+      path: record.crop_path || record.source_image,
+    }))
+    .filter((record) => record.path);
+}
+
+function detailsForEmbedding(details, embeddingId) {
+  return (details || []).filter((detail) => detail.embedding_id === embeddingId);
+}
+
+function personProfile(payload, scopedDetails = payload.details || [], imageSelected = false) {
+  const details = scopedDetails.length ? scopedDetails : payload.details || [];
+  const metadata = payload.person.metadata || {};
+  const latestDetail = details.find((detail) => detail.rank || detail.country || detail.importance || detail.name) || {};
+  const hasScopedDetails = scopedDetails.length > 0;
+  return {
+    personId: payload.person.person_id,
+    rank: hasScopedDetails ? latestDetail.rank || metadata.rank || "" : metadata.rank || latestDetail.rank || "",
+    name: hasScopedDetails ? latestDetail.name || payload.person.name || "" : payload.person.name || latestDetail.name || "",
+    country: hasScopedDetails ? latestDetail.country || metadata.country || "" : metadata.country || latestDetail.country || "",
+    importance: hasScopedDetails ? latestDetail.importance || metadata.importance || "Regular" : metadata.importance || latestDetail.importance || "Regular",
+    scopeLabel: hasScopedDetails ? "Selected image details" : imageSelected ? "Selected image has no saved details" : "Person summary",
+  };
 }
 
 function mediaUrl(path) {

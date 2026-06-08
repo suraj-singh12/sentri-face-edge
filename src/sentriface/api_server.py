@@ -1,0 +1,813 @@
+from __future__ import annotations
+
+import argparse
+import base64
+import binascii
+import json
+import uuid
+from http import HTTPStatus
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, urlparse
+
+from sentriface.cli import build_dev_engine, build_onnx_engine
+from sentriface.config import RuntimeConfig, config_for_hardware
+from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
+from sentriface.hardware import assess_hardware
+from sentriface.models import (
+    EmbeddingRecord,
+    InitGroup,
+    PendingAddition,
+    Person,
+    PersonChange,
+    PersonMatch,
+    PersonSummary,
+    QualityReport,
+    RecognitionDetail,
+    RecognitionResult,
+    RejectedFace,
+)
+
+STATIC_DIR = Path(__file__).with_name("ui_static")
+UPLOAD_RESIZE_LIMIT_BYTES = 1_000_000
+UPLOAD_MAX_EDGE = 1600
+DUPLICATE_MATCH_SCORE = 0.9999
+
+
+class SentriFaceApiServer(ThreadingHTTPServer):
+    def __init__(
+        self,
+        server_address: tuple[str, int],
+        engine: FaceEngine,
+        config: RuntimeConfig,
+        runtime: str,
+        debug: bool = True,
+    ) -> None:
+        super().__init__(server_address, SentriFaceApiHandler)
+        self.engine = engine
+        self.config = config
+        self.runtime = runtime
+        self.debug = debug
+        self.events: list[dict[str, Any]] = []
+
+    def log_event(self, event: str, **details: Any) -> None:
+        item = {"event": event, **details}
+        self.events.append(item)
+        self.events = self.events[-200:]
+        if self.debug:
+            print(f"[sentriface-ui] {event} {json.dumps(details, separators=(',', ':'), default=str)}")
+
+
+class SentriFaceApiHandler(SimpleHTTPRequestHandler):
+    server: SentriFaceApiServer
+
+    def translate_path(self, path: str) -> str:
+        parsed = urlparse(path)
+        if parsed.path == "/":
+            return str(STATIC_DIR / "index.html")
+        return str(STATIC_DIR / parsed.path.lstrip("/"))
+
+    def do_GET(self) -> None:
+        parsed = urlparse(self.path)
+        try:
+            if parsed.path == "/api/profile":
+                self._json(self._profile())
+                return
+            if parsed.path == "/api/persons":
+                self._json({"persons": [_person_summary(item, self.server.engine) for item in self.server.engine.list_persons()]})
+                return
+            if parsed.path == "/api/person":
+                person_id = _query_value(parsed.query, "person_id")
+                person = self.server.engine.get_person(person_id)
+                if person is None:
+                    raise KeyError(f"Unknown person: {person_id}")
+                embeddings = self.server.engine.list_person_embeddings(person_id)
+                details = self.server.engine.list_recognition_details_for_person(person_id)
+                changes = self.server.engine.list_person_changes(person_id)
+                self._json(
+                    {
+                        "person": _person(person),
+                        "embeddings": [_embedding(record) for record in embeddings],
+                        "details": [_recognition_detail(detail) for detail in details],
+                        "changes": [_person_change(change) for change in changes],
+                    }
+                )
+                return
+            if parsed.path == "/api/pending":
+                self._json({"pending": [_pending(self.server.engine, item) for item in self.server.engine.list_pending_additions()]})
+                return
+            if parsed.path == "/api/events":
+                self._json({"events": self.server.events[-80:]})
+                return
+            if parsed.path == "/api/queue-groups":
+                session_id = _query_value(parsed.query, "session_id")
+                groups = self.server.engine.list_init_groups(session_id)
+                self._json({"groups": [_init_group(self.server.engine, group) for group in groups]})
+                return
+            if parsed.path == "/media":
+                self._media(_query_value(parsed.query, "path"))
+                return
+            super().do_GET()
+        except Exception as exc:  # noqa: BLE001 - local UI should surface errors clearly.
+            self._error(exc)
+
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        try:
+            payload = self._read_json()
+            if parsed.path == "/api/upload":
+                saved_path = _save_upload(
+                    self.server.config.data_dir,
+                    _required(payload, "filename"),
+                    _required(payload, "data"),
+                )
+                self.server.log_event(
+                    "upload",
+                    filename=payload.get("filename"),
+                    path=str(saved_path),
+                    stored_size=saved_path.stat().st_size,
+                )
+                self._json({"path": str(saved_path), "stored_size": saved_path.stat().st_size})
+                return
+            if parsed.path == "/api/upload-batch":
+                saved_dir, count = _save_upload_batch(
+                    self.server.config.data_dir,
+                    payload.get("files", []),
+                )
+                self.server.log_event("upload-batch", path=str(saved_dir), files=count)
+                self._json({"path": str(saved_dir), "files": count})
+                return
+            if parsed.path == "/api/recognize":
+                image_path = Path(_required(payload, "path"))
+                self.server.engine.reset_metrics()
+                results = self.server.engine.recognize(image_path)
+                self.server.log_event("recognize", path=str(image_path), faces=len(results))
+                self._json(
+                    {
+                        "faces": [_recognition(self.server.engine, result, index) for index, result in enumerate(results, 1)],
+                        "metrics": self.server.engine.metrics_snapshot(),
+                    }
+                )
+                return
+            if parsed.path == "/api/recognize-batch":
+                source = Path(_required(payload, "path"))
+                images = _image_paths(source)
+                if not images:
+                    raise KeyError(f"No supported images found: {source}")
+                self.server.engine.reset_metrics()
+                batch = [
+                    {
+                        "image": str(image_path),
+                        "faces": [
+                            _recognition(self.server.engine, result, index)
+                            for index, result in enumerate(self.server.engine.recognize(image_path), 1)
+                        ],
+                    }
+                    for image_path in images
+                ]
+                self.server.log_event("recognize-batch", path=str(source), images=len(images))
+                self._json({"batch": batch, "metrics": self.server.engine.metrics_snapshot()})
+                return
+            if parsed.path == "/api/person-update":
+                change = self.server.engine.update_person_profile(
+                    person_id=_required(payload, "person_id"),
+                    name=_required(payload, "name"),
+                    rank=payload.get("rank"),
+                    country=payload.get("country"),
+                    importance=payload.get("importance"),
+                    editor_name=_required(payload, "editor_name"),
+                )
+                self.server.log_event(
+                    "person-update",
+                    person_id=change.person_id,
+                    editor_name=change.editor_name,
+                )
+                self._json({"updated": True, "change": _person_change(change)})
+                return
+            if parsed.path == "/api/recognition-accept-existing":
+                image_path = Path(_required(payload, "path"))
+                person_id = _required(payload, "person_id")
+                if self.server.engine.get_person(person_id) is None:
+                    raise KeyError(f"Unknown person: {person_id}")
+                self.server.engine.reset_metrics()
+                additions = self.server.engine.prepare_additions(image_path)
+                if not additions:
+                    raise KeyError("No acceptable faces found")
+                duplicate = _duplicate_embedding(additions[0].vector, self.server.engine.list_person_embeddings(person_id))
+                if duplicate:
+                    person = self.server.engine.get_person(person_id)
+                    self.server.log_event("recognition-duplicate", path=str(image_path), person_id=person_id)
+                    self._json(
+                        {
+                            "duplicate": True,
+                            "embedding_id": duplicate.embedding_id,
+                            "person_id": person_id,
+                            "name": person.name if person else person_id,
+                            "metrics": self.server.engine.metrics_snapshot(),
+                        }
+                    )
+                    return
+                embedding_id = self.server.engine.confirm_existing_person(additions[0], person_id)
+                self.server.log_event("recognition-accept-existing", path=str(image_path), person_id=person_id)
+                self._json({"embedding_id": embedding_id, "metrics": self.server.engine.metrics_snapshot()})
+                return
+            if parsed.path == "/api/recognition-new":
+                image_path = Path(_required(payload, "path"))
+                name = _required(payload, "name")
+                self.server.engine.reset_metrics()
+                additions = self.server.engine.prepare_additions(image_path)
+                if not additions:
+                    raise KeyError("No acceptable faces found")
+                person_id = self.server.engine.confirm_new_person(additions[0], name)
+                embedding = self.server.engine.list_person_embeddings(person_id)[-1]
+                self.server.log_event("recognition-new", path=str(image_path), person_id=person_id)
+                self._json(
+                    {
+                        "person_id": person_id,
+                        "embedding_id": embedding.embedding_id,
+                        "metrics": self.server.engine.metrics_snapshot(),
+                    }
+                )
+                return
+            if parsed.path == "/api/recognition-followup":
+                detail_id = self.server.engine.add_recognition_detail(
+                    embedding_id=_required(payload, "embedding_id"),
+                    person_id=_required(payload, "person_id"),
+                    image_id=_required(payload, "image_id"),
+                    image_path=payload.get("image_path"),
+                    name=_required(payload, "name"),
+                    decision=_required(payload, "decision"),
+                    seen_date=_required(payload, "date"),
+                    seen_time=_required(payload, "time"),
+                    place_seen=_required(payload, "place_seen"),
+                    individual_count=int(_required(payload, "individual_count")),
+                    event_occasion=_required(payload, "event_occasion"),
+                    rank=payload.get("rank"),
+                    country=payload.get("country"),
+                    importance=payload.get("importance"),
+                    added_by=payload.get("added_by"),
+                )
+                self.server.log_event(
+                    "recognition-followup",
+                    detail_id=detail_id,
+                    path=_required(payload, "path"),
+                    image_id=_required(payload, "image_id"),
+                    embedding_id=_required(payload, "embedding_id"),
+                    name=_required(payload, "name"),
+                    person_id=_required(payload, "person_id"),
+                    decision=_required(payload, "decision"),
+                    date=_required(payload, "date"),
+                    time=_required(payload, "time"),
+                    place_seen=_required(payload, "place_seen"),
+                    individual_count=int(_required(payload, "individual_count")),
+                    event_occasion=_required(payload, "event_occasion"),
+                    rank=payload.get("rank"),
+                    country=payload.get("country"),
+                    importance=payload.get("importance"),
+                    added_by=payload.get("added_by"),
+                )
+                self._json({"confirmed": True, "detail_id": detail_id})
+                return
+            if parsed.path == "/api/enroll":
+                image_path = Path(_required(payload, "path"))
+                name = _required(payload, "name")
+                self.server.engine.reset_metrics()
+                additions = self.server.engine.prepare_additions(image_path, bool(payload.get("force_bad_quality", False)))
+                if not additions:
+                    raise KeyError("No acceptable faces found")
+                person_id = self.server.engine.confirm_new_person(additions[0], name)
+                self.server.log_event("enroll", path=str(image_path), person_id=person_id)
+                self._json({"person_id": person_id, "metrics": self.server.engine.metrics_snapshot()})
+                return
+            if parsed.path == "/api/queue-add":
+                image_path = Path(_required(payload, "path"))
+                self.server.engine.reset_metrics()
+                prepared = self.server.engine.queue_additions(image_path, bool(payload.get("force_bad_quality", False)))
+                self.server.log_event(
+                    "queue-add",
+                    path=str(image_path),
+                    accepted=len(prepared.accepted),
+                    rejected=len(prepared.rejected),
+                )
+                self._json(
+                    {
+                        "pending": [_pending(self.server.engine, item) for item in prepared.accepted],
+                        "rejected": [_rejected(item, index) for index, item in enumerate(prepared.rejected, 1)],
+                        "metrics": self.server.engine.metrics_snapshot(),
+                    }
+                )
+                return
+            if parsed.path == "/api/queue-scan":
+                source = Path(_required(payload, "path"))
+                self.server.engine.reset_metrics()
+                queue_result = self.server.engine.create_queue_session(source, bool(payload.get("force_bad_quality", False)))
+                self.server.log_event(
+                    "queue-scan",
+                    path=str(source),
+                    session_id=queue_result.session.session_id,
+                    groups=len(queue_result.groups),
+                )
+                self._json(
+                    {
+                        "session_id": queue_result.session.session_id,
+                        "groups": [
+                            _init_group(self.server.engine, group, queue_result.matches_by_face_id)
+                            for group in queue_result.groups
+                        ],
+                        "metrics": self.server.engine.metrics_snapshot(),
+                    }
+                )
+                return
+            if parsed.path == "/api/queue-confirm-new":
+                person_id, accepted = self.server.engine.confirm_init_faces(
+                    _required(payload, "session_id"),
+                    _required(payload, "group_id"),
+                    list(payload.get("face_ids", [])),
+                    _required(payload, "name"),
+                )
+                self.server.log_event("queue-confirm-new", person_id=person_id, embeddings=len(accepted))
+                self._json({"person_id": person_id, "accepted": accepted, "embedding_ids": [item["embedding_id"] for item in accepted]})
+                return
+            if parsed.path == "/api/queue-confirm-existing":
+                accepted = self.server.engine.confirm_init_faces_existing(
+                    _required(payload, "session_id"),
+                    _required(payload, "group_id"),
+                    list(payload.get("face_ids", [])),
+                    _required(payload, "person_id"),
+                )
+                self.server.log_event("queue-confirm-existing", person_id=payload.get("person_id"), embeddings=len(accepted))
+                self._json({"accepted": accepted, "embedding_ids": [item["embedding_id"] for item in accepted]})
+                return
+            if parsed.path == "/api/queue-discard":
+                self.server.engine.discard_init_faces(
+                    _required(payload, "session_id"),
+                    _required(payload, "group_id"),
+                    list(payload.get("face_ids", [])),
+                )
+                self.server.log_event("queue-discard", group_id=payload.get("group_id"), faces=len(payload.get("face_ids", [])))
+                self._json({"discarded": len(payload.get("face_ids", []))})
+                return
+            if parsed.path == "/api/confirm-new":
+                pending_id = _required(payload, "pending_id")
+                name = _required(payload, "name")
+                person_id = self.server.engine.confirm_pending_as_new_person(pending_id, name)
+                self.server.log_event("confirm-new", pending_id=pending_id, person_id=person_id)
+                self._json({"person_id": person_id})
+                return
+            if parsed.path == "/api/confirm-existing":
+                pending_id = _required(payload, "pending_id")
+                person_id = _required(payload, "person_id")
+                embedding_id = self.server.engine.confirm_pending_as_existing_person(pending_id, person_id)
+                self.server.log_event("confirm-existing", pending_id=pending_id, person_id=person_id)
+                self._json({"embedding_id": embedding_id})
+                return
+            if parsed.path == "/api/reject-pending":
+                pending_id = _required(payload, "pending_id")
+                self.server.engine.reject_pending_addition(pending_id)
+                self.server.log_event("reject-pending", pending_id=pending_id)
+                self._json({"rejected": 1})
+                return
+            if parsed.path == "/api/backup-db":
+                target = Path(_required(payload, "path"))
+                self.server.engine.backup_database(target)
+                self.server.log_event("backup-db", path=str(target))
+                self._json({"backup": str(target)})
+                return
+            self._json({"error": "Unknown endpoint"}, status=HTTPStatus.NOT_FOUND)
+        except Exception as exc:  # noqa: BLE001 - local UI should surface errors clearly.
+            self._error(exc)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        if self.server.debug:
+            print(f"[sentriface-ui:http] {self.address_string()} {format % args}")
+
+    def _profile(self) -> dict[str, Any]:
+        config = self.server.config
+        return {
+            "runtime": self.server.runtime,
+            "hardware_tier": config.hardware_tier,
+            "data_dir": str(config.data_dir),
+            "db_path": str(config.db_path),
+            "max_workers": config.max_workers,
+            "onnx_intra_threads": config.onnx_intra_threads,
+            "max_image_edge": config.max_image_edge,
+            "high_confidence": config.high_confidence,
+            "medium_confidence": config.medium_confidence,
+            "min_quality_score": config.min_quality_score,
+        }
+
+    def _read_json(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length == 0:
+            return {}
+        raw = self.rfile.read(length).decode("utf-8")
+        return json.loads(raw)
+
+    def _json(self, payload: dict[str, Any], status: int = 200) -> None:
+        body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _error(self, exc: Exception) -> None:
+        self.server.log_event("error", message=str(exc).strip("'"))
+        self._json({"error": str(exc).strip("'")}, status=400)
+
+    def _media(self, raw_path: str) -> None:
+        path = Path(raw_path)
+        if not path.exists() or not path.is_file():
+            raise KeyError(f"Media file not found: {path}")
+        if path.suffix.lower() not in IMAGE_EXTENSIONS:
+            raise KeyError(f"Unsupported media file: {path}")
+        data = path.read_bytes()
+        content_type = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".bmp": "image/bmp",
+            ".webp": "image/webp",
+        }.get(path.suffix.lower(), "application/octet-stream")
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
+def create_server(
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    data_dir: Path = Path("data"),
+    runtime: str = "dev",
+    debug: bool = True,
+) -> SentriFaceApiServer:
+    profile = assess_hardware()
+    config = config_for_hardware(profile, data_dir=data_dir)
+    engine = build_dev_engine(data_dir, config) if runtime == "dev" else build_onnx_engine(config)
+    engine.initialize()
+    server = SentriFaceApiServer((host, port), engine=engine, config=config, runtime=runtime, debug=debug)
+    server.log_event("startup", runtime=runtime, data_dir=str(data_dir), address=f"http://{host}:{server.server_port}")
+    return server
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="SentriFace Edge local UI")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument("--runtime", choices=("dev", "onnx"), default="dev")
+    parser.add_argument("--quiet-debug", action="store_true", help="Disable verbose UI debug logs")
+    args = parser.parse_args()
+
+    server = create_server(
+        host=args.host,
+        port=args.port,
+        data_dir=args.data_dir,
+        runtime=args.runtime,
+        debug=not args.quiet_debug,
+    )
+    print(f"SentriFace UI running at http://{args.host}:{server.server_port}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("SentriFace UI stopped")
+    finally:
+        server.server_close()
+    return 0
+
+
+def _required(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if value is None or str(value).strip() == "":
+        raise KeyError(f"Missing required field: {key}")
+    return str(value)
+
+
+def _query_value(query: str, key: str) -> str:
+    values = parse_qs(query).get(key)
+    if not values:
+        raise KeyError(f"Missing required query: {key}")
+    return values[0]
+
+
+def _image_paths(source: Path) -> list[Path]:
+    if source.is_file():
+        return [source] if source.suffix.lower() in IMAGE_EXTENSIONS else []
+    if not source.exists():
+        raise KeyError(f"Source path does not exist: {source}")
+    return sorted(path for path in source.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
+
+
+def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Path = Path("uploads")) -> Path:
+    suffix = Path(filename).suffix.lower()
+    if suffix not in IMAGE_EXTENSIONS:
+        raise KeyError(f"Unsupported upload type: {suffix or filename}")
+    if "," in data_url:
+        _, encoded = data_url.split(",", 1)
+    else:
+        encoded = data_url
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    except binascii.Error as exc:
+        raise KeyError("Invalid upload data") from exc
+    if not data:
+        raise KeyError("Upload is empty")
+    if len(data) > UPLOAD_RESIZE_LIMIT_BYTES:
+        data, suffix = _reduce_upload_image(data)
+    upload_dir = data_dir / upload_subdir
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    target = upload_dir / f"{uuid.uuid4().hex}{suffix}"
+    target.write_bytes(data)
+    return target
+
+
+def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]]) -> tuple[Path, int]:
+    if not files:
+        raise KeyError("No files selected")
+    batch_subdir = Path("uploads") / "batches" / uuid.uuid4().hex
+    batch_dir = data_dir / batch_subdir
+    count = 0
+    for item in files:
+        filename = _required(item, "filename")
+        relative_path = str(item.get("relative_path") or filename)
+        data_url = _required(item, "data")
+        suffix = Path(filename).suffix.lower()
+        if suffix not in IMAGE_EXTENSIONS:
+            continue
+        safe_path = _safe_relative_upload_path(relative_path)
+        saved = _save_upload(data_dir, safe_path.name, data_url, batch_subdir / safe_path.parent)
+        count += int(saved.exists())
+    if count == 0:
+        raise KeyError("No supported image files selected")
+    return batch_dir, count
+
+
+def _safe_relative_upload_path(relative_path: str) -> Path:
+    parts = [
+        part
+        for part in Path(relative_path).parts
+        if part not in {"", ".", ".."} and not Path(part).is_absolute()
+    ]
+    if not parts:
+        raise KeyError("Invalid upload path")
+    return Path(*parts)
+
+
+def _reduce_upload_image(data: bytes) -> tuple[bytes, str]:
+    cv2 = _cv2()
+    np = _numpy()
+    encoded = np.frombuffer(data, dtype=np.uint8)
+    image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+    if image is None:
+        raise KeyError("Could not decode uploaded image for size reduction")
+
+    height, width = image.shape[:2]
+    longest = max(height, width)
+    if longest > UPLOAD_MAX_EDGE:
+        scale = UPLOAD_MAX_EDGE / float(longest)
+        image = cv2.resize(
+            image,
+            (max(1, int(width * scale)), max(1, int(height * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+
+    for quality in (92, 88, 84, 80, 76, 72, 68):
+        ok, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+        if not ok:
+            raise KeyError("Could not encode uploaded image")
+        reduced = buffer.tobytes()
+        if len(reduced) <= UPLOAD_RESIZE_LIMIT_BYTES:
+            return reduced, ".jpg"
+
+    while len(reduced) > UPLOAD_RESIZE_LIMIT_BYTES:
+        height, width = image.shape[:2]
+        if max(height, width) <= 640:
+            return reduced, ".jpg"
+        image = cv2.resize(
+            image,
+            (max(1, int(width * 0.85)), max(1, int(height * 0.85))),
+            interpolation=cv2.INTER_AREA,
+        )
+        ok, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 76])
+        if not ok:
+            raise KeyError("Could not encode uploaded image")
+        reduced = buffer.tobytes()
+    return reduced, ".jpg"
+
+
+def _cv2() -> Any:
+    try:
+        import cv2
+
+        return cv2
+    except ImportError as exc:
+        raise RuntimeError("OpenCV is required for upload size reduction") from exc
+
+
+def _numpy() -> Any:
+    try:
+        import numpy
+
+        return numpy
+    except ImportError as exc:
+        raise RuntimeError("NumPy is required for upload size reduction") from exc
+
+
+def _recognition(engine: FaceEngine, result: RecognitionResult, index: int) -> dict[str, Any]:
+    return {
+        "index": index,
+        "decision": result.decision.value,
+        "box": _box(result.face),
+        "quality": _quality(result.quality),
+        "matches": [_match(engine, match, rank) for rank, match in enumerate(result.matches, 1)],
+    }
+
+
+def _pending(engine: FaceEngine, pending: PendingAddition) -> dict[str, Any]:
+    return {
+        "pending_id": pending.pending_id,
+        "source_image": pending.source_image,
+        "crop_path": pending.face.crop_path,
+        "decision": pending.decision.value,
+        "box": _box(pending.face),
+        "quality": _quality(pending.quality),
+        "matches": [_match(engine, match, rank) for rank, match in enumerate(pending.matches, 1)],
+        "created_at": pending.created_at,
+    }
+
+
+def _rejected(rejected: RejectedFace, index: int) -> dict[str, Any]:
+    return {
+        "index": index,
+        "source_image": rejected.source_image,
+        "box": _box(rejected.face),
+        "quality": _quality(rejected.quality),
+    }
+
+
+def _person(person: Person) -> dict[str, Any]:
+    return {
+        "person_id": person.person_id,
+        "name": person.name,
+        "metadata": person.metadata,
+        "created_at": person.created_at,
+    }
+
+
+def _person_summary(summary: PersonSummary, engine: FaceEngine | None = None) -> dict[str, Any]:
+    embeddings = engine.list_person_embeddings(summary.person.person_id) if engine else []
+    return {
+        **_person(summary.person),
+        "embedding_count": summary.embedding_count,
+        "representative_image": _representative_image(embeddings),
+    }
+
+
+def _embedding(record: EmbeddingRecord) -> dict[str, Any]:
+    return {
+        "embedding_id": record.embedding_id,
+        "person_id": record.person_id,
+        "quality_score": record.quality_score,
+        "source_image": record.source_image,
+        "crop_path": record.crop_path,
+        "created_at": record.created_at,
+    }
+
+
+def _recognition_detail(detail: RecognitionDetail) -> dict[str, Any]:
+    return {
+        "detail_id": detail.detail_id,
+        "embedding_id": detail.embedding_id,
+        "person_id": detail.person_id,
+        "image_id": detail.image_id,
+        "image_path": detail.image_path,
+        "name": detail.name,
+        "decision": detail.decision,
+        "date": detail.seen_date,
+        "time": detail.seen_time,
+        "place_seen": detail.place_seen,
+        "individual_count": detail.individual_count,
+        "event_occasion": detail.event_occasion,
+        "rank": detail.rank,
+        "country": detail.country,
+        "importance": detail.importance,
+        "added_by": detail.added_by,
+        "created_at": detail.created_at,
+    }
+
+
+def _person_change(change: PersonChange) -> dict[str, Any]:
+    return {
+        "change_id": change.change_id,
+        "person_id": change.person_id,
+        "previous_name": change.previous_name,
+        "new_name": change.new_name,
+        "previous_rank": change.previous_rank,
+        "new_rank": change.new_rank,
+        "previous_country": change.previous_country,
+        "new_country": change.new_country,
+        "previous_importance": change.previous_importance,
+        "new_importance": change.new_importance,
+        "editor_name": change.editor_name,
+        "created_at": change.created_at,
+    }
+
+
+def _init_group(
+    engine: FaceEngine,
+    group: InitGroup,
+    matches_by_face_id: dict[str, list[PersonMatch]] | None = None,
+) -> dict[str, Any]:
+    face_matches = [
+        matches_by_face_id.get(face.init_face_id, []) if matches_by_face_id is not None else engine.matches_for_vector(face.vector)
+        for face in group.faces
+    ]
+    best_by_person: dict[str, PersonMatch] = {}
+    for matches in face_matches:
+        for match in matches:
+            current = best_by_person.get(match.person_id)
+            if current is None or match.score > current.score:
+                best_by_person[match.person_id] = match
+    group_matches = sorted(best_by_person.values(), key=lambda match: match.score, reverse=True)[: engine.config.top_k]
+    return {
+        "group_id": group.group_id,
+        "session_id": group.session_id,
+        "status": group.status,
+        "matches": [_match(engine, match, rank) for rank, match in enumerate(group_matches, 1)],
+        "faces": [
+            {
+                "init_face_id": face.init_face_id,
+                "source_image": face.source_image,
+                "crop_path": face.face.crop_path,
+                "box": _box(face.face),
+                "quality": _quality(face.quality),
+                "matches": [_match(engine, match, rank) for rank, match in enumerate(face_matches[index], 1)],
+            }
+            for index, face in enumerate(group.faces)
+        ],
+    }
+
+
+def _match(engine: FaceEngine, match: PersonMatch, rank: int) -> dict[str, Any]:
+    person = engine.get_person(match.person_id)
+    embeddings = engine.list_person_embeddings(match.person_id) if person else []
+    representative = _representative_image(embeddings)
+    return {
+        "rank": rank,
+        "person_id": match.person_id,
+        "name": person.name if person else "unknown",
+        "score": match.score,
+        "embedding_ids": list(match.embedding_ids),
+        "embeddings_matched": match.embeddings_matched,
+        "representative_image": representative,
+    }
+
+
+def _representative_image(embeddings: list[EmbeddingRecord]) -> str | None:
+    for record in embeddings:
+        if record.crop_path:
+            return record.crop_path
+    for record in embeddings:
+        if record.source_image:
+            return record.source_image
+    return None
+
+
+def _has_duplicate_embedding(vector: tuple[float, ...], embeddings: list[EmbeddingRecord]) -> bool:
+    return _duplicate_embedding(vector, embeddings) is not None
+
+
+def _duplicate_embedding(vector: tuple[float, ...], embeddings: list[EmbeddingRecord]) -> EmbeddingRecord | None:
+    for record in embeddings:
+        if _cosine(vector, record.vector) >= DUPLICATE_MATCH_SCORE:
+            return record
+    return None
+
+
+def _cosine(left: tuple[float, ...], right: tuple[float, ...]) -> float:
+    return sum(a * b for a, b in zip(left, right))
+
+
+def _box(face) -> dict[str, Any]:
+    return {
+        "x": face.box.x,
+        "y": face.box.y,
+        "width": face.box.width,
+        "height": face.box.height,
+        "confidence": face.box.confidence,
+        "quality_score": face.quality_score,
+        "crop_path": face.crop_path,
+    }
+
+
+def _quality(report: QualityReport | None) -> dict[str, Any] | None:
+    if report is None:
+        return None
+    return {"status": report.status.value, "score": report.score, "reasons": list(report.reasons)}
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

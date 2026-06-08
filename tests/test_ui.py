@@ -10,7 +10,7 @@ import numpy as np
 
 from sentriface.cli import build_dev_engine
 from sentriface.models import EmbeddingRecord
-from sentriface.ui import (
+from sentriface.api_server import (
     UPLOAD_RESIZE_LIMIT_BYTES,
     _has_duplicate_embedding,
     _pending,
@@ -21,7 +21,7 @@ from sentriface.ui import (
 )
 
 
-class UiSerializationTest(unittest.TestCase):
+class ApiSerializationTest(unittest.TestCase):
     def test_duplicate_embedding_detection_uses_near_exact_score(self) -> None:
         embeddings = [
             EmbeddingRecord(
