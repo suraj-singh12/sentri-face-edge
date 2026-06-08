@@ -768,11 +768,11 @@ def _match(engine: FaceEngine, match: PersonMatch, rank: int) -> dict[str, Any]:
 
 def _representative_image(embeddings: list[EmbeddingRecord]) -> str | None:
     for record in embeddings:
-        if record.crop_path:
-            return record.crop_path
-    for record in embeddings:
         if record.source_image:
             return record.source_image
+    for record in embeddings:
+        if record.crop_path:
+            return record.crop_path
     return None
 
 
