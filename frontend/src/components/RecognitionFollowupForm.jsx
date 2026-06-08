@@ -2,8 +2,9 @@ import { Button, Card, Group, NumberInput, Select, SimpleGrid, Stack, TextInput 
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 
-export function RecognitionFollowupForm({ values, confirmed, onChange, onSubmit, onClear, embedded = false }) {
+export function RecognitionFollowupForm({ values, confirmed, onChange, onSubmit, onClear, embedded = false, showAddedBy = false }) {
   const isNew = values.action === "new";
+  const needsAddedBy = isNew || showAddedBy;
   const form = (
     <form onSubmit={onSubmit}>
       <Stack>
@@ -17,7 +18,7 @@ export function RecognitionFollowupForm({ values, confirmed, onChange, onSubmit,
           <TextInput required label="Place Seen" value={values.placeSeen} onChange={(event) => onChange("placeSeen", event.target.value)} />
           <NumberInput required min={0} step={1} label="With how many indl" value={values.individualCount} onChange={(value) => onChange("individualCount", value)} />
           <TextInput required label="Event/Occasion" value={values.eventOccasion} onChange={(event) => onChange("eventOccasion", event.target.value)} />
-          {isNew && <TextInput required label="Added by" placeholder="Your Name" value={values.addedBy} onChange={(event) => onChange("addedBy", event.target.value)} />}
+          {needsAddedBy && <TextInput required label="Added by" placeholder="Your Name" value={values.addedBy} onChange={(event) => onChange("addedBy", event.target.value)} />}
         </SimpleGrid>
         <Group justify="center">
           <Button type="submit" disabled={confirmed}>Confirm</Button>

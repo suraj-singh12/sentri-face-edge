@@ -245,7 +245,7 @@ function QueueGroupReview({
         <Card withBorder radius="md">
           <Text fw={700}>{followup.name || "New person"}</Text>
           <Text size="xs" c="dimmed" mb="sm">{followup.faceIds.length} image(s)</Text>
-          <RecognitionFollowupForm values={followup} confirmed={followupDone} onChange={onFollowupChange} onSubmit={onFollowupSubmit} onClear={onFollowupClear} embedded />
+          <RecognitionFollowupForm values={followup} confirmed={followupDone} onChange={onFollowupChange} onSubmit={onFollowupSubmit} onClear={onFollowupClear} embedded showAddedBy />
         </Card>
       )}
     </Stack>
