@@ -95,7 +95,7 @@ export function personProfile(payload, scopedDetails = payload.details || [], im
   return {
     personId: payload.person.person_id,
     rank: hasScopedDetails ? latestDetail.rank || metadata.rank || "" : metadata.rank || latestDetail.rank || "",
-    name: hasScopedDetails ? latestDetail.name || payload.person.name || "" : payload.person.name || latestDetail.name || "",
+    name: payload.person.name || latestDetail.name || "",
     country: hasScopedDetails ? latestDetail.country || metadata.country || "" : metadata.country || latestDetail.country || "",
     importance: hasScopedDetails ? latestDetail.importance || metadata.importance || "Regular" : metadata.importance || latestDetail.importance || "Regular",
     scopeLabel: hasScopedDetails ? "Selected image details" : imageSelected ? "Selected image has no saved details" : "Person summary",
