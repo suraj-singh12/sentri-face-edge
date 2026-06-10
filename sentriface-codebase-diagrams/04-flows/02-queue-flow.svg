@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="760" viewBox="0 0 1180 760" role="img" aria-label="Queue Review Flow">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/></marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.12"/></filter>
+    <style>
+      .title{font:700 28px Inter,Arial,sans-serif;fill:#0f172a}.label{font:700 16px Inter,Arial,sans-serif;fill:#0f172a}.small{font:500 12px Inter,Arial,sans-serif;fill:#475569}.tiny{font:500 11px Inter,Arial,sans-serif;fill:#64748b}.note{font:600 12px Inter,Arial,sans-serif;fill:#334155}.arrow{stroke:#334155;stroke-width:2.2;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="32" y="42" class="title">Queue Review Flow</text>
+  
+<rect x="55" y="90" width="225" height="105" rx="8" fill="#ecfeff" stroke="#cbd5e1" filter="url(#shadow)"/><text x="71" y="118" class="label">Queue item</text><text x="71" y="142" class="small">Pending recognition</text><text x="71" y="159" class="small">Input image fixed frame</text><text x="71" y="176" class="small">Match image fixed frame</text>
+<rect x="365" y="90" width="225" height="105" rx="8" fill="#fff7ed" stroke="#cbd5e1" filter="url(#shadow)"/><text x="381" y="118" class="label">Review candidate</text><text x="381" y="142" class="small">Full representative image</text><text x="381" y="159" class="small">No face-only crop in card</text>
+<rect x="660" y="90" width="215" height="105" rx="8" fill="#eef2ff" stroke="#cbd5e1" filter="url(#shadow)"/><text x="676" y="118" class="label">Decision</text><text x="676" y="142" class="small">Accept existing</text><text x="676" y="159" class="small">Create new person</text><text x="676" y="176" class="small">Reject / defer</text>
+<rect x="145" y="320" width="250" height="120" rx="8" fill="#f0fdf4" stroke="#cbd5e1" filter="url(#shadow)"/><text x="161" y="348" class="label">Accept existing</text><text x="161" y="372" class="small">Disabled for low confidence</text><text x="161" y="389" class="small">Records reviewer data</text><text x="161" y="406" class="small">Includes Added by</text>
+<rect x="465" y="320" width="250" height="120" rx="8" fill="#f0fdf4" stroke="#cbd5e1" filter="url(#shadow)"/><text x="481" y="348" class="label">Add new person</text><text x="481" y="372" class="small">Name and metadata</text><text x="481" y="389" class="small">Added by field</text><text x="481" y="406" class="small">Saves person + photo</text>
+<rect x="785" y="320" width="250" height="120" rx="8" fill="#fee2e2" stroke="#cbd5e1" filter="url(#shadow)"/><text x="801" y="348" class="label">No valid match</text><text x="801" y="372" class="small">Accept button disabled</text><text x="801" y="389" class="small">Cannot accept placeholder</text><text x="801" y="406" class="small">Needs explicit new-person action</text>
+<rect x="455" y="570" width="270" height="95" rx="8" fill="#f8fafc" stroke="#cbd5e1" filter="url(#shadow)"/><text x="471" y="598" class="label">Persist changes</text><text x="471" y="622" class="small">Queue row updated</text><text x="471" y="639" class="small">DB metadata saved</text><text x="471" y="656" class="small">UI dimensions remain stable</text>
+<path class="arrow" d="M 280 142 L 365 142"/><path class="arrow" d="M 590 142 L 660 142"/>
+<path class="arrow" d="M 768 195 L 270 320"/><rect x="459" y="237.5" width="120" height="22" rx="11" fill="#f8fafc"/><text x="519" y="252.5" text-anchor="middle" class="tiny">valid match</text><path class="arrow" d="M 768 195 L 590 320"/><rect x="619" y="237.5" width="120" height="22" rx="11" fill="#f8fafc"/><text x="679" y="252.5" text-anchor="middle" class="tiny">new person</text><path class="arrow" d="M 768 195 L 910 320"/><rect x="779" y="237.5" width="120" height="22" rx="11" fill="#f8fafc"/><text x="839" y="252.5" text-anchor="middle" class="tiny">low/no match</text>
+<path class="arrow" d="M 270 440 L 520 570"/><path class="arrow" d="M 590 440 L 590 570"/><path class="arrow" d="M 910 440 L 660 570"/>
+
+</svg>

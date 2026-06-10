@@ -1,6 +1,6 @@
-import { ActionIcon, AppShell, Box, Group, MantineProvider, Tabs, Text, Title, Tooltip, rem } from "@mantine/core";
+import { ActionIcon, AppShell, Box, Group, MantineProvider, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
-import { IconDatabaseExport, IconRefresh } from "@tabler/icons-react";
+import { IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
 import { VIEWS } from "./constants.js";
 import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
@@ -30,6 +30,9 @@ export default function SentriFaceApp() {
 function SentriFaceShell() {
   const { state, refs, actions } = useSentriFaceController();
   const { guarded } = actions;
+  const { setColorScheme } = useMantineColorScheme();
+  const computedColorScheme = useComputedColorScheme("light", { getInitialValueInEffect: true });
+  const nextColorScheme = computedColorScheme === "dark" ? "light" : "dark";
 
   return (
     <AppShell header={{ height: 74 }} padding="md">
@@ -40,6 +43,16 @@ function SentriFaceShell() {
             <Text size="xs" c="dimmed" truncate>{profileLine(state.profile)}</Text>
           </Box>
           <Group gap="xs" wrap="nowrap">
+            <Tooltip label={`Switch to ${nextColorScheme} mode`}>
+              <ActionIcon
+                variant="light"
+                size="lg"
+                onClick={() => setColorScheme(nextColorScheme)}
+                aria-label={`Switch to ${nextColorScheme} mode`}
+              >
+                {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
+              </ActionIcon>
+            </Tooltip>
             <Tooltip label="Refresh data">
               <ActionIcon variant="light" size="lg" onClick={guarded(actions.refreshAll)} aria-label="Refresh data">
                 <IconRefresh size={18} />

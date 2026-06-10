@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="740" viewBox="0 0 1180 740" role="img" aria-label="API Surface Map">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/></marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.12"/></filter>
+    <style>
+      .title{font:700 28px Inter,Arial,sans-serif;fill:#0f172a}.label{font:700 16px Inter,Arial,sans-serif;fill:#0f172a}.small{font:500 12px Inter,Arial,sans-serif;fill:#475569}.tiny{font:500 11px Inter,Arial,sans-serif;fill:#64748b}.note{font:600 12px Inter,Arial,sans-serif;fill:#334155}.arrow{stroke:#334155;stroke-width:2.2;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="32" y="42" class="title">API Surface Map</text>
+  
+<rect x="60" y="100" width="230" height="105" rx="8" fill="#fff7ed" stroke="#cbd5e1" filter="url(#shadow)"/><text x="76" y="128" class="label">Recognition APIs</text><text x="76" y="152" class="small">POST /recognize</text><text x="76" y="169" class="small">Queue create/update</text><text x="76" y="186" class="small">Result image URLs</text>
+<rect x="365" y="100" width="230" height="105" rx="8" fill="#ecfeff" stroke="#cbd5e1" filter="url(#shadow)"/><text x="381" y="128" class="label">People APIs</text><text x="381" y="152" class="small">List people</text><text x="381" y="169" class="small">Create/update person</text><text x="381" y="186" class="small">Person photo library</text>
+<rect x="670" y="100" width="230" height="105" rx="8" fill="#f8fafc" stroke="#cbd5e1" filter="url(#shadow)"/><text x="686" y="128" class="label">Photo APIs</text><text x="686" y="152" class="small">Upload image</text><text x="686" y="169" class="small">Serve source image</text><text x="686" y="186" class="small">Serve bounded previews</text>
+<rect x="945" y="100" width="180" height="105" rx="8" fill="#eef2ff" stroke="#cbd5e1" filter="url(#shadow)"/><text x="961" y="128" class="label">Debug APIs</text><text x="961" y="152" class="small">Health</text><text x="961" y="169" class="small">Runtime</text><text x="961" y="186" class="small">Model status</text>
+<rect x="215" y="345" width="250" height="120" rx="8" fill="#f0fdf4" stroke="#cbd5e1" filter="url(#shadow)"/><text x="231" y="373" class="label">Storage boundary</text><text x="231" y="397" class="small">DB rows</text><text x="231" y="414" class="small">File paths</text><text x="231" y="431" class="small">Metadata including added_by</text>
+<rect x="705" y="345" width="250" height="120" rx="8" fill="#fef2f2" stroke="#cbd5e1" filter="url(#shadow)"/><text x="721" y="373" class="label">Engine boundary</text><text x="721" y="397" class="small">Runtime selection</text><text x="721" y="414" class="small">Detection</text><text x="721" y="431" class="small">Embedding comparison</text>
+<rect x="455" y="565" width="270" height="90" rx="8" fill="#fafafa" stroke="#cbd5e1" filter="url(#shadow)"/><text x="471" y="593" class="label">Frontend contract</text><text x="471" y="617" class="small">Stable dimensions</text><text x="471" y="634" class="small">Full representative images</text><text x="471" y="651" class="small">Disabled invalid actions</text>
+<path class="arrow" d="M 175 205 L 340 345"/><path class="arrow" d="M 480 205 L 340 345"/><path class="arrow" d="M 785 205 L 340 345"/><path class="arrow" d="M 785 205 L 830 345"/><path class="arrow" d="M 1035 205 L 830 345"/>
+<path class="arrow" d="M 340 465 L 520 565"/><path class="arrow" d="M 830 465 L 660 565"/>
+
+</svg>

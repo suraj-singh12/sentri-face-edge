@@ -264,7 +264,7 @@ function SeenAtList({ details }) {
   return (
     <Stack gap="xs">
       {items.map((detail) => (
-        <Paper key={detail.detail_id} withBorder radius="md" p="sm" bg="gray.0">
+        <Paper key={detail.detail_id} withBorder radius="md" p="sm" className="detail-history-card">
           <Text fw={700}>{detail.place_seen || "-"}</Text>
           <Text size="xs" c="dimmed">
             [AT] {formatSeenDateTime(detail)} | [Event] {detail.event_occasion || "-"} | [Added by] - {detail.added_by || "-"}

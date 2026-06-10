@@ -187,8 +187,8 @@ export function EmptyCard({ text }) {
 
 function MatchIdentitySummary({ match }) {
   return (
-    <Paper withBorder radius="md" p="sm" bg="teal.0">
-      <Text fw={800} c="teal.9">score: {match.score.toFixed(4)}</Text>
+    <Paper withBorder radius="md" p="sm" className="match-identity-summary">
+      <Text fw={800} className="match-identity-score">score: {match.score.toFixed(4)}</Text>
       <Text size="sm" fw={700}>Group-id: {match.person_id}</Text>
     </Paper>
   );

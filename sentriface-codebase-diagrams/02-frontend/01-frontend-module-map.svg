@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="760" viewBox="0 0 1180 760" role="img" aria-label="Frontend Module Map">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/></marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.12"/></filter>
+    <style>
+      .title{font:700 28px Inter,Arial,sans-serif;fill:#0f172a}.label{font:700 16px Inter,Arial,sans-serif;fill:#0f172a}.small{font:500 12px Inter,Arial,sans-serif;fill:#475569}.tiny{font:500 11px Inter,Arial,sans-serif;fill:#64748b}.note{font:600 12px Inter,Arial,sans-serif;fill:#334155}.arrow{stroke:#334155;stroke-width:2.2;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="32" y="42" class="title">Frontend Module Map</text>
+  
+<rect x="455" y="80" width="270" height="95" rx="8" fill="#ecfeff" stroke="#cbd5e1" filter="url(#shadow)"/><text x="471" y="108" class="label">SentriFaceApp.jsx</text><text x="471" y="132" class="small">Application shell</text><text x="471" y="149" class="small">Navigation tabs</text><text x="471" y="166" class="small">Global Mantine providers</text>
+<rect x="80" y="230" width="245" height="110" rx="8" fill="#f0fdf4" stroke="#cbd5e1" filter="url(#shadow)"/><text x="96" y="258" class="label">useSentriFaceController</text><text x="96" y="282" class="small">API orchestration</text><text x="96" y="299" class="small">Shared state</text><text x="96" y="316" class="small">Actions and loading flags</text>
+<rect x="390" y="230" width="180" height="110" rx="8" fill="#f8fafc" stroke="#cbd5e1" filter="url(#shadow)"/><text x="406" y="258" class="label">constants.js</text><text x="406" y="282" class="small">Tabs</text><text x="406" y="299" class="small">Defaults</text><text x="406" y="316" class="small">API paths</text>
+<rect x="610" y="230" width="180" height="110" rx="8" fill="#f8fafc" stroke="#cbd5e1" filter="url(#shadow)"/><text x="626" y="258" class="label">utils.js</text><text x="626" y="282" class="small">Image URL helpers</text><text x="626" y="299" class="small">Formatting</text><text x="626" y="316" class="small">Confidence labels</text>
+<rect x="850" y="230" width="245" height="110" rx="8" fill="#fff7ed" stroke="#cbd5e1" filter="url(#shadow)"/><text x="866" y="258" class="label">Shared.jsx</text><text x="866" y="282" class="small">Reusable UI pieces</text><text x="866" y="299" class="small">Image frames</text><text x="866" y="316" class="small">Result cards</text><text x="866" y="333" class="small">Status states</text>
+<rect x="55" y="440" width="235" height="120" rx="8" fill="#eef2ff" stroke="#cbd5e1" filter="url(#shadow)"/><text x="71" y="468" class="label">RecognizeView</text><text x="71" y="492" class="small">Upload/preview</text><text x="71" y="509" class="small">Recognition result</text><text x="71" y="526" class="small">Follow-up form</text>
+<rect x="335" y="440" width="235" height="120" rx="8" fill="#eef2ff" stroke="#cbd5e1" filter="url(#shadow)"/><text x="351" y="468" class="label">QueueView</text><text x="351" y="492" class="small">Pending recognitions</text><text x="351" y="509" class="small">Accept existing</text><text x="351" y="526" class="small">Create new person</text><text x="351" y="543" class="small">Added by field</text>
+<rect x="615" y="440" width="235" height="120" rx="8" fill="#eef2ff" stroke="#cbd5e1" filter="url(#shadow)"/><text x="631" y="468" class="label">PeopleView</text><text x="631" y="492" class="small">People cards</text><text x="631" y="509" class="small">Photo library</text><text x="631" y="526" class="small">Bounded image viewer</text>
+<rect x="895" y="440" width="235" height="120" rx="8" fill="#eef2ff" stroke="#cbd5e1" filter="url(#shadow)"/><text x="911" y="468" class="label">DebugView</text><text x="911" y="492" class="small">Engine health</text><text x="911" y="509" class="small">API state</text><text x="911" y="526" class="small">Runtime info</text>
+<rect x="392" y="625" width="395" height="80" rx="8" fill="#fef2f2" stroke="#cbd5e1" filter="url(#shadow)"/><text x="408" y="653" class="label">RecognitionFollowupForm</text><text x="408" y="677" class="small">Shared form for new person / accept flows</text><text x="408" y="694" class="small">Queue mode includes Added by</text>
+<path class="arrow" d="M 590 175 L 205 230"/><path class="arrow" d="M 590 175 L 480 230"/><path class="arrow" d="M 590 175 L 700 230"/><path class="arrow" d="M 590 175 L 972 230"/>
+<path class="arrow" d="M 205 340 L 172 440"/><path class="arrow" d="M 205 340 L 452 440"/><path class="arrow" d="M 972 340 L 172 440"/><path class="arrow" d="M 972 340 L 452 440"/><path class="arrow" d="M 972 340 L 732 440"/><path class="arrow" d="M 972 340 L 1012 440"/>
+<path class="arrow" d="M 172 560 L 512 625"/><path class="arrow" d="M 452 560 L 512 625"/>
+
+</svg>
