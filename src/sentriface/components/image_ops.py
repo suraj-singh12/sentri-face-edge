@@ -34,6 +34,12 @@ def _cached_imread(path: str, mtime_ns: int, size: int) -> Any:
     return _cv2().imread(path)
 
 
+""" 
+OPTIMIZATION during pre-processing: 
+Resize the image size in RAM (not on disk) if it is larger than max_edge, 
+and return resized image & scale
+reduce memory, cpu usage significantly while recognizing
+"""
 def resize_max_edge(image: Any, max_edge: int) -> tuple[Any, float]:
     cv2 = _cv2()
     height, width = image.shape[:2]
@@ -44,11 +50,17 @@ def resize_max_edge(image: Any, max_edge: int) -> tuple[Any, float]:
     resized = cv2.resize(
         image,
         (int(width * scale), int(height * scale)),
-        interpolation=cv2.INTER_AREA,
+        interpolation=cv2.INTER_AREA,       # averages neighbouring pixels, 
+                    # results in cleaner face, better detector performance (boost) 
     )
     return resized, scale
 
 
+"""
+OPTIMIZATION during pre-processing: 
+Take the detected face, align it if possible, crop it safely, 
+and convert it into the exact format expected by the recognition model, i.e. a 112x112 size image 
+"""
 def crop_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
     cv2 = _cv2()
     if face.landmarks and len(face.landmarks) >= 5:
@@ -64,7 +76,10 @@ def crop_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
     crop = image[y1:y2, x1:x2]
     return cv2.resize(crop, (output_size, output_size), interpolation=cv2.INTER_AREA)
 
-
+"""
+Image -> Crop / Align face -> Save face image to disk -> Return saved path
+This is what helps keeping the People library with images. 
+"""
 def save_face_crop(image: Any, face: DetectedFace, output_path: Path, output_size: int = 112) -> str:
     cv2 = _cv2()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,6 +89,14 @@ def save_face_crop(image: Any, face: DetectedFace, output_path: Path, output_siz
     return str(output_path)
 
 
+"""
+OPTIMIZATION: during pre-processing
+Improves recognition accuracy
+Straightens and standardizes the face before recognition.
+# because same person + tilted face = lower similarity
+# same person + tilted face = stronger match
+> Face recognition models like ArcFace expect faces in a fixed layout
+"""
 def align_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
     cv2 = _cv2()
     np = _numpy()
