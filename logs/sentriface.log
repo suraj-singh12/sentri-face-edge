@@ -1,0 +1,4 @@
+2026-07-05 16:59:04.017 | INFO     | __main__:<module>:7 - Starting Sentriface CLI
+2026-07-05 17:13:58.252 | INFO     | __main__:<module>:8 - Starting Sentriface CLI
+2026-07-05 17:13:58.253 | INFO     | sentriface.components.onnx_components:__init__:56 - [OnnxScrfdDetector] | __init__()
+2026-07-05 17:13:58.253 | INFO     | sentriface.components.onnx_components:__init__:57 - self: 

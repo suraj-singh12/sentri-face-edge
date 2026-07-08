@@ -6,7 +6,13 @@ from typing import Any
 
 from sentriface.errors import InputImageError
 from sentriface.models import DetectedFace
+# Todo: crop_face() & crop_face_without_alignment() are similar!
 
+'''
+Pre-Processing: 
+OPTIMIZATION of image prior to sending it to model for processing.
+
+'''
 
 ARCFACE_TEMPLATE = (
     (38.2946, 51.6963),
@@ -34,13 +40,14 @@ def _cached_imread(path: str, mtime_ns: int, size: int) -> Any:
     return _cv2().imread(path)
 
 
-""" 
-OPTIMIZATION during pre-processing: 
-Resize the image size in RAM (not on disk) if it is larger than max_edge, 
-and return resized image & scale
-reduce memory, cpu usage significantly while recognizing
-"""
+
 def resize_max_edge(image: Any, max_edge: int) -> tuple[Any, float]:
+    """ 
+    OPTIMIZATION during pre-processing: 
+    Resize the image size in RAM (not on disk) if it is larger than max_edge, 
+    and return resized image & scale
+    -> reduces memory, cpu usage significantly while recognizing
+    """
     cv2 = _cv2()
     height, width = image.shape[:2]
     longest = max(height, width)
@@ -56,16 +63,19 @@ def resize_max_edge(image: Any, max_edge: int) -> tuple[Any, float]:
     return resized, scale
 
 
-"""
-OPTIMIZATION during pre-processing: 
-Take the detected face, align it if possible, crop it safely, 
-and convert it into the exact format expected by the recognition model, i.e. a 112x112 size image 
-"""
 def crop_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
+    """
+    Extract a face crop suitable for the recognition model.
+    If the detection contains facial landmarks (typically from SCRFD),
+    the face is first aligned to the ArcFace template to improve
+    recognition accuracy.
+    If landmarks are unavailable, falls back to a simple bounding-box
+    crop and resize.
+    """
     cv2 = _cv2()
     if face.landmarks and len(face.landmarks) >= 5:
         return align_face(image, face, output_size)
-
+    
     height, width = image.shape[:2]
     x1 = max(0, face.box.x)
     y1 = max(0, face.box.y)
@@ -76,11 +86,12 @@ def crop_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
     crop = image[y1:y2, x1:x2]
     return cv2.resize(crop, (output_size, output_size), interpolation=cv2.INTER_AREA)
 
-"""
-Image -> Crop / Align face -> Save face image to disk -> Return saved path
-This is what helps keeping the People library with images. 
-"""
+
 def save_face_crop(image: Any, face: DetectedFace, output_path: Path, output_size: int = 112) -> str:
+    """
+    Image -> Crop / Align face -> Save face image to disk -> Return saved path
+    This is what helps keeping the People library with images. 
+    """
     cv2 = _cv2()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     crop = crop_face(image, face, output_size=output_size)
@@ -98,6 +109,14 @@ Straightens and standardizes the face before recognition.
 > Face recognition models like ArcFace expect faces in a fixed layout
 """
 def align_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
+    """
+    Align a detected face using its five facial landmarks.
+    The detected landmarks are mapped to the canonical ArcFace landmark
+    template using an affine transformation, producing a normalized
+    face crop of the requested output size.
+    If the transformation cannot be estimated, a simple crop is used
+    as a fallback.
+    """
     cv2 = _cv2()
     np = _numpy()
     source = np.array(face.landmarks[:5], dtype=np.float32)
@@ -117,6 +136,12 @@ def align_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
 
 
 def crop_face_without_alignment(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
+    """
+    Crop the face directly from its bounding box without alignment.
+    Used as a fallback when facial landmarks are unavailable or
+    alignment fails. The cropped face is resized to the required
+    output size.
+    """
     cv2 = _cv2()
     height, width = image.shape[:2]
     x1 = max(0, face.box.x)
