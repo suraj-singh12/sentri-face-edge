@@ -6,6 +6,9 @@ from __future__ import annotations
 # logger.info("Starting Sentriface CLI")
 # # Logger setup END
 
+# Cli only system
+# TODO: can be removed, and fastAPI used
+
 import argparse
 import json
 from pathlib import Path

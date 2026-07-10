@@ -11,6 +11,7 @@ class HardwareProfile:
     tier: str
     reason: str
 
+# TODO: Check if confidence scores are same in UI and here, remove capability from UI.
 
 @dataclass(frozen=True)
 class RuntimeConfig:

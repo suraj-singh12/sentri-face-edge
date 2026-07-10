@@ -28,6 +28,9 @@ from sentriface.models import (
     RecognitionResult,
     RejectedFace,
 )
+# TODO: To be replaced with FastApi
+# It is an adapter which connects react to python code.  
+
 
 STATIC_DIR = Path(__file__).with_name("ui_static")
 UPLOAD_RESIZE_LIMIT_BYTES = 1_000_000
