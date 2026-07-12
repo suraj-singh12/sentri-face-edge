@@ -258,18 +258,42 @@ button {
 }
 
 .queue-workspace {
-  min-height: calc(100dvh - 160px);
+  height: calc(100dvh - 152px);
+  min-height: 0;
+  overflow: hidden;
   background: transparent;
   border-color: transparent;
   padding: 0 !important;
 }
 
 .queue-shell-grid {
-  min-height: calc(100dvh - 190px);
+  height: 100%;
+  min-height: 0;
+}
+
+.queue-shell-grid > .mantine-Grid-inner {
+  height: 100%;
+}
+
+.queue-sidebar-col {
+  flex: 0 0 360px;
+  max-width: 360px;
+  height: 100%;
+  min-height: 0;
+}
+
+.queue-main-col {
+  flex: 1 1 0;
+  max-width: none;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
 }
 
 .queue-sidebar {
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
   padding-right: 18px;
   border-right: 1px solid var(--sentriface-card-border);
 }
@@ -283,15 +307,20 @@ button {
 }
 
 .queue-upload-card {
-  min-height: 210px;
+  min-height: 184px;
 }
 
 .queue-side-card {
-  padding: 16px;
+  padding: 14px;
 }
 
 .queue-review-list {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-left: 4px;
+  padding-right: 8px;
 }
 
 .queue-list-divider {
@@ -301,7 +330,7 @@ button {
 }
 
 .queue-group-row {
-  min-height: 150px;
+  min-height: 138px;
 }
 
 .queue-row-media {
@@ -310,30 +339,63 @@ button {
 }
 
 .queue-row-copy {
-  flex: 1 1 260px;
+  flex: 1 1 320px;
+  min-width: 260px;
 }
 
 .queue-preview-mosaic {
-  flex: 0 0 430px;
+  flex: 0 0 300px;
   min-width: 0;
 }
 
 .queue-preview-main {
-  width: 162px;
+  width: 132px;
   height: 112px;
-  flex: 0 0 162px;
+  flex: 0 0 132px;
 }
 
 .queue-preview-thumbs {
   display: grid;
-  grid-template-columns: repeat(3, 68px);
+  grid-template-columns: repeat(2, 58px);
+  grid-template-rows: repeat(2, 51px);
   gap: 10px;
 }
 
 .queue-preview-thumbs .mantine-Image-root,
 .queue-preview-thumbs img {
-  width: 68px !important;
-  height: 52px !important;
+  width: 58px !important;
+  height: 51px !important;
+}
+
+.queue-thumb-wrap {
+  position: relative;
+  width: 58px;
+  height: 51px;
+  overflow: hidden;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.queue-thumb-more {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: white;
+  font-weight: 800;
+  background: rgba(2, 8, 16, 0.56);
+}
+
+.queue-row-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.queue-row-meta {
+  white-space: normal;
+}
+
+.queue-row-copy .mantine-Badge-root {
+  max-width: none;
 }
 
 .people-gallery-shell,
@@ -736,6 +798,24 @@ button {
   .queue-sidebar {
     padding-right: 0;
     border-right: 0;
+  }
+
+  .queue-workspace,
+  .queue-shell-grid,
+  .queue-shell-grid > .mantine-Grid-inner,
+  .queue-sidebar-col,
+  .queue-main-col {
+    height: auto;
+  }
+
+  .queue-sidebar-col {
+    flex-basis: auto;
+    max-width: none;
+  }
+
+  .queue-review-list {
+    height: auto;
+    overflow: visible;
   }
 
   .queue-group-row > .mantine-Group-root {

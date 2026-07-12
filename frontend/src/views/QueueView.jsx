@@ -58,9 +58,9 @@ export function QueueView({
 }) {
   return (
     <Paper withBorder radius="md" p="md" className="queue-workspace">
-      <Grid gutter="xl" className="queue-shell-grid">
+      <Grid gutter="lg" className="queue-shell-grid">
         {!queueSelectedGroup && (
-          <Grid.Col span={{ base: 12, md: 4 }}>
+          <Grid.Col span={{ base: 12, md: "content" }} className="queue-sidebar-col">
             <QueueInputPanel
               sessionId={queueSessionId}
               onFiles={onFiles}
@@ -70,7 +70,7 @@ export function QueueView({
             />
           </Grid.Col>
         )}
-        <Grid.Col span={queueSelectedGroup ? 12 : { base: 12, md: 8 }}>
+        <Grid.Col span={queueSelectedGroup ? 12 : "auto"} className="queue-main-col">
           {queueSelectedGroup ? (
             <QueueGroupReview
               group={queueSelectedGroup}
@@ -174,8 +174,8 @@ function QueueGroupList({ groups, onOpen }) {
                 <Group gap="lg" wrap="nowrap" className="queue-row-media">
                   <QueuePreviewMosaic faces={group.faces} />
                   <Box miw={0} className="queue-row-copy">
-                    <Text fw={800} size="lg" truncate>{recognitionText(best)}</Text>
-                    <Text size="sm" c="dimmed">{group.group_id} • {group.faces.length} image{group.faces.length === 1 ? "" : "s"}</Text>
+                    <Text fw={800} size="lg" className="queue-row-title">{recognitionText(best)}</Text>
+                    <Text size="sm" c="dimmed" className="queue-row-meta">{group.group_id} • {group.faces.length} image{group.faces.length === 1 ? "" : "s"}</Text>
                     <Group gap="sm" mt="md">
                       {best && <Badge color={scoreColorName} variant="light" size="lg">{scoreLabel}</Badge>}
                       {best && <Badge color={scoreColorName} variant="light" size="lg">{best.score.toFixed(3)}</Badge>}
@@ -198,13 +198,17 @@ function QueueGroupList({ groups, onOpen }) {
 
 function QueuePreviewMosaic({ faces }) {
   const primary = faces[0];
-  const thumbnails = faces.slice(1, 7);
+  const thumbnails = faces.slice(1, 5);
+  const overflowCount = Math.max(0, faces.length - 5);
   return (
     <Group gap="md" wrap="nowrap" className="queue-preview-mosaic">
       <Image src={mediaUrl(primary.crop_path || primary.source_image)} alt="group preview" fit="cover" className="queue-preview-main" radius="sm" />
       <Box className="queue-preview-thumbs">
-        {thumbnails.map((face) => (
-          <Image key={face.init_face_id} src={mediaUrl(face.crop_path || face.source_image)} alt="group thumbnail" fit="cover" radius="sm" />
+        {thumbnails.map((face, index) => (
+          <Box key={face.init_face_id} className="queue-thumb-wrap">
+            <Image src={mediaUrl(face.crop_path || face.source_image)} alt="group thumbnail" fit="cover" radius="sm" />
+            {overflowCount > 0 && index === thumbnails.length - 1 && <Box className="queue-thumb-more">+{overflowCount}</Box>}
+          </Box>
         ))}
       </Box>
     </Group>
