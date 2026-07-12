@@ -160,12 +160,17 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
   const openQueueGallery = async (personId) => {
     if (!personId) return;
     setQueueGallery(await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`));
-    setQueueGalleryImage(null);
   };
 
   const queueGalleryBack = () => {
-    if (queueGalleryImage) setQueueGalleryImage(null);
-    else setQueueGallery(null);
+    setQueueGallery(null);
+  };
+
+  const selectQueueGalleryImage = (path) => {
+    const embedding = queueGallery?.embeddings?.find((record) => (
+      record.source_image === path || record.crop_path === path
+    ));
+    setQueueGalleryImage(embedding?.source_image || path);
   };
 
   function selectedQueueFaceIds() {
@@ -241,7 +246,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
       confirmQueueFollowup,
       clearQueueFollowupForm,
       openQueueGallery,
-      setQueueGalleryImage,
+      setQueueGalleryImage: selectQueueGalleryImage,
       queueGalleryBack,
       closeQueueReview,
     },

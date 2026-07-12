@@ -398,6 +398,19 @@ button {
   max-width: none;
 }
 
+.queue-decision-actions {
+  min-height: 56px;
+}
+
+.queue-decision-actions .mantine-Button-root {
+  min-width: 0;
+}
+
+.queue-decision-actions .mantine-Button-label {
+  white-space: normal;
+  text-align: center;
+}
+
 .people-gallery-shell,
 .queue-review-shell {
   min-height: 0;

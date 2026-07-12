@@ -19,6 +19,7 @@ import {
   IconArrowLeft,
   IconChevronRight,
   IconCopy,
+  IconTrash,
   IconEye,
   IconFolderOpen,
   IconPhotoUp,
@@ -279,15 +280,16 @@ function QueueGroupReview({
           <Surface title="Suggested Match" subtitle="Select images before accepting.">
             {gallery
               ? <GalleryPanel payload={gallery} selectedImage={galleryImage} onImage={onGalleryImage} onBack={onGalleryBack} />
-              : <BestMatchPanel best={best} face={{ index: 1 }} onGallery={onGallery} />}
-            <SimpleGrid cols={{ base: 1, sm: 2 }} mt="md">
+              : <BestMatchPanel best={best} face={{ index: 1 }} selectedImage={galleryImage} onGallery={onGallery} />}
+            <Group grow mt="md" className="queue-decision-actions">
               <Button onClick={onAcceptExisting} disabled={!best || isNewPersonSuggestion(best) || !selectedCount || accepted}>
                 {best && !isNewPersonSuggestion(best) ? `Accept as ${best.name}` : "Accept"}
               </Button>
               <Button variant="light" onClick={onNewPerson} disabled={!selectedCount || accepted || shouldFadeNewPerson}>New Person</Button>
-              <Button color="red" variant="light" onClick={onDiscard} disabled={!selectedCount || accepted}>Discard</Button>
-              <Button variant="subtle" onClick={onBack}>Back</Button>
-            </SimpleGrid>
+              <Button color="red" variant="light" leftSection={<IconTrash size={17} />} onClick={onDiscard} disabled={!selectedCount || accepted}>
+                Reject selected
+              </Button>
+            </Group>
           </Surface>
         </Grid.Col>
       </Grid>
