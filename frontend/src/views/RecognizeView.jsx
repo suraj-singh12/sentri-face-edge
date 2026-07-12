@@ -1,5 +1,5 @@
-import { Box, Button, Grid, Group, Image, Paper, Stack } from "@mantine/core";
-import { IconTrash, IconUserCheck, IconUserPlus } from "@tabler/icons-react";
+import { Badge, Box, Button, Grid, Group, Image, Paper, Stack, Text, ThemeIcon } from "@mantine/core";
+import { IconBulb, IconFolder, IconTrash, IconUserCheck, IconUserPlus } from "@tabler/icons-react";
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
 import {
@@ -37,41 +37,64 @@ export function RecognizeView({
   const topMostMatch = recognition?.face?.matches?.[0] || null;
   const isExistingPerson = topMostMatch?.score > MATCH_TEXT_THRESHOLDS.newPerson;
   const shouldFadeNewPerson = hasCertainMatch(topMostMatch);
+  const quality = recognition?.face?.quality;
 
   return (
     <>
       <input ref={recognizeFileRef} className="hidden-file" type="file" accept="image/*" onChange={onRecognizeFile} />
-      <Paper withBorder radius="md" p="md">
+      <Paper withBorder radius="md" p="md" className="recognize-workspace">
         <Stack gap="md">
           <Grid align="stretch" className="recognize-grid">
             <Grid.Col span={{ base: 12, md: 7 }}>
-              <Surface title="Input Image" subtitle={recognition?.inputPath || "Load one photo to recognize."} action={recognition?.inputPath ? (
-                <Button variant="light" onClick={onLoadAnother}>Load Another</Button>
-              ) : null}>
+              <Surface step="1" title="Input Image" subtitle={recognition?.inputPath || "Upload or select a photo to recognize"} action={(
+                <Button variant="default" leftSection={<IconFolder size={18} />} onClick={onLoadAnother}>Load Another</Button>
+              )}>
                 <ImageFrame>
                   {recognition?.inputPath
                     ? <Image src={mediaUrl(recognition.inputPath)} alt="input" fit="contain" h="100%" />
                     : <LoadImagePanel onClick={onLoadAnother} />}
                 </ImageFrame>
                 <Box className="quality-slot">
-                  {recognition?.face?.quality && <InputImageQuality quality={recognition.face.quality} />}
+                  {quality ? (
+                    <InputImageQuality quality={quality} />
+                  ) : (
+                    <Paper withBorder radius="md" p="sm" className="quality-placeholder">
+                      <Group grow>
+                        <Group gap="sm" wrap="nowrap">
+                          <Text size="sm">Face Quality</Text>
+                          <Badge color="dark" variant="light">-</Badge>
+                        </Group>
+                        <Group gap="sm" wrap="nowrap">
+                          <Text size="sm">Detection</Text>
+                          <Badge color="dark" variant="light">-</Badge>
+                        </Group>
+                      </Group>
+                    </Paper>
+                  )}
                 </Box>
               </Surface>
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 5 }}>
-              <Surface title="Best Match" subtitle={recognition?.face ? `Face ${recognition.face.index}` : "No result yet."}>
+              <Surface step="2" title="Recognition Result" subtitle="Best match from your people database">
                 {recognitionGallery
                   ? <GalleryPanel payload={recognitionGallery} selectedImage={recognitionGalleryImage} onImage={onGalleryImage} onBack={onGalleryBack} />
-                  : <BestMatchPanel best={topMostMatch} face={recognition?.face} onGallery={onGallery} />}
+                  : <BestMatchPanel best={topMostMatch} face={recognition?.face} selectedImage={recognitionGalleryImage} onGallery={onGallery} />}
               </Surface>
             </Grid.Col>
           </Grid>
           <Group grow className="action-slot">
-            <Button leftSection={<IconUserCheck size={17} />} onClick={onAccept} disabled={!topMostMatch || !isExistingPerson || recognitionAccepted}>
+            <Button className="recognize-action recognize-action--accept" leftSection={<IconUserCheck size={20} />} onClick={onAccept} disabled={!topMostMatch || !isExistingPerson || recognitionAccepted}>
               {topMostMatch && isExistingPerson ? `Accept as ${topMostMatch.name}` : "Accept"}
+              <Text component="span" size="xs" fw={400}>Add this photo to this person</Text>
             </Button>
-            <Button variant="light" leftSection={<IconUserPlus size={17} />} onClick={onNew} disabled={!recognition || recognitionAccepted || shouldFadeNewPerson}>New Person</Button>
-            <Button color="red" variant="light" leftSection={<IconTrash size={17} />} onClick={onClear}>Clear</Button>
+            <Button className="recognize-action recognize-action--new" variant="light" leftSection={<IconUserPlus size={20} />} onClick={onNew} disabled={!recognition || recognitionAccepted || shouldFadeNewPerson}>
+              New Person
+              <Text component="span" size="xs" fw={400}>Create a new person from this photo</Text>
+            </Button>
+            <Button className="recognize-action recognize-action--clear" color="red" variant="light" leftSection={<IconTrash size={20} />} onClick={onClear}>
+              Clear
+              <Text component="span" size="xs" fw={400}>Reset and try another photo</Text>
+            </Button>
           </Group>
         </Stack>
       </Paper>
@@ -85,6 +108,10 @@ export function RecognizeView({
         />
       )}
       {recognition?.metrics && <Metrics metrics={recognition.metrics} />}
+      <Group justify="center" mt="xs" className="recognize-tip">
+        <ThemeIcon size="sm" variant="subtle" color="gray"><IconBulb size={15} /></ThemeIcon>
+        <Text size="xs" c="dimmed">Tip: Use high quality, front-facing photos for best recognition results.</Text>
+      </Group>
     </>
   );
 }

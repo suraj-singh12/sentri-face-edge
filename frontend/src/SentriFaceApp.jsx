@@ -35,11 +35,11 @@ function SentriFaceShell() {
   const nextColorScheme = computedColorScheme === "dark" ? "light" : "dark";
 
   return (
-    <AppShell header={{ height: 74 }} padding="md">
-      <AppShell.Header>
+    <AppShell header={{ height: 72 }} padding="sm" className="sentriface-shell">
+      <AppShell.Header className="sentriface-header">
         <Group h="100%" px="xl" justify="space-between" wrap="nowrap">
           <Box miw={0}>
-            <Title order={2} size="h3">SentriFace Edge</Title>
+            <Title order={2} size="h3" className="brand-title">SentriFace <Text span inherit c="teal.4">Edge</Text></Title>
             <Text size="xs" c="dimmed" truncate>{profileLine(state.profile)}</Text>
           </Box>
           <Group gap="xs" wrap="nowrap">
@@ -68,7 +68,7 @@ function SentriFaceShell() {
       </AppShell.Header>
 
       <AppShell.Main>
-        <Tabs value={state.activeView} onChange={actions.setActiveView} keepMounted={false}>
+        <Tabs value={state.activeView} onChange={actions.setActiveView} keepMounted={false} className="sentriface-tabs">
           <Tabs.List mb="md">
             {VIEWS.map((view) => <Tabs.Tab key={view} value={view}>{tabLabel(view)}</Tabs.Tab>)}
           </Tabs.List>

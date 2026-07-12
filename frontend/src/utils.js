@@ -52,7 +52,7 @@ export function qualityColor(status) {
 
 export function profileLine(profile) {
   if (!profile) return "Starting local engine...";
-  return `${profile.runtime} runtime | ${profile.hardware_tier} profile | ${profile.onnx_intra_threads} ONNX thread(s) | DB ${profile.db_path}`;
+  return `${profile.runtime.toUpperCase()} Runtime • ${titleCase(profile.hardware_tier)} Profile • ${profile.onnx_intra_threads} Threads • DB: ${profile.db_path}`;
 }
 
 export function tabLabel(view) {
@@ -140,6 +140,14 @@ async function collectEntryFiles(entry, files) {
     await Promise.all(batch.map((item) => collectEntryFiles(item, files)));
     batch = await readEntries(reader);
   }
+}
+
+function titleCase(value) {
+  return String(value || "")
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function entryFile(entry) {

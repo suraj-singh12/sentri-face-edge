@@ -132,12 +132,17 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
   const openRecognitionGallery = async (personId) => {
     if (!personId) return;
     setRecognitionGallery(await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`));
-    setRecognitionGalleryImage(null);
   };
 
   const recognitionGalleryBack = () => {
-    if (recognitionGalleryImage) setRecognitionGalleryImage(null);
-    else setRecognitionGallery(null);
+    setRecognitionGallery(null);
+  };
+
+  const selectRecognitionGalleryImage = (path) => {
+    const embedding = recognitionGallery?.embeddings?.find((record) => (
+      record.source_image === path || record.crop_path === path
+    ));
+    setRecognitionGalleryImage(embedding?.source_image || path);
   };
 
   function openRecognitionFollowup({ name, personId, embeddingId, decision, action }) {
@@ -178,7 +183,7 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
       recognitionNew,
       recognitionClear,
       openRecognitionGallery,
-      setRecognitionGalleryImage,
+      setRecognitionGalleryImage: selectRecognitionGalleryImage,
       recognitionGalleryBack,
       updateRecognitionFollowup,
       confirmRecognitionFollowup,

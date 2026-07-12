@@ -12,7 +12,7 @@
 
 body {
   margin: 0;
-  background: var(--mantine-color-body);
+  background: var(--sentriface-app-bg);
   overflow-y: scroll;
 }
 
@@ -26,6 +26,9 @@ button {
 
 .surface-card {
   overflow: hidden;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+  box-shadow: var(--sentriface-card-shadow);
 }
 
 .surface-card > .mantine-Stack-root {
@@ -33,16 +36,87 @@ button {
 }
 
 .recognize-grid {
-  min-height: 440px;
+  height: clamp(430px, calc(100dvh - 260px), 560px);
+  min-height: 0;
+}
+
+.recognize-grid > .mantine-Grid-inner {
+  height: 100%;
+}
+
+.recognize-grid .mantine-Grid-col {
+  height: 100%;
+  min-height: 0;
 }
 
 .action-slot {
-  min-height: 42px;
+  min-height: 58px;
 }
 
 .quality-slot {
-  min-height: 48px;
+  min-height: 46px;
   overflow: auto;
+}
+
+.sentriface-shell .mantine-AppShell-main {
+  background: transparent;
+}
+
+.sentriface-shell .mantine-AppShell-main {
+  min-height: calc(100dvh - 72px);
+}
+
+.sentriface-header {
+  background: var(--sentriface-header-bg);
+  border-bottom-color: var(--sentriface-card-border);
+  backdrop-filter: blur(16px);
+}
+
+.brand-title {
+  letter-spacing: 0;
+}
+
+.sentriface-tabs .mantine-Tabs-list {
+  border-bottom-color: var(--sentriface-card-border);
+  margin-bottom: 10px;
+}
+
+.sentriface-tabs .mantine-Tabs-tab {
+  height: 36px;
+  min-width: 116px;
+  font-weight: 600;
+  color: var(--sentriface-tab-color);
+}
+
+.sentriface-tabs .mantine-Tabs-tab[data-active] {
+  color: var(--mantine-color-teal-3);
+}
+
+.recognize-workspace {
+  background: transparent;
+  border-color: transparent;
+  padding: 0 !important;
+}
+
+.surface-title-block {
+  position: relative;
+  padding-left: 42px;
+}
+
+.surface-title-block::before {
+  content: attr(data-step);
+  position: absolute;
+  left: 0;
+  top: 2px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: white;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--mantine-color-teal-7), var(--mantine-color-green-5));
+  box-shadow: 0 8px 22px rgba(16, 185, 129, 0.2);
 }
 
 .mantine-click-card {
@@ -74,10 +148,26 @@ button {
 .result-photo-card {
   display: grid;
   place-items: center;
-  flex: 0 0 200px;
-  height: 200px;
+  flex: 0 0 auto;
+  height: clamp(150px, 23dvh, 230px);
   overflow: hidden;
   background: var(--sentriface-muted-surface);
+}
+
+.result-photo-card--match {
+  min-height: 0;
+  height: clamp(180px, 26dvh, 260px);
+  padding: 8px !important;
+}
+
+.match-result-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--mantine-radius-md);
 }
 
 .result-photo-placeholder,
@@ -90,6 +180,16 @@ button {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  gap: 10px;
+}
+
+.no-result-panel {
+  justify-content: stretch;
+}
+
+.match-title {
+  line-height: 1.05;
+  font-size: clamp(1.35rem, 2dvw, 1.9rem);
 }
 
 .image-frame {
@@ -97,7 +197,7 @@ button {
   place-items: center;
   width: 100%;
   min-height: 180px;
-  height: 320px;
+  height: clamp(270px, 39dvh, 340px);
   overflow: hidden;
   border: 1px solid var(--sentriface-border);
   border-radius: var(--mantine-radius-md);
@@ -140,7 +240,8 @@ button {
   min-height: 0;
   height: 100%;
   border-style: dashed;
-  background: var(--sentriface-muted-surface);
+  border-color: var(--sentriface-drop-border);
+  background: var(--sentriface-drop-bg);
 }
 
 .load-image-panel {
@@ -201,25 +302,130 @@ button {
 }
 
 .match-identity-summary {
+  padding: 12px !important;
   border-color: var(--sentriface-accent-border);
+  background: var(--sentriface-summary-bg);
 }
 
 .match-identity-score {
   color: var(--sentriface-accent-text);
 }
 
+.match-identity-placeholder {
+  padding: 12px !important;
+  border-color: var(--sentriface-accent-border);
+  background: var(--sentriface-muted-surface);
+}
+
+.quality-placeholder,
+.quality-slot .mantine-Stack-root {
+  height: 100%;
+  border-color: var(--sentriface-card-border);
+  background: var(--sentriface-muted-surface);
+}
+
+.quality-slot .mantine-Divider-root {
+  display: none;
+}
+
+.quality-slot .mantine-Stack-root {
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--mantine-radius-md);
+}
+
+.recognize-action {
+  height: 58px;
+}
+
+.recognize-action .mantine-Button-inner {
+  align-items: center;
+  justify-content: center;
+}
+
+.recognize-action .mantine-Button-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.recognize-action--accept:not(:disabled) {
+  background: linear-gradient(135deg, #0f8f4e, #31a56e);
+}
+
+.recognize-action--new:not(:disabled) {
+  color: var(--sentriface-new-action-color);
+  background: var(--sentriface-new-action-bg);
+}
+
+.recognize-action--clear {
+  color: var(--mantine-color-red-0);
+  background: linear-gradient(135deg, rgba(185, 28, 28, 0.86), rgba(127, 29, 29, 0.88));
+}
+
+.recognize-action--clear:hover {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.9), rgba(153, 27, 27, 0.92));
+}
+
+.recognize-tip {
+  opacity: 0.86;
+  margin-top: 6px !important;
+}
+
 :root[data-mantine-color-scheme="light"] {
+  --sentriface-app-bg:
+    radial-gradient(circle at 18% 8%, rgba(16, 185, 129, 0.08), transparent 28rem),
+    linear-gradient(135deg, #f8fafc 0%, #eef4f8 48%, #f8fafc 100%);
+  --sentriface-header-bg: rgba(255, 255, 255, 0.9);
+  --sentriface-card-bg: rgba(255, 255, 255, 0.82);
+  --sentriface-card-border: rgba(15, 23, 42, 0.12);
+  --sentriface-card-shadow: 0 18px 46px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --sentriface-tab-color: var(--mantine-color-gray-7);
   --sentriface-muted-surface: var(--mantine-color-gray-0);
   --sentriface-border: var(--mantine-color-gray-3);
   --sentriface-accent-border: var(--mantine-color-teal-2);
   --sentriface-accent-text: var(--mantine-color-teal-9);
+  --sentriface-drop-border: rgba(13, 148, 136, 0.38);
+  --sentriface-drop-bg:
+    radial-gradient(circle at 50% 45%, rgba(20, 184, 166, 0.08), transparent 14rem),
+    rgba(255, 255, 255, 0.58);
+  --sentriface-summary-bg: linear-gradient(135deg, rgba(20, 184, 166, 0.09), rgba(255, 255, 255, 0.72));
+  --sentriface-new-action-color: var(--mantine-color-blue-8);
+  --sentriface-new-action-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(148, 163, 184, 0.08));
+  --sentriface-metrics-bg: rgba(255, 255, 255, 0.78);
+  --sentriface-metrics-text: var(--mantine-color-green-9);
 }
 
 :root[data-mantine-color-scheme="dark"] {
-  --sentriface-muted-surface: var(--mantine-color-dark-6);
-  --sentriface-border: var(--mantine-color-dark-4);
-  --sentriface-accent-border: var(--mantine-color-teal-8);
-  --sentriface-accent-text: var(--mantine-color-teal-2);
+  --mantine-color-body: transparent;
+  --sentriface-app-bg:
+    radial-gradient(circle at 18% 8%, rgba(34, 197, 94, 0.08), transparent 28rem),
+    linear-gradient(135deg, #050b12 0%, #0a111a 46%, #101923 100%);
+  --sentriface-header-bg: rgba(5, 10, 17, 0.92);
+  --sentriface-card-bg:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
+    rgba(7, 13, 21, 0.78);
+  --sentriface-card-border: rgba(148, 163, 184, 0.18);
+  --sentriface-card-shadow: 0 18px 46px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --sentriface-tab-color: var(--mantine-color-gray-4);
+  --sentriface-muted-surface: rgba(15, 23, 42, 0.48);
+  --sentriface-border: rgba(148, 163, 184, 0.2);
+  --sentriface-accent-border: rgba(20, 184, 166, 0.62);
+  --sentriface-accent-text: var(--mantine-color-teal-3);
+  --sentriface-drop-border: rgba(20, 184, 166, 0.55);
+  --sentriface-drop-bg:
+    radial-gradient(circle at 50% 45%, rgba(20, 184, 166, 0.09), transparent 14rem),
+    rgba(2, 8, 16, 0.35);
+  --sentriface-summary-bg: linear-gradient(135deg, rgba(16, 185, 129, 0.11), rgba(15, 23, 42, 0.56));
+  --sentriface-new-action-color: var(--mantine-color-blue-2);
+  --sentriface-new-action-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(148, 163, 184, 0.08));
+  --sentriface-metrics-bg: rgba(2, 8, 16, 0.56);
+  --sentriface-metrics-text: var(--mantine-color-green-3);
 }
 
 .library-thumb-strip {
@@ -236,22 +442,182 @@ button {
 }
 
 .match-gallery-panel {
+  height: 100%;
   min-height: 0;
   overflow: hidden;
+  gap: 12px;
 }
 
-.match-gallery-selected-slot {
-  height: 220px;
-  min-height: 0;
-  overflow: hidden;
+.gallery-topbar {
+  flex: 0 0 auto;
 }
 
-.match-gallery-strip {
-  height: 102px;
+.gallery-person-row {
+  flex: 0 0 auto;
+}
+
+.gallery-toolbar {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+.gallery-search {
+  flex: 1 1 150px;
+  min-width: 0;
+  color: var(--mantine-color-dimmed);
+}
+
+.gallery-search .mantine-Input-input {
+  min-width: 0;
+}
+
+.gallery-view-toggle {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.match-gallery-grid-scroll {
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+}
+
+.match-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding-right: 4px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.gallery-photo-card {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px !important;
+  text-align: left;
+  background: color-mix(in srgb, var(--sentriface-muted-surface) 74%, transparent);
+}
+
+.match-gallery-list {
+  display: grid;
+  gap: 10px;
+  padding-right: 4px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.match-gallery-list .gallery-photo-card {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.match-gallery-list .gallery-photo-card .mantine-Image-root,
+.match-gallery-list .gallery-photo-card img {
+  height: 70px !important;
+}
+
+.gallery-photo-meta {
+  min-width: 0;
+}
+
+.gallery-photo-image {
+  width: 100%;
+  height: clamp(92px, 15dvh, 132px) !important;
+}
+
+.gallery-photo-wrap {
+  position: relative;
+}
+
+.gallery-selected-check {
+  position: absolute;
+  z-index: 1;
+  left: 4px;
+  top: 4px;
+}
+
+.followup-card,
+.metrics-card {
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.followup-card .mantine-Input-input {
+  min-height: 46px;
+}
+
+.followup-help {
+  background: var(--sentriface-muted-surface);
+  border-color: var(--sentriface-card-border);
+}
+
+.metrics-card .mantine-Textarea-input {
+  color: var(--sentriface-metrics-text);
+  background: var(--sentriface-metrics-bg);
+}
+
+.metrics-toggle {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  list-style: none;
+  user-select: none;
+}
+
+.metrics-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.metrics-toggle:hover {
+  background: color-mix(in srgb, var(--sentriface-muted-surface) 70%, transparent);
+}
+
+.metrics-hide-text {
+  display: none;
+}
+
+.metrics-chevron {
+  transition: transform 140ms ease;
+}
+
+.metrics-card[open] .metrics-chevron {
+  transform: rotate(180deg);
+}
+
+.metrics-card[open] .metrics-show-text {
+  display: none;
+}
+
+.metrics-card[open] .metrics-hide-text {
+  display: inline;
 }
 
 @media (max-width: 48em) {
+  .sentriface-tabs .mantine-Tabs-tab {
+    min-width: auto;
+  }
+
+  .recognize-grid {
+    height: auto;
+    min-height: 0;
+  }
+
+  .recognize-grid > .mantine-Grid-inner,
+  .recognize-grid .mantine-Grid-col {
+    height: auto;
+  }
+
   .image-frame {
     min-height: 240px;
     height: 280px;
@@ -273,7 +639,19 @@ button {
   }
 
   .result-photo-card {
-    flex-basis: 180px;
-    height: 180px;
+    height: 220px;
   }
+
+  .action-slot {
+    flex-direction: column;
+  }
+
+  .gallery-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .match-gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
 }
