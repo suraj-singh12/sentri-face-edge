@@ -157,7 +157,7 @@ button {
 .result-photo-card--match {
   min-height: 0;
   height: clamp(180px, 26dvh, 260px);
-  padding: 8px !important;
+  align-content: center;
 }
 
 .match-result-image {
@@ -255,6 +255,85 @@ button {
 .queue-dropzone {
   display: grid;
   place-items: center;
+}
+
+.queue-workspace {
+  min-height: calc(100dvh - 160px);
+  background: transparent;
+  border-color: transparent;
+  padding: 0 !important;
+}
+
+.queue-shell-grid {
+  min-height: calc(100dvh - 190px);
+}
+
+.queue-sidebar {
+  height: 100%;
+  padding-right: 18px;
+  border-right: 1px solid var(--sentriface-card-border);
+}
+
+.queue-upload-card,
+.queue-side-card,
+.queue-group-row {
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+  box-shadow: var(--sentriface-card-shadow);
+}
+
+.queue-upload-card {
+  min-height: 210px;
+}
+
+.queue-side-card {
+  padding: 16px;
+}
+
+.queue-review-list {
+  padding-left: 4px;
+}
+
+.queue-list-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--sentriface-card-border);
+}
+
+.queue-group-row {
+  min-height: 150px;
+}
+
+.queue-row-media {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.queue-row-copy {
+  flex: 1 1 260px;
+}
+
+.queue-preview-mosaic {
+  flex: 0 0 430px;
+  min-width: 0;
+}
+
+.queue-preview-main {
+  width: 162px;
+  height: 112px;
+  flex: 0 0 162px;
+}
+
+.queue-preview-thumbs {
+  display: grid;
+  grid-template-columns: repeat(3, 68px);
+  gap: 10px;
+}
+
+.queue-preview-thumbs .mantine-Image-root,
+.queue-preview-thumbs img {
+  width: 68px !important;
+  height: 52px !important;
 }
 
 .people-gallery-shell,
@@ -485,7 +564,7 @@ button {
 
 .match-gallery-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   padding-right: 4px;
   width: 100%;
@@ -652,6 +731,42 @@ button {
 
   .match-gallery-grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
+  .queue-sidebar {
+    padding-right: 0;
+    border-right: 0;
+  }
+
+  .queue-group-row > .mantine-Group-root {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .queue-row-media {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .queue-preview-mosaic {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .queue-preview-main {
+    width: 132px;
+    height: 96px;
+    flex-basis: 132px;
+  }
+
+  .queue-preview-thumbs {
+    grid-template-columns: repeat(3, 56px);
+  }
+
+  .queue-preview-thumbs .mantine-Image-root,
+  .queue-preview-thumbs img {
+    width: 56px !important;
+    height: 44px !important;
   }
 
 }
