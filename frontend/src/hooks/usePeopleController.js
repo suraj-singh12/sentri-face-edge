@@ -28,8 +28,8 @@ export function usePeopleController({ apiGet, apiPost, loadEvents, loadPeople, s
   };
 
   const peopleBack = () => {
-    if (peopleGalleryImage) setPeopleGalleryImage(null);
-    else setPeopleGallery(null);
+    setPeopleGalleryImage(null);
+    setPeopleGallery(null);
   };
 
   return {
