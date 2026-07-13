@@ -54,24 +54,11 @@ export function RecognizeView({
                     ? <Image src={mediaUrl(recognition.inputPath)} alt="input" fit="contain" h="100%" />
                     : <LoadImagePanel onClick={onLoadAnother} />}
                 </ImageFrame>
-                <Box className="quality-slot">
-                  {quality ? (
+                {quality && (
+                  <Box className="quality-slot">                
                     <InputImageQuality quality={quality} />
-                  ) : (
-                    <Paper withBorder radius="md" p="sm" className="quality-placeholder">
-                      <Group grow>
-                        <Group gap="sm" wrap="nowrap">
-                          <Text size="sm">Face Quality</Text>
-                          <Badge color="dark" variant="light">-</Badge>
-                        </Group>
-                        <Group gap="sm" wrap="nowrap">
-                          <Text size="sm">Detection</Text>
-                          <Badge color="dark" variant="light">-</Badge>
-                        </Group>
-                      </Group>
-                    </Paper>
-                  )}
-                </Box>
+                  </Box>
+                )}
               </Surface>
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 5 }}>

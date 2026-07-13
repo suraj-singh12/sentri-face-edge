@@ -36,7 +36,7 @@ button {
 }
 
 .recognize-grid {
-  height: clamp(430px, calc(100dvh - 260px), 560px);
+  height: clamp(430px, calc(100dvh - 270px), 560px);
   min-height: 0;
 }
 
@@ -149,7 +149,9 @@ button {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  height: clamp(150px, 23dvh, 230px);
+  /* height: clamp(150px, 30dvh, 230px); */
+  /* height: clamp(270px, 39dvh, 340px); */
+  height: 100%;
   overflow: hidden;
   background: var(--sentriface-muted-surface);
 }
@@ -158,6 +160,7 @@ button {
   min-height: 0;
   height: clamp(180px, 26dvh, 260px);
   align-content: center;
+  background: var(--sentriface-muted-surface);
 }
 
 .match-result-image {
@@ -197,7 +200,8 @@ button {
   place-items: center;
   width: 100%;
   min-height: 180px;
-  height: clamp(270px, 39dvh, 340px);
+  /* height: clamp(270px, 39dvh, 340px); */
+  height: 100%;
   overflow: hidden;
   border: 1px solid var(--sentriface-border);
   border-radius: var(--mantine-radius-md);

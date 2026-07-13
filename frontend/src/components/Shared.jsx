@@ -89,14 +89,14 @@ export function BestMatchPanel({ best, face, onGallery, selectedImage }) {
   if (!face) {
     return (
       <Stack className="best-match-panel no-result-panel">
-        <Paper withBorder radius="md" className="result-photo-card result-photo-placeholder">
+        <Paper withBorder radius="md" className="result-photo-card result-photo-placeholder" p="xl">
           <Stack align="center" gap="md">
             <ThemeIcon size={76} radius="xl" variant="light" color="blue"><IconUserCircle size={46} /></ThemeIcon>
             <Title order={2} size="h3">No result yet</Title>
             <Text size="sm" c="dimmed">Load an image on the left to start recognition.</Text>
           </Stack>
         </Paper>
-        <MatchIdentityPlaceholder />
+        {/* <MatchIdentityPlaceholder /> */}
       </Stack>
     );
   }
@@ -138,7 +138,7 @@ export function BestMatchPanel({ best, face, onGallery, selectedImage }) {
         </>
       ) : (
         <>
-          <Card withBorder p={0} component="button" className="mantine-click-card result-photo-card result-photo-card--match" onClick={() => onGallery(best.person_id)}>
+          <Card withBorder p={0} component="button" className="mantine-click-card result-photo-card--match" onClick={() => onGallery(best.person_id)}>
             {matchImage ? (
               <img
                 src={mediaUrl(matchImage)}
@@ -215,7 +215,7 @@ export function GalleryPanel({ payload, selectedImage, onImage, onBack }) {
           <ActionIcon variant="subtle" onClick={onBack} aria-label="Back to results"><IconArrowLeft size={20} /></ActionIcon>
           <Text fw={800} size="lg">Recognition Result</Text>
         </Group>
-        <Button variant="default">View Details</Button>
+        {/* <Button variant="default">View Details</Button> */}
       </Group>
       <Group gap="sm" wrap="nowrap" className="gallery-person-row">
         {selectedRecord?.thumbPath && <Image src={mediaUrl(selectedRecord.thumbPath)} alt={payload.person.name} fit="cover" h={68} w={68} radius="sm" />}
@@ -293,6 +293,7 @@ export function InputImageQuality({ quality }) {
     <Stack gap="xs">
       <Divider />
       <Group>
+        <Text fw={700}>Face Quality</Text>
         <Badge color={qualityColor(quality.status)}>{quality.status}</Badge>
         <Text fw={700}>score: {quality.score.toFixed(3)}</Text>
       </Group>
@@ -322,6 +323,7 @@ export function Metrics({ metrics }) {
         <Textarea
           value={JSON.stringify(metrics ?? {}, null, 2)}
           readOnly
+          autosize
           minRows={6}
           maxRows={6}
           styles={{ input: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", resize: "none" } }}
