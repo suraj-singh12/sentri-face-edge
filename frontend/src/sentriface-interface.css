@@ -930,10 +930,12 @@ button {
 }
 
 .recent-sighting-row {
+  width: 100%;
   padding: 8px;
   border: 1px solid var(--sentriface-card-border);
   border-radius: var(--mantine-radius-md);
   background: var(--sentriface-muted-surface);
+  text-align: left;
 }
 
 .sighting-thumb {
@@ -989,6 +991,11 @@ button {
 
 .people-sighting-card .mantine-Stack-root {
   flex: 1 1 auto;
+}
+
+.people-sighting-card {
+  width: 100%;
+  text-align: left;
 }
 
 .people-change-history-shell {

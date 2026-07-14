@@ -476,6 +476,16 @@ function PeopleGalleryView({ payload, selectedImage, onImage, onBack, onSave }) 
     onImage(path);
     if (activeTab === "overview") setActiveTab("photos");
   };
+  const selectSightingPhoto = (detail) => {
+    const record = imageRecords.find((item) => (
+      item.embeddingId === detail.embedding_id
+      || item.path === detail.image_path
+      || item.thumbPath === detail.image_path
+    ));
+    if (record?.path) onImage(record.path);
+    setActiveTab("photos");
+    window.setTimeout(() => tabContentRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }), 0);
+  };
   const changeTab = (value) => {
     setActiveTab(value || "overview");
     if (value && value !== "overview") {
@@ -542,6 +552,7 @@ function PeopleGalleryView({ payload, selectedImage, onImage, onBack, onSave }) 
             imageRecords={imageRecords}
             latestSightings={latestSightings}
             recentSightings={recentSightings}
+            onSighting={selectSightingPhoto}
             onSightings={() => changeTab("sightings")}
           />
         </Tabs.Panel>
@@ -557,7 +568,7 @@ function PeopleGalleryView({ payload, selectedImage, onImage, onBack, onSave }) 
           />
         </Tabs.Panel>
         <Tabs.Panel value="sightings">
-          <PeopleProfileSightings details={latestSightings} imageRecords={imageRecords} />
+          <PeopleProfileSightings details={latestSightings} imageRecords={imageRecords} onSighting={selectSightingPhoto} />
         </Tabs.Panel>
         <Tabs.Panel value="changes">
           <PeopleProfileChanges changes={changes} currentProfile={summaryProfile} />
@@ -582,7 +593,7 @@ function PeopleGalleryView({ payload, selectedImage, onImage, onBack, onSave }) 
   );
 }
 
-function PeopleProfileOverview({ profile, selectedPath, imageRecords, latestSightings, recentSightings, onSightings }) {
+function PeopleProfileOverview({ profile, selectedPath, imageRecords, latestSightings, recentSightings, onSighting, onSightings }) {
   const latest = latestSightings[0];
   return (
     <Grid mt="md" className="people-profile-content-grid">
@@ -601,7 +612,11 @@ function PeopleProfileOverview({ profile, selectedPath, imageRecords, latestSigh
       <Grid.Col span={{ base: 12, md: 4 }}>
         <Card withBorder radius="md" className="people-profile-panel">
           <Text fw={800} mb="md">Latest Sighting</Text>
-          {latest ? <SightingSummary detail={latest} /> : <Text size="sm" c="dimmed">No sightings recorded.</Text>}
+          {latest ? (
+            <Paper withBorder radius="md" p="sm" component="button" className="mantine-click-card recent-sighting-row" onClick={() => onSighting(latest)}>
+              <SightingSummary detail={latest} />
+            </Paper>
+          ) : <Text size="sm" c="dimmed">No sightings recorded.</Text>}
         </Card>
       </Grid.Col>
       <Grid.Col span={{ base: 12, md: 4 }}>
@@ -609,7 +624,7 @@ function PeopleProfileOverview({ profile, selectedPath, imageRecords, latestSigh
           <Text fw={800} mb="md">Recent Sightings</Text>
           <Stack gap="xs">
             {recentSightings.length ? recentSightings.map((detail) => (
-              <Group key={detail.detail_id} gap="sm" wrap="nowrap" className="recent-sighting-row">
+              <Group key={detail.detail_id} gap="sm" wrap="nowrap" component="button" className="mantine-click-card recent-sighting-row" onClick={() => onSighting(detail)}>
                 <ThemeIcon variant="light" color="gray" size="sm"><IconMapPin size={13} /></ThemeIcon>
                 <Box miw={0}>
                   <Text size="xs" truncate>{formatSeenDateTime(detail)}</Text>
@@ -679,11 +694,11 @@ function PeopleProfilePhotos({ payload, records, selectedRecord, selectedPath, s
   );
 }
 
-function PeopleProfileSightings({ details, imageRecords }) {
+function PeopleProfileSightings({ details, imageRecords, onSighting }) {
   return (
     <Stack mt="md" className="people-profile-list-panel">
       {details.length ? details.map((detail) => (
-        <Card key={detail.detail_id} withBorder radius="md" className="people-profile-panel people-sighting-card">
+        <Card key={detail.detail_id} withBorder radius="md" component="button" className="mantine-click-card people-profile-panel people-sighting-card" onClick={() => onSighting(detail)}>
           <Group justify="space-between" align="center" wrap="nowrap">
             <SightingSummary detail={detail} />
             <SightingImage detail={detail} imageRecords={imageRecords} size={92} />
@@ -716,7 +731,7 @@ function PeopleProfileChanges({ changes, currentProfile }) {
           <CurrentInfoRow icon={IconFlag} label="Importance" value={currentProfile.importance || "-"} active={changedFields.has("importance")} pill={importanceColor(currentProfile.importance)} />
           <CurrentInfoRow icon={IconTag} label="Tags" value={["Avenger", "Red Room"]} active={changedFields.has("tags")} tags />
           <CurrentInfoRow icon={IconNotes} label="Notes" value="Former spy. Highly skilled in close combat and espionage." active={changedFields.has("notes")} multiline />
-          <Divider my="xs" />
+          <Divider />
           <CurrentInfoRow icon={IconRefresh} label="Last Updated" value={activeChange?.createdAt || "-"} subvalue={`By ${activeChange?.editor || "System"}`} />
         </Stack>
       </Card>
@@ -768,7 +783,7 @@ function PeopleProfileChanges({ changes, currentProfile }) {
               <Stack gap={0} className="people-change-field-list">
                 {change.fields.map((field) => <ChangeFieldRow key={field.key} field={field} />)}
               </Stack>
-              <Button mt="md" size="xs" variant="default" rightSection={<IconArrowLeft size={13} style={{ transform: "rotate(135deg)" }} />}>View Full Details</Button>
+              {/* <Button mt="md" size="xs" variant="default" rightSection={<IconArrowLeft size={13} style={{ transform: "rotate(135deg)" }} />}>View Full Details</Button> */}
             </Card>
           )) : <EmptyCard text="No changes recorded yet." />}
         </Box>
@@ -805,7 +820,7 @@ function SightingImage({ detail, imageRecords, fallbackPath, size = 56 }) {
 
 function CurrentInfoRow({ icon: Icon, label, value, subvalue, active, pill, tags, multiline }) {
   return (
-    <Paper withBorder radius="md" p="sm" className={active ? "current-info-row current-info-row--active" : "current-info-row"}>
+    <Paper withBorder radius="md" p="xs" className={active ? "current-info-row current-info-row--active" : "current-info-row"}>
       <Group gap="sm" align={multiline ? "flex-start" : "center"} wrap="nowrap">
         <ThemeIcon variant="subtle" color="gray" size="sm"><Icon size={16} /></ThemeIcon>
         <Text size="xs" fw={700} className="current-info-label">{label}</Text>
