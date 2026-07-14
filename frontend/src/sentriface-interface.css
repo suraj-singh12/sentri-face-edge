@@ -55,7 +55,7 @@ button {
 
 .quality-slot {
   min-height: 46px;
-  overflow: auto;
+  overflow: visible;
 }
 
 .sentriface-shell .mantine-AppShell-main {
@@ -270,9 +270,21 @@ button {
   padding: 0 !important;
 }
 
+.queue-workspace[data-followup-open="true"] {
+  height: auto;
+  min-height: calc(100dvh - 152px);
+  overflow: visible;
+}
+
 .queue-shell-grid {
   height: 100%;
   min-height: 0;
+}
+
+.queue-workspace[data-followup-open="true"] .queue-shell-grid,
+.queue-workspace[data-followup-open="true"] .queue-shell-grid > .mantine-Grid-inner,
+.queue-workspace[data-followup-open="true"] .queue-main-col {
+  height: auto;
 }
 
 .queue-shell-grid > .mantine-Grid-inner {
@@ -829,6 +841,29 @@ button {
   min-height: 0;
 }
 
+.queue-review-shell {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  padding-bottom: 8px;
+}
+
+.queue-review-shell[data-followup-open="true"] {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.queue-followup-card {
+  flex: 0 0 auto;
+  width: 100%;
+  margin-top: 8px;
+  background: var(--sentriface-solid-card-bg);
+  border-color: var(--sentriface-card-border);
+  box-shadow: var(--sentriface-card-shadow);
+}
+
 .people-profile-shell {
   height: 100%;
   min-height: 0;
@@ -1162,21 +1197,36 @@ button {
 }
 
 .quality-placeholder,
-.quality-slot .mantine-Stack-root {
+.input-quality-panel {
   height: 100%;
   border-color: var(--sentriface-card-border);
   background: var(--sentriface-muted-surface);
 }
 
-.quality-slot .mantine-Divider-root {
-  display: none;
-}
-
-.quality-slot .mantine-Stack-root {
+.input-quality-panel {
   justify-content: center;
-  padding: 8px 12px;
+  padding: 12px 16px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: var(--mantine-radius-md);
+}
+
+.input-quality-row {
+  min-height: 34px;
+}
+
+.input-quality-cell {
+  min-width: 0;
+}
+
+.input-quality-badge {
+  min-width: 66px;
+  justify-content: center;
+  text-transform: none;
+}
+
+.input-quality-divider {
+  height: 28px;
+  border-color: var(--sentriface-card-border);
 }
 
 .recognize-action {
@@ -1227,6 +1277,7 @@ button {
     linear-gradient(135deg, #f8fafc 0%, #eef4f8 48%, #f8fafc 100%);
   --sentriface-header-bg: rgba(255, 255, 255, 0.9);
   --sentriface-card-bg: rgba(255, 255, 255, 0.82);
+  --sentriface-solid-card-bg: #ffffff;
   --sentriface-card-border: rgba(15, 23, 42, 0.12);
   --sentriface-card-shadow: 0 18px 46px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
   --sentriface-tab-color: var(--mantine-color-gray-7);
@@ -1254,6 +1305,7 @@ button {
   --sentriface-card-bg:
     linear-gradient(135deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
     rgba(7, 13, 21, 0.78);
+  --sentriface-solid-card-bg: #0b111a;
   --sentriface-card-border: rgba(148, 163, 184, 0.18);
   --sentriface-card-shadow: 0 18px 46px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   --sentriface-tab-color: var(--mantine-color-gray-4);

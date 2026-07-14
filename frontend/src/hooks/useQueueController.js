@@ -14,14 +14,21 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
   const [queueGallery, setQueueGallery] = useState(null);
   const [queueGalleryImage, setQueueGalleryImage] = useState(null);
 
-  const loadQueueGroups = useCallback(async (sessionId = queueSessionId) => {
+  const loadQueueGroups = useCallback(async (sessionId = queueSessionId, options = {}) => {
     if (!sessionId) return;
     const payload = await apiGet(`/api/queue-groups?session_id=${encodeURIComponent(sessionId)}`);
     setQueueGroups(payload.groups);
     setQueueSelectedGroup((current) => {
       if (!current) return current;
-      return payload.groups.find((group) => group.group_id === current.group_id) || null;
+      const refreshedGroup = payload.groups.find((group) => group.group_id === current.group_id);
+      if (refreshedGroup) return refreshedGroup;
+      if (!options.preserveSelectedGroup) return null;
+      const removedFaceIds = new Set(options.removeFaceIds || []);
+      return removedFaceIds.size
+        ? { ...current, faces: current.faces.filter((face) => !removedFaceIds.has(face.init_face_id)) }
+        : current;
     });
+    return payload;
   }, [apiGet, queueSessionId]);
 
   const scanQueuePath = useCallback(async (path) => {
@@ -118,6 +125,9 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
   const confirmQueueFollowup = async (event) => {
     event.preventDefault();
     if (!queueFollowup?.faceIds?.length || !queueSelectedGroup) return;
+    const confirmedGroupId = queueSelectedGroup.group_id;
+    const confirmedSessionId = queueSelectedGroup.session_id;
+    const confirmedFaceIds = queueFollowup.faceIds;
     const payload = queueFollowup.action === "new"
       ? await apiPost("/api/queue-confirm-new", {
         session_id: queueSelectedGroup.session_id,
@@ -152,9 +162,24 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
       added_by: queueFollowup.addedBy,
     })));
     setQueueFollowupDone(true);
-    resetQueueDecision();
+    setQueueSelectedFaces([]);
+    setQueueAccepted(false);
+    setQueueGallery(null);
+    setQueueGalleryImage(null);
     showToast(`Queue details confirmed for ${entries.length} image(s)`);
-    await Promise.all([loadQueueGroups(queueSelectedGroup.session_id), loadPeople(), loadEvents()]);
+    const [queuePayload] = await Promise.all([
+      loadQueueGroups(confirmedSessionId, { preserveSelectedGroup: true, removeFaceIds: confirmedFaceIds }),
+      loadPeople(),
+      loadEvents(),
+    ]);
+    window.setTimeout(() => {
+      setQueueFollowup(null);
+      setQueueFollowupDone(false);
+      setQueueSelectedGroup((current) => {
+        if (!current || current.group_id !== confirmedGroupId) return current;
+        return queuePayload?.groups?.find((group) => group.group_id === confirmedGroupId) || null;
+      });
+    }, 1000);
   };
 
   const openQueueGallery = async (personId) => {

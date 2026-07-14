@@ -56,7 +56,7 @@ export function RecognizeView({
                 </ImageFrame>
                 {quality && (
                   <Box className="quality-slot">                
-                    <InputImageQuality quality={quality} />
+                    <InputImageQuality quality={quality} face={recognition?.face} />
                   </Box>
                 )}
               </Surface>

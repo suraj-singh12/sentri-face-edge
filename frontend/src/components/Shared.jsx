@@ -287,15 +287,23 @@ export function GalleryPanel({ payload, selectedImage, onImage, onBack }) {
   );
 }
 
-export function InputImageQuality({ quality }) {
+export function InputImageQuality({ quality, face }) {
   const reasons = quality.reasons.length ? quality.reasons.join(", ") : "";
+  const detectedFaces = face ? 1 : 0;
+  const statusLabel = quality.status ? quality.status.charAt(0).toUpperCase() + quality.status.slice(1).toLowerCase() : "-";
   return (
-    <Stack gap="xs">
-      <Divider />
-      <Group>
-        <Text fw={700}>Face Quality</Text>
-        <Badge color={qualityColor(quality.status)}>{quality.status}</Badge>
-        <Text fw={700}>score: {quality.score.toFixed(3)}</Text>
+    <Stack gap={6} className="input-quality-panel">
+      <Group gap="xl" wrap="nowrap" className="input-quality-row">
+        <Group gap="sm" wrap="nowrap" className="input-quality-cell">
+          <Text size="sm">Face Quality</Text>
+          <Badge color={qualityColor(quality.status)} variant="light" className="input-quality-badge">{statusLabel}</Badge>
+        </Group>
+        <Divider orientation="vertical" className="input-quality-divider" />
+        <Group gap="sm" wrap="nowrap" className="input-quality-cell">
+          <Text size="sm">Detection</Text>
+          <ThemeIcon size="sm" radius="xl" color={detectedFaces ? "green" : "gray"}><IconCheck size={14} /></ThemeIcon>
+          <Text size="sm">{detectedFaces} face detected</Text>
+        </Group>
       </Group>
       {reasons && <Text size="sm" c="dimmed">{reasons}</Text>}
     </Stack>

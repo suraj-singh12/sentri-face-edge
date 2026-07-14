@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import {
   Badge,
   Box,
@@ -58,7 +60,7 @@ export function QueueView({
   onBack,
 }) {
   return (
-    <Paper withBorder radius="md" p="md" className="queue-workspace">
+    <Paper withBorder radius="md" p="md" className="queue-workspace" data-followup-open={Boolean(queueFollowup)}>
       <Grid gutter="lg" className="queue-shell-grid">
         {!queueSelectedGroup && (
           <Grid.Col span={{ base: 12, md: "content" }} className="queue-sidebar-col">
@@ -236,11 +238,18 @@ function QueueGroupReview({
   onGalleryBack,
   onBack,
 }) {
+  const followupRef = useRef(null);
   const best = group.matches?.[0] || null;
   const selectedCount = selectedFaces.length;
   const shouldFadeNewPerson = hasCertainMatch(best);
+
+  useEffect(() => {
+    if (!followup) return;
+    followupRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [followup]);
+
   return (
-    <Stack className="queue-review-shell">
+    <Stack className="queue-review-shell" data-followup-open={Boolean(followup)}>
       <Group justify="space-between" align="flex-start">
         <Box>
           <Title order={3} size="h4">{group.group_id}</Title>
@@ -294,7 +303,7 @@ function QueueGroupReview({
         </Grid.Col>
       </Grid>
       {followup && (
-        <Card withBorder radius="md">
+        <Card withBorder radius="md" ref={followupRef} className="queue-followup-card">
           <Text fw={700}>{followup.name || "New person"}</Text>
           <Text size="xs" c="dimmed" mb="sm">{followup.faceIds.length} image(s)</Text>
           <RecognitionFollowupForm values={followup} confirmed={followupDone} onChange={onFollowupChange} onSubmit={onFollowupSubmit} onClear={onFollowupClear} embedded showAddedBy />
