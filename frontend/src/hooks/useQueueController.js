@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { currentDateTimeParts, droppedImageFiles, isNewPersonSuggestion } from "../utils.js";
@@ -14,6 +14,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
   const [queueFollowupDone, setQueueFollowupDone] = useState(false);
   const [queueGallery, setQueueGallery] = useState(null);
   const [queueGalleryImage, setQueueGalleryImage] = useState(null);
+  const canceledQueueJobs = useRef(new Set());
 
   const loadQueueGroups = useCallback(async (sessionId = queueSessionId, options = {}) => {
     if (!sessionId) return;
@@ -48,6 +49,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     pollId = window.setInterval(async () => {
       try {
         const payload = await apiGet(`/api/queue-progress?job_id=${encodeURIComponent(jobId)}`);
+        if (canceledQueueJobs.current.has(jobId)) return;
         setQueueProgress((current) => normalizeQueueProgress({ ...current, ...payload, jobId, startedAt }));
       } catch (error) {
         console.debug("[sentriface-ui] queue progress unavailable", error);
@@ -60,6 +62,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
         total_files: options.totalFiles || 0,
         uploaded_files: options.uploadedFiles || options.totalFiles || 0,
       });
+      if (canceledQueueJobs.current.has(jobId)) return;
       setQueueSessionId(payload.session_id);
       setQueueGroups(payload.groups);
       resetQueueReview();
@@ -91,13 +94,13 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     }
   }, [apiGet, apiPost, loadEvents, showToast]);
 
-  const scanQueueFiles = async (files) => {
+  const scanQueueFiles = async (files, options = {}) => {
     if (!files.length) {
       showToast("Choose or drop images", "yellow");
       throw new Error("Missing queue source");
     }
-    const jobId = crypto.randomUUID();
-    const startedAt = Date.now();
+    const jobId = options.jobId || crypto.randomUUID();
+    const startedAt = options.startedAt || Date.now();
     setQueueProgress({
       jobId,
       status: "running",
@@ -122,12 +125,36 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
 
   const queueDrop = async (event) => {
     event.preventDefault();
+    const jobId = crypto.randomUUID();
+    const startedAt = Date.now();
+    setQueueProgress({
+      jobId,
+      status: "running",
+      phase: "uploading",
+      totalFiles: 0,
+      uploadedFiles: 0,
+      totalImages: 0,
+      imagesScanned: 0,
+      facesDetected: 0,
+      embeddingsGenerated: 0,
+      groups: 0,
+      startedAt,
+    });
     const files = await droppedImageFiles(event.dataTransfer);
     if (!files.length) {
+      setQueueProgress(null);
       showToast("Drop image files or a folder", "yellow");
       return;
     }
-    await scanQueueFiles(files);
+    await scanQueueFiles(files, { jobId, startedAt });
+  };
+
+  const cancelQueueProcessing = () => {
+    setQueueProgress((current) => {
+      if (current?.jobId) canceledQueueJobs.current.add(current.jobId);
+      return null;
+    });
+    showToast("Stopped tracking queue processing", "yellow");
   };
 
   const openQueueGroup = (group) => {
@@ -343,6 +370,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     actions: {
       scanQueueFiles,
       queueDrop,
+      cancelQueueProcessing,
       loadQueueGroups,
       openQueueGroup,
       toggleQueueFace,

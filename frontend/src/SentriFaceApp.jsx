@@ -111,6 +111,7 @@ function SentriFaceShell() {
               onFiles={guarded((files) => actions.scanQueueFiles(Array.from(files || [])))}
               onFolder={guarded((files) => actions.scanQueueFiles(Array.from(files || [])))}
               onDrop={guarded(actions.queueDrop)}
+              onCancelProcessing={actions.cancelQueueProcessing}
               onRefresh={guarded(() => actions.loadQueueGroups(state.queueSessionId))}
               onOpenGroup={actions.openQueueGroup}
               onToggleFace={actions.toggleQueueFace}

@@ -309,9 +309,12 @@ button {
 .queue-sidebar {
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  gap: 10px;
   padding-right: 18px;
   border-right: 1px solid var(--sentriface-card-border);
+  scrollbar-width: thin;
 }
 
 .queue-upload-card,
@@ -323,11 +326,50 @@ button {
 }
 
 .queue-upload-card {
-  min-height: 184px;
+  padding: 12px !important;
+}
+
+.queue-folder-drop-target {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-height: 142px;
+  padding: 14px;
+  border: 1px dashed color-mix(in srgb, var(--mantine-color-teal-5) 70%, var(--sentriface-card-border));
+  border-radius: var(--mantine-radius-md);
+  background: linear-gradient(145deg, rgba(20, 184, 166, 0.08), rgba(14, 165, 233, 0.06));
+  text-align: center;
+}
+
+.queue-folder-drop-target .mantine-Button-root {
+  max-width: 260px;
+  min-height: 38px;
+}
+
+.queue-folder-drop-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.queue-drop-note {
+  color: var(--mantine-color-dimmed);
+  margin-top: 0;
 }
 
 .queue-side-card {
-  padding: 14px;
+  padding: 10px 14px;
+}
+
+.queue-session-card .mantine-Button-root {
+  min-height: 36px;
+}
+
+.queue-side-card--steps .mantine-ThemeIcon-root {
+  flex: 0 0 auto;
+}
+
+.queue-side-card--steps .mantine-Group-root {
+  min-height: 24px;
 }
 
 .queue-review-list {
@@ -354,6 +396,11 @@ button {
   background: var(--sentriface-card-bg);
   border-color: var(--sentriface-card-border);
   box-shadow: var(--sentriface-card-shadow);
+}
+
+.queue-processing-source {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--sentriface-card-border);
 }
 
 .queue-processing-steps {
@@ -429,6 +476,58 @@ button {
   border: 1px solid rgba(59, 130, 246, 0.34);
   border-radius: var(--mantine-radius-md);
   background: rgba(37, 99, 235, 0.12);
+}
+
+.queue-groups-pending-card {
+  padding: 20px 24px !important;
+  min-height: 132px;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--sentriface-card-bg) 92%, transparent);
+  border-color: color-mix(in srgb, var(--sentriface-card-border) 70%, var(--mantine-color-gray-5));
+}
+
+.queue-groups-pending-card > .mantine-Group-root {
+  min-height: 92px;
+}
+
+.queue-pending-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  min-width: 440px;
+}
+
+.queue-pending-skeleton-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 126px;
+  min-height: 56px;
+  padding: 10px;
+  border-radius: var(--mantine-radius-md);
+  background: color-mix(in srgb, var(--sentriface-muted-surface) 80%, transparent);
+}
+
+.queue-pending-line-stack {
+  display: grid;
+  gap: 7px;
+  flex: 1;
+}
+
+.queue-pending-line-stack > div {
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mantine-color-gray-5) 55%, transparent);
+}
+
+.queue-pending-line-stack > div:last-child {
+  width: 68%;
+}
+
+.queue-processing-tip {
+  padding: 12px 14px !important;
+  background: color-mix(in srgb, var(--sentriface-muted-surface) 65%, transparent);
+  border-color: var(--sentriface-card-border);
 }
 
 .queue-row-media {
@@ -1666,6 +1765,11 @@ button {
     padding: 16px !important;
   }
 
+  .queue-folder-drop-target {
+    min-height: 176px;
+    padding: 18px;
+  }
+
   .queue-processing-steps,
   .queue-processing-stats {
     grid-template-columns: 1fr;
@@ -1697,6 +1801,18 @@ button {
 
   .queue-processing-stat:last-child {
     border-bottom: 0;
+  }
+
+  .queue-groups-pending-card > .mantine-Group-root {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .queue-pending-skeleton {
+    min-width: 0;
+    width: 100%;
+    gap: 10px;
+    overflow-x: auto;
   }
 
   .queue-group-row > .mantine-Group-root {
