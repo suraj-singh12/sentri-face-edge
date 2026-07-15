@@ -100,6 +100,7 @@ function SentriFaceShell() {
             <QueueView
               queueGroups={state.queueGroups}
               queueSessionId={state.queueSessionId}
+              queueProgress={state.queueProgress}
               queueSelectedGroup={state.queueSelectedGroup}
               queueSelectedFaces={state.queueSelectedFaces}
               queueAccepted={state.queueAccepted}

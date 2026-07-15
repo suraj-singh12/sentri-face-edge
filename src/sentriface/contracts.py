@@ -147,5 +147,23 @@ class IdentityStore(Protocol):
     def delete_init_faces(self, init_face_ids: list[str]) -> None:
         """Remove reviewed faces from an initialization/queue group."""
 
+    def update_init_face_groups(self, assignments: dict[str, str]) -> None:
+        """Move pending initialization/queue faces into review groups."""
+
+    def add_init_face_person_exclusions(
+        self,
+        session_id: str,
+        init_face_ids: list[str],
+        person_id: str,
+    ) -> None:
+        """Suppress a person suggestion for pending queue faces."""
+
+    def list_init_face_person_exclusions(
+        self,
+        session_id: str,
+        init_face_ids: list[str],
+    ) -> dict[str, set[str]]:
+        """Load suppressed person suggestions for queue faces."""
+
     def mark_init_group_status(self, session_id: str, group_id: str, status: str) -> None:
         """Mark an initialization group reviewed or rejected."""

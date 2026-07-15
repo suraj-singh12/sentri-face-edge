@@ -4,6 +4,8 @@ import argparse
 import base64
 import binascii
 import json
+import threading
+import time
 import uuid
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -53,6 +55,8 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.runtime = runtime
         self.debug = debug
         self.events: list[dict[str, Any]] = []
+        self.queue_progress: dict[str, dict[str, Any]] = {}
+        self.queue_progress_lock = threading.Lock()
 
     def log_event(self, event: str, **details: Any) -> None:
         item = {"event": event, **details}
@@ -60,6 +64,21 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.events = self.events[-200:]
         if self.debug:
             print(f"[sentriface-ui] {event} {json.dumps(details, separators=(',', ':'), default=str)}")
+
+    def update_queue_progress(self, job_id: str, **updates: Any) -> None:
+        with self.queue_progress_lock:
+            current = self.queue_progress.get(job_id, {"job_id": job_id, "started_at": time.time(), "status": "running"})
+            current.update(updates)
+            current["job_id"] = job_id
+            self.queue_progress[job_id] = current
+
+    def queue_progress_snapshot(self, job_id: str) -> dict[str, Any]:
+        with self.queue_progress_lock:
+            progress = dict(self.queue_progress.get(job_id, {"job_id": job_id, "status": "unknown"}))
+        started_at = progress.get("started_at")
+        ended_at = progress.get("finished_at") or time.time()
+        progress["elapsed_seconds"] = max(0, int(ended_at - started_at)) if started_at else 0
+        return progress
 
 
 class SentriFaceApiHandler(SimpleHTTPRequestHandler):
@@ -103,9 +122,13 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/events":
                 self._json({"events": self.server.events[-80:]})
                 return
+            if parsed.path == "/api/queue-progress":
+                job_id = _query_value(parsed.query, "job_id")
+                self._json(self.server.queue_progress_snapshot(job_id))
+                return
             if parsed.path == "/api/queue-groups":
                 session_id = _query_value(parsed.query, "session_id")
-                groups = self.server.engine.list_init_groups(session_id)
+                groups = self.server.engine.refresh_init_groups(session_id)
                 self._json({"groups": [_init_group(self.server.engine, group) for group in groups]})
                 return
             if parsed.path == "/media":
@@ -303,17 +326,45 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/queue-scan":
                 source = Path(_required(payload, "path"))
+                job_id = str(payload.get("job_id") or uuid.uuid4())
+                self.server.update_queue_progress(
+                    job_id,
+                    phase="scanning",
+                    status="running",
+                    total_files=payload.get("total_files") or 0,
+                    uploaded_files=payload.get("uploaded_files") or payload.get("total_files") or 0,
+                    total_images=0,
+                    images_scanned=0,
+                    faces_detected=0,
+                    embeddings_generated=0,
+                    groups=0,
+                    started_at=time.time(),
+                )
                 self.server.engine.reset_metrics()
-                queue_result = self.server.engine.create_queue_session(source, bool(payload.get("force_bad_quality", False)))
+                queue_result = self.server.engine.create_queue_session(
+                    source,
+                    bool(payload.get("force_bad_quality", False)),
+                    progress_callback=lambda update: self.server.update_queue_progress(job_id, **update),
+                )
+                self.server.update_queue_progress(
+                    job_id,
+                    phase="done",
+                    status="done",
+                    session_id=queue_result.session.session_id,
+                    groups=len(queue_result.groups),
+                    finished_at=time.time(),
+                )
                 self.server.log_event(
                     "queue-scan",
                     path=str(source),
+                    job_id=job_id,
                     session_id=queue_result.session.session_id,
                     groups=len(queue_result.groups),
                 )
                 self._json(
                     {
                         "session_id": queue_result.session.session_id,
+                        "job_id": job_id,
                         "groups": [
                             _init_group(self.server.engine, group, queue_result.matches_by_face_id)
                             for group in queue_result.groups
@@ -323,24 +374,52 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 return
             if parsed.path == "/api/queue-confirm-new":
+                session_id = _required(payload, "session_id")
                 person_id, accepted = self.server.engine.confirm_init_faces(
-                    _required(payload, "session_id"),
+                    session_id,
                     _required(payload, "group_id"),
-                    list(payload.get("face_ids", [])),
+                    _queue_face_ids(self.server.engine, payload),
                     _required(payload, "name"),
                 )
+                changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
+                groups = self.server.engine.list_init_groups(session_id)
                 self.server.log_event("queue-confirm-new", person_id=person_id, embeddings=len(accepted))
-                self._json({"person_id": person_id, "accepted": accepted, "embedding_ids": [item["embedding_id"] for item in accepted]})
+                self._json(
+                    {
+                        "person_id": person_id,
+                        "accepted": accepted,
+                        "embedding_ids": [item["embedding_id"] for item in accepted],
+                        "changed_groups": [_init_group(self.server.engine, group) for group in changed],
+                        "groups": [_init_group(self.server.engine, group) for group in groups],
+                    }
+                )
                 return
             if parsed.path == "/api/queue-confirm-existing":
+                session_id = _required(payload, "session_id")
+                person_id = _required(payload, "person_id")
                 accepted = self.server.engine.confirm_init_faces_existing(
-                    _required(payload, "session_id"),
+                    session_id,
                     _required(payload, "group_id"),
-                    list(payload.get("face_ids", [])),
-                    _required(payload, "person_id"),
+                    _queue_face_ids(self.server.engine, payload),
+                    person_id,
                 )
+                changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
+                groups = self.server.engine.list_init_groups(session_id)
                 self.server.log_event("queue-confirm-existing", person_id=payload.get("person_id"), embeddings=len(accepted))
-                self._json({"accepted": accepted, "embedding_ids": [item["embedding_id"] for item in accepted]})
+                self._json(
+                    {
+                        "accepted": accepted,
+                        "embedding_ids": [item["embedding_id"] for item in accepted],
+                        "changed_groups": [_init_group(self.server.engine, group) for group in changed],
+                        "groups": [_init_group(self.server.engine, group) for group in groups],
+                    }
+                )
+                return
+            if parsed.path == "/api/queue-refresh-suggestions":
+                session_id = _required(payload, "session_id")
+                groups = self.server.engine.list_init_groups(session_id)
+                self.server.log_event("queue-refresh-suggestions", session_id=session_id, groups=len(groups))
+                self._json({"groups": [_init_group(self.server.engine, group) for group in groups]})
                 return
             if parsed.path == "/api/queue-discard":
                 self.server.engine.discard_init_faces(
@@ -724,21 +803,28 @@ def _init_group(
     group: InitGroup,
     matches_by_face_id: dict[str, list[PersonMatch]] | None = None,
 ) -> dict[str, Any]:
+    exclusions_by_face_id = engine.excluded_person_ids_for_init_faces(
+        group.session_id,
+        [face.init_face_id for face in group.faces],
+    )
     face_matches = [
-        matches_by_face_id.get(face.init_face_id, []) if matches_by_face_id is not None else engine.matches_for_vector(face.vector)
+        _filtered_matches(
+            matches_by_face_id.get(face.init_face_id, []),
+            exclusions_by_face_id.get(face.init_face_id, set()),
+        ) if matches_by_face_id is not None else engine.matches_for_vector(
+            face.vector,
+            excluded_person_ids=exclusions_by_face_id.get(face.init_face_id, set()),
+        )
         for face in group.faces
     ]
-    best_by_person: dict[str, PersonMatch] = {}
-    for matches in face_matches:
-        for match in matches:
-            current = best_by_person.get(match.person_id)
-            if current is None or match.score > current.score:
-                best_by_person[match.person_id] = match
-    group_matches = sorted(best_by_person.values(), key=lambda match: match.score, reverse=True)[: engine.config.top_k]
+    group_matches = _group_matches_from_face_matches(face_matches, engine.config.top_k)
+    representative = _representative_init_face(group)
     return {
         "group_id": group.group_id,
         "session_id": group.session_id,
         "status": group.status,
+        "representative_face_id": representative.init_face_id if representative else None,
+        "representative_image": (representative.face.crop_path or representative.source_image) if representative else None,
         "matches": [_match(engine, match, rank) for rank, match in enumerate(group_matches, 1)],
         "faces": [
             {
@@ -752,6 +838,40 @@ def _init_group(
             for index, face in enumerate(group.faces)
         ],
     }
+
+
+def _representative_init_face(group: InitGroup):
+    if not group.faces:
+        return None
+    return max(group.faces, key=lambda face: face.quality.score)
+
+
+def _filtered_matches(matches: list[PersonMatch], excluded_person_ids: set[str]) -> list[PersonMatch]:
+    if not excluded_person_ids:
+        return matches
+    return [match for match in matches if match.person_id not in excluded_person_ids]
+
+
+def _group_matches_from_face_matches(
+    face_matches: list[list[PersonMatch]],
+    top_k: int,
+) -> list[PersonMatch]:
+    best_by_person: dict[str, PersonMatch] = {}
+    for matches in face_matches:
+        for match in matches:
+            current = best_by_person.get(match.person_id)
+            if current is None or match.score > current.score:
+                best_by_person[match.person_id] = match
+    group_matches = sorted(best_by_person.values(), key=lambda match: match.score, reverse=True)
+    return group_matches[:top_k]
+
+
+def _queue_face_ids(engine: FaceEngine, payload: dict[str, Any]) -> list[str]:
+    face_ids = list(payload.get("face_ids") or [])
+    if face_ids:
+        return face_ids
+    group = engine.get_init_group(_required(payload, "session_id"), _required(payload, "group_id"))
+    return [face.init_face_id for face in group.faces]
 
 
 def _match(engine: FaceEngine, match: PersonMatch, rank: int) -> dict[str, Any]:

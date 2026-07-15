@@ -10,6 +10,7 @@ import {
   Group,
   Image,
   Paper,
+  Progress,
   ScrollArea,
   SimpleGrid,
   Stack,
@@ -26,6 +27,8 @@ import {
   IconFolderOpen,
   IconPhotoUp,
   IconRefresh,
+  IconClock,
+  IconUsers,
 } from "@tabler/icons-react";
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
@@ -35,6 +38,7 @@ import { hasCertainMatch, isNewPersonSuggestion, mediaUrl, recognitionText } fro
 export function QueueView({
   queueGroups,
   queueSessionId,
+  queueProgress,
   queueSelectedGroup,
   queueSelectedFaces,
   queueAccepted,
@@ -96,7 +100,7 @@ export function QueueView({
               onBack={onBack}
             />
           ) : (
-            <QueueGroupList groups={queueGroups} onOpen={onOpenGroup} />
+            <QueueGroupList groups={queueGroups} progress={queueProgress} onOpen={onOpenGroup} />
           )}
         </Grid.Col>
       </Grid>
@@ -153,8 +157,9 @@ function QueueInputPanel({ sessionId, onFiles, onFolder, onDrop, onRefresh }) {
   );
 }
 
-function QueueGroupList({ groups, onOpen }) {
+function QueueGroupList({ groups, progress, onOpen }) {
   const pendingGroups = groups.filter((group) => group.status === "pending" && group.faces.length);
+  const isProcessing = progress && progress.status === "running";
   return (
     <Stack className="queue-review-list">
       <Group align="center" gap="md">
@@ -162,10 +167,10 @@ function QueueGroupList({ groups, onOpen }) {
           <Title order={2} size="h3">Review Queue</Title>
           <Text size="sm" c="dimmed">Review the groups below and take action.</Text>
         </Box>
-        <Badge variant="light" size="lg">{pendingGroups.length} Active</Badge>
+        <Badge variant="light" size="lg">{isProcessing ? "Processing" : `${pendingGroups.length} Active`}</Badge>
       </Group>
       <Box className="queue-list-divider" />
-      <Stack gap="sm">
+      {isProcessing ? <QueueProcessingPanel progress={progress} /> : <Stack gap="sm">
         {pendingGroups.length ? pendingGroups.map((group) => {
           const best = group?.matches?.[0] || null;
           const score = best?.score || 0;
@@ -193,10 +198,120 @@ function QueueGroupList({ groups, onOpen }) {
             </Card>
           );
         }) : <EmptyCard text="No queue groups loaded." />}
-      </Stack>
-      <Text size="sm" c="dimmed">Showing {pendingGroups.length} group{pendingGroups.length === 1 ? "" : "s"}</Text>
+      </Stack>}
+      {!isProcessing && <Text size="sm" c="dimmed">Showing {pendingGroups.length} group{pendingGroups.length === 1 ? "" : "s"}</Text>}
     </Stack>
   );
+}
+
+function QueueProcessingPanel({ progress }) {
+  const phaseIndex = phaseOrder.indexOf(progress.phase);
+  const percent = queueProgressPercent(progress);
+  const elapsed = formatElapsed(progress);
+  const stages = [
+    { phase: "uploading", label: "Uploading", detail: `${progress.uploadedFiles} / ${progress.totalFiles || "-"} files`, icon: IconFolderOpen },
+    { phase: "detecting", label: "Detecting Faces", detail: `${progress.imagesScanned} / ${progress.totalImages || "-"} images`, icon: IconEye },
+    { phase: "matching", label: "Matching DB", detail: `${progress.embeddingsGenerated} embedding${progress.embeddingsGenerated === 1 ? "" : "s"}`, icon: IconRefresh },
+    { phase: "clustering", label: "Clustering Faces", detail: `${progress.groups || "-"} groups so far`, icon: IconUsers },
+    { phase: "preparing", label: "Preparing Results", detail: progress.groups ? `${progress.groups} groups` : "Finalizing", icon: IconCopy },
+  ];
+  return (
+    <Card withBorder radius="md" className="queue-processing-card">
+      <Stack gap="lg">
+        <Box>
+          <Title order={3} size="h4">Processing your images...</Title>
+          <Text size="sm" c="dimmed">Please wait while we analyze your photos and prepare review groups.</Text>
+        </Box>
+        <Box className="queue-processing-steps">
+          {stages.map((stage, index) => {
+            const Icon = stage.icon;
+            const active = index === phaseIndex || (progress.phase === "done" && index === stages.length - 1);
+            const complete = index < phaseIndex || progress.phase === "done";
+            return (
+              <Box key={stage.phase} className="queue-processing-step" data-active={active} data-complete={complete}>
+                <ThemeIcon size={42} radius="xl" variant={active || complete ? "light" : "default"} color={complete ? "teal" : active ? "blue" : "gray"}>
+                  <Icon size={20} />
+                </ThemeIcon>
+                <Text fw={700} size="sm">{stage.label}</Text>
+                <Text size="xs" c="dimmed">{stage.detail}</Text>
+              </Box>
+            );
+          })}
+        </Box>
+        <Group gap="md" wrap="nowrap">
+          <Progress value={percent} size="sm" radius="xl" className="queue-processing-progress" />
+          <Text fw={700} size="sm" className="queue-processing-percent">{Math.round(percent)}%</Text>
+        </Group>
+        <Box className="queue-processing-stats">
+          <QueueProgressStat icon={IconPhotoUp} value={progress.totalFiles || 0} label="Total Files" />
+          <QueueProgressStat icon={IconEye} value={progress.imagesScanned || 0} label="Images Scanned" />
+          <QueueProgressStat icon={IconPhotoUp} value={progress.facesDetected || 0} label="Faces Detected" />
+          <QueueProgressStat icon={IconUsers} value={progress.groups || "-"} label="Groups so far" />
+          <QueueProgressStat icon={IconClock} value={elapsed} label="Elapsed Time" />
+        </Box>
+        <Box className="queue-processing-note">
+          <Text size="sm" fw={700}>You can continue using the app.</Text>
+          <Text size="sm" c="dimmed">The queue will appear here as soon as processing finishes.</Text>
+        </Box>
+      </Stack>
+    </Card>
+  );
+}
+
+function QueueProgressStat({ icon: Icon, value, label }) {
+  return (
+    <Group gap="sm" justify="center" wrap="nowrap" className="queue-processing-stat">
+      <ThemeIcon variant="subtle" size="sm"><Icon size={16} /></ThemeIcon>
+      <Box>
+        <Text fw={800} ta="center">{value}</Text>
+        <Text size="xs" c="dimmed" ta="center">{label}</Text>
+      </Box>
+    </Group>
+  );
+}
+
+const phaseOrder = ["uploading", "detecting", "matching", "clustering", "preparing", "done"];
+
+function queueProgressPercent(progress) {
+  if (!progress) return 0;
+  if (progress.status === "done" || progress.phase === "done") return 100;
+  const baseByPhase = {
+    uploading: 0,
+    detecting: 25,
+    matching: 62,
+    clustering: 78,
+    preparing: 90,
+  };
+  const spanByPhase = {
+    uploading: 25,
+    detecting: 37,
+    matching: 16,
+    clustering: 12,
+    preparing: 10,
+  };
+  const phase = progress.phase || "uploading";
+  const base = baseByPhase[phase] ?? 0;
+  const span = spanByPhase[phase] ?? 10;
+  let ratio = 0;
+  if (phase === "uploading") {
+    ratio = progress.totalFiles ? progress.uploadedFiles / progress.totalFiles : 0.08;
+  } else if (phase === "detecting") {
+    ratio = progress.totalImages ? progress.imagesScanned / progress.totalImages : 0.15;
+  } else if (phase === "matching") {
+    ratio = progress.facesDetected ? progress.embeddingsGenerated / progress.facesDetected : 0.4;
+  } else if (phase === "clustering") {
+    ratio = progress.groups ? 0.85 : 0.4;
+  } else if (phase === "preparing") {
+    ratio = 0.8;
+  }
+  return Math.max(0, Math.min(99, base + span * Math.max(0, Math.min(1, ratio))));
+}
+
+function formatElapsed(progress) {
+  const seconds = progress.elapsedSeconds || Math.max(0, Math.floor((Date.now() - Number(progress.startedAt || Date.now())) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
 function QueuePreviewMosaic({ faces }) {
@@ -241,6 +356,7 @@ function QueueGroupReview({
   const followupRef = useRef(null);
   const best = group.matches?.[0] || null;
   const selectedCount = selectedFaces.length;
+  const actionScope = selectedCount ? `${selectedCount} selected` : "group";
   const shouldFadeNewPerson = hasCertainMatch(best);
 
   useEffect(() => {
@@ -286,15 +402,17 @@ function QueueGroupReview({
           </ScrollArea.Autosize>
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 5 }}>
-          <Surface title="Suggested Match" subtitle="Select images before accepting.">
+          <Surface title="Suggested Match" subtitle={selectedCount ? `${selectedCount} selected` : `${group.faces.length} image${group.faces.length === 1 ? "" : "s"} in group`}>
             {gallery
               ? <GalleryPanel payload={gallery} selectedImage={galleryImage} onImage={onGalleryImage} onBack={onGalleryBack} />
               : <BestMatchPanel best={best} face={{ index: 1 }} selectedImage={galleryImage} onGallery={onGallery} />}
             <Group grow mt="md" className="queue-decision-actions">
-              <Button onClick={onAcceptExisting} disabled={!best || isNewPersonSuggestion(best) || !selectedCount || accepted}>
-                {best && !isNewPersonSuggestion(best) ? `Accept as ${best.name}` : "Accept"}
+              <Button onClick={onAcceptExisting} disabled={!best || isNewPersonSuggestion(best) || !group.faces.length || accepted}>
+                {best && !isNewPersonSuggestion(best) ? `Accept ${actionScope} as ${best.name}` : "Accept"}
               </Button>
-              <Button variant="light" onClick={onNewPerson} disabled={!selectedCount || accepted || shouldFadeNewPerson}>New Person</Button>
+              <Button variant="light" onClick={onNewPerson} disabled={!group.faces.length || accepted || shouldFadeNewPerson}>
+                {selectedCount ? `New from ${selectedCount}` : "New Person"}
+              </Button>
               <Button color="red" variant="light" leftSection={<IconTrash size={17} />} onClick={onDiscard} disabled={!selectedCount || accepted}>
                 Reject selected
               </Button>

@@ -6,6 +6,7 @@ import { currentDateTimeParts, droppedImageFiles, isNewPersonSuggestion } from "
 export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, showToast, uploadFile, uploadFolder }) {
   const [queueGroups, setQueueGroups] = useState([]);
   const [queueSessionId, setQueueSessionId] = useState("");
+  const [queueProgress, setQueueProgress] = useState(null);
   const [queueSelectedGroup, setQueueSelectedGroup] = useState(null);
   const [queueSelectedFaces, setQueueSelectedFaces] = useState([]);
   const [queueAccepted, setQueueAccepted] = useState(false);
@@ -31,21 +32,92 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     return payload;
   }, [apiGet, queueSessionId]);
 
-  const scanQueuePath = useCallback(async (path) => {
-    const payload = await apiPost("/api/queue-scan", { path });
-    setQueueSessionId(payload.session_id);
-    setQueueGroups(payload.groups);
-    resetQueueReview();
-    showToast(`Queued ${payload.groups.length} group(s)`);
-    await loadEvents();
-  }, [apiPost, loadEvents, showToast]);
+  const scanQueuePath = useCallback(async (path, options = {}) => {
+    const jobId = options.jobId || crypto.randomUUID();
+    const startedAt = Date.now();
+    let pollId = null;
+    setQueueProgress((current) => ({
+      ...current,
+      jobId,
+      status: "running",
+      phase: "scanning",
+      startedAt,
+      totalFiles: options.totalFiles || current?.totalFiles || 0,
+      uploadedFiles: options.uploadedFiles || current?.uploadedFiles || 0,
+    }));
+    pollId = window.setInterval(async () => {
+      try {
+        const payload = await apiGet(`/api/queue-progress?job_id=${encodeURIComponent(jobId)}`);
+        setQueueProgress((current) => normalizeQueueProgress({ ...current, ...payload, jobId, startedAt }));
+      } catch (error) {
+        console.debug("[sentriface-ui] queue progress unavailable", error);
+      }
+    }, 450);
+    try {
+      const payload = await apiPost("/api/queue-scan", {
+        path,
+        job_id: jobId,
+        total_files: options.totalFiles || 0,
+        uploaded_files: options.uploadedFiles || options.totalFiles || 0,
+      });
+      setQueueSessionId(payload.session_id);
+      setQueueGroups(payload.groups);
+      resetQueueReview();
+      showToast(`Queued ${payload.groups.length} group(s)`);
+      setQueueProgress((current) => normalizeQueueProgress({
+        ...current,
+        jobId,
+        status: "done",
+        phase: "done",
+        session_id: payload.session_id,
+        groups: payload.groups.length,
+        finishedAt: Date.now(),
+      }));
+      await loadEvents();
+    } catch (error) {
+      setQueueProgress((current) => normalizeQueueProgress({
+        ...current,
+        jobId,
+        status: "failed",
+        phase: "failed",
+        finishedAt: Date.now(),
+      }));
+      throw error;
+    } finally {
+      if (pollId) window.clearInterval(pollId);
+      window.setTimeout(() => {
+        setQueueProgress((current) => current?.jobId === jobId && current.status === "done" ? null : current);
+      }, 900);
+    }
+  }, [apiGet, apiPost, loadEvents, showToast]);
 
   const scanQueueFiles = async (files) => {
     if (!files.length) {
       showToast("Choose or drop images", "yellow");
       throw new Error("Missing queue source");
     }
-    await scanQueuePath(files.length === 1 ? await uploadFile(files[0]) : await uploadFolder(files));
+    const jobId = crypto.randomUUID();
+    const startedAt = Date.now();
+    setQueueProgress({
+      jobId,
+      status: "running",
+      phase: "uploading",
+      totalFiles: files.length,
+      uploadedFiles: 0,
+      totalImages: 0,
+      imagesScanned: 0,
+      facesDetected: 0,
+      embeddingsGenerated: 0,
+      groups: 0,
+      startedAt,
+    });
+    const onProgress = (progress) => {
+      setQueueProgress((current) => normalizeQueueProgress({ ...current, ...progress, jobId, startedAt }));
+    };
+    const path = files.length === 1
+      ? await uploadFile(files[0], { onProgress })
+      : await uploadFolder(files, { onProgress });
+    await scanQueuePath(path, { jobId, totalFiles: files.length, uploadedFiles: files.length });
   };
 
   const queueDrop = async (event) => {
@@ -73,7 +145,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
   const queueAcceptExisting = async () => {
     const best = queueSelectedGroup?.matches?.[0];
     if (!queueSelectedGroup || !best || isNewPersonSuggestion(best)) return;
-    const faceIds = selectedQueueFaceIds();
+    const faceIds = selectedOrGroupFaceIds();
     setQueueAccepted(true);
     openQueueFollowup({ name: best.name, personId: best.person_id, decision: "existing", action: "existing", faceIds });
     showToast(`Fill details for ${best.name}`);
@@ -81,7 +153,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
 
   const queueNewPerson = async () => {
     if (!queueSelectedGroup) return;
-    const faceIds = selectedQueueFaceIds();
+    const faceIds = selectedOrGroupFaceIds();
     setQueueAccepted(true);
     openQueueFollowup({ name: "", personId: "", decision: "new", action: "new", faceIds });
     showToast("Fill new person details");
@@ -206,6 +278,15 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     return queueSelectedFaces;
   }
 
+  function selectedOrGroupFaceIds() {
+    if (queueSelectedFaces.length) return queueSelectedFaces;
+    const faceIds = (queueSelectedGroup?.faces || []).map((face) => face.init_face_id);
+    if (!faceIds.length) {
+      throw new Error("No queue images available");
+    }
+    return faceIds;
+  }
+
   function openQueueFollowup({ name, personId, decision, action, faceIds }) {
     const { date, time } = currentDateTimeParts();
     setQueueFollowup({
@@ -250,6 +331,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     state: {
       queueGroups,
       queueSessionId,
+      queueProgress,
       queueSelectedGroup,
       queueSelectedFaces,
       queueAccepted,
@@ -275,5 +357,23 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
       queueGalleryBack,
       closeQueueReview,
     },
+  };
+}
+
+function normalizeQueueProgress(progress) {
+  return {
+    jobId: progress.jobId || progress.job_id,
+    status: progress.status || "running",
+    phase: progress.phase || "uploading",
+    totalFiles: Number(progress.totalFiles ?? progress.total_files ?? 0),
+    uploadedFiles: Number(progress.uploadedFiles ?? progress.uploaded_files ?? 0),
+    totalImages: Number(progress.totalImages ?? progress.total_images ?? 0),
+    imagesScanned: Number(progress.imagesScanned ?? progress.images_scanned ?? 0),
+    facesDetected: Number(progress.facesDetected ?? progress.faces_detected ?? 0),
+    embeddingsGenerated: Number(progress.embeddingsGenerated ?? progress.embeddings_generated ?? 0),
+    groups: Number(progress.groups ?? 0),
+    startedAt: progress.startedAt || progress.started_at || Date.now(),
+    finishedAt: progress.finishedAt || progress.finished_at || null,
+    elapsedSeconds: Number(progress.elapsedSeconds ?? progress.elapsed_seconds ?? 0),
   };
 }

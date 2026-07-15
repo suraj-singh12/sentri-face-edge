@@ -26,7 +26,7 @@ from sentriface.models import (
     utc_now,
 )
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 class SQLiteIdentityStore:
@@ -65,6 +65,9 @@ class SQLiteIdentityStore:
             if version == 6:
                 _migrate_6_to_7(conn)
                 version = 7
+            if version == 7:
+                _migrate_7_to_8(conn)
+                version = 8
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -658,6 +661,55 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             conn.executemany("DELETE FROM init_faces WHERE init_face_id = ?", [(face_id,) for face_id in init_face_ids])
 
+    def update_init_face_groups(self, assignments: dict[str, str]) -> None:
+        if not assignments:
+            return
+        with self._connect() as conn:
+            conn.executemany(
+                "UPDATE init_faces SET group_id = ? WHERE init_face_id = ?",
+                [(group_id, face_id) for face_id, group_id in assignments.items()],
+            )
+
+    def add_init_face_person_exclusions(
+        self,
+        session_id: str,
+        init_face_ids: list[str],
+        person_id: str,
+    ) -> None:
+        if not init_face_ids:
+            return
+        now = utc_now()
+        with self._connect() as conn:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO init_face_person_exclusions(session_id, init_face_id, person_id, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                [(session_id, face_id, person_id, now) for face_id in init_face_ids],
+            )
+
+    def list_init_face_person_exclusions(
+        self,
+        session_id: str,
+        init_face_ids: list[str],
+    ) -> dict[str, set[str]]:
+        if not init_face_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in init_face_ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT init_face_id, person_id
+                FROM init_face_person_exclusions
+                WHERE session_id = ? AND init_face_id IN ({placeholders})
+                """,
+                (session_id, *init_face_ids),
+            ).fetchall()
+        exclusions: dict[str, set[str]] = {}
+        for row in rows:
+            exclusions.setdefault(row["init_face_id"], set()).add(row["person_id"])
+        return exclusions
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -870,6 +922,28 @@ def _migrate_6_to_7(conn: sqlite3.Connection) -> None:
         ON person_change_history(person_id);
 
         PRAGMA user_version = 7;
+        """
+    )
+
+
+def _migrate_7_to_8(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS init_face_person_exclusions (
+            session_id TEXT NOT NULL,
+            init_face_id TEXT NOT NULL,
+            person_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(session_id, init_face_id, person_id),
+            FOREIGN KEY(session_id) REFERENCES init_sessions(session_id),
+            FOREIGN KEY(init_face_id) REFERENCES init_faces(init_face_id) ON DELETE CASCADE,
+            FOREIGN KEY(person_id) REFERENCES persons(person_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_init_face_person_exclusions_face
+        ON init_face_person_exclusions(init_face_id);
+
+        PRAGMA user_version = 8;
         """
     )
 
