@@ -41,6 +41,7 @@ class RuntimeConfig:
     detector_model: Path = Path("models/det_500m.onnx")
     recognizer_model: Path = Path("models/w600k_r50.onnx")
     collect_metrics: bool = False
+    backup_retention_limit: int = 10
 
     @property
     def db_path(self) -> Path:
@@ -53,6 +54,10 @@ class RuntimeConfig:
     @property
     def index_dir(self) -> Path:
         return self.data_dir / "index"
+
+    @property
+    def backup_dir(self) -> Path:
+        return self.data_dir / "backups"
 
 
 def config_for_hardware(

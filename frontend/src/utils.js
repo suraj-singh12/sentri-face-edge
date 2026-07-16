@@ -42,8 +42,50 @@ export function isNewPersonSuggestion(match) {
 
 export function scoreColor(score) {
   if (score >= MATCH_TEXT_THRESHOLDS.certain) return "green";
+  if (score >= MATCH_TEXT_THRESHOLDS.likely) return "blue";
   if (score >= MATCH_TEXT_THRESHOLDS.possible) return "yellow";
   return "red";
+}
+
+export function matchDisplay(score) {
+  if (score >= MATCH_TEXT_THRESHOLDS.certain) {
+    return {
+      badge: "Strong Match",
+      color: "green",
+      stars: "★★★★★",
+      confidence: "Very High Confidence",
+    };
+  }
+  if (score >= MATCH_TEXT_THRESHOLDS.likely) {
+    return {
+      badge: "Good Match",
+      color: "blue",
+      stars: "★★★★☆",
+      confidence: "High Confidence",
+    };
+  }
+  if (score >= MATCH_TEXT_THRESHOLDS.possible) {
+    return {
+      badge: "Possible Match",
+      color: "yellow",
+      stars: "★★☆☆☆",
+      confidence: "Possible Match",
+    };
+  }
+  if (score > MATCH_TEXT_THRESHOLDS.newPerson) {
+    return {
+      badge: "Weak Match",
+      color: "orange",
+      stars: "★☆☆☆☆",
+      confidence: "Low Confidence",
+    };
+  }
+  return {
+    badge: "No Match",
+    color: "red",
+    stars: "☆☆☆☆☆",
+    confidence: "No Reliable Match",
+  };
 }
 
 export function qualityColor(status) {

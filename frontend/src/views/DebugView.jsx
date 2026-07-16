@@ -24,6 +24,7 @@ import {
   IconChevronRight,
   IconCircleCheck,
   IconDatabase,
+  IconDatabaseExport,
   IconDownload,
   IconInfoCircle,
   IconPlayerPause,
@@ -35,7 +36,7 @@ import {
   IconTrendingUp,
 } from "@tabler/icons-react";
 
-export function DebugView({ events, onRefresh }) {
+export function DebugView({ events, backups = [], backupCreating = false, onRefresh, onCreateBackup, onDeleteBackup }) {
   const [section, setSection] = useState("events");
   const [paused, setPaused] = useState(false);
   const [cleared, setCleared] = useState(false);
@@ -125,6 +126,13 @@ export function DebugView({ events, onRefresh }) {
               onClear={clearEvents}
               onExport={exportEvents}
               onRefresh={refreshEvents}
+            />
+          ) : section === "database" ? (
+            <DatabaseBackupsPanel
+              backups={backups}
+              creating={backupCreating}
+              onCreate={onCreateBackup}
+              onDelete={onDeleteBackup}
             />
           ) : (
             <DebugPlaceholderPanel section={section} summary={summary} totalEvents={normalizedEvents.length} />
@@ -328,6 +336,94 @@ function DebugPlaceholderPanel({ section, summary, totalEvents }) {
   );
 }
 
+function DatabaseBackupsPanel({ backups, creating, onCreate, onDelete }) {
+  const latest = backups[0] || null;
+  const previous = backups.slice(1);
+  return (
+    <Stack h="100%" gap="md">
+      <Group justify="space-between" align="flex-start" wrap="nowrap" className="debug-main-header">
+        <Box>
+          <Title order={3} size="h4">Database Backups</Title>
+          <Text size="sm" c="dimmed">Managed SQLite snapshots stored by the application</Text>
+        </Box>
+        <Button leftSection={<IconDatabaseExport size={16} />} loading={creating} onClick={onCreate}>
+          {creating ? "Creating backup..." : "Create Backup"}
+        </Button>
+      </Group>
+
+      <Paper withBorder radius="md" p="md" className="database-backup-summary">
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
+          <Box>
+            <Text size="xs" c="dimmed" fw={800} tt="uppercase">Last backup</Text>
+            {latest ? (
+              <>
+                <Text fw={900} size="lg">{formatDateTime(latest.created_at)}</Text>
+                <Text size="sm" c="dimmed">
+                  {formatBytes(latest.size_bytes)} · {latest.people_count.toLocaleString()} people · {latest.embedding_count.toLocaleString()} embeddings
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text fw={900} size="lg">No backup yet</Text>
+                <Text size="sm" c="dimmed">Create the first managed database snapshot.</Text>
+              </>
+            )}
+          </Box>
+          {latest && <Badge color={latest.verified ? "green" : "red"} variant="light">{latest.verified ? "Verified" : "Not verified"}</Badge>}
+        </Group>
+      </Paper>
+
+      <Paper withBorder radius="md" className="debug-table-card">
+        <Box className="debug-table-scroll">
+          <table className="debug-table database-backup-table">
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Size</th>
+                <th>People</th>
+                <th>Embeddings</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {backups.length ? backups.map((backup) => (
+                <tr key={backup.backup_id}>
+                  <td>{formatDateTime(backup.created_at)}</td>
+                  <td>{formatBytes(backup.size_bytes)}</td>
+                  <td>{backup.people_count.toLocaleString()}</td>
+                  <td>{backup.embedding_count.toLocaleString()}</td>
+                  <td>
+                    <Tooltip label="Delete backup">
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        onClick={() => onDelete(backup.backup_id)}
+                        aria-label={`Delete backup ${formatDateTime(backup.created_at)}`}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={5} className="debug-empty-row">No managed backups created yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </Box>
+      </Paper>
+
+      {previous.length > 0 && (
+        <Text size="sm" c="dimmed">
+          Previous backups: {previous.slice(0, 3).map((backup) => `${formatDateTime(backup.created_at)} ${formatBytes(backup.size_bytes)}`).join(" · ")}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
 function SimpleDebugGrid({ items }) {
   return (
     <Box className="debug-info-grid">
@@ -435,4 +531,16 @@ function formatBytes(value) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "-");
+  return date.toLocaleString([], {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

@@ -37,7 +37,7 @@ import {
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
 import { BestMatchPanel, EmptyCard, GalleryPanel, Surface } from "../components/Shared.jsx";
-import { hasCertainMatch, isNewPersonSuggestion, mediaUrl, recognitionText } from "../utils.js";
+import { hasCertainMatch, isNewPersonSuggestion, matchDisplay, mediaUrl, recognitionText } from "../utils.js";
 
 export function QueueView({
   queueGroups,
@@ -200,8 +200,7 @@ function QueueGroupList({ groups, progress, onCancelProcessing, onOpen }) {
             {pendingGroups.length ? pendingGroups.map((group) => {
               const best = group?.matches?.[0] || null;
               const score = best?.score || 0;
-              const scoreLabel = score >= 0.9 ? "Strong Match" : score >= 0.65 ? "Good Match" : "Possible Match";
-              const scoreColorName = score >= 0.9 ? "green" : score >= 0.65 ? "blue" : "yellow";
+              const display = matchDisplay(score);
               return (
                 <Card key={`${group.session_id}-${group.group_id}`} withBorder radius="md" p="md" className="queue-group-row">
                   <Group justify="space-between" wrap="nowrap" align="center">
@@ -211,8 +210,8 @@ function QueueGroupList({ groups, progress, onCancelProcessing, onOpen }) {
                         <Text fw={800} size="lg" className="queue-row-title">{recognitionText(best)}</Text>
                         <Text size="sm" c="dimmed" className="queue-row-meta">{group.group_id} • {group.faces.length} image{group.faces.length === 1 ? "" : "s"}</Text>
                         <Group gap="sm" mt="md">
-                          {best && <Badge color={scoreColorName} variant="light" size="lg">{scoreLabel}</Badge>}
-                          {best && <Badge color={scoreColorName} variant="light" size="lg">{best.score.toFixed(3)}</Badge>}
+                          {best && <Badge color={display.color} variant="light" size="lg">{display.badge}</Badge>}
+                          {best && <Badge color={display.color} variant="light" size="lg">{best.score.toFixed(3)}</Badge>}
                         </Group>
                       </Box>
                     </Group>

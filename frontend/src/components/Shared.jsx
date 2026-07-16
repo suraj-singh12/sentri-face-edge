@@ -39,6 +39,7 @@ import {
   detailsForEmbedding,
   galleryImages,
   isNewPersonSuggestion,
+  matchDisplay,
   mediaUrl,
   qualityColor,
   recognitionText,
@@ -114,16 +115,17 @@ export function BestMatchPanel({ best, face, onGallery, selectedImage }) {
 
   const noMatchFound = isNewPersonSuggestion(best);
   const matchImage = selectedImage || best.source_image || best.image_path || best.representative_source_image || best.representative_image;
+  const display = matchDisplay(best.score);
   return (
     <Stack className="best-match-panel">
       <Group gap="md" align="center">
-        {!noMatchFound && <ThemeIcon size={44} radius="xl" color="teal"><IconCheck size={26} /></ThemeIcon>}
+        {!noMatchFound && <ThemeIcon size={44} radius="xl" color={display.color}><IconCheck size={26} /></ThemeIcon>}
         <Box miw={0}>
           <Title order={2} size="h2" className="match-title">{recognitionText(best)}</Title>
           {!noMatchFound && (
             <Group gap="xs" mt={2}>
-              <Badge color="green" variant="light">Strong Match</Badge>
-              <Text size="sm" c="green.4">★★★★★</Text>
+              <Badge color={display.color} variant="light">{display.badge}</Badge>
+              <Text size="sm" c={`${display.color}.4`}>{display.stars}</Text>
               <Text size="xs" c="dimmed">({(best.score * 100).toFixed(1)}% confidence)</Text>
             </Group>
           )}
@@ -288,7 +290,7 @@ export function GalleryPanel({ payload, selectedImage, onImage, onBack }) {
 }
 
 export function InputImageQuality({ quality, face }) {
-  const reasons = quality.reasons.length ? quality.reasons.join(", ") : "";
+  const reasons = (quality.reasons || []).map(qualityReasonLabel).filter(Boolean);
   const detectedFaces = face ? 1 : 0;
   const statusLabel = quality.status ? quality.status.charAt(0).toUpperCase() + quality.status.slice(1).toLowerCase() : "-";
   return (
@@ -305,9 +307,38 @@ export function InputImageQuality({ quality, face }) {
           <Text size="sm">{detectedFaces} face detected</Text>
         </Group>
       </Group>
-      {reasons && <Text size="sm" c="dimmed">{reasons}</Text>}
+      {reasons.length > 0 && (
+        <Group gap={6} className="input-quality-reasons">
+          {reasons.map((reason) => (
+            <Badge key={reason} color={qualityColor(quality.status)} variant="light" size="sm">
+              {reason}
+            </Badge>
+          ))}
+        </Group>
+      )}
     </Stack>
   );
+}
+
+function qualityReasonLabel(reason) {
+  return {
+    low_detector_confidence: "Low detector confidence",
+    face_too_small: "Face is too small",
+    face_box_outside_image: "Face is partly outside the image",
+    invalid_face_crop: "Invalid face crop",
+    too_blurry: "Too blurry",
+    too_dark: "Too dark",
+    too_bright: "Too bright",
+    missing_landmarks: "Missing facial landmarks",
+  }[reason] || titleCaseReason(reason);
+}
+
+function titleCaseReason(reason) {
+  return String(reason || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export function Metrics({ metrics }) {
@@ -356,6 +387,7 @@ export function EmptyCard({ text }) {
 
 function MatchIdentitySummary({ match }) {
   const [copied, setCopied] = useState(false);
+  const display = matchDisplay(match.score);
   const copyGroupId = async () => {
     await navigator.clipboard?.writeText(match.person_id);
     setCopied(true);
@@ -363,12 +395,12 @@ function MatchIdentitySummary({ match }) {
   };
 
   return (
-    <Paper withBorder radius="md" p="sm" className="match-identity-summary">
+    <Paper withBorder radius="md" p="sm" className="match-identity-summary" data-match-color={display.color}>
       <Group grow>
         <Box>
           <Text size="sm" c="dimmed">Confidence Score</Text>
-          <Text fw={900} size="xl" className="match-identity-score">{(match.score * 100).toFixed(1)}%</Text>
-          <Text size="xs" c="dimmed">Very High Confidence</Text>
+          <Text fw={900} size="xl" c={`${display.color}.4`} className="match-identity-score">{(match.score * 100).toFixed(1)}%</Text>
+          <Text size="xs" c="dimmed">{display.confidence}</Text>
         </Box>
         <Box>
           <Text size="sm" c="dimmed">Group ID</Text>

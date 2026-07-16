@@ -1,4 +1,4 @@
-import { ActionIcon, AppShell, Box, Group, MantineProvider, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
+import { ActionIcon, AppShell, Box, Button, Group, Loader, MantineProvider, Modal, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
@@ -58,9 +58,16 @@ function SentriFaceShell() {
                 <IconRefresh size={18} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="Create DB backup">
-              <ActionIcon variant="light" color="blue" size="lg" onClick={guarded(actions.backupDb)} aria-label="Create DB backup">
-                <IconDatabaseExport size={18} />
+            <Tooltip label={state.backupCreating ? "Creating backup..." : "Create DB backup"}>
+              <ActionIcon
+                variant="light"
+                color="blue"
+                size="lg"
+                onClick={actions.requestBackup}
+                disabled={state.backupCreating}
+                aria-label={state.backupCreating ? "Creating backup..." : "Create DB backup"}
+              >
+                {state.backupCreating ? <Loader size={18} /> : <IconDatabaseExport size={18} />}
               </ActionIcon>
             </Tooltip>
           </Group>
@@ -142,9 +149,34 @@ function SentriFaceShell() {
           </Tabs.Panel>
 
           <Tabs.Panel value="debug">
-            <DebugView events={state.events} onRefresh={guarded(actions.loadEvents)} />
+            <DebugView
+              events={state.events}
+              backups={state.backups}
+              backupCreating={state.backupCreating}
+              onRefresh={guarded(actions.loadEvents)}
+              onCreateBackup={guarded(actions.createBackup)}
+              onDeleteBackup={guarded(actions.deleteBackup)}
+            />
           </Tabs.Panel>
         </Tabs>
+        <Modal
+          opened={state.backupModalOpen}
+          onClose={actions.cancelBackup}
+          title="Create database backup?"
+          centered
+          closeOnClickOutside={!state.backupCreating}
+          closeOnEscape={!state.backupCreating}
+        >
+          <Stack gap="md">
+            <Text size="sm" c="dimmed">
+              A snapshot of the current people, embeddings, and application data will be saved in the managed backups folder.
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={actions.cancelBackup} disabled={state.backupCreating}>Cancel</Button>
+              <Button onClick={guarded(actions.createBackup)} loading={state.backupCreating}>Create Backup</Button>
+            </Group>
+          </Stack>
+        </Modal>
       </AppShell.Main>
     </AppShell>
   );

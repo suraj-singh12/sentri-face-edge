@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from sentriface.backup_service import BackupError, BackupRecord, BackupService
 from sentriface.cli import build_dev_engine, build_onnx_engine
 from sentriface.config import RuntimeConfig, config_for_hardware
 from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
@@ -57,6 +58,12 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.events: list[dict[str, Any]] = []
         self.queue_progress: dict[str, dict[str, Any]] = {}
         self.queue_progress_lock = threading.Lock()
+        self.backups = BackupService(
+            config.db_path,
+            config.backup_dir,
+            retention_limit=config.backup_retention_limit,
+            logger=self.log_event,
+        )
 
     def log_event(self, event: str, **details: Any) -> None:
         item = {"event": event, **details}
@@ -122,6 +129,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/events":
                 self._json({"events": self.server.events[-80:]})
                 return
+            if parsed.path == "/api/backups":
+                self._json({"backups": [_backup(record) for record in self.server.backups.list_backups()]})
+                return
             if parsed.path == "/api/queue-progress":
                 job_id = _query_value(parsed.query, "job_id")
                 self._json(self.server.queue_progress_snapshot(job_id))
@@ -142,6 +152,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             payload = self._read_json()
+            if parsed.path == "/api/backups":
+                record = self.server.backups.create_backup()
+                self._json({"backup": _backup(record)})
+                return
             if parsed.path == "/api/upload":
                 saved_path = _save_upload(
                     self.server.config.data_dir,
@@ -451,10 +465,20 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"rejected": 1})
                 return
             if parsed.path == "/api/backup-db":
-                target = Path(_required(payload, "path"))
-                self.server.engine.backup_database(target)
-                self.server.log_event("backup-db", path=str(target))
-                self._json({"backup": str(target)})
+                record = self.server.backups.create_backup()
+                self._json({"backup": _backup(record)})
+                return
+            self._json({"error": "Unknown endpoint"}, status=HTTPStatus.NOT_FOUND)
+        except Exception as exc:  # noqa: BLE001 - local UI should surface errors clearly.
+            self._error(exc)
+
+    def do_DELETE(self) -> None:
+        parsed = urlparse(self.path)
+        try:
+            if parsed.path.startswith("/api/backups/"):
+                backup_id = parsed.path.removeprefix("/api/backups/")
+                self.server.backups.delete_backup(backup_id)
+                self._json({"deleted": True, "backup_id": backup_id})
                 return
             self._json({"error": "Unknown endpoint"}, status=HTTPStatus.NOT_FOUND)
         except Exception as exc:  # noqa: BLE001 - local UI should surface errors clearly.
@@ -496,7 +520,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
 
     def _error(self, exc: Exception) -> None:
         self.server.log_event("error", message=str(exc).strip("'"))
-        self._json({"error": str(exc).strip("'")}, status=400)
+        status = HTTPStatus.BAD_REQUEST
+        if isinstance(exc, BackupError) and "not found" in str(exc).lower():
+            status = HTTPStatus.NOT_FOUND
+        self._json({"error": str(exc).strip("'")}, status=status)
 
     def _media(self, raw_path: str) -> None:
         path = Path(raw_path)
@@ -930,6 +957,17 @@ def _quality(report: QualityReport | None) -> dict[str, Any] | None:
     if report is None:
         return None
     return {"status": report.status.value, "score": report.score, "reasons": list(report.reasons)}
+
+
+def _backup(record: BackupRecord) -> dict[str, Any]:
+    return {
+        "backup_id": record.backup_id,
+        "created_at": record.created_at,
+        "size_bytes": record.size_bytes,
+        "people_count": record.people_count,
+        "embedding_count": record.embedding_count,
+        "verified": record.verified,
+    }
 
 
 if __name__ == "__main__":

@@ -1004,6 +1004,22 @@ button {
   gap: 12px;
 }
 
+.database-backup-summary {
+  background: var(--sentriface-muted-surface);
+  border-color: var(--sentriface-card-border);
+}
+
+.database-backup-table th:nth-child(1),
+.database-backup-table td:nth-child(1) {
+  width: 36%;
+}
+
+.database-backup-table th:nth-child(5),
+.database-backup-table td:nth-child(5) {
+  width: 72px;
+  text-align: center;
+}
+
 .queue-decision-actions {
   min-height: 56px;
 }
@@ -1374,8 +1390,21 @@ button {
   background: var(--sentriface-summary-bg);
 }
 
+.match-identity-summary[data-match-color="blue"] {
+  border-color: color-mix(in srgb, var(--mantine-color-blue-5) 65%, var(--sentriface-card-border));
+}
+
+.match-identity-summary[data-match-color="yellow"],
+.match-identity-summary[data-match-color="orange"] {
+  border-color: color-mix(in srgb, var(--mantine-color-yellow-6) 70%, var(--sentriface-card-border));
+}
+
+.match-identity-summary[data-match-color="red"] {
+  border-color: color-mix(in srgb, var(--mantine-color-red-5) 65%, var(--sentriface-card-border));
+}
+
 .match-identity-score {
-  color: var(--sentriface-accent-text);
+  color: inherit;
 }
 
 .match-identity-placeholder {
@@ -1393,7 +1422,7 @@ button {
 
 .input-quality-panel {
   justify-content: center;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: var(--mantine-radius-md);
 }
@@ -1415,6 +1444,15 @@ button {
 .input-quality-divider {
   height: 28px;
   border-color: var(--sentriface-card-border);
+}
+
+.input-quality-reasons {
+  padding-top: 2px;
+}
+
+.input-quality-reasons .mantine-Badge-root {
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .recognize-action {

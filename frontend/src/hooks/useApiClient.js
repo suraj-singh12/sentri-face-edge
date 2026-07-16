@@ -2,8 +2,13 @@ import { useCallback } from "react";
 import { notifications } from "@mantine/notifications";
 
 export function useApiClient() {
-  const showToast = useCallback((message, color = "teal") => {
-    notifications.show({ message, color, autoClose: 2400 });
+  const showToast = useCallback((message, color = "teal", options = {}) => {
+    notifications.show({
+      message,
+      color,
+      title: options.title,
+      autoClose: options.autoClose ?? 2400,
+    });
   }, []);
 
   const readResponse = useCallback(async (response) => {
@@ -33,6 +38,11 @@ export function useApiClient() {
     }));
   }, [readResponse]);
 
+  const apiDelete = useCallback(async (path) => {
+    console.debug("[sentriface-ui] DELETE", path);
+    return readResponse(await fetch(path, { method: "DELETE" }));
+  }, [readResponse]);
+
   const guarded = useCallback((fn) => async (...args) => {
     try {
       await fn(...args);
@@ -41,5 +51,5 @@ export function useApiClient() {
     }
   }, []);
 
-  return { apiGet, apiPost, guarded, showToast };
+  return { apiGet, apiPost, apiDelete, guarded, showToast };
 }
