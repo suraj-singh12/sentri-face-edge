@@ -33,6 +33,7 @@ export function useSentriFaceController() {
     actions: {
       setActiveView,
       refreshAll: appData.refreshAll,
+      reloadAppData: appData.reloadAppData,
       loadPeople: appData.loadPeople,
       loadEvents: appData.loadEvents,
       loadBackups: appData.loadBackups,

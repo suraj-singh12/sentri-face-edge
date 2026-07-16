@@ -53,8 +53,8 @@ function SentriFaceShell() {
                 {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="Refresh data">
-              <ActionIcon variant="light" size="lg" onClick={guarded(actions.refreshAll)} aria-label="Refresh data">
+            <Tooltip label="Reload app data">
+              <ActionIcon variant="light" size="lg" onClick={guarded(actions.reloadAppData)} aria-label="Reload app data">
                 <IconRefresh size={18} />
               </ActionIcon>
             </Tooltip>

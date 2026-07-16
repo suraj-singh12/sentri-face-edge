@@ -14,6 +14,10 @@ export function useAppData({ activeView, apiGet, apiPost, apiDelete, showToast }
   const loadEvents = useCallback(async () => setEvents((await apiGet("/api/events")).events), [apiGet]);
   const loadBackups = useCallback(async () => setBackups((await apiGet("/api/backups")).backups), [apiGet]);
   const refreshAll = useCallback(async () => Promise.all([loadProfile(), loadPeople(), loadEvents(), loadBackups()]), [loadProfile, loadPeople, loadEvents, loadBackups]);
+  const reloadAppData = useCallback(async () => {
+    await refreshAll();
+    showToast("App data reloaded");
+  }, [refreshAll, showToast]);
 
   useEffect(() => {
     refreshAll().catch((error) => console.error(error));
@@ -83,6 +87,7 @@ export function useAppData({ activeView, apiGet, apiPost, apiDelete, showToast }
     loadEvents,
     loadBackups,
     refreshAll,
+    reloadAppData,
     requestBackup,
     cancelBackup,
     createBackup,
