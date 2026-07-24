@@ -84,13 +84,15 @@ function SentriFaceShell() {
             <RecognizeView
               recognizeFileRef={refs.recognizeFileRef}
               recognition={state.recognition}
+              selectedFaceIndex={state.selectedRecognitionFace}
               recognitionGallery={state.recognitionGallery}
               recognitionGalleryImage={state.recognitionGalleryImage}
-              recognitionAccepted={state.recognitionAccepted}
+              recognitionAcceptedFaces={state.recognitionAcceptedFaces}
               recognitionFollowup={state.recognitionFollowup}
               recognitionFollowupDone={state.recognitionFollowupDone}
               onRecognizeFile={guarded(actions.recognizeLoadedImage)}
               onLoadAnother={() => refs.recognizeFileRef.current?.click()}
+              onSelectFace={actions.selectRecognitionFace}
               onAccept={guarded(actions.recognitionAccept)}
               onNew={guarded(actions.recognitionNew)}
               onClear={actions.recognitionClear}

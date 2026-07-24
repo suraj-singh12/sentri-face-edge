@@ -20,6 +20,7 @@ from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
 from sentriface.hardware import assess_hardware
 from sentriface.models import (
     EmbeddingRecord,
+    FaceBox,
     InitGroup,
     PendingAddition,
     Person,
@@ -228,16 +229,22 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/recognition-accept-existing":
                 image_path = Path(_required(payload, "path"))
                 person_id = _required(payload, "person_id")
+                face_index = _face_index(payload)
                 if self.server.engine.get_person(person_id) is None:
                     raise KeyError(f"Unknown person: {person_id}")
                 self.server.engine.reset_metrics()
-                additions = self.server.engine.prepare_additions(image_path)
-                if not additions:
-                    raise KeyError("No acceptable faces found")
-                duplicate = _duplicate_embedding(additions[0].vector, self.server.engine.list_person_embeddings(person_id))
+                addition = self.server.engine.prepare_face_addition(
+                    image_path,
+                    face_index,
+                    allow_bad_quality=bool(payload.get("force_bad_quality", False)),
+                    expected_box=_face_box(payload),
+                )
+                if addition is None:
+                    raise KeyError(f"Face {face_index} does not meet the enrollment quality requirements")
+                duplicate = _duplicate_embedding(addition.vector, self.server.engine.list_person_embeddings(person_id))
                 if duplicate:
                     person = self.server.engine.get_person(person_id)
-                    self.server.log_event("recognition-duplicate", path=str(image_path), person_id=person_id)
+                    self.server.log_event("recognition-duplicate", path=str(image_path), person_id=person_id, face_index=face_index)
                     self._json(
                         {
                             "duplicate": True,
@@ -248,20 +255,26 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         }
                     )
                     return
-                embedding_id = self.server.engine.confirm_existing_person(additions[0], person_id)
-                self.server.log_event("recognition-accept-existing", path=str(image_path), person_id=person_id)
+                embedding_id = self.server.engine.confirm_existing_person(addition, person_id)
+                self.server.log_event("recognition-accept-existing", path=str(image_path), person_id=person_id, face_index=face_index)
                 self._json({"embedding_id": embedding_id, "metrics": self.server.engine.metrics_snapshot()})
                 return
             if parsed.path == "/api/recognition-new":
                 image_path = Path(_required(payload, "path"))
                 name = _required(payload, "name")
+                face_index = _face_index(payload)
                 self.server.engine.reset_metrics()
-                additions = self.server.engine.prepare_additions(image_path)
-                if not additions:
-                    raise KeyError("No acceptable faces found")
-                person_id = self.server.engine.confirm_new_person(additions[0], name)
+                addition = self.server.engine.prepare_face_addition(
+                    image_path,
+                    face_index,
+                    allow_bad_quality=bool(payload.get("force_bad_quality", False)),
+                    expected_box=_face_box(payload),
+                )
+                if addition is None:
+                    raise KeyError(f"Face {face_index} does not meet the enrollment quality requirements")
+                person_id = self.server.engine.confirm_new_person(addition, name)
                 embedding = self.server.engine.list_person_embeddings(person_id)[-1]
-                self.server.log_event("recognition-new", path=str(image_path), person_id=person_id)
+                self.server.log_event("recognition-new", path=str(image_path), person_id=person_id, face_index=face_index)
                 self._json(
                     {
                         "person_id": person_id,
@@ -593,6 +606,37 @@ def _required(payload: dict[str, Any], key: str) -> str:
     if value is None or str(value).strip() == "":
         raise KeyError(f"Missing required field: {key}")
     return str(value)
+
+
+def _face_index(payload: dict[str, Any]) -> int:
+    try:
+        face_index = int(payload.get("face_index", 1))
+    except (TypeError, ValueError) as exc:
+        raise KeyError("face_index must be a positive integer") from exc
+    if face_index < 1:
+        raise KeyError("face_index must be a positive integer")
+    return face_index
+
+
+def _face_box(payload: dict[str, Any]) -> FaceBox | None:
+    value = payload.get("face_box")
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise KeyError("face_box must be an object")
+    try:
+        box = FaceBox(
+            x=int(value["x"]),
+            y=int(value["y"]),
+            width=int(value["width"]),
+            height=int(value["height"]),
+            confidence=float(value.get("confidence", 1.0)),
+        )
+        if box.width <= 0 or box.height <= 0:
+            raise ValueError("face box dimensions must be positive")
+        return box
+    except (KeyError, TypeError, ValueError) as exc:
+        raise KeyError("face_box must contain numeric x, y, width, and height") from exc
 
 
 def _query_value(query: str, key: str) -> str:

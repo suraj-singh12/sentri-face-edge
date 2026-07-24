@@ -61,12 +61,14 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
         job_id: jobId,
         total_files: options.totalFiles || 0,
         uploaded_files: options.uploadedFiles || options.totalFiles || 0,
+        force_bad_quality: options.includeLowQuality !== false,
       });
       if (canceledQueueJobs.current.has(jobId)) return;
       setQueueSessionId(payload.session_id);
       setQueueGroups(payload.groups);
       resetQueueReview();
-      showToast(`Queued ${payload.groups.length} group(s)`);
+      const faceCount = payload.groups.reduce((total, group) => total + (group.faces?.length || 0), 0);
+      showToast(`Queued ${faceCount} face(s) in ${payload.groups.length} group(s)`);
       setQueueProgress((current) => normalizeQueueProgress({
         ...current,
         jobId,
@@ -194,7 +196,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
       group_id: queueSelectedGroup.group_id,
       face_ids: faceIds,
     });
-    showToast(`Discarded ${faceIds.length} image(s)`);
+    showToast(`Discarded ${faceIds.length} face(s)`);
     resetQueueDecision();
     await Promise.all([loadQueueGroups(queueSelectedGroup.session_id), loadEvents()]);
   };
@@ -265,7 +267,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     setQueueAccepted(false);
     setQueueGallery(null);
     setQueueGalleryImage(null);
-    showToast(`Queue details confirmed for ${entries.length} image(s)`);
+    showToast(`Queue details confirmed for ${entries.length} face(s)`);
     const [queuePayload] = await Promise.all([
       loadQueueGroups(confirmedSessionId, { preserveSelectedGroup: true, removeFaceIds: confirmedFaceIds }),
       loadPeople(),
@@ -299,8 +301,8 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
 
   function selectedQueueFaceIds() {
     if (!queueSelectedFaces.length) {
-      showToast("Select images first", "yellow");
-      throw new Error("No queue images selected");
+      showToast("Select faces first", "yellow");
+      throw new Error("No queue faces selected");
     }
     return queueSelectedFaces;
   }
@@ -309,7 +311,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     if (queueSelectedFaces.length) return queueSelectedFaces;
     const faceIds = (queueSelectedGroup?.faces || []).map((face) => face.init_face_id);
     if (!faceIds.length) {
-      throw new Error("No queue images available");
+      throw new Error("No queue faces available");
     }
     return faceIds;
   }

@@ -1,29 +1,52 @@
-import { Badge, Box, Button, Grid, Group, Image, Paper, Stack, Text, ThemeIcon } from "@mantine/core";
-import { IconBulb, IconFolder, IconTrash, IconUserCheck, IconUserPlus } from "@tabler/icons-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Badge,
+  Box,
+  Button,
+  Card,
+  Grid,
+  Group,
+  Image,
+  Modal,
+  Paper,
+  Progress,
+  ScrollArea,
+  Select,
+  Stack,
+  Text,
+  ThemeIcon,
+} from "@mantine/core";
+import {
+  IconAlertTriangle,
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconFolder,
+  IconAdjustmentsHorizontal,
+  IconTrash,
+  IconUserCheck,
+  IconUserPlus,
+} from "@tabler/icons-react";
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
-import {
-  BestMatchPanel,
-  GalleryPanel,
-  ImageFrame,
-  InputImageQuality,
-  LoadImagePanel,
-  Metrics,
-  Surface,
-} from "../components/Shared.jsx";
+import { GalleryPanel, LoadImagePanel, Metrics, Surface } from "../components/Shared.jsx";
 import { MATCH_TEXT_THRESHOLDS } from "../constants.js";
-import { hasCertainMatch, mediaUrl } from "../utils.js";
+import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor } from "../utils.js";
+
+const FACE_COLORS = ["#35d6d0", "#bd83ff", "#f5a623", "#59a7ff", "#f472b6", "#a3e635"];
 
 export function RecognizeView({
   recognizeFileRef,
   recognition,
+  selectedFaceIndex,
   recognitionGallery,
   recognitionGalleryImage,
-  recognitionAccepted,
+  recognitionAcceptedFaces,
   recognitionFollowup,
   recognitionFollowupDone,
   onRecognizeFile,
   onLoadAnother,
+  onSelectFace,
   onAccept,
   onNew,
   onClear,
@@ -34,49 +57,153 @@ export function RecognizeView({
   onFollowupSubmit,
   onFollowupClear,
 }) {
-  const topMostMatch = recognition?.face?.matches?.[0] || null;
-  const isExistingPerson = topMostMatch?.score > MATCH_TEXT_THRESHOLDS.newPerson;
-  const shouldFadeNewPerson = hasCertainMatch(topMostMatch);
-  const quality = recognition?.face?.quality;
+  const faces = recognition?.faces || [];
+  const selectedFace = faces.find((face) => face.index === selectedFaceIndex) || faces[0] || null;
+  const selectedMatch = selectedFace?.matches?.[0] || null;
+  const selectedAccepted = recognitionAcceptedFaces.includes(selectedFace?.index);
+  const selectedIsKnown = selectedMatch?.score > MATCH_TEXT_THRESHOLDS.newPerson;
+  const selectedIsBad = selectedFace?.quality?.status === "bad";
+  const imageSrc = recognition?.inputPath ? mediaUrl(recognition.inputPath) : null;
+  const imageSize = useImageSize(imageSrc);
+  const [sort, setSort] = useState("index");
+  const [qualityOverride, setQualityOverride] = useState(null);
+  const sortedFaces = useMemo(() => [...faces].sort((left, right) => {
+    if (sort === "quality") return (right.quality?.score || 0) - (left.quality?.score || 0) || left.index - right.index;
+    if (sort === "confidence") return (right.box?.confidence || 0) - (left.box?.confidence || 0) || left.index - right.index;
+    return left.index - right.index;
+  }), [faces, sort]);
+  useEffect(() => setQualityOverride(null), [recognition?.inputPath]);
+
+  const requestFaceAction = (action, faceIndex) => {
+    const face = faces.find((item) => item.index === faceIndex);
+    if (!face) return;
+    onSelectFace(faceIndex);
+    if (face.quality?.status === "bad") {
+      setQualityOverride({ action, face });
+      return;
+    }
+    if (action === "accept") onAccept(faceIndex);
+    else onNew(faceIndex);
+  };
+
+  const confirmQualityOverride = () => {
+    if (!qualityOverride) return;
+    const { action, face } = qualityOverride;
+    setQualityOverride(null);
+    if (action === "accept") onAccept(face.index, true);
+    else onNew(face.index, true);
+  };
 
   return (
     <>
       <input ref={recognizeFileRef} className="hidden-file" type="file" accept="image/*" onChange={onRecognizeFile} />
       <Paper withBorder radius="md" p="md" className="recognize-workspace">
         <Stack gap="md">
-          <Grid align="stretch" className="recognize-grid">
+          <Grid align="stretch" className="recognize-grid recognize-grid--multi">
             <Grid.Col span={{ base: 12, md: 7 }}>
-              <Surface step="1" title="Input Image" subtitle={recognition?.inputPath || "Upload or select a photo to recognize"} action={(
-                <Button variant="default" leftSection={<IconFolder size={18} />} onClick={onLoadAnother}>Load Another</Button>
-              )}>
-                <ImageFrame>
-                  {recognition?.inputPath
-                    ? <Image src={mediaUrl(recognition.inputPath)} alt="input" fit="contain" h="100%" />
-                    : <LoadImagePanel onClick={onLoadAnother} />}
-                </ImageFrame>
-                {quality && (
-                  <Box className="quality-slot">                
-                    <InputImageQuality quality={quality} face={recognition?.face} />
-                  </Box>
+              <Surface
+                step="1"
+                title="Input Image"
+                subtitle={recognition?.inputPath || "Upload or select a photo to recognize"}
+                action={(
+                  <Group gap="sm" wrap="nowrap">
+                    <Button variant="default" leftSection={<IconFolder size={18} />} onClick={onLoadAnother}>Load Another</Button>
+                    {recognition && <Badge size="lg" variant="outline" color={faces.length ? "gray" : "red"}>{faceCountLabel(faces.length)}</Badge>}
+                  </Group>
                 )}
+              >
+                <Box className="multi-face-image-frame">
+                  {imageSrc
+                    ? <AnnotatedImage src={imageSrc} faces={faces} imageSize={imageSize} selectedFaceIndex={selectedFace?.index} onSelectFace={onSelectFace} />
+                    : <LoadImagePanel onClick={onLoadAnother} />}
+                </Box>
+                <Box className="face-quality-section">
+                  <Group justify="space-between" gap="sm" wrap="nowrap">
+                    <Group gap="sm">
+                      <Text fw={600}>Face Quality</Text>
+                      <Badge variant="light" color="gray">{faces.length} {faces.length === 1 ? "face" : "faces"}</Badge>
+                    </Group>
+                    {faces.length > 1 && (
+                      <Select
+                        size="xs"
+                        w={150}
+                        value={sort}
+                        onChange={(value) => setSort(value || "index")}
+                        data={[
+                          { value: "index", label: "Face order" },
+                          { value: "quality", label: "Quality" },
+                          { value: "confidence", label: "Detection" },
+                        ]}
+                        leftSection={<IconAdjustmentsHorizontal size={14} />}
+                        allowDeselect={false}
+                        aria-label="Sort detected faces"
+                      />
+                    )}
+                  </Group>
+                  {faces.length ? (
+                    <Box className="face-quality-scroll" role="list" aria-label="Detected face quality">
+                      {sortedFaces.map((face) => (
+                        <FaceQualityCard
+                          key={face.index}
+                          face={face}
+                          src={imageSrc}
+                          imageSize={imageSize}
+                          selected={face.index === selectedFace?.index}
+                          onClick={() => onSelectFace(face.index)}
+                        />
+                      ))}
+                    </Box>
+                  ) : recognition ? (
+                    <Paper withBorder p="md" className="recognize-empty-inline">
+                      <Text size="sm" c="dimmed">No faces were detected. Try a clearer, front-facing photo.</Text>
+                    </Paper>
+                  ) : null}
+                </Box>
               </Surface>
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 5 }}>
-              <Surface step="2" title="Recognition Result" subtitle="Best match from your people database">
+              <Surface
+                step="2"
+                title="Recognition Results"
+                subtitle="Best matches from your people database"
+                action={recognition && <Badge size="lg" variant="light" color={faces.length ? "green" : "gray"}>{faces.length} detected</Badge>}
+              >
                 {recognitionGallery
                   ? <GalleryPanel payload={recognitionGallery} selectedImage={recognitionGalleryImage} onImage={onGalleryImage} onBack={onGalleryBack} />
-                  : <BestMatchPanel best={topMostMatch} face={recognition?.face} selectedImage={recognitionGalleryImage} onGallery={onGallery} />}
+                  : (
+                    <RecognitionResults
+                      faces={faces}
+                      inputSrc={imageSrc}
+                      imageSize={imageSize}
+                      selectedFaceIndex={selectedFace?.index}
+                      acceptedFaces={recognitionAcceptedFaces}
+                      onSelectFace={onSelectFace}
+                      onAccept={(faceIndex) => requestFaceAction("accept", faceIndex)}
+                      onGallery={onGallery}
+                    />
+                  )}
               </Surface>
             </Grid.Col>
           </Grid>
           <Group grow className="action-slot">
-            <Button className="recognize-action recognize-action--accept" leftSection={<IconUserCheck size={20} />} onClick={onAccept} disabled={!topMostMatch || !isExistingPerson || recognitionAccepted}>
-              {topMostMatch && isExistingPerson ? `Accept as ${topMostMatch.name}` : "Accept"}
-              <Text component="span" size="xs" fw={400}>Add this photo to this person</Text>
+            <Button
+              className="recognize-action recognize-action--accept"
+              leftSection={<IconUserCheck size={20} />}
+              onClick={() => requestFaceAction("accept", selectedFace?.index)}
+              disabled={!selectedFace || !selectedMatch || !selectedIsKnown || selectedAccepted}
+            >
+              {selectedMatch && selectedIsKnown ? `Accept Face ${faceNumber(selectedFace.index)}${selectedIsBad ? " Anyway" : ""}` : "Accept"}
+              <Text component="span" size="xs" fw={400}>{selectedMatch && selectedIsKnown ? (selectedIsBad ? "Review the quality warning first" : `Add this photo to ${selectedMatch.name}`) : "Select a confident match"}</Text>
             </Button>
-            <Button className="recognize-action recognize-action--new" variant="light" leftSection={<IconUserPlus size={20} />} onClick={onNew} disabled={!recognition || recognitionAccepted || shouldFadeNewPerson}>
-              New Person
-              <Text component="span" size="xs" fw={400}>Create a new person from this photo</Text>
+            <Button
+              className="recognize-action recognize-action--new"
+              variant="light"
+              leftSection={<IconUserPlus size={20} />}
+              onClick={() => requestFaceAction("new", selectedFace?.index)}
+              disabled={!selectedFace || selectedAccepted}
+            >
+              {selectedIsBad ? "New Person Anyway" : "New Person"}
+              <Text component="span" size="xs" fw={400}>{selectedFace ? (selectedIsBad ? "Review the quality warning first" : `Create a person from Face ${faceNumber(selectedFace.index)}`) : "Select a face first"}</Text>
             </Button>
             <Button className="recognize-action recognize-action--clear" color="red" variant="light" leftSection={<IconTrash size={20} />} onClick={onClear}>
               Clear
@@ -85,6 +212,35 @@ export function RecognizeView({
           </Group>
         </Stack>
       </Paper>
+      <Modal
+        opened={Boolean(qualityOverride)}
+        onClose={() => setQualityOverride(null)}
+        title={`Use Face ${faceNumber(qualityOverride?.face?.index)} despite quality warning?`}
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            This face was marked poor quality{qualityOverride?.face?.quality?.reasons?.length
+              ? ` (${qualityOverride.face.quality.reasons.map(qualityReasonLabel).join(", ")})`
+              : ""}. You can continue, but future recognition may be less reliable.
+          </Text>
+          <Paper withBorder p="sm" className="quality-override-summary">
+            <Group gap="sm" wrap="nowrap">
+              <FaceCrop src={imageSrc} face={qualityOverride?.face} imageSize={imageSize} className="quality-override-thumb" />
+              <Box>
+                <Text fw={700}>Face {faceNumber(qualityOverride?.face?.index)}</Text>
+                <Text size="xs" c="dimmed">Quality score {Math.round((qualityOverride?.face?.quality?.score || 0) * 100)}%</Text>
+              </Box>
+            </Group>
+          </Paper>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setQualityOverride(null)}>Cancel</Button>
+            <Button color="orange" onClick={confirmQualityOverride}>
+              {qualityOverride?.action === "accept" ? "Accept Anyway" : "Create Person Anyway"}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
       {recognitionFollowup && (
         <RecognitionFollowupForm
           values={recognitionFollowup}
@@ -95,10 +251,195 @@ export function RecognizeView({
         />
       )}
       {recognition?.metrics && <Metrics metrics={recognition.metrics} />}
-      <Group justify="center" mt="xs" className="recognize-tip">
-        <ThemeIcon size="sm" variant="subtle" color="gray"><IconBulb size={15} /></ThemeIcon>
-        <Text size="xs" c="dimmed">Tip: Use high quality, front-facing photos for best recognition results.</Text>
-      </Group>
     </>
   );
+}
+
+function AnnotatedImage({ src, faces, imageSize, selectedFaceIndex, onSelectFace }) {
+  const width = imageSize.width || 1;
+  const height = imageSize.height || 1;
+  return (
+    <svg className="annotated-face-image" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Input image with ${faceCountLabel(faces.length)}`}>
+      <image href={src} width={width} height={height} preserveAspectRatio="xMidYMid meet" />
+      {faces.map((face) => {
+        const color = faceColor(face.index);
+        const selected = face.index === selectedFaceIndex;
+        const labelHeight = Math.max(18, height * 0.035);
+        const fontSize = Math.max(12, height * 0.022);
+        return (
+          <g key={face.index} className="face-overlay" data-selected={selected} onClick={() => onSelectFace(face.index)}>
+            <rect x={face.box.x} y={face.box.y} width={face.box.width} height={face.box.height} fill="transparent" stroke={color} strokeWidth={selected ? 4 : 2.5} rx="2" vectorEffect="non-scaling-stroke" />
+            <rect x={face.box.x} y={Math.max(0, face.box.y - labelHeight)} width={Math.max(68, face.box.width * 0.58)} height={labelHeight} fill={color} rx="2" />
+            <text x={face.box.x + 6} y={Math.max(labelHeight * 0.72, face.box.y - labelHeight * 0.25)} fill="#071018" fontSize={fontSize} fontWeight="700">Face {faceNumber(face.index)}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function FaceCrop({ src, face, imageSize, className = "" }) {
+  if (!src || !face) return null;
+  const width = imageSize.width || 1;
+  const height = imageSize.height || 1;
+  const padX = face.box.width * 0.22;
+  const padY = face.box.height * 0.18;
+  const x = Math.max(0, face.box.x - padX);
+  const y = Math.max(0, face.box.y - padY);
+  const cropWidth = Math.min(width - x, face.box.width + padX * 2);
+  const cropHeight = Math.min(height - y, face.box.height + padY * 2);
+  return (
+    <svg className={`face-crop ${className}`} viewBox={`${x} ${y} ${Math.max(1, cropWidth)} ${Math.max(1, cropHeight)}`} role="img" aria-label={`Face ${faceNumber(face.index)}`}>
+      <image href={src} width={width} height={height} preserveAspectRatio="none" />
+    </svg>
+  );
+}
+
+function FaceQualityCard({ face, src, imageSize, selected, onClick }) {
+  const quality = face.quality || {};
+  const color = qualityColor(quality.status);
+  const status = quality.status === "warn" ? "Fair" : quality.status === "bad" ? "Poor" : "Good";
+  const reason = qualityReasonLabel(quality.reasons?.[0]);
+  return (
+    <Card component="button" withBorder p="xs" className="face-quality-card" data-selected={selected} data-face-index={face.index} data-face-color={color} onClick={onClick} role="listitem">
+      <Group gap="sm" wrap="nowrap" align="flex-start">
+        <FaceCrop src={src} face={face} imageSize={imageSize} className="face-quality-thumb" />
+        <Stack gap={4} miw={0} className="face-quality-copy">
+          <Text fw={700} size="sm" style={{ color: faceColor(face.index) }}>Face {faceNumber(face.index)}</Text>
+          <Group gap={6} wrap="nowrap">
+            <ThemeIcon size="sm" radius="xl" color={color}>{quality.status === "bad" ? <IconAlertTriangle size={13} /> : <IconCheck size={13} />}</ThemeIcon>
+            <Text size="sm" fw={600}>{status}</Text>
+            <Text size="xs" c="dimmed">{Math.round((quality.score || 0) * 100)}</Text>
+          </Group>
+          {reason && <Badge size="xs" color={color} variant="light" className="quality-reason-badge">{reason}</Badge>}
+        </Stack>
+      </Group>
+      <Group grow gap="xs" mt="xs">
+        <QualityMeter label="Quality" value={(quality.score || 0) * 100} color={color} />
+        <QualityMeter label="Detection" value={(face.box?.confidence || 0) * 100} color={(face.box?.confidence || 0) > 0.75 ? "green" : "yellow"} />
+      </Group>
+    </Card>
+  );
+}
+
+function QualityMeter({ label, value, color }) {
+  return (
+    <Box>
+      <Text size="10px" c="dimmed" mb={4}>{label}</Text>
+      <Progress value={value} color={color} size={5} />
+    </Box>
+  );
+}
+
+function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acceptedFaces, onSelectFace, onAccept, onGallery }) {
+  if (!faces.length) {
+    return (
+      <Paper withBorder className="recognition-results-empty">
+        <Text fw={700}>{inputSrc ? "No faces detected" : "No result yet"}</Text>
+        <Text size="sm" c="dimmed">{inputSrc ? "Try another photo with visible faces." : "Load an image to start recognition."}</Text>
+      </Paper>
+    );
+  }
+  return (
+    <Stack className="recognition-results-shell" gap={6}>
+      <ScrollArea type="auto" scrollbars="y" className="recognition-results-scroll">
+        <Stack gap="xs" pr="xs">
+          {faces.map((face) => (
+            <RecognitionFaceCard
+              key={face.index}
+              face={face}
+              inputSrc={inputSrc}
+              imageSize={imageSize}
+              selected={face.index === selectedFaceIndex}
+              accepted={acceptedFaces.includes(face.index)}
+              onSelect={() => onSelectFace(face.index)}
+              onAccept={() => onAccept(face.index)}
+              onGallery={onGallery}
+            />
+          ))}
+        </Stack>
+      </ScrollArea>
+      <Text size="xs" c="dimmed">Showing {faces.length} of {faces.length} {faces.length === 1 ? "face" : "faces"}</Text>
+    </Stack>
+  );
+}
+
+function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, onSelect, onAccept, onGallery }) {
+  const best = face.matches?.[0] || null;
+  const unknown = isNewPersonSuggestion(best);
+  const display = matchDisplay(best?.score || 0);
+  const faceLabel = `Face ${faceNumber(face.index)}`;
+  const matchImage = best?.representative_image;
+  return (
+    <Card withBorder p="xs" className="recognition-face-card" data-selected={selected} data-face-index={face.index} style={{ "--face-color": faceColor(face.index) }}>
+      <button type="button" className="recognition-face-summary" onClick={onSelect} aria-expanded={selected}>
+        <Box className="recognition-face-photo">
+          {matchImage && !unknown
+            ? <Image src={mediaUrl(matchImage)} alt={best.name} fit="cover" h="100%" />
+            : <FaceCrop src={inputSrc} face={face} imageSize={imageSize} />}
+        </Box>
+        <Box miw={0} className="recognition-face-identity">
+          <Text size="sm" fw={700} className="recognition-face-label">{faceLabel}</Text>
+          <Text fw={800} truncate>{unknown ? "Unknown" : best.name}</Text>
+          <Group gap="xs" wrap="nowrap">
+            <Progress value={(best?.score || 0) * 100} color={display.color === "red" ? "orange" : display.color} size={5} className="recognition-score-bar" />
+            <Text size="xs" c="dimmed">{((best?.score || 0) * 100).toFixed(1)}%</Text>
+            <Badge size="xs" color={unknown ? "orange" : display.color} variant="light">{unknown ? "Review" : accepted ? "Accepted" : "Match"}</Badge>
+          </Group>
+        </Box>
+        {selected ? <IconChevronUp size={18} /> : <IconChevronDown size={18} />}
+      </button>
+      {selected && (
+        <Box className="recognition-face-details">
+          <Text size="xs" c="dimmed">{unknown ? "No confident match" : `ID ${best.person_id}`}</Text>
+          <Group grow mt="xs">
+            <Button size="xs" variant="default" disabled={unknown} onClick={() => best && onGallery(best.person_id)}>View profile</Button>
+            <Button size="xs" color={face.quality?.status === "bad" ? "orange" : "green"} leftSection={<IconCheck size={14} />} disabled={unknown || accepted} onClick={onAccept}>
+              {unknown ? "No Match" : accepted ? "Accepted" : face.quality?.status === "bad" ? "Accept Anyway" : "Accept"}
+            </Button>
+          </Group>
+        </Box>
+      )}
+    </Card>
+  );
+}
+
+function useImageSize(src) {
+  const [size, setSize] = useState({ width: 1, height: 1 });
+  useEffect(() => {
+    if (!src) {
+      setSize({ width: 1, height: 1 });
+      return undefined;
+    }
+    const image = new window.Image();
+    image.onload = () => setSize({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 });
+    image.src = src;
+    return () => { image.onload = null; };
+  }, [src]);
+  return size;
+}
+
+function faceColor(index) {
+  return FACE_COLORS[(Math.max(1, index) - 1) % FACE_COLORS.length];
+}
+
+function faceNumber(index) {
+  return String(index || 0).padStart(2, "0");
+}
+
+function faceCountLabel(count) {
+  return `${count} ${count === 1 ? "face" : "faces"} detected`;
+}
+
+function qualityReasonLabel(reason) {
+  return {
+    low_detector_confidence: "Low confidence",
+    face_too_small: "Too small",
+    face_box_outside_image: "Partly outside",
+    invalid_face_crop: "Invalid crop",
+    too_blurry: "Too blurry",
+    too_dark: "Too dark",
+    too_bright: "Too bright",
+    missing_landmarks: "Missing landmarks",
+  }[reason] || String(reason || "").replaceAll("_", " ");
 }

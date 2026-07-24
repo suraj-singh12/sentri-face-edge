@@ -5,19 +5,21 @@ import { clearFile, currentDateTimeParts, imageIdFromPath, isNewPersonSuggestion
 
 export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople, showToast, uploadFile }) {
   const [recognition, setRecognition] = useState(null);
+  const [selectedRecognitionFace, setSelectedRecognitionFace] = useState(1);
   const [recognitionGallery, setRecognitionGallery] = useState(null);
   const [recognitionGalleryImage, setRecognitionGalleryImage] = useState(null);
-  const [recognitionAccepted, setRecognitionAccepted] = useState(false);
+  const [recognitionAcceptedFaces, setRecognitionAcceptedFaces] = useState([]);
   const [recognitionFollowup, setRecognitionFollowup] = useState(null);
   const [recognitionFollowupDone, setRecognitionFollowupDone] = useState(false);
   const recognizeFileRef = useRef(null);
 
   const runRecognition = useCallback(async (path) => {
     const payload = await apiPost("/api/recognize", { path });
-    setRecognition({ inputPath: path, face: payload.faces[0] || null, metrics: payload.metrics });
+    setRecognition({ inputPath: path, faces: payload.faces || [], metrics: payload.metrics });
+    setSelectedRecognitionFace(payload.faces?.[0]?.index || 1);
     setRecognitionGallery(null);
     setRecognitionGalleryImage(null);
-    setRecognitionAccepted(false);
+    setRecognitionAcceptedFaces([]);
     setRecognitionFollowup(null);
     setRecognitionFollowupDone(false);
     showToast(`Recognized ${payload.faces.length} face(s)`);
@@ -30,33 +32,50 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
     await runRecognition(await uploadFile(file));
   }, [runRecognition, uploadFile]);
 
-  const recognitionAccept = async () => {
-    const best = recognition?.face?.matches?.[0];
+  const recognitionAccept = async (requestedFaceIndex, forceBadQuality = false) => {
+    const faceIndex = requestedFaceIndex || selectedRecognitionFace;
+    const face = recognition?.faces?.find((item) => item.index === faceIndex);
+    const best = face?.matches?.[0];
     if (!recognition?.inputPath || !best || isNewPersonSuggestion(best)) return;
+    setSelectedRecognitionFace(faceIndex);
+    setRecognitionGallery(null);
+    setRecognitionGalleryImage(null);
     if (best.score >= DUPLICATE_MATCH_SCORE) {
-      setRecognitionAccepted(true);
-      openRecognitionFollowup({ name: best.name, personId: best.person_id, embeddingId: best.embedding_ids[0], decision: "duplicate" });
+      setRecognitionAcceptedFaces((current) => current.includes(faceIndex) ? current : [...current, faceIndex]);
+      openRecognitionFollowup({ name: best.name, personId: best.person_id, embeddingId: best.embedding_ids[0], decision: "duplicate", faceIndex, faceBox: face.box, forceBadQuality });
       showToast(`Duplicate image of ${best.name}`);
       return;
     }
-    setRecognitionAccepted(true);
-    openRecognitionFollowup({ name: best.name, personId: best.person_id, decision: "existing", action: "existing" });
+    setRecognitionAcceptedFaces((current) => current.includes(faceIndex) ? current : [...current, faceIndex]);
+    openRecognitionFollowup({ name: best.name, personId: best.person_id, decision: "existing", action: "existing", faceIndex, faceBox: face.box, forceBadQuality });
     showToast(`Fill details for ${best.name}`);
   };
 
-  const recognitionNew = async () => {
-    if (!recognition?.inputPath) return;
-    setRecognitionAccepted(true);
-    openRecognitionFollowup({ name: "", personId: "", decision: "new", action: "new" });
+  const recognitionNew = async (requestedFaceIndex, forceBadQuality = false) => {
+    const faceIndex = requestedFaceIndex || selectedRecognitionFace;
+    const face = recognition?.faces?.find((item) => item.index === faceIndex);
+    if (!recognition?.inputPath || !face || (face.quality?.status === "bad" && !forceBadQuality)) return;
+    setSelectedRecognitionFace(faceIndex);
+    setRecognitionGallery(null);
+    setRecognitionGalleryImage(null);
+    setRecognitionAcceptedFaces((current) => current.includes(faceIndex) ? current : [...current, faceIndex]);
+    openRecognitionFollowup({ name: "", personId: "", decision: "new", action: "new", faceIndex, faceBox: face.box, forceBadQuality });
     showToast("Fill new person details");
+  };
+
+  const selectRecognitionFace = (faceIndex) => {
+    setSelectedRecognitionFace(faceIndex);
+    setRecognitionGallery(null);
+    setRecognitionGalleryImage(null);
   };
 
   const recognitionClear = () => {
     clearFile(recognizeFileRef);
     setRecognition(null);
+    setSelectedRecognitionFace(1);
     setRecognitionGallery(null);
     setRecognitionGalleryImage(null);
-    setRecognitionAccepted(false);
+    setRecognitionAcceptedFaces([]);
     setRecognitionFollowup(null);
     setRecognitionFollowupDone(false);
   };
@@ -93,6 +112,9 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
       const payload = await apiPost("/api/recognition-accept-existing", {
         path: recognition.inputPath,
         person_id: recognitionFollowup.personId,
+        face_index: recognitionFollowup.faceIndex,
+        face_box: recognitionFollowup.faceBox,
+        force_bad_quality: recognitionFollowup.forceBadQuality,
       });
       embeddingId = payload.embedding_id;
       detailName = payload.name || detailName;
@@ -101,6 +123,9 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
       const payload = await apiPost("/api/recognition-new", {
         path: recognition.inputPath,
         name: recognitionFollowup.name,
+        face_index: recognitionFollowup.faceIndex,
+        face_box: recognitionFollowup.faceBox,
+        force_bad_quality: recognitionFollowup.forceBadQuality,
       });
       personId = payload.person_id;
       embeddingId = payload.embedding_id;
@@ -145,7 +170,7 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
     setRecognitionGalleryImage(embedding?.source_image || path);
   };
 
-  function openRecognitionFollowup({ name, personId, embeddingId, decision, action }) {
+  function openRecognitionFollowup({ name, personId, embeddingId, decision, action, faceIndex, faceBox, forceBadQuality = false }) {
     const { date, time } = currentDateTimeParts();
     setRecognitionFollowup({
       date,
@@ -160,7 +185,10 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
       name,
       personId,
       embeddingId,
-      imageId: imageIdFromPath(recognition?.inputPath || ""),
+      imageId: `${imageIdFromPath(recognition?.inputPath || "")}#face-${String(faceIndex).padStart(2, "0")}`,
+      faceIndex,
+      faceBox,
+      forceBadQuality,
       decision,
       action,
     });
@@ -170,9 +198,10 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
   return {
     state: {
       recognition,
+      selectedRecognitionFace,
       recognitionGallery,
       recognitionGalleryImage,
-      recognitionAccepted,
+      recognitionAcceptedFaces,
       recognitionFollowup,
       recognitionFollowupDone,
     },
@@ -182,6 +211,7 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
       recognitionAccept,
       recognitionNew,
       recognitionClear,
+      selectRecognitionFace,
       openRecognitionGallery,
       setRecognitionGalleryImage: selectRecognitionGalleryImage,
       recognitionGalleryBack,

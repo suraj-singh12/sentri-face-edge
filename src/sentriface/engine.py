@@ -11,6 +11,7 @@ from sentriface.config import RuntimeConfig
 from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, IdentityStore
 from sentriface.metrics import MetricsCollector
 from sentriface.models import (
+    FaceBox,
     Match,
     MatchDecision,
     InitFace,
@@ -98,6 +99,8 @@ class FaceEngine:
         self,
         image_path: Path,
         allow_bad_quality: bool,
+        face_index: int | None = None,
+        expected_box: FaceBox | None = None,
     ) -> "PreparedAdditions":
         additions: list[PendingAddition] = []
         rejected: list[RejectedFace] = []
@@ -106,7 +109,18 @@ class FaceEngine:
         with self.metrics.timer("detect_ms"):
             faces = self.detector.detect(image_path)
         self.metrics.increment("faces_detected", len(faces))
-        for face in faces:
+        if face_index is not None:
+            if face_index < 1 or face_index > len(faces):
+                raise KeyError(f"Face {face_index} is no longer available in this image")
+            selected_face = faces[face_index - 1]
+            if expected_box is not None and _box_iou(selected_face.box, expected_box) < 0.5:
+                selected_face = max(faces, key=lambda face: _box_iou(face.box, expected_box))
+                if _box_iou(selected_face.box, expected_box) < 0.5:
+                    raise KeyError(f"Face {face_index} is no longer available in this image")
+            indexed_faces = [(face_index, selected_face)]
+        else:
+            indexed_faces = list(enumerate(faces, start=1))
+        for _, face in indexed_faces:
             with self.metrics.timer("quality_ms"):
                 quality = self.quality.evaluate(image, face)
             self.metrics.increment(f"quality_{quality.status.value}")
@@ -148,6 +162,23 @@ class FaceEngine:
     def prepare_additions(self, image_path: Path, allow_bad_quality: bool = False) -> list[PendingAddition]:
         prepared = self.prepare_additions_with_rejections(image_path, allow_bad_quality)
         return prepared.accepted
+
+    def prepare_face_addition(
+        self,
+        image_path: Path,
+        face_index: int,
+        allow_bad_quality: bool = False,
+        expected_box: FaceBox | None = None,
+    ) -> PendingAddition | None:
+        """Prepare exactly the face selected in a previous recognition response."""
+        with self.metrics.timer("total_prepare_additions_ms"):
+            prepared = self._process_additions(
+                image_path,
+                allow_bad_quality,
+                face_index=face_index,
+                expected_box=expected_box,
+            )
+        return prepared.accepted[0] if prepared.accepted else None
 
     def prepare_additions_with_rejections(
         self,
@@ -946,6 +977,14 @@ def _duplicate_embedding(vector, embeddings) -> object | None:
         if _cosine(vector, record.vector) >= DUPLICATE_MATCH_SCORE:
             return record
     return None
+
+
+def _box_iou(left: FaceBox, right: FaceBox) -> float:
+    intersection_width = max(0, min(left.x + left.width, right.x + right.width) - max(left.x, right.x))
+    intersection_height = max(0, min(left.y + left.height, right.y + right.height) - max(left.y, right.y))
+    intersection = intersection_width * intersection_height
+    union = left.width * left.height + right.width * right.height - intersection
+    return intersection / union if union > 0 else 0.0
 
 
 def _with_crop_path(face, crop_path: str):

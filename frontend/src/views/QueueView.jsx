@@ -37,7 +37,7 @@ import {
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
 import { BestMatchPanel, EmptyCard, GalleryPanel, Surface } from "../components/Shared.jsx";
-import { hasCertainMatch, isNewPersonSuggestion, matchDisplay, mediaUrl, recognitionText } from "../utils.js";
+import { hasCertainMatch, isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor, recognitionText } from "../utils.js";
 
 export function QueueView({
   queueGroups,
@@ -75,6 +75,7 @@ export function QueueView({
           <Grid.Col span={{ base: 12, md: "content" }} className="queue-sidebar-col">
             <QueueInputPanel
               sessionId={queueSessionId}
+              onFiles={onFiles}
               onFolder={onFolder}
               onDrop={onDrop}
               onRefresh={onRefresh}
@@ -112,7 +113,7 @@ export function QueueView({
   );
 }
 
-function QueueInputPanel({ sessionId, onFolder, onDrop, onRefresh }) {
+function QueueInputPanel({ sessionId, onFiles, onFolder, onDrop, onRefresh }) {
   return (
     <Stack className="queue-sidebar">
       <Paper
@@ -125,17 +126,22 @@ function QueueInputPanel({ sessionId, onFolder, onDrop, onRefresh }) {
       >
         <Stack gap="md">
           <Box>
-            <Text fw={800} size="lg">Upload Folder</Text>
-            <Text size="sm" c="dimmed" mt={4}>Build review groups from local photos.</Text>
+            <Text fw={800} size="lg">Add Photos</Text>
+            <Text size="sm" c="dimmed" mt={4}>Choose images or a folder. Every detected face becomes a review item.</Text>
           </Box>
           <Box className="queue-folder-drop-target">
             <ThemeIcon size={42} radius="md" variant="light" color="teal" className="queue-folder-drop-icon">
               <IconFolderOpen size={25} />
             </ThemeIcon>
             <Text fw={700} size="sm">Drop folder here</Text>
-            <FileButton onChange={onFolder} accept="image/*" multiple inputProps={{ webkitdirectory: "", directory: "" }}>
-              {(props) => <Button {...props} fullWidth leftSection={<IconFolderOpen size={16} />}>Select Folder</Button>}
-            </FileButton>
+            <Group grow w="100%" gap="xs">
+              <FileButton onChange={onFiles} accept="image/*" multiple>
+                {(props) => <Button {...props} variant="light" leftSection={<IconPhotoUp size={16} />}>Select Images</Button>}
+              </FileButton>
+              <FileButton onChange={onFolder} accept="image/*" multiple inputProps={{ webkitdirectory: "", directory: "" }}>
+                {(props) => <Button {...props} leftSection={<IconFolderOpen size={16} />}>Select Folder</Button>}
+              </FileButton>
+            </Group>
             <Group gap={6} wrap="nowrap" justify="center" className="queue-drop-note">
               <IconInfoCircle size={14} />
               <Text size="xs" c="dimmed">Stays on this device.</Text>
@@ -156,7 +162,7 @@ function QueueInputPanel({ sessionId, onFolder, onDrop, onRefresh }) {
       <Card withBorder radius="md" className="queue-side-card queue-side-card--steps">
         <Text fw={700} mb="xs">Flow</Text>
         <Stack gap={7}>
-          {["Upload folder", "Group faces", "Review matches", "Confirm people"].map((step, index) => (
+          {["Add photos", "Detect & group faces", "Review matches", "Confirm people"].map((step, index) => (
             <Group key={step} gap="sm" wrap="nowrap">
               <ThemeIcon radius="xl" size="sm" color="teal">{index + 1}</ThemeIcon>
               <Text size="sm" c="dimmed">{step}</Text>
@@ -208,7 +214,7 @@ function QueueGroupList({ groups, progress, onCancelProcessing, onOpen }) {
                       <QueuePreviewMosaic faces={group.faces} />
                       <Box miw={0} className="queue-row-copy">
                         <Text fw={800} size="lg" className="queue-row-title">{recognitionText(best)}</Text>
-                        <Text size="sm" c="dimmed" className="queue-row-meta">{group.group_id} • {group.faces.length} image{group.faces.length === 1 ? "" : "s"}</Text>
+                        <Text size="sm" c="dimmed" className="queue-row-meta">{group.group_id} • {group.faces.length} face{group.faces.length === 1 ? "" : "s"}</Text>
                         <Group gap="sm" mt="md">
                           {best && <Badge color={display.color} variant="light" size="lg">{display.badge}</Badge>}
                           {best && <Badge color={display.color} variant="light" size="lg">{best.score.toFixed(3)}</Badge>}
@@ -445,7 +451,7 @@ function QueueGroupReview({
       <Group justify="space-between" align="flex-start">
         <Box>
           <Title order={3} size="h4">{group.group_id}</Title>
-          <Text size="xs" c="dimmed">{group.faces.length} image(s) left | {selectedCount} selected</Text>
+          <Text size="xs" c="dimmed">{group.faces.length} face{group.faces.length === 1 ? "" : "s"} left | {selectedCount} selected</Text>
         </Box>
         <Button variant="light" leftSection={<IconArrowLeft size={16} />} onClick={onBack}>Back</Button>
       </Group>
@@ -468,6 +474,9 @@ function QueueGroupReview({
                     onClick={() => onToggleFace(face.init_face_id)}
                   >
                     <Stack gap={6}>
+                      <Badge size="xs" color={qualityColor(face.quality?.status)} variant="filled" className="queue-face-quality">
+                        {face.quality?.status === "bad" ? "Poor" : face.quality?.status === "warn" ? "Fair" : "Good"}
+                      </Badge>
                       <Image src={mediaUrl(face.crop_path || face.source_image)} alt="queue face" fit="cover" h={112} radius="sm" />
                       <Text size="xs" fw={700} c={selected ? "teal" : "dimmed"} ta="center">{selected ? "Selected" : "Select"}</Text>
                     </Stack>
@@ -478,7 +487,7 @@ function QueueGroupReview({
           </ScrollArea.Autosize>
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 5 }}>
-          <Surface title="Suggested Match" subtitle={selectedCount ? `${selectedCount} selected` : `${group.faces.length} image${group.faces.length === 1 ? "" : "s"} in group`}>
+          <Surface title="Suggested Match" subtitle={selectedCount ? `${selectedCount} selected` : `${group.faces.length} face${group.faces.length === 1 ? "" : "s"} in group`}>
             {gallery
               ? <GalleryPanel payload={gallery} selectedImage={galleryImage} onImage={onGalleryImage} onBack={onGalleryBack} />
               : <BestMatchPanel best={best} face={{ index: 1 }} selectedImage={galleryImage} onGallery={onGallery} />}
@@ -499,7 +508,7 @@ function QueueGroupReview({
       {followup && (
         <Card withBorder radius="md" ref={followupRef} className="queue-followup-card">
           <Text fw={700}>{followup.name || "New person"}</Text>
-          <Text size="xs" c="dimmed" mb="sm">{followup.faceIds.length} image(s)</Text>
+          <Text size="xs" c="dimmed" mb="sm">{followup.faceIds.length} face{followup.faceIds.length === 1 ? "" : "s"}</Text>
           <RecognitionFollowupForm values={followup} confirmed={followupDone} onChange={onFollowupChange} onSubmit={onFollowupSubmit} onClear={onFollowupClear} embedded showAddedBy />
         </Card>
       )}
