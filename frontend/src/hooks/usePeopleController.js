@@ -11,15 +11,13 @@ export function usePeopleController({ apiGet, apiPost, loadEvents, loadPeople, s
   };
 
   const savePeopleProfile = async (values) => {
-    const editorName = window.prompt("Editor's name");
-    if (!editorName) return false;
     await apiPost("/api/person-update", {
       person_id: values.personId,
       name: values.name,
       rank: values.rank,
       country: values.country,
       importance: values.importance,
-      editor_name: editorName,
+      editor_name: values.editorName,
     });
     setPeopleGallery(await apiGet(`/api/person?person_id=${encodeURIComponent(values.personId)}`));
     showToast("Person details updated");

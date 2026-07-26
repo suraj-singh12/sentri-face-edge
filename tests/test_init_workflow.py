@@ -194,6 +194,56 @@ class InitWorkflowTest(unittest.TestCase):
             updated = engine.list_init_groups(session.session_id)[0]
             self.assertEqual(updated.status, "pending")
 
+    def test_queue_skip_and_resume_preserves_group_faces(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_dir = temp_path / "images"
+            image_dir.mkdir()
+            self._write_image(image_dir / "person_a.jpg", shade=120)
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            session = engine.create_init_session(image_dir)
+            group = engine.list_init_groups(session.session_id)[0]
+            original_face_ids = [face.init_face_id for face in group.faces]
+
+            engine.skip_init_group(session.session_id, group.group_id)
+            skipped = engine.list_init_groups(session.session_id)[0]
+            self.assertEqual(skipped.status, "skipped")
+            self.assertEqual([face.init_face_id for face in skipped.faces], original_face_ids)
+
+            resumed = engine.resume_skipped_init_groups(session.session_id)
+            restored = engine.list_init_groups(session.session_id)[0]
+            self.assertEqual(resumed, 1)
+            self.assertEqual(restored.status, "pending")
+            self.assertEqual([face.init_face_id for face in restored.faces], original_face_ids)
+
+    def test_queue_reject_match_excludes_person_from_every_group_face(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            config = RuntimeConfig(data_dir=temp_path / "data", embedding_dim=2)
+            engine = build_dev_engine(config.data_dir, config)
+            engine.initialize()
+            person = engine.store.create_person("Wrong suggestion")
+            engine.store.add_embedding(person.person_id, (1.0, 0.0), 1.0)
+            engine.index.rebuild(engine.store.list_embeddings())
+            session = engine.store.create_init_session("manual")
+            faces = [
+                self._init_face("face_1", (1.0, 0.0), session.session_id, "group_0001"),
+                self._init_face("face_2", (0.99, 0.01), session.session_id, "group_0001"),
+            ]
+            engine.store.save_init_faces(faces)
+
+            engine.reject_init_group_match(session.session_id, "group_0001", person.person_id)
+
+            exclusions = engine.excluded_person_ids_for_init_faces(
+                session.session_id,
+                [face.init_face_id for face in faces],
+            )
+            self.assertTrue(all(person.person_id in exclusions[face.init_face_id] for face in faces))
+            for group in engine.list_init_groups(session.session_id):
+                self.assertNotIn(person.person_id, [match.person_id for match in engine.matches_for_init_group(group)])
+
     def test_queue_selected_faces_leave_remaining_group_pending(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
@@ -308,6 +358,52 @@ class InitWorkflowTest(unittest.TestCase):
             updated = [item for item in engine.list_init_groups(session.session_id) if item.group_id == group.group_id][0]
             self.assertEqual(updated.status, "pending")
             self.assertEqual(len(updated.faces), len(group.faces) - 1)
+
+    def test_discard_queue_session_removes_records_and_unreferenced_managed_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            engine = build_dev_engine(data_dir)
+            engine.initialize()
+            source = data_dir / "uploads" / "batch" / "incoming.jpg"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"incoming")
+            session = engine.store.create_init_session(str(source.parent))
+            crop = engine.config.face_dir / "init" / session.session_id / "face.jpg"
+            crop.parent.mkdir(parents=True)
+            crop.write_bytes(b"crop")
+
+            engine.discard_init_session(session.session_id)
+
+            self.assertIsNone(engine.store.get_init_session(session.session_id))
+            self.assertFalse(source.exists())
+            self.assertFalse(crop.exists())
+
+    def test_discard_queue_session_preserves_files_used_by_embeddings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            engine = build_dev_engine(data_dir)
+            engine.initialize()
+            source = data_dir / "uploads" / "batch" / "accepted.jpg"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"accepted")
+            session = engine.store.create_init_session(str(source.parent))
+            crop = engine.config.face_dir / "init" / session.session_id / "accepted-crop.jpg"
+            crop.parent.mkdir(parents=True)
+            crop.write_bytes(b"crop")
+            person = engine.store.create_person("Accepted Person")
+            engine.store.add_embedding(
+                person.person_id,
+                [0.0] * engine.config.embedding_dim,
+                quality_score=1.0,
+                source_image=str(source),
+                crop_path=str(crop),
+            )
+
+            engine.discard_init_session(session.session_id)
+
+            self.assertIsNone(engine.store.get_init_session(session.session_id))
+            self.assertTrue(source.exists())
+            self.assertTrue(crop.exists())
 
     def _write_image(self, image: Path, shade: int) -> None:
         canvas = np.full((160, 160, 3), shade, dtype=np.uint8)

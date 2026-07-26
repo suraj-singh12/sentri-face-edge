@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ActionIcon,
@@ -71,16 +71,27 @@ export function ImageFrame({ children, ratio, variant = "default" }) {
   );
 }
 
+export function SafeImage({ src, alt, fallback = null, ...props }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (!src || failed) return fallback;
+  return <Image src={src} alt={alt} onError={() => setFailed(true)} {...props} />;
+}
+
 export function LoadImagePanel({ onClick }) {
   return (
     <Paper withBorder radius="md" p="xl" className="load-image-panel" component="button" onClick={onClick}>
       <Stack align="center" gap="lg">
         <ThemeIcon size={64} radius="md" variant="light" color="teal"><IconPhotoUp size={32} /></ThemeIcon>
         <Box ta="center">
-          <Title order={3} size="h4">Drag & drop an image here</Title>
-          <Text size="md" c="teal.3">or click to browse</Text>
+          <Title order={3} size="h4">Choose an image to recognize</Title>
+          <Text size="md" c="teal.7">Click to browse</Text>
         </Box>
-        <Text size="sm" c="dimmed">Supports: JPG, PNG, JPEG&nbsp;&nbsp;•&nbsp;&nbsp;Max size: 10 MB</Text>
+        <Text size="sm" c="dimmed">Supports JPG, JPEG, PNG, BMP and WebP</Text>
       </Stack>
     </Paper>
   );

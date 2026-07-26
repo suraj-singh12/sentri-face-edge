@@ -140,6 +140,8 @@ export function personProfile(payload, scopedDetails = payload.details || [], im
     name: payload.person.name || latestDetail.name || "",
     country: hasScopedDetails ? latestDetail.country || metadata.country || "" : metadata.country || latestDetail.country || "",
     importance: hasScopedDetails ? latestDetail.importance || metadata.importance || "Regular" : metadata.importance || latestDetail.importance || "Regular",
+    createdAt: payload.person.created_at || "",
+    addedBy: metadata.added_by || "",
     scopeLabel: hasScopedDetails ? "Selected image details" : imageSelected ? "Selected image has no saved details" : "Person summary",
   };
 }

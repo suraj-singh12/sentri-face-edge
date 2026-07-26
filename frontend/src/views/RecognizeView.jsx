@@ -107,7 +107,7 @@ export function RecognizeView({
                 subtitle={recognition?.inputPath || "Upload or select a photo to recognize"}
                 action={(
                   <Group gap="sm" wrap="nowrap">
-                    <Button variant="default" leftSection={<IconFolder size={18} />} onClick={onLoadAnother}>Load Another</Button>
+                    {recognition && <Button variant="default" leftSection={<IconFolder size={18} />} onClick={onLoadAnother}>Load Another</Button>}
                     {recognition && <Badge size="lg" variant="outline" color={faces.length ? "gray" : "red"}>{faceCountLabel(faces.length)}</Badge>}
                   </Group>
                 )}
@@ -205,7 +205,7 @@ export function RecognizeView({
               {selectedIsBad ? "New Person Anyway" : "New Person"}
               <Text component="span" size="xs" fw={400}>{selectedFace ? (selectedIsBad ? "Review the quality warning first" : `Create a person from Face ${faceNumber(selectedFace.index)}`) : "Select a face first"}</Text>
             </Button>
-            <Button className="recognize-action recognize-action--clear" color="red" variant="light" leftSection={<IconTrash size={20} />} onClick={onClear}>
+            <Button className="recognize-action recognize-action--clear" color="red" variant="light" leftSection={<IconTrash size={20} />} onClick={onClear} disabled={!recognition}>
               Clear
               <Text component="span" size="xs" fw={400}>Reset and try another photo</Text>
             </Button>

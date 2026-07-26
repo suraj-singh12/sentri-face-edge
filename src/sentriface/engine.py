@@ -527,6 +527,59 @@ class FaceEngine:
         with self.metrics.timer("db_list_init_groups_ms"):
             return self.store.list_init_groups(session_id)
 
+    def list_init_sessions(self) -> list[InitSession]:
+        with self.metrics.timer("db_list_init_sessions_ms"):
+            return self.store.list_init_sessions()
+
+    def discard_init_session(self, session_id: str, *, delete_files: bool = True) -> None:
+        session = self.store.get_init_session(session_id)
+        if session is None:
+            raise KeyError(f"Unknown init session: {session_id}")
+        other_sources = {
+            Path(item.source_path)
+            for item in self.store.list_init_sessions()
+            if item.session_id != session_id
+        }
+        with self.metrics.timer("db_delete_init_session_ms"):
+            self.store.delete_init_session(session_id)
+        if not delete_files:
+            return
+        protected_paths = {
+            Path(path).resolve()
+            for person in self.store.list_persons()
+            for record in self.store.list_embeddings_for_person(person.person.person_id)
+            for path in (record.source_image, record.crop_path)
+            if path
+        }
+        source = Path(session.source_path)
+        if source not in other_sources:
+            self._remove_managed_queue_path(source, protected_paths)
+        self._remove_managed_queue_path(self.config.face_dir / "init" / session_id, protected_paths)
+
+    def _remove_managed_queue_path(self, path: Path, protected_paths: set[Path]) -> None:
+        resolved = path.resolve()
+        managed_roots = [
+            (self.config.data_dir / "uploads").resolve(),
+            (self.config.face_dir / "init").resolve(),
+        ]
+        if not any(resolved == root or root in resolved.parents for root in managed_roots):
+            return
+        if resolved.is_dir():
+            for child in sorted(resolved.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+                if child.is_file() and child.resolve() not in protected_paths:
+                    child.unlink()
+                elif child.is_dir():
+                    try:
+                        child.rmdir()
+                    except OSError:
+                        pass
+            try:
+                resolved.rmdir()
+            except OSError:
+                pass
+        elif resolved.exists() and resolved not in protected_paths:
+            resolved.unlink()
+
     def get_init_group(self, session_id: str, group_id: str) -> InitGroup:
         return self._get_init_group(session_id, group_id)
 
@@ -603,6 +656,29 @@ class FaceEngine:
         self._get_init_group(session_id, group_id)
         with self.metrics.timer("db_mark_init_group_ms"):
             self.store.mark_init_group_status(session_id, group_id, "rejected")
+
+    def skip_init_group(self, session_id: str, group_id: str) -> None:
+        group = self._get_init_group(session_id, group_id)
+        if group.status != "pending":
+            raise KeyError(f"Queue group is not pending: {group_id}")
+        with self.metrics.timer("db_mark_init_group_ms"):
+            self.store.mark_init_group_status(session_id, group_id, "skipped")
+
+    def resume_skipped_init_groups(self, session_id: str) -> int:
+        skipped = [group for group in self.list_init_groups(session_id) if group.status == "skipped"]
+        for group in skipped:
+            with self.metrics.timer("db_mark_init_group_ms"):
+                self.store.mark_init_group_status(session_id, group.group_id, "pending")
+        return len(skipped)
+
+    def reject_init_group_match(self, session_id: str, group_id: str, person_id: str) -> None:
+        group = self._get_init_group(session_id, group_id)
+        if group.status != "pending":
+            raise KeyError(f"Queue group is not pending: {group_id}")
+        face_ids = [face.init_face_id for face in group.faces]
+        with self.metrics.timer("db_save_init_exclusions_ms"):
+            self.store.add_init_face_person_exclusions(session_id, face_ids, person_id)
+        self._regroup_pending_init_session(session_id)
 
     def reset_init_group(self, session_id: str, group_id: str) -> None:
         self._get_init_group(session_id, group_id)

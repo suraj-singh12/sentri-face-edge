@@ -1,14 +1,13 @@
-import { useState } from "react";
-
 import { useApiClient } from "./useApiClient.js";
 import { useAppData } from "./useAppData.js";
 import { useFileUploads } from "./useFileUploads.js";
+import { usePersistentState } from "./usePersistentState.js";
 import { usePeopleController } from "./usePeopleController.js";
 import { useQueueController } from "./useQueueController.js";
 import { useRecognizeController } from "./useRecognizeController.js";
 
 export function useSentriFaceController() {
-  const [activeView, setActiveView] = useState("recognize");
+  const [activeView, setActiveView] = usePersistentState("sentriface.activeView", "recognize");
   const api = useApiClient();
   const uploads = useFileUploads(api);
   const appData = useAppData({ activeView, ...api });

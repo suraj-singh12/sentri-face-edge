@@ -30,10 +30,7 @@ import {
   IconPlayerPause,
   IconRefresh,
   IconSearch,
-  IconServer,
-  IconSettings,
   IconTrash,
-  IconTrendingUp,
 } from "@tabler/icons-react";
 
 export function DebugView({ events, backups = [], backupCreating = false, onRefresh, onCreateBackup, onDeleteBackup }) {
@@ -74,6 +71,10 @@ export function DebugView({ events, backups = [], backupCreating = false, onRefr
   useEffect(() => {
     setPage(1);
   }, [eventFilter, levelFilter, pageSize, query, timeFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const refreshEvents = async () => {
     setCleared(false);
@@ -127,15 +128,13 @@ export function DebugView({ events, backups = [], backupCreating = false, onRefr
               onExport={exportEvents}
               onRefresh={refreshEvents}
             />
-          ) : section === "database" ? (
+          ) : (
             <DatabaseBackupsPanel
               backups={backups}
               creating={backupCreating}
               onCreate={onCreateBackup}
               onDelete={onDeleteBackup}
             />
-          ) : (
-            <DebugPlaceholderPanel section={section} summary={summary} totalEvents={normalizedEvents.length} />
           )}
         </Box>
       </Box>
@@ -146,10 +145,7 @@ export function DebugView({ events, backups = [], backupCreating = false, onRefr
 function DebugSidebar({ section, onSection, summary, onRefresh }) {
   const navItems = [
     { key: "events", label: "Events Log", icon: IconInfoCircle },
-    { key: "system", label: "System Info", icon: IconServer },
-    { key: "performance", label: "Performance", icon: IconTrendingUp },
     { key: "database", label: "Database", icon: IconDatabase },
-    { key: "settings", label: "Settings", icon: IconSettings },
   ];
   return (
     <Stack className="debug-sidebar">
@@ -228,7 +224,7 @@ function EventsLogPanel({
         </Box>
         <Group gap="sm" wrap="nowrap" className="debug-actions">
           <Button variant="default" leftSection={<IconPlayerPause size={16} />} onClick={onPause}>{paused ? "Resume" : "Pause"}</Button>
-          <Button variant="default" leftSection={<IconTrash size={16} />} onClick={onClear}>Clear</Button>
+          <Button variant="default" leftSection={<IconTrash size={16} />} onClick={onClear}>Clear view</Button>
           <Button variant="default" leftSection={<IconDownload size={16} />} onClick={onExport}>Export</Button>
           <Button leftSection={<IconRefresh size={16} />} onClick={onRefresh}>Refresh</Button>
         </Group>
@@ -303,35 +299,23 @@ function EventsLogPanel({
           </Group>
           <Group gap="xs">
             <ActionIcon variant="default" disabled={page <= 1} onClick={() => onPage(Math.max(1, page - 1))} aria-label="Previous page"><IconChevronLeft size={16} /></ActionIcon>
-            {visiblePageNumbers(page, totalPages).map((item) => item === "ellipsis"
-              ? <Text key={item} c="dimmed">...</Text>
-              : <Badge key={item} size="lg" variant={item === page ? "filled" : "light"}>{item}</Badge>)}
+            {visiblePageNumbers(page, totalPages).map((item, index) => item === "ellipsis"
+              ? <Text key={`ellipsis-${index}`} c="dimmed">...</Text>
+              : (
+                <ActionIcon
+                  key={item}
+                  variant={item === page ? "filled" : "light"}
+                  onClick={() => onPage(item)}
+                  aria-label={`Page ${item}`}
+                  aria-current={item === page ? "page" : undefined}
+                >
+                  {item}
+                </ActionIcon>
+              ))}
             <ActionIcon variant="default" disabled={page >= totalPages} onClick={() => onPage(Math.min(totalPages, page + 1))} aria-label="Next page"><IconChevronRight size={16} /></ActionIcon>
           </Group>
         </Group>
       </Paper>
-    </Stack>
-  );
-}
-
-function DebugPlaceholderPanel({ section, summary, totalEvents }) {
-  const title = {
-    system: "System Info",
-    performance: "Performance",
-    database: "Database",
-    settings: "Settings",
-  }[section];
-  return (
-    <Stack>
-      <Title order={3} size="h4">{title}</Title>
-      <SimpleDebugGrid
-        items={[
-          ["Captured Events", totalEvents.toLocaleString()],
-          ["Errors", summary.error],
-          ["Warnings", summary.warning],
-          ["Last Updated", new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })],
-        ]}
-      />
     </Stack>
   );
 }

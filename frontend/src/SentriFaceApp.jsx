@@ -107,6 +107,7 @@ function SentriFaceShell() {
 
           <Tabs.Panel value="queue">
             <QueueView
+              queueSessions={state.queueSessions}
               queueGroups={state.queueGroups}
               queueSessionId={state.queueSessionId}
               queueProgress={state.queueProgress}
@@ -117,16 +118,26 @@ function SentriFaceShell() {
               queueFollowupDone={state.queueFollowupDone}
               queueGallery={state.queueGallery}
               queueGalleryImage={state.queueGalleryImage}
+              queueReviewStats={state.queueReviewStats}
               onFiles={guarded((files) => actions.scanQueueFiles(Array.from(files || [])))}
               onFolder={guarded((files) => actions.scanQueueFiles(Array.from(files || [])))}
               onDrop={guarded(actions.queueDrop)}
               onCancelProcessing={actions.cancelQueueProcessing}
               onRefresh={guarded(() => actions.loadQueueGroups(state.queueSessionId))}
+              onSelectSession={guarded(actions.selectQueueSession)}
+              onDiscardSession={guarded(actions.discardQueueSession)}
               onOpenGroup={actions.openQueueGroup}
               onToggleFace={actions.toggleQueueFace}
+              onSelectAllFaces={actions.selectAllQueueFaces}
+              onClearFaces={actions.clearQueueFaces}
               onAcceptExisting={guarded(actions.queueAcceptExisting)}
               onNewPerson={guarded(actions.queueNewPerson)}
               onDiscard={guarded(actions.queueDiscard)}
+              onDiscardGroup={guarded(actions.discardQueueGroup)}
+              onSkip={guarded(actions.queueSkipGroup)}
+              onResumeSkipped={guarded(actions.queueResumeSkipped)}
+              onRejectSuggestedMatch={guarded(actions.queueRejectSuggestedMatch)}
+              onViewPeople={() => actions.setActiveView("people")}
               onFollowupChange={actions.updateQueueFollowup}
               onFollowupSubmit={guarded(actions.confirmQueueFollowup)}
               onFollowupClear={actions.clearQueueFollowupForm}

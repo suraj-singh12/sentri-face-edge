@@ -617,6 +617,32 @@ class SQLiteIdentityStore:
             created_at=row["created_at"],
         )
 
+    def list_init_sessions(self) -> list[InitSession]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT session_id, source_path, status, created_at
+                FROM init_sessions
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+        return [
+            InitSession(
+                session_id=row["session_id"],
+                source_path=row["source_path"],
+                status=row["status"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
+    def delete_init_session(self, session_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM init_face_person_exclusions WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM init_groups WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM init_faces WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM init_sessions WHERE session_id = ?", (session_id,))
+
     def list_init_groups(self, session_id: str) -> list[InitGroup]:
         with self._connect() as conn:
             rows = conn.execute(

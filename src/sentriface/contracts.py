@@ -141,6 +141,12 @@ class IdentityStore(Protocol):
     def get_init_session(self, session_id: str) -> InitSession | None:
         """Load one initialization session."""
 
+    def list_init_sessions(self) -> list[InitSession]:
+        """List durable initialization sessions."""
+
+    def delete_init_session(self, session_id: str) -> None:
+        """Delete an initialization session and its review records."""
+
     def list_init_groups(self, session_id: str) -> list[InitGroup]:
         """List grouped faces in an initialization session."""
 

@@ -1,28 +1,45 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { currentDateTimeParts, droppedImageFiles, isNewPersonSuggestion } from "../utils.js";
+import { usePersistentState } from "./usePersistentState.js";
 
-export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, showToast, uploadFile, uploadFolder }) {
+export function useQueueController({ apiDelete, apiGet, apiPost, loadEvents, loadPeople, showToast, uploadFile, uploadFolder }) {
+  const [queueSessions, setQueueSessions] = useState([]);
   const [queueGroups, setQueueGroups] = useState([]);
-  const [queueSessionId, setQueueSessionId] = useState("");
+  const [queueSessionId, setQueueSessionId] = usePersistentState("sentriface.queue.sessionId", "");
   const [queueProgress, setQueueProgress] = useState(null);
   const [queueSelectedGroup, setQueueSelectedGroup] = useState(null);
-  const [queueSelectedFaces, setQueueSelectedFaces] = useState([]);
-  const [queueAccepted, setQueueAccepted] = useState(false);
-  const [queueFollowup, setQueueFollowup] = useState(null);
-  const [queueFollowupDone, setQueueFollowupDone] = useState(false);
+  const [queueSelectedGroupId, setQueueSelectedGroupId] = usePersistentState("sentriface.queue.selectedGroupId", "");
+  const [queueSelectedFaces, setQueueSelectedFaces] = usePersistentState("sentriface.queue.selectedFaces", []);
+  const [queueAccepted, setQueueAccepted] = usePersistentState("sentriface.queue.accepted", false);
+  const [queueFollowup, setQueueFollowup] = usePersistentState("sentriface.queue.followup", null);
+  const [queueFollowupDone, setQueueFollowupDone] = usePersistentState("sentriface.queue.followupDone", false);
   const [queueGallery, setQueueGallery] = useState(null);
   const [queueGalleryImage, setQueueGalleryImage] = useState(null);
+  const [queueReviewStats, setQueueReviewStats] = useState(emptyQueueReviewStats);
   const canceledQueueJobs = useRef(new Set());
+  const queueAbortControllers = useRef(new Map());
+  const restoredQueueRef = useRef(false);
 
   const loadQueueGroups = useCallback(async (sessionId = queueSessionId, options = {}) => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      setQueueGroups([]);
+      return;
+    }
     const payload = await apiGet(`/api/queue-groups?session_id=${encodeURIComponent(sessionId)}`);
+    setQueueSessionId(sessionId);
     setQueueGroups(payload.groups);
+    setQueueReviewStats((current) => current.totalGroups ? current : {
+      ...emptyQueueReviewStats,
+      totalGroups: payload.groups.length,
+      totalFaces: payload.groups.reduce((total, group) => total + (group.faces?.length || 0), 0),
+      skippedGroups: payload.groups.filter((group) => group.status === "skipped").length,
+    });
     setQueueSelectedGroup((current) => {
-      if (!current) return current;
-      const refreshedGroup = payload.groups.find((group) => group.group_id === current.group_id);
+      const desiredGroupId = current?.group_id || queueSelectedGroupId;
+      if (!desiredGroupId) return null;
+      const refreshedGroup = payload.groups.find((group) => group.group_id === desiredGroupId);
       if (refreshedGroup) return refreshedGroup;
       if (!options.preserveSelectedGroup) return null;
       const removedFaceIds = new Set(options.removeFaceIds || []);
@@ -31,7 +48,35 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
         : current;
     });
     return payload;
-  }, [apiGet, queueSessionId]);
+  }, [apiGet, queueSelectedGroupId, queueSessionId, setQueueSessionId]);
+
+  const loadQueueSessions = useCallback(async (preferredSessionId = queueSessionId) => {
+    const payload = await apiGet("/api/queue-sessions");
+    const sessions = payload.sessions || [];
+    setQueueSessions(sessions);
+    const selected = sessions.find((session) => session.session_id === preferredSessionId) || sessions[0] || null;
+    if (!selected) {
+      setQueueSessionId("");
+      setQueueGroups([]);
+      setQueueSelectedGroup(null);
+      setQueueSelectedGroupId("");
+      resetQueueDecision();
+      return payload;
+    }
+    if (selected.session_id !== queueSessionId) {
+      setQueueSelectedGroup(null);
+      setQueueSelectedGroupId("");
+      resetQueueDecision();
+    }
+    await loadQueueGroups(selected.session_id);
+    return payload;
+  }, [apiGet, loadQueueGroups, queueSessionId, setQueueSelectedGroupId, setQueueSessionId]);
+
+  useEffect(() => {
+    if (restoredQueueRef.current) return;
+    restoredQueueRef.current = true;
+    loadQueueSessions().catch((error) => console.error("[sentriface-ui] unable to restore queue", error));
+  }, [loadQueueSessions]);
 
   const scanQueuePath = useCallback(async (path, options = {}) => {
     const jobId = options.jobId || crypto.randomUUID();
@@ -62,10 +107,15 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
         total_files: options.totalFiles || 0,
         uploaded_files: options.uploadedFiles || options.totalFiles || 0,
         force_bad_quality: options.includeLowQuality !== false,
-      });
+      }, { signal: options.signal });
       if (canceledQueueJobs.current.has(jobId)) return;
       setQueueSessionId(payload.session_id);
       setQueueGroups(payload.groups);
+      setQueueReviewStats({
+        ...emptyQueueReviewStats,
+        totalGroups: payload.groups.length,
+        totalFaces: payload.groups.reduce((total, group) => total + (group.faces?.length || 0), 0),
+      });
       resetQueueReview();
       const faceCount = payload.groups.reduce((total, group) => total + (group.faces?.length || 0), 0);
       showToast(`Queued ${faceCount} face(s) in ${payload.groups.length} group(s)`);
@@ -78,8 +128,9 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
         groups: payload.groups.length,
         finishedAt: Date.now(),
       }));
-      await loadEvents();
+      await Promise.all([loadEvents(), loadQueueSessions(payload.session_id)]);
     } catch (error) {
+      if (options.signal?.aborted || canceledQueueJobs.current.has(jobId)) return;
       setQueueProgress((current) => normalizeQueueProgress({
         ...current,
         jobId,
@@ -94,20 +145,25 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
         setQueueProgress((current) => current?.jobId === jobId && current.status === "done" ? null : current);
       }, 900);
     }
-  }, [apiGet, apiPost, loadEvents, showToast]);
+  }, [apiGet, apiPost, loadEvents, loadQueueSessions, showToast]);
 
   const scanQueueFiles = async (files, options = {}) => {
-    if (!files.length) {
+    const imageFiles = Array.from(files).filter((file) => (
+      file.type.startsWith("image/") || /\.(jpe?g|png|bmp|webp)$/i.test(file.name)
+    ));
+    if (!imageFiles.length) {
       showToast("Choose or drop images", "yellow");
       throw new Error("Missing queue source");
     }
     const jobId = options.jobId || crypto.randomUUID();
     const startedAt = options.startedAt || Date.now();
+    const abortController = new AbortController();
+    queueAbortControllers.current.set(jobId, abortController);
     setQueueProgress({
       jobId,
       status: "running",
       phase: "uploading",
-      totalFiles: files.length,
+      totalFiles: imageFiles.length,
       uploadedFiles: 0,
       totalImages: 0,
       imagesScanned: 0,
@@ -119,10 +175,31 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     const onProgress = (progress) => {
       setQueueProgress((current) => normalizeQueueProgress({ ...current, ...progress, jobId, startedAt }));
     };
-    const path = files.length === 1
-      ? await uploadFile(files[0], { onProgress })
-      : await uploadFolder(files, { onProgress });
-    await scanQueuePath(path, { jobId, totalFiles: files.length, uploadedFiles: files.length });
+    try {
+      const path = imageFiles.length === 1
+        ? await uploadFile(imageFiles[0], { onProgress, signal: abortController.signal })
+        : await uploadFolder(imageFiles, { onProgress, signal: abortController.signal });
+      if (abortController.signal.aborted) return;
+      await scanQueuePath(path, {
+        jobId,
+        totalFiles: imageFiles.length,
+        uploadedFiles: imageFiles.length,
+        signal: abortController.signal,
+      });
+    } catch (error) {
+      if (abortController.signal.aborted || error?.name === "AbortError") return;
+      setQueueProgress((current) => normalizeQueueProgress({
+        ...current,
+        jobId,
+        status: "failed",
+        phase: "failed",
+        error: readableUploadError(error),
+        finishedAt: Date.now(),
+      }));
+      throw error;
+    } finally {
+      queueAbortControllers.current.delete(jobId);
+    }
   };
 
   const queueDrop = async (event) => {
@@ -152,16 +229,49 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
   };
 
   const cancelQueueProcessing = () => {
+    if (queueProgress?.status === "failed") {
+      setQueueProgress(null);
+      return;
+    }
+    const wasUploading = queueProgress?.phase === "uploading";
     setQueueProgress((current) => {
-      if (current?.jobId) canceledQueueJobs.current.add(current.jobId);
+      if (current?.jobId) {
+        canceledQueueJobs.current.add(current.jobId);
+        queueAbortControllers.current.get(current.jobId)?.abort();
+      }
       return null;
     });
-    showToast("Stopped tracking queue processing", "yellow");
+    showToast(wasUploading ? "Queue upload canceled" : "Stopped tracking queue processing", "yellow");
   };
 
   const openQueueGroup = (group) => {
     setQueueSelectedGroup(group);
+    setQueueSelectedGroupId(group.group_id);
     resetQueueDecision();
+    setQueueSelectedFaces(group.faces.map((face) => face.init_face_id));
+  };
+
+  const selectQueueSession = async (sessionId) => {
+    if (!sessionId || sessionId === queueSessionId) return;
+    setQueueSelectedGroup(null);
+    setQueueSelectedGroupId("");
+    resetQueueDecision();
+    setQueueReviewStats(emptyQueueReviewStats);
+    await loadQueueGroups(sessionId);
+  };
+
+  const discardQueueSession = async () => {
+    if (!queueSessionId) return;
+    const discardedSessionId = queueSessionId;
+    await apiDelete(`/api/queue-session?session_id=${encodeURIComponent(discardedSessionId)}`);
+    setQueueSessionId("");
+    setQueueGroups([]);
+    setQueueSelectedGroup(null);
+    setQueueSelectedGroupId("");
+    resetQueueDecision();
+    setQueueReviewStats(emptyQueueReviewStats);
+    await Promise.all([loadQueueSessions(""), loadEvents()]);
+    showToast("Queue session and its pending photos were discarded", "yellow");
   };
 
   const toggleQueueFace = (faceId) => {
@@ -169,6 +279,16 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     setQueueSelectedFaces((current) => (
       current.includes(faceId) ? current.filter((item) => item !== faceId) : [...current, faceId]
     ));
+  };
+
+  const selectAllQueueFaces = () => {
+    if (queueAccepted) return;
+    setQueueSelectedFaces((queueSelectedGroup?.faces || []).map((face) => face.init_face_id));
+  };
+
+  const clearQueueFaces = () => {
+    if (queueAccepted) return;
+    setQueueSelectedFaces([]);
   };
 
   const queueAcceptExisting = async () => {
@@ -191,14 +311,38 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
   const queueDiscard = async () => {
     if (!queueSelectedGroup) return;
     const faceIds = selectedQueueFaceIds();
-    await apiPost("/api/queue-discard", {
+    const payload = await apiPost("/api/queue-discard", {
       session_id: queueSelectedGroup.session_id,
       group_id: queueSelectedGroup.group_id,
       face_ids: faceIds,
     });
     showToast(`Discarded ${faceIds.length} face(s)`);
     resetQueueDecision();
-    await Promise.all([loadQueueGroups(queueSelectedGroup.session_id), loadEvents()]);
+    setQueueSelectedGroup(null);
+    setQueueSelectedGroupId("");
+    await Promise.all([
+      payload.session_closed ? loadQueueSessions("") : loadQueueGroups(queueSelectedGroup.session_id),
+      loadEvents(),
+    ]);
+  };
+
+  const discardQueueGroup = async (group) => {
+    if (!group?.faces?.length) return;
+    const payload = await apiPost("/api/queue-discard", {
+      session_id: group.session_id,
+      group_id: group.group_id,
+      face_ids: group.faces.map((face) => face.init_face_id),
+    });
+    if (queueSelectedGroup?.group_id === group.group_id) {
+      setQueueSelectedGroup(null);
+      setQueueSelectedGroupId("");
+      resetQueueDecision();
+    }
+    await Promise.all([
+      payload.session_closed ? loadQueueSessions("") : loadQueueGroups(group.session_id),
+      loadEvents(),
+    ]);
+    showToast(`Discarded group with ${group.faces.length} face(s)`, "yellow");
   };
 
   const updateQueueFollowup = (field, value) => {
@@ -226,7 +370,6 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
   const confirmQueueFollowup = async (event) => {
     event.preventDefault();
     if (!queueFollowup?.faceIds?.length || !queueSelectedGroup) return;
-    const confirmedGroupId = queueSelectedGroup.group_id;
     const confirmedSessionId = queueSelectedGroup.session_id;
     const confirmedFaceIds = queueFollowup.faceIds;
     const payload = queueFollowup.action === "new"
@@ -267,20 +410,77 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     setQueueAccepted(false);
     setQueueGallery(null);
     setQueueGalleryImage(null);
+    setQueueReviewStats((current) => ({
+      ...current,
+      reviewedGroups: current.reviewedGroups + 1,
+      processedFaces: current.processedFaces + entries.length,
+      personsUpdated: current.personsUpdated + (entries.length ? 1 : 0),
+      activities: [
+        ...current.activities,
+        {
+          label: queueFollowup.name || "New person",
+          detail: `${entries.length} photo${entries.length === 1 ? "" : "s"} confirmed`,
+        },
+      ],
+    }));
     showToast(`Queue details confirmed for ${entries.length} face(s)`);
-    const [queuePayload] = await Promise.all([
-      loadQueueGroups(confirmedSessionId, { preserveSelectedGroup: true, removeFaceIds: confirmedFaceIds }),
+    await Promise.all([
+      payload.session_closed
+        ? loadQueueSessions("")
+        : loadQueueGroups(confirmedSessionId, { preserveSelectedGroup: true, removeFaceIds: confirmedFaceIds }),
       loadPeople(),
       loadEvents(),
     ]);
     window.setTimeout(() => {
       setQueueFollowup(null);
       setQueueFollowupDone(false);
-      setQueueSelectedGroup((current) => {
-        if (!current || current.group_id !== confirmedGroupId) return current;
-        return queuePayload?.groups?.find((group) => group.group_id === confirmedGroupId) || null;
-      });
+      setQueueSelectedGroup(null);
+      setQueueSelectedGroupId("");
     }, 1000);
+  };
+
+  const queueSkipGroup = async () => {
+    if (!queueSelectedGroup) return;
+    const payload = await apiPost("/api/queue-skip", {
+      session_id: queueSelectedGroup.session_id,
+      group_id: queueSelectedGroup.group_id,
+    });
+    setQueueGroups(payload.groups);
+    setQueueReviewStats((current) => ({
+      ...current,
+      skippedGroups: current.skippedGroups + 1,
+      activities: [...current.activities, {
+        label: queueSelectedGroup.group_id,
+        detail: `${queueSelectedGroup.faces.length} photo${queueSelectedGroup.faces.length === 1 ? "" : "s"} skipped`,
+      }],
+    }));
+    showToast("Group skipped for now", "yellow");
+    setQueueSelectedGroup(null);
+    resetQueueDecision();
+    await loadEvents();
+  };
+
+  const queueResumeSkipped = async () => {
+    if (!queueSessionId) return;
+    const payload = await apiPost("/api/queue-resume-skipped", { session_id: queueSessionId });
+    setQueueGroups(payload.groups);
+    setQueueReviewStats((current) => ({ ...current, skippedGroups: 0 }));
+    showToast(`Restored ${payload.resumed} skipped group(s)`);
+  };
+
+  const queueRejectSuggestedMatch = async () => {
+    const best = queueSelectedGroup?.matches?.[0];
+    if (!queueSelectedGroup || !best) return;
+    const payload = await apiPost("/api/queue-reject-match", {
+      session_id: queueSelectedGroup.session_id,
+      group_id: queueSelectedGroup.group_id,
+      person_id: best.person_id,
+    });
+    setQueueGroups(payload.groups);
+    setQueueSelectedGroup(null);
+    resetQueueDecision();
+    showToast(`Removed ${best.name} as the suggestion`, "yellow");
+    await loadEvents();
   };
 
   const openQueueGallery = async (personId) => {
@@ -308,12 +508,7 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
   }
 
   function selectedOrGroupFaceIds() {
-    if (queueSelectedFaces.length) return queueSelectedFaces;
-    const faceIds = (queueSelectedGroup?.faces || []).map((face) => face.init_face_id);
-    if (!faceIds.length) {
-      throw new Error("No queue faces available");
-    }
-    return faceIds;
+    return selectedQueueFaceIds();
   }
 
   function openQueueFollowup({ name, personId, decision, action, faceIds }) {
@@ -348,16 +543,19 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
 
   function resetQueueReview() {
     setQueueSelectedGroup(null);
+    setQueueSelectedGroupId("");
     resetQueueDecision();
   }
 
   function closeQueueReview() {
     setQueueSelectedGroup(null);
+    setQueueSelectedGroupId("");
     resetQueueDecision();
   }
 
   return {
     state: {
+      queueSessions,
       queueGroups,
       queueSessionId,
       queueProgress,
@@ -368,17 +566,27 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
       queueFollowupDone,
       queueGallery,
       queueGalleryImage,
+      queueReviewStats,
     },
     actions: {
       scanQueueFiles,
       queueDrop,
       cancelQueueProcessing,
       loadQueueGroups,
+      loadQueueSessions,
+      selectQueueSession,
+      discardQueueSession,
       openQueueGroup,
       toggleQueueFace,
+      selectAllQueueFaces,
+      clearQueueFaces,
       queueAcceptExisting,
       queueNewPerson,
       queueDiscard,
+      discardQueueGroup,
+      queueSkipGroup,
+      queueResumeSkipped,
+      queueRejectSuggestedMatch,
       updateQueueFollowup,
       confirmQueueFollowup,
       clearQueueFollowupForm,
@@ -389,6 +597,16 @@ export function useQueueController({ apiGet, apiPost, loadEvents, loadPeople, sh
     },
   };
 }
+
+const emptyQueueReviewStats = {
+  totalGroups: 0,
+  totalFaces: 0,
+  reviewedGroups: 0,
+  processedFaces: 0,
+  personsUpdated: 0,
+  skippedGroups: 0,
+  activities: [],
+};
 
 function normalizeQueueProgress(progress) {
   return {
@@ -405,5 +623,17 @@ function normalizeQueueProgress(progress) {
     startedAt: progress.startedAt || progress.started_at || Date.now(),
     finishedAt: progress.finishedAt || progress.finished_at || null,
     elapsedSeconds: Number(progress.elapsedSeconds ?? progress.elapsed_seconds ?? 0),
+    error: progress.error || "",
   };
+}
+
+function readableUploadError(error) {
+  const message = String(error?.message || error || "Upload failed");
+  if (message.includes("codec can't decode") || message.includes("Unknown endpoint")) {
+    return "The app server was out of date. Reload the page and select the folder again.";
+  }
+  if (/failed to fetch|networkerror/i.test(message)) {
+    return "The server connection was interrupted. Check that SentriFace is running, then try again.";
+  }
+  return message;
 }

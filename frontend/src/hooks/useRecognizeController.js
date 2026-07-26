@@ -1,16 +1,17 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 
 import { DUPLICATE_MATCH_SCORE, NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { clearFile, currentDateTimeParts, imageIdFromPath, isNewPersonSuggestion } from "../utils.js";
+import { usePersistentState } from "./usePersistentState.js";
 
 export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople, showToast, uploadFile }) {
-  const [recognition, setRecognition] = useState(null);
-  const [selectedRecognitionFace, setSelectedRecognitionFace] = useState(1);
-  const [recognitionGallery, setRecognitionGallery] = useState(null);
-  const [recognitionGalleryImage, setRecognitionGalleryImage] = useState(null);
-  const [recognitionAcceptedFaces, setRecognitionAcceptedFaces] = useState([]);
-  const [recognitionFollowup, setRecognitionFollowup] = useState(null);
-  const [recognitionFollowupDone, setRecognitionFollowupDone] = useState(false);
+  const [recognition, setRecognition] = usePersistentState("sentriface.recognize.result", null);
+  const [selectedRecognitionFace, setSelectedRecognitionFace] = usePersistentState("sentriface.recognize.selectedFace", 1);
+  const [recognitionGallery, setRecognitionGallery] = usePersistentState("sentriface.recognize.gallery", null);
+  const [recognitionGalleryImage, setRecognitionGalleryImage] = usePersistentState("sentriface.recognize.galleryImage", null);
+  const [recognitionAcceptedFaces, setRecognitionAcceptedFaces] = usePersistentState("sentriface.recognize.acceptedFaces", []);
+  const [recognitionFollowup, setRecognitionFollowup] = usePersistentState("sentriface.recognize.followup", null);
+  const [recognitionFollowupDone, setRecognitionFollowupDone] = usePersistentState("sentriface.recognize.followupDone", false);
   const recognizeFileRef = useRef(null);
 
   const runRecognition = useCallback(async (path) => {

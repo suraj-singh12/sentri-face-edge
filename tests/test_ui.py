@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 import cv2
@@ -12,12 +13,14 @@ from sentriface.cli import build_dev_engine
 from sentriface.models import EmbeddingRecord
 from sentriface.api_server import (
     UPLOAD_RESIZE_LIMIT_BYTES,
+    _discard_upload_batch,
     _has_duplicate_embedding,
     _pending,
     _person_summary,
     _recognition,
     _save_upload,
     _save_upload_batch,
+    _save_upload_chunk,
 )
 
 
@@ -137,6 +140,44 @@ class ApiSerializationTest(unittest.TestCase):
             self.assertEqual(len(list((batch_dir / "folder").glob("*.jpg"))), 1)
             self.assertEqual(len(list((batch_dir / "folder" / "nested").glob("*.png"))), 1)
             self.assertFalse((batch_dir / "folder" / "skip.txt").exists())
+
+    def test_upload_chunks_share_staging_folder_and_can_be_discarded(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            upload_id = str(uuid.uuid4())
+
+            first_dir, first_path = _save_upload_chunk(
+                data_dir,
+                upload_id,
+                "a.jpg",
+                "folder/a.jpg",
+                b"first image",
+            )
+            second_dir, second_path = _save_upload_chunk(
+                data_dir,
+                upload_id,
+                "b.png",
+                "folder/nested/b.png",
+                b"second image",
+            )
+
+            self.assertEqual(first_dir, second_dir)
+            self.assertTrue(first_path.exists())
+            self.assertTrue(second_path.exists())
+            self.assertTrue(_discard_upload_batch(data_dir, upload_id))
+            self.assertFalse(first_dir.exists())
+            self.assertFalse(_discard_upload_batch(data_dir, upload_id))
+
+    def test_upload_chunk_rejects_invalid_staging_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaises(KeyError):
+                _save_upload_chunk(
+                    Path(temp) / "data",
+                    "../../outside",
+                    "a.jpg",
+                    "folder/a.jpg",
+                    b"image",
+                )
 
     def _write_image(self, image: Path) -> None:
         canvas = np.full((160, 160, 3), 128, dtype=np.uint8)

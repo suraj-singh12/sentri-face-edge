@@ -9,7 +9,7 @@ import numpy as np
 
 from sentriface.cli import build_dev_engine
 from sentriface.config import RuntimeConfig
-from sentriface.models import MatchDecision, QualityStatus
+from sentriface.models import DetectedFace, FaceBox, MatchDecision, QualityStatus
 
 
 class EngineWorkflowTest(unittest.TestCase):
@@ -119,6 +119,44 @@ class EngineWorkflowTest(unittest.TestCase):
             self.assertEqual(len(prepared.accepted), 1)
             self.assertEqual(prepared.accepted[0].quality.status, QualityStatus.BAD)
             self.assertEqual(prepared.rejected, [])
+
+    def test_prepare_face_addition_preserves_selected_detection_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image = temp_path / "faces.jpg"
+            self._write_image(image)
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            faces = [
+                DetectedFace(FaceBox(10, 20, 60, 80, 0.96), 0.9),
+                DetectedFace(FaceBox(88, 18, 58, 82, 0.94), 0.88),
+            ]
+            engine.detector = StaticDetector(faces)
+
+            selected = engine.prepare_face_addition(image, 1, allow_bad_quality=True, expected_box=faces[1].box)
+
+            self.assertIsNotNone(selected)
+            self.assertEqual(selected.face.box, faces[1].box)
+            self.assertNotEqual(selected.face.box, faces[0].box)
+
+    def test_prepare_face_addition_rejects_stale_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image = temp_path / "face.jpg"
+            self._write_image(image)
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+
+            with self.assertRaisesRegex(KeyError, "Face 2"):
+                engine.prepare_face_addition(image, 2)
+
+
+class StaticDetector:
+    def __init__(self, faces):
+        self.faces = faces
+
+    def detect(self, image_path):
+        return self.faces
 
 
 if __name__ == "__main__":

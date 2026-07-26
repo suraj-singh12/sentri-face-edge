@@ -4,9 +4,11 @@ import argparse
 import base64
 import binascii
 import json
+import shutil
 import threading
 import time
 import uuid
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,6 +24,7 @@ from sentriface.models import (
     EmbeddingRecord,
     FaceBox,
     InitGroup,
+    InitSession,
     PendingAddition,
     Person,
     PersonChange,
@@ -38,6 +41,7 @@ from sentriface.models import (
 
 STATIC_DIR = Path(__file__).with_name("ui_static")
 UPLOAD_RESIZE_LIMIT_BYTES = 1_000_000
+UPLOAD_REQUEST_LIMIT_BYTES = 100_000_000
 UPLOAD_MAX_EDGE = 1600
 DUPLICATE_MATCH_SCORE = 0.9999
 
@@ -67,7 +71,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         )
 
     def log_event(self, event: str, **details: Any) -> None:
-        item = {"event": event, **details}
+        item = {"event": event, "timestamp": datetime.now(timezone.utc).isoformat(), **details}
         self.events.append(item)
         self.events = self.events[-200:]
         if self.debug:
@@ -137,6 +141,14 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 job_id = _query_value(parsed.query, "job_id")
                 self._json(self.server.queue_progress_snapshot(job_id))
                 return
+            if parsed.path == "/api/queue-sessions":
+                sessions = []
+                for session in self.server.engine.list_init_sessions():
+                    groups = self.server.engine.list_init_groups(session.session_id)
+                    if groups:
+                        sessions.append(_init_session_summary(session, groups))
+                self._json({"sessions": sessions})
+                return
             if parsed.path == "/api/queue-groups":
                 session_id = _query_value(parsed.query, "session_id")
                 groups = self.server.engine.refresh_init_groups(session_id)
@@ -152,6 +164,25 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if parsed.path == "/api/upload-chunk":
+                content_length = int(self.headers.get("Content-Length", "0"))
+                if content_length <= 0:
+                    raise KeyError("Upload is empty")
+                if content_length > UPLOAD_REQUEST_LIMIT_BYTES:
+                    raise KeyError("Upload exceeds the 100 MB per-file limit")
+                saved_dir, saved_path = _save_upload_chunk(
+                    self.server.config.data_dir,
+                    _query_value(parsed.query, "upload_id"),
+                    _query_value(parsed.query, "filename"),
+                    _query_value(parsed.query, "relative_path"),
+                    self.rfile.read(content_length),
+                )
+                self._json({
+                    "path": str(saved_dir),
+                    "stored_path": str(saved_path),
+                    "stored_size": saved_path.stat().st_size,
+                })
+                return
             payload = self._read_json()
             if parsed.path == "/api/backups":
                 record = self.server.backups.create_backup()
@@ -178,6 +209,13 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 self.server.log_event("upload-batch", path=str(saved_dir), files=count)
                 self._json({"path": str(saved_dir), "files": count})
+                return
+            if parsed.path == "/api/upload-batch-discard":
+                removed = _discard_upload_batch(
+                    self.server.config.data_dir,
+                    _required(payload, "upload_id"),
+                )
+                self._json({"removed": removed})
                 return
             if parsed.path == "/api/recognize":
                 image_path = Path(_required(payload, "path"))
@@ -388,9 +426,13 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     session_id=queue_result.session.session_id,
                     groups=len(queue_result.groups),
                 )
+                session_id = queue_result.session.session_id
+                if not queue_result.groups:
+                    self.server.engine.discard_init_session(session_id)
+                    session_id = ""
                 self._json(
                     {
-                        "session_id": queue_result.session.session_id,
+                        "session_id": session_id,
                         "job_id": job_id,
                         "groups": [
                             _init_group(self.server.engine, group, queue_result.matches_by_face_id)
@@ -410,6 +452,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
                 groups = self.server.engine.list_init_groups(session_id)
+                session_closed = not groups
+                if session_closed:
+                    self.server.engine.discard_init_session(session_id)
                 self.server.log_event("queue-confirm-new", person_id=person_id, embeddings=len(accepted))
                 self._json(
                     {
@@ -418,6 +463,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         "embedding_ids": [item["embedding_id"] for item in accepted],
                         "changed_groups": [_init_group(self.server.engine, group) for group in changed],
                         "groups": [_init_group(self.server.engine, group) for group in groups],
+                        "session_closed": session_closed,
                     }
                 )
                 return
@@ -432,6 +478,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
                 groups = self.server.engine.list_init_groups(session_id)
+                session_closed = not groups
+                if session_closed:
+                    self.server.engine.discard_init_session(session_id)
                 self.server.log_event("queue-confirm-existing", person_id=payload.get("person_id"), embeddings=len(accepted))
                 self._json(
                     {
@@ -439,6 +488,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         "embedding_ids": [item["embedding_id"] for item in accepted],
                         "changed_groups": [_init_group(self.server.engine, group) for group in changed],
                         "groups": [_init_group(self.server.engine, group) for group in groups],
+                        "session_closed": session_closed,
                     }
                 )
                 return
@@ -449,13 +499,46 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"groups": [_init_group(self.server.engine, group) for group in groups]})
                 return
             if parsed.path == "/api/queue-discard":
+                session_id = _required(payload, "session_id")
                 self.server.engine.discard_init_faces(
-                    _required(payload, "session_id"),
+                    session_id,
                     _required(payload, "group_id"),
                     list(payload.get("face_ids", [])),
                 )
+                groups = self.server.engine.list_init_groups(session_id)
+                session_closed = not groups
+                if session_closed:
+                    self.server.engine.discard_init_session(session_id)
                 self.server.log_event("queue-discard", group_id=payload.get("group_id"), faces=len(payload.get("face_ids", [])))
-                self._json({"discarded": len(payload.get("face_ids", []))})
+                self._json({
+                    "discarded": len(payload.get("face_ids", [])),
+                    "groups": [_init_group(self.server.engine, group) for group in groups],
+                    "session_closed": session_closed,
+                })
+                return
+            if parsed.path == "/api/queue-skip":
+                session_id = _required(payload, "session_id")
+                group_id = _required(payload, "group_id")
+                self.server.engine.skip_init_group(session_id, group_id)
+                groups = self.server.engine.list_init_groups(session_id)
+                self.server.log_event("queue-skip", session_id=session_id, group_id=group_id)
+                self._json({"skipped": True, "groups": [_init_group(self.server.engine, group) for group in groups]})
+                return
+            if parsed.path == "/api/queue-resume-skipped":
+                session_id = _required(payload, "session_id")
+                resumed = self.server.engine.resume_skipped_init_groups(session_id)
+                groups = self.server.engine.list_init_groups(session_id)
+                self.server.log_event("queue-resume-skipped", session_id=session_id, groups=resumed)
+                self._json({"resumed": resumed, "groups": [_init_group(self.server.engine, group) for group in groups]})
+                return
+            if parsed.path == "/api/queue-reject-match":
+                session_id = _required(payload, "session_id")
+                group_id = _required(payload, "group_id")
+                person_id = _required(payload, "person_id")
+                self.server.engine.reject_init_group_match(session_id, group_id, person_id)
+                groups = self.server.engine.list_init_groups(session_id)
+                self.server.log_event("queue-reject-match", session_id=session_id, group_id=group_id, person_id=person_id)
+                self._json({"rejected": True, "groups": [_init_group(self.server.engine, group) for group in groups]})
                 return
             if parsed.path == "/api/confirm-new":
                 pending_id = _required(payload, "pending_id")
@@ -492,6 +575,12 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 backup_id = parsed.path.removeprefix("/api/backups/")
                 self.server.backups.delete_backup(backup_id)
                 self._json({"deleted": True, "backup_id": backup_id})
+                return
+            if parsed.path == "/api/queue-session":
+                session_id = _query_value(parsed.query, "session_id")
+                self.server.engine.discard_init_session(session_id)
+                self.server.log_event("queue-session-discard", session_id=session_id)
+                self._json({"deleted": True, "session_id": session_id})
                 return
             self._json({"error": "Unknown endpoint"}, status=HTTPStatus.NOT_FOUND)
         except Exception as exc:  # noqa: BLE001 - local UI should surface errors clearly.
@@ -541,7 +630,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     def _media(self, raw_path: str) -> None:
         path = Path(raw_path)
         if not path.exists() or not path.is_file():
-            raise KeyError(f"Media file not found: {path}")
+            self.send_response(HTTPStatus.NOT_FOUND)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if path.suffix.lower() not in IMAGE_EXTENSIONS:
             raise KeyError(f"Unsupported media file: {path}")
         data = path.read_bytes()
@@ -666,6 +758,13 @@ def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Pa
         data = base64.b64decode(encoded, validate=True)
     except binascii.Error as exc:
         raise KeyError("Invalid upload data") from exc
+    return _save_upload_bytes(data_dir, filename, data, upload_subdir)
+
+
+def _save_upload_bytes(data_dir: Path, filename: str, data: bytes, upload_subdir: Path = Path("uploads")) -> Path:
+    suffix = Path(filename).suffix.lower()
+    if suffix not in IMAGE_EXTENSIONS:
+        raise KeyError(f"Unsupported upload type: {suffix or filename}")
     if not data:
         raise KeyError("Upload is empty")
     if len(data) > UPLOAD_RESIZE_LIMIT_BYTES:
@@ -675,6 +774,35 @@ def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Pa
     target = upload_dir / f"{uuid.uuid4().hex}{suffix}"
     target.write_bytes(data)
     return target
+
+
+def _upload_batch_subdir(upload_id: str) -> Path:
+    try:
+        normalized_id = uuid.UUID(str(upload_id)).hex
+    except (ValueError, AttributeError) as exc:
+        raise KeyError("Invalid upload id") from exc
+    return Path("uploads") / "batches" / normalized_id
+
+
+def _save_upload_chunk(
+    data_dir: Path,
+    upload_id: str,
+    filename: str,
+    relative_path: str,
+    data: bytes,
+) -> tuple[Path, Path]:
+    batch_subdir = _upload_batch_subdir(upload_id)
+    safe_path = _safe_relative_upload_path(relative_path or filename)
+    saved = _save_upload_bytes(data_dir, filename, data, batch_subdir / safe_path.parent)
+    return data_dir / batch_subdir, saved
+
+
+def _discard_upload_batch(data_dir: Path, upload_id: str) -> bool:
+    batch_dir = data_dir / _upload_batch_subdir(upload_id)
+    if not batch_dir.exists():
+        return False
+    shutil.rmtree(batch_dir)
+    return True
 
 
 def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]]) -> tuple[Path, int]:
@@ -915,6 +1043,19 @@ def _representative_init_face(group: InitGroup):
     if not group.faces:
         return None
     return max(group.faces, key=lambda face: face.quality.score)
+
+
+def _init_session_summary(session: InitSession, groups: list[InitGroup]) -> dict[str, Any]:
+    return {
+        "session_id": session.session_id,
+        "source_path": session.source_path,
+        "status": session.status,
+        "created_at": session.created_at,
+        "group_count": len(groups),
+        "face_count": sum(len(group.faces) for group in groups),
+        "pending_count": sum(1 for group in groups if group.status == "pending" and group.faces),
+        "skipped_count": sum(1 for group in groups if group.status == "skipped" and group.faces),
+    }
 
 
 def _filtered_matches(matches: list[PersonMatch], excluded_person_ids: set[str]) -> list[PersonMatch]:
