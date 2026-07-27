@@ -167,7 +167,7 @@ function DebugSidebar({ section, onSection, summary, onRefresh }) {
   return (
     <Stack className="debug-sidebar">
       <Card withBorder radius="md" className="debug-side-card">
-        <Text size="xs" c="dimmed" fw={800} tt="uppercase" mb="sm">Debug</Text>
+        <Text size="xs" c="dimmed" fw={800} tt="uppercase" mb="sm">Advanced</Text>
         <Stack gap={4}>
           {navItems.map((item) => {
             const Icon = item.icon;

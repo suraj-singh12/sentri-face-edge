@@ -793,7 +793,23 @@ function PeopleGalleryView({
           <Text size="xs">{payload.person.name}</Text>
         </Group>
         <Group gap="xs">
-          {!archived && <Button size="xs" onClick={() => setEditOpen(true)}>Edit</Button>}
+          {!archived && (
+            <>
+              <Button size="xs" variant="default" leftSection={<IconPhoto size={14} />} onClick={() => changeTab("photos")}>
+                Manage faces
+              </Button>
+              <Button size="xs" onClick={() => setEditOpen(true)}>Edit profile</Button>
+              <Button
+                size="xs"
+                variant="light"
+                color="orange"
+                leftSection={<IconArchive size={14} />}
+                onClick={() => setManagementDialog("archive")}
+              >
+                Archive
+              </Button>
+            </>
+          )}
           {archived && !mergedInto && (
             <Button size="xs" leftSection={<IconRestore size={14} />} onClick={() => setManagementDialog("restore")}>
               Restore
@@ -1132,7 +1148,10 @@ function PeopleProfilePhotos({
     <Grid mt="md" className="people-profile-photos-grid">
       <Grid.Col span={{ base: 12, lg: 8 }}>
         <Group justify="space-between" mb="sm">
-          <Text size="sm">All Photos ({records.length})</Text>
+          <Box>
+            <Text size="sm" fw={700}>All Faces ({records.length})</Text>
+            <Text size="xs" c="dimmed">Select a face to set it as the profile photo, move it, or delete it.</Text>
+          </Box>
         </Group>
         <Group gap="sm" mb="md" className="people-profile-thumb-row">
           {records.map((record) => (
@@ -1183,7 +1202,7 @@ function PeopleProfilePhotos({
                 Move to another person
               </Button>
               <Button color="red" variant="light" leftSection={<IconTrash size={16} />} onClick={onDelete}>
-                Delete face
+                Move face to Deleted Faces
               </Button>
             </Stack>
           )}

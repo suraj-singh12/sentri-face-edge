@@ -41,6 +41,12 @@ export function useQueueController({
     const payload = await apiGet(`/api/queue-groups?session_id=${encodeURIComponent(sessionId)}`);
     setQueueSessionId(sessionId);
     setQueueGroups(payload.groups);
+    const selectedGroupStillExists = !queueSelectedGroupId
+      || payload.groups.some((group) => group.group_id === queueSelectedGroupId);
+    if (!selectedGroupStillExists && !options.preserveSelectedGroup) {
+      setQueueSelectedGroupId("");
+      resetQueueDecision();
+    }
     setQueueReviewStats((current) => current.totalGroups ? current : {
       ...emptyQueueReviewStats,
       totalGroups: payload.groups.length,
@@ -292,6 +298,7 @@ export function useQueueController({
     if (!queueSessionId) return;
     const discardedSessionId = queueSessionId;
     await apiDelete(`/api/queue-session?session_id=${encodeURIComponent(discardedSessionId)}`);
+    setQueueProgress(null);
     setQueueSessionId("");
     setQueueGroups([]);
     setQueueSelectedGroup(null);
@@ -348,6 +355,7 @@ export function useQueueController({
     resetQueueDecision();
     setQueueSelectedGroup(null);
     setQueueSelectedGroupId("");
+    if (payload.session_closed) setQueueProgress(null);
     await Promise.all([
       payload.session_closed ? loadQueueSessions("") : loadQueueGroups(queueSelectedGroup.session_id),
       loadEvents(),
@@ -366,6 +374,7 @@ export function useQueueController({
       setQueueSelectedGroupId("");
       resetQueueDecision();
     }
+    if (payload.session_closed) setQueueProgress(null);
     await Promise.all([
       payload.session_closed ? loadQueueSessions("") : loadQueueGroups(group.session_id),
       loadEvents(),

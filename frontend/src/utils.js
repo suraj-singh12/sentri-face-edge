@@ -102,7 +102,7 @@ export function tabLabel(view) {
     recognize: "Recognize",
     queue: "Queue",
     people: "People",
-    debug: "Debug",
+    debug: "Advanced",
   }[view];
 }
 

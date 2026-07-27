@@ -209,6 +209,14 @@ export function QueueView({
 }
 
 function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder, onDrop, onRefresh, onSelectSession, onDiscardSession }) {
+  const [uploadInputVersion, setUploadInputVersion] = useState(0);
+  const chooseFiles = (handler) => (selection) => {
+    const files = Array.from(selection || []);
+    // Remount the native file input after every choice so selecting the same
+    // image or folder again always emits a change event.
+    setUploadInputVersion((current) => current + 1);
+    handler(files);
+  };
   const flow = [
     { label: "Upload", complete: Boolean(sessionId) },
     { label: "Review groups", complete: Boolean(sessionId) && pendingCount === 0, detail: pendingCount ? `${pendingCount} remaining` : "" },
@@ -240,10 +248,16 @@ function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder,
               </Box>
             </Group>
             <Group grow w="100%" gap="xs" wrap="nowrap">
-              <FileButton onChange={onFiles} accept="image/*" multiple>
+              <FileButton key={`images-${uploadInputVersion}`} onChange={chooseFiles(onFiles)} accept="image/*" multiple>
                 {(props) => <Button {...props} size="xs" variant="light" leftSection={<IconPhotoUp size={15} />}>Images</Button>}
               </FileButton>
-              <FileButton onChange={onFolder} accept="image/*" multiple inputProps={{ webkitdirectory: "", directory: "" }}>
+              <FileButton
+                key={`folder-${uploadInputVersion}`}
+                onChange={chooseFiles(onFolder)}
+                accept="image/*"
+                multiple
+                inputProps={{ webkitdirectory: "", directory: "" }}
+              >
                 {(props) => <Button {...props} size="xs" leftSection={<IconFolderOpen size={15} />}>Folder</Button>}
               </FileButton>
             </Group>
