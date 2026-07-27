@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import uuid
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -18,6 +19,7 @@ from typing import Any
 from sentriface.components.dev_components import HashFaceEmbedder, WholeImageFaceDetector
 from sentriface.components.linear_index import LinearFaceIndex
 from sentriface.components.onnx_components import OnnxArcFaceEmbedder, OnnxScrfdDetector
+from sentriface.backup_service import BackupService
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
 from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import SentriFaceError
@@ -33,7 +35,7 @@ def build_dev_engine(data_dir: Path, config: RuntimeConfig | None = None) -> Fac
         detector=WholeImageFaceDetector(),
         embedder=HashFaceEmbedder(config.embedding_dim),
         index=LinearFaceIndex(),
-        store=SQLiteIdentityStore(config.db_path, config.embedding_dim),
+        store=_identity_store(config),
     )
 
 
@@ -51,8 +53,29 @@ def build_onnx_engine(config: RuntimeConfig) -> FaceEngine:
             intra_op_threads=config.onnx_intra_threads,
         ),
         index=LinearFaceIndex(),
-        store=SQLiteIdentityStore(config.db_path, config.embedding_dim),
+        store=_identity_store(config),
     )
+
+
+def _identity_store(config: RuntimeConfig) -> SQLiteIdentityStore:
+    return SQLiteIdentityStore(
+        config.db_path,
+        config.embedding_dim,
+        backup_dir=config.backup_dir,
+        backup_retention_limit=config.backup_retention_limit,
+    )
+
+
+def _pre_deletion_backup(
+    config: RuntimeConfig,
+    reason: str,
+    operation_id: str,
+):
+    return BackupService(
+        config.db_path,
+        config.backup_dir,
+        retention_limit=config.backup_retention_limit,
+    ).create_backup(reason=reason, operation_id=operation_id)
 
 
 def main() -> int:
@@ -154,11 +177,31 @@ def main() -> int:
     rename.add_argument("person_id")
     rename.add_argument("name")
 
-    delete_person = subcommands.add_parser("delete-person", help="Soft-delete a person")
+    delete_person = subcommands.add_parser("delete-person", help="Archive a person")
     delete_person.add_argument("person_id")
 
-    delete_embedding = subcommands.add_parser("delete-embedding", help="Delete one embedding")
+    restore_person = subcommands.add_parser("restore-person", help="Restore an archived person")
+    restore_person.add_argument("person_id")
+
+    delete_embedding = subcommands.add_parser(
+        "delete-embedding",
+        help="Move one face to Deleted Faces for 30 days",
+    )
     delete_embedding.add_argument("embedding_id")
+
+    subcommands.add_parser("deleted-faces", help="List soft-deleted faces")
+
+    restore_embedding = subcommands.add_parser(
+        "restore-embedding",
+        help="Restore a face from Deleted Faces",
+    )
+    restore_embedding.add_argument("embedding_id")
+
+    purge_embedding = subcommands.add_parser(
+        "purge-embedding",
+        help="Permanently delete a face from Deleted Faces",
+    )
+    purge_embedding.add_argument("embedding_id")
 
     move_embedding = subcommands.add_parser("move-embedding", help="Move one embedding to another person")
     move_embedding.add_argument("embedding_id")
@@ -396,12 +439,66 @@ def main() -> int:
             return _emit_engine(args, engine, {"person_id": args.person_id, "renamed": args.name})
 
         if args.command == "delete-person":
-            engine.delete_person(args.person_id)
-            return _emit_engine(args, engine, {"person_id": args.person_id, "deleted": 1})
+            person = engine.get_person(args.person_id)
+            if person is None:
+                raise KeyError(f"Unknown person: {args.person_id}")
+            operation_id = str(uuid.uuid4())
+            backup = _pre_deletion_backup(
+                config,
+                f"before-person-archive-{person.name}-{args.person_id[:8]}",
+                operation_id,
+            )
+            result = engine.archive_person(args.person_id, operation_id)
+            return _emit_engine(args, engine, {**result, "backup_id": backup.backup_id})
+
+        if args.command == "restore-person":
+            result = engine.restore_person(args.person_id, str(uuid.uuid4()))
+            return _emit_engine(args, engine, result)
 
         if args.command == "delete-embedding":
-            engine.delete_embedding(args.embedding_id)
-            return _emit_engine(args, engine, {"embedding_id": args.embedding_id, "deleted": 1})
+            lifecycle = engine.get_embedding_lifecycle(args.embedding_id)
+            if lifecycle is None:
+                raise KeyError(f"Unknown embedding: {args.embedding_id}")
+            if lifecycle.get("deleted_at"):
+                raise KeyError("Face is already in Deleted Faces")
+            operation_id = str(uuid.uuid4())
+            backup = _pre_deletion_backup(
+                config,
+                (
+                    f"before-face-delete-{lifecycle['person_name']}-"
+                    f"{args.embedding_id[:8]}"
+                ),
+                operation_id,
+            )
+            result = engine.delete_embedding(args.embedding_id, operation_id)
+            return _emit_engine(args, engine, {**result, "backup_id": backup.backup_id})
+
+        if args.command == "deleted-faces":
+            return _emit_engine(
+                args,
+                engine,
+                {"deleted_faces": engine.list_deleted_embeddings()},
+            )
+
+        if args.command == "restore-embedding":
+            result = engine.restore_deleted_embedding(args.embedding_id, str(uuid.uuid4()))
+            return _emit_engine(args, engine, result)
+
+        if args.command == "purge-embedding":
+            lifecycle = engine.get_embedding_lifecycle(args.embedding_id)
+            if lifecycle is None or not lifecycle.get("deleted_at"):
+                raise KeyError(f"Unknown deleted face: {args.embedding_id}")
+            operation_id = str(uuid.uuid4())
+            backup = _pre_deletion_backup(
+                config,
+                (
+                    f"before-face-permanent-delete-{lifecycle['person_name']}-"
+                    f"{args.embedding_id[:8]}"
+                ),
+                operation_id,
+            )
+            result = engine.permanently_delete_embedding(args.embedding_id, operation_id)
+            return _emit_engine(args, engine, {**result, "backup_id": backup.backup_id})
 
         if args.command == "move-embedding":
             engine.move_embedding(args.embedding_id, args.person_id)
@@ -416,14 +513,35 @@ def main() -> int:
             )
 
         if args.command == "merge-persons":
-            moved = engine.merge_persons(args.source_person_id, args.target_person_id)
+            source = engine.get_person(args.source_person_id)
+            target = engine.get_person(args.target_person_id)
+            if source is None:
+                raise KeyError(f"Unknown source person: {args.source_person_id}")
+            if target is None:
+                raise KeyError(f"Unknown target person: {args.target_person_id}")
+            operation_id = str(uuid.uuid4())
+            backup = _pre_deletion_backup(
+                config,
+                (
+                    f"before-person-merge-{source.name}-into-{target.name}-"
+                    f"{args.source_person_id[:8]}"
+                ),
+                operation_id,
+            )
+            moved = engine.merge_persons(
+                args.source_person_id,
+                args.target_person_id,
+                operation_id,
+            )
             return _emit_engine(
                 args,
                 engine,
                 {
                     "source_person_id": args.source_person_id,
                     "target_person_id": args.target_person_id,
-                    "embeddings_moved": moved,
+                    "embeddings_moved": moved["moved_embeddings"],
+                    "deleted_faces_moved": moved["moved_deleted_faces"],
+                    "backup_id": backup.backup_id,
                     "merged": 1,
                 },
             )

@@ -13,17 +13,27 @@ export function useSentriFaceController() {
   const appData = useAppData({ activeView, ...api });
   const recognize = useRecognizeController({ ...api, ...uploads, loadEvents: appData.loadEvents, loadPeople: appData.loadPeople });
   const queue = useQueueController({ ...api, ...uploads, loadEvents: appData.loadEvents, loadPeople: appData.loadPeople });
-  const people = usePeopleController({ ...api, loadEvents: appData.loadEvents, loadPeople: appData.loadPeople });
+  const people = usePeopleController({
+    ...api,
+    loadDeletedFaces: appData.loadDeletedFaces,
+    loadEvents: appData.loadEvents,
+    loadPeople: appData.loadPeople,
+  });
 
   return {
     state: {
       activeView,
       profile: appData.profile,
       people: appData.people,
+      archivedPeople: appData.archivedPeople,
+      deletedFaces: appData.deletedFaces,
       events: appData.events,
       backups: appData.backups,
       backupModalOpen: appData.backupModalOpen,
       backupCreating: appData.backupCreating,
+      backupImporting: appData.backupImporting,
+      backupRestoring: appData.backupRestoring,
+      restoreBackupSelection: appData.restoreBackupSelection,
       ...recognize.state,
       ...queue.state,
       ...people.state,
@@ -35,11 +45,17 @@ export function useSentriFaceController() {
       reloadAppData: appData.reloadAppData,
       loadPeople: appData.loadPeople,
       loadEvents: appData.loadEvents,
+      loadDeletedFaces: appData.loadDeletedFaces,
       loadBackups: appData.loadBackups,
       requestBackup: appData.requestBackup,
       cancelBackup: appData.cancelBackup,
       createBackup: appData.createBackup,
       deleteBackup: appData.deleteBackup,
+      importBackup: appData.importBackup,
+      downloadBackup: appData.downloadBackup,
+      requestRestoreBackup: appData.requestRestoreBackup,
+      cancelRestoreBackup: appData.cancelRestoreBackup,
+      restoreBackup: appData.restoreBackup,
       ...recognize.actions,
       ...queue.actions,
       ...people.actions,

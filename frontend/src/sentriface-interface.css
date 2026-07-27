@@ -1196,6 +1196,23 @@ button {
   padding: 10px 12px !important;
 }
 
+.deleted-faces-notice {
+  background: color-mix(in srgb, var(--mantine-color-yellow-9) 9%, var(--sentriface-card-bg));
+  border-color: var(--sentriface-card-border);
+}
+
+.deleted-face-card {
+  min-width: 0;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+  box-shadow: var(--sentriface-card-shadow);
+}
+
+.deleted-face-card .mantine-Image-root {
+  flex: 0 0 auto;
+  background: var(--mantine-color-dark-8);
+}
+
 .people-library-main {
   height: 100%;
   min-height: 0;

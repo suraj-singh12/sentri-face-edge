@@ -24,7 +24,9 @@ def setup_logging(debug: bool = True) -> None:
         "logs/sentriface.log",
         rotation="10 MB",
         retention="7 days",
-        level="DEBUG",
-        backtrace=True,
-        diagnose=True,
+        level=level,
+        backtrace=debug,
+        # Loguru's diagnostic mode can serialize local variables from a failing
+        # inference frame, including images, tensors, and embeddings.
+        diagnose=False,
     )

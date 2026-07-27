@@ -11,36 +11,36 @@ export function useApiClient() {
     });
   }, []);
 
-  const readResponse = useCallback(async (response) => {
+  const readResponse = useCallback(async (response, options = {}) => {
     const contentType = response.headers.get("Content-Type") || "";
     const payload = contentType.includes("application/json")
       ? await response.json()
       : { error: await response.text() || response.statusText };
-    console.debug("[sentriface-ui] response", response.status, payload);
     if (!response.ok) {
-      showToast(payload.error || "Request failed", "red");
-      throw new Error(payload.error || "Request failed");
+      if (!options.silent) showToast(payload.error || "Request failed", "red");
+      const error = new Error(payload.error || "Request failed");
+      error.status = response.status;
+      error.code = payload.code;
+      error.reason = payload.reason;
+      throw error;
     }
     return payload;
   }, [showToast]);
 
   const apiGet = useCallback(async (path) => {
-    console.debug("[sentriface-ui] GET", path);
     return readResponse(await fetch(path));
   }, [readResponse]);
 
   const apiPost = useCallback(async (path, body, options = {}) => {
-    console.debug("[sentriface-ui] POST", path);
     return readResponse(await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: options.signal,
-    }));
+    }), options);
   }, [readResponse]);
 
   const apiUpload = useCallback(async (path, file, options = {}) => {
-    console.debug("[sentriface-ui] UPLOAD", path, file.name, file.size);
     const controller = new AbortController();
     let timedOut = false;
     const forwardAbort = () => controller.abort();
@@ -55,7 +55,7 @@ export function useApiClient() {
         headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file,
         signal: controller.signal,
-      }));
+      }), options);
     } catch (error) {
       if (timedOut) throw new Error(`Upload timed out for ${file.name}`);
       throw error;
@@ -66,7 +66,6 @@ export function useApiClient() {
   }, [readResponse]);
 
   const apiDelete = useCallback(async (path) => {
-    console.debug("[sentriface-ui] DELETE", path);
     return readResponse(await fetch(path, { method: "DELETE" }));
   }, [readResponse]);
 

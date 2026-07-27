@@ -59,13 +59,17 @@ class IdentityStore(Protocol):
     def list_embeddings(self) -> list[EmbeddingRecord]:
         """Load all embedding records."""
 
-    def get_person(self, person_id: str) -> Person | None:
+    def get_person(self, person_id: str, include_archived: bool = False) -> Person | None:
         """Load one person by id."""
 
-    def list_persons(self) -> list[PersonSummary]:
-        """List active people with summary counts."""
+    def list_persons(self, archived: bool = False) -> list[PersonSummary]:
+        """List active or archived people with summary counts."""
 
-    def list_embeddings_for_person(self, person_id: str) -> list[EmbeddingRecord]:
+    def list_embeddings_for_person(
+        self,
+        person_id: str,
+        include_archived: bool = False,
+    ) -> list[EmbeddingRecord]:
         """List embeddings belonging to one person."""
 
     def rename_person(self, person_id: str, name: str) -> None:
@@ -79,20 +83,66 @@ class IdentityStore(Protocol):
         country: str | None,
         importance: str | None,
         editor_name: str,
+        tags: list[str] | None = None,
+        operation_id: str | None = None,
     ) -> PersonChange:
         """Update editable person profile fields and keep a change record."""
 
     def list_person_changes(self, person_id: str) -> list[PersonChange]:
         """List profile changes for one person, newest first."""
 
-    def delete_person(self, person_id: str) -> None:
-        """Soft-delete one person."""
+    def list_person_operations(self, person_id: str) -> list[dict]:
+        """List lifecycle operations involving one person, newest first."""
 
-    def delete_embedding(self, embedding_id: str) -> None:
-        """Delete one embedding record."""
+    def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
+        """Load a prior idempotent operation result, if one exists."""
 
-    def move_embedding(self, embedding_id: str, person_id: str) -> None:
-        """Move one embedding to another person."""
+    def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
+        """Load face ownership and deletion state."""
+
+    def archive_person(self, person_id: str, operation_id: str) -> dict:
+        """Atomically archive one person."""
+
+    def restore_person(self, person_id: str, operation_id: str) -> dict:
+        """Atomically restore one archived person."""
+
+    def delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
+        """Atomically soft-delete an embedding while retaining linked details."""
+
+    def list_deleted_embeddings(self) -> list[dict]:
+        """List soft-deleted faces and their retention metadata."""
+
+    def restore_deleted_embedding(self, embedding_id: str, operation_id: str) -> dict:
+        """Restore one soft-deleted face."""
+
+    def permanently_delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
+        """Permanently delete a soft-deleted face and linked details."""
+
+    def list_expired_deleted_embedding_ids(self, now: str | None = None) -> list[str]:
+        """List soft-deleted faces whose retention period has elapsed."""
+
+    def purge_expired_deleted_embeddings(
+        self,
+        embedding_ids: list[str],
+        operation_id: str,
+        now: str | None = None,
+    ) -> dict:
+        """Purge an expired-face batch atomically."""
+
+    def move_embedding(self, embedding_id: str, person_id: str, operation_id: str) -> dict:
+        """Atomically move one embedding and its recognition details."""
+
+    def merge_persons(self, source_person_id: str, target_person_id: str, operation_id: str) -> dict:
+        """Atomically merge one active person into another."""
+
+    def update_person_preferences(
+        self,
+        person_id: str,
+        operation_id: str,
+        favorite: bool | None = None,
+        representative_embedding_id: str | None = None,
+    ) -> dict:
+        """Persist favorite and representative-photo preferences."""
 
     def list_recognition_details_for_person(self, person_id: str) -> list[RecognitionDetail]:
         """Load recognition details for all embeddings of one person."""

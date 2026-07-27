@@ -58,14 +58,14 @@ function SentriFaceShell() {
                 <IconRefresh size={18} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label={state.backupCreating ? "Creating backup..." : "Create DB backup"}>
+            <Tooltip label={state.backupCreating ? "Creating portable backup..." : "Create portable backup"}>
               <ActionIcon
                 variant="light"
                 color="blue"
                 size="lg"
                 onClick={actions.requestBackup}
                 disabled={state.backupCreating}
-                aria-label={state.backupCreating ? "Creating backup..." : "Create DB backup"}
+                aria-label={state.backupCreating ? "Creating portable backup..." : "Create portable backup"}
               >
                 {state.backupCreating ? <Loader size={18} /> : <IconDatabaseExport size={18} />}
               </ActionIcon>
@@ -151,13 +151,24 @@ function SentriFaceShell() {
           <Tabs.Panel value="people">
             <PeopleView
               people={state.people}
+              archivedPeople={state.archivedPeople}
+              deletedFaces={state.deletedFaces}
               peopleGallery={state.peopleGallery}
               peopleGalleryImage={state.peopleGalleryImage}
-              onRefresh={guarded(actions.loadPeople)}
+              onRefresh={guarded(actions.refreshAll)}
               onOpen={guarded(actions.peopleOpen)}
               onImage={actions.setPeopleGalleryImage}
               onBack={actions.peopleBack}
               onSave={actions.savePeopleProfile}
+              onFavorite={guarded(actions.setPeopleFavorite)}
+              onSetRepresentative={guarded(actions.setRepresentativePhoto)}
+              onArchive={actions.archivePerson}
+              onRestore={actions.restorePerson}
+              onMerge={actions.mergePeople}
+              onMovePhoto={actions.movePersonPhoto}
+              onDeletePhoto={actions.deletePersonPhoto}
+              onRestoreDeletedFace={actions.restoreDeletedFace}
+              onPermanentlyDeleteFace={actions.permanentlyDeleteFace}
             />
           </Tabs.Panel>
 
@@ -166,27 +177,59 @@ function SentriFaceShell() {
               events={state.events}
               backups={state.backups}
               backupCreating={state.backupCreating}
+              backupImporting={state.backupImporting}
               onRefresh={guarded(actions.loadEvents)}
               onCreateBackup={guarded(actions.createBackup)}
               onDeleteBackup={guarded(actions.deleteBackup)}
+              onImportBackup={guarded(actions.importBackup)}
+              onDownloadBackup={actions.downloadBackup}
+              onRestoreBackup={actions.requestRestoreBackup}
             />
           </Tabs.Panel>
         </Tabs>
         <Modal
           opened={state.backupModalOpen}
           onClose={actions.cancelBackup}
-          title="Create database backup?"
+          title="Create a complete portable backup?"
           centered
           closeOnClickOutside={!state.backupCreating}
           closeOnEscape={!state.backupCreating}
         >
           <Stack gap="md">
             <Text size="sm" c="dimmed">
-              A snapshot of the current people, embeddings, and application data will be saved in the managed backups folder.
+              SentriFace will snapshot the database and copy every referenced original image and face crop. Files are deduplicated, checksummed, and verified before the backup is marked ready.
             </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={actions.cancelBackup} disabled={state.backupCreating}>Cancel</Button>
               <Button onClick={guarded(actions.createBackup)} loading={state.backupCreating}>Create Backup</Button>
+            </Group>
+          </Stack>
+        </Modal>
+        <Modal
+          opened={Boolean(state.restoreBackupSelection)}
+          onClose={actions.cancelRestoreBackup}
+          title="Restore portable backup?"
+          centered
+          closeOnClickOutside={!state.backupRestoring}
+          closeOnEscape={!state.backupRestoring}
+        >
+          <Stack gap="md">
+            <Text size="sm">
+              This replaces the current identity database with{" "}
+              <Text span fw={800}>{state.restoreBackupSelection?.reason || "the selected backup"}</Text>
+              {" "}and restores its {state.restoreBackupSelection?.file_count || 0} referenced files.
+            </Text>
+            <Text size="sm" c="dimmed">
+              Before changing anything, SentriFace creates and verifies a complete safety backup of the current state. If restore or reload fails, it rolls back automatically.
+            </Text>
+            <Text size="sm" c="red" fw={700}>
+              Active recognition and queue screen state will be cleared after a successful restore.
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={actions.cancelRestoreBackup} disabled={state.backupRestoring}>Cancel</Button>
+              <Button color="teal" onClick={guarded(actions.restoreBackup)} loading={state.backupRestoring}>
+                Restore Safely
+              </Button>
             </Group>
           </Stack>
         </Modal>

@@ -4,8 +4,10 @@ import json
 import sqlite3
 import struct
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 
+from sentriface.backup_service import BackupError, BackupService
 from sentriface.models import (
     DetectedFace,
     Embedding,
@@ -26,16 +28,33 @@ from sentriface.models import (
     utc_now,
 )
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
+DELETED_FACE_RETENTION_DAYS = 30
 
 
 class SQLiteIdentityStore:
-    def __init__(self, db_path: Path, embedding_dim: int = 512) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        embedding_dim: int = 512,
+        backup_dir: Path | None = None,
+        backup_retention_limit: int = 10,
+    ) -> None:
         self.db_path = db_path
         self.embedding_dim = embedding_dim
+        self.backup_dir = backup_dir or db_path.parent / "backups"
+        self.backup_retention_limit = backup_retention_limit
 
     def initialize(self) -> None:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        version = self._schema_version()
+        if version > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database schema version {version} is newer than this app supports "
+                f"({SCHEMA_VERSION}). Please update SentriFace."
+            )
+        if 0 < version < SCHEMA_VERSION:
+            self._create_pre_migration_backup(version)
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             version = conn.execute("PRAGMA user_version").fetchone()[0]
@@ -68,8 +87,39 @@ class SQLiteIdentityStore:
             if version == 7:
                 _migrate_7_to_8(conn)
                 version = 8
+            if version == 8:
+                _migrate_8_to_9(conn)
+                version = 9
+            if version == 9:
+                _migrate_9_to_10(conn)
+                version = 10
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
+
+    def _schema_version(self) -> int:
+        if not self.db_path.exists():
+            return 0
+        with sqlite3.connect(self.db_path) as conn:
+            return int(conn.execute("PRAGMA user_version").fetchone()[0])
+
+    def _create_pre_migration_backup(self, version: int) -> None:
+        reason = f"before-schema-migration-v{version}-to-v{SCHEMA_VERSION}"
+        operation_id = f"schema-migration-v{version}-to-v{SCHEMA_VERSION}"
+        service = BackupService(
+            self.db_path,
+            self.backup_dir,
+            retention_limit=self.backup_retention_limit,
+        )
+        existing = service.find_by_operation(operation_id)
+        if existing is not None:
+            if not service.verify_backup(existing.backup_id):
+                raise BackupError(
+                    f"Existing pre-migration backup failed verification: {existing.backup_id}"
+                )
+            return
+        backup = service.create_backup(reason=reason, operation_id=operation_id)
+        if not backup.verified or not service.verify_backup(backup.backup_id):
+            raise BackupError(f"Pre-migration backup failed verification: {backup.backup_id}")
 
     def create_person(self, name: str, metadata: dict | None = None) -> Person:
         person = Person(
@@ -92,13 +142,13 @@ class SQLiteIdentityStore:
             )
         return person
 
-    def get_person(self, person_id: str) -> Person | None:
+    def get_person(self, person_id: str, include_archived: bool = False) -> Person | None:
         with self._connect() as conn:
             row = conn.execute(
-                """
+                f"""
                 SELECT person_id, name, metadata, created_at, deleted_at
                 FROM persons
-                WHERE person_id = ? AND deleted_at IS NULL
+                WHERE person_id = ? {" " if include_archived else "AND deleted_at IS NULL"}
                 """,
                 (person_id,),
             ).fetchone()
@@ -112,15 +162,15 @@ class SQLiteIdentityStore:
             deleted_at=row["deleted_at"],
         )
 
-    def list_persons(self) -> list[PersonSummary]:
+    def list_persons(self, archived: bool = False) -> list[PersonSummary]:
         with self._connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT p.person_id, p.name, p.metadata, p.created_at, p.deleted_at,
-                       COUNT(e.embedding_id) AS embedding_count
+                       COUNT(CASE WHEN e.deleted_at IS NULL THEN e.embedding_id END) AS embedding_count
                 FROM persons p
                 LEFT JOIN embeddings e ON e.person_id = p.person_id
-                WHERE p.deleted_at IS NULL
+                WHERE p.deleted_at IS {"NOT NULL" if archived else "NULL"}
                 GROUP BY p.person_id
                 ORDER BY p.name COLLATE NOCASE
                 """
@@ -139,15 +189,21 @@ class SQLiteIdentityStore:
             for row in rows
         ]
 
-    def list_embeddings_for_person(self, person_id: str) -> list[EmbeddingRecord]:
+    def list_embeddings_for_person(
+        self,
+        person_id: str,
+        include_archived: bool = False,
+    ) -> list[EmbeddingRecord]:
         with self._connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT e.embedding_id, e.person_id, e.vector, e.quality_score,
                        e.source_image, e.crop_path, e.created_at
                 FROM embeddings e
                 JOIN persons p ON p.person_id = e.person_id
-                WHERE e.person_id = ? AND p.deleted_at IS NULL
+                WHERE e.person_id = ?
+                  AND e.deleted_at IS NULL
+                  {" " if include_archived else "AND p.deleted_at IS NULL"}
                 ORDER BY e.created_at ASC
                 """,
                 (person_id,),
@@ -171,8 +227,26 @@ class SQLiteIdentityStore:
         country: str | None,
         importance: str | None,
         editor_name: str,
+        tags: list[str] | None = None,
+        operation_id: str | None = None,
     ) -> PersonChange:
         with self._connect() as conn:
+            if operation_id:
+                existing = _begin_person_operation(conn, operation_id, "update-profile")
+                if existing:
+                    change_row = conn.execute(
+                        """
+                        SELECT change_id, person_id, previous_name, new_name,
+                               previous_rank, new_rank, previous_country, new_country,
+                               previous_importance, new_importance, editor_name, created_at
+                        FROM person_change_history
+                        WHERE change_id = ?
+                        """,
+                        (existing["change_id"],),
+                    ).fetchone()
+                    if change_row is None:
+                        raise RuntimeError("Stored profile update result is no longer available")
+                    return _person_change_from_row(change_row)
             row = conn.execute(
                 """
                 SELECT person_id, name, metadata
@@ -190,6 +264,7 @@ class SQLiteIdentityStore:
                 "rank": rank or "",
                 "country": country or "",
                 "importance": importance or "",
+                "tags": _normalize_tags(tags if tags is not None else previous_metadata.get("tags", [])),
             }
             change = PersonChange(
                 change_id=str(uuid.uuid4()),
@@ -241,6 +316,13 @@ class SQLiteIdentityStore:
                     change.created_at,
                 ),
             )
+            if operation_id:
+                _record_person_operation(
+                    conn,
+                    operation_id,
+                    "update-profile",
+                    {"change_id": change.change_id, "person_id": person_id},
+                )
         return change
 
     def list_person_changes(self, person_id: str) -> list[PersonChange]:
@@ -258,31 +340,580 @@ class SQLiteIdentityStore:
             ).fetchall()
         return [_person_change_from_row(row) for row in rows]
 
-    def delete_person(self, person_id: str) -> None:
+    def list_person_operations(self, person_id: str) -> list[dict]:
         with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT operation_id, operation_type, result, created_at
+                FROM person_operations
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+        operations: list[dict] = []
+        for row in rows:
+            result = json.loads(row["result"])
+            involved_ids = {
+                result.get("person_id"),
+                result.get("source_person_id"),
+                result.get("target_person_id"),
+            }
+            involved_ids.update(result.get("person_ids") or [])
+            if person_id not in involved_ids:
+                continue
+            operations.append(
+                {
+                    "operation_id": row["operation_id"],
+                    "operation_type": row["operation_type"],
+                    "created_at": row["created_at"],
+                    "result": result,
+                }
+            )
+        return operations
+
+    def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
+        with self._connect() as conn:
+            return _existing_person_operation(conn, operation_id, operation_type)
+
+    def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT e.embedding_id, e.person_id, e.deleted_at, e.purge_after,
+                       p.name AS person_name, p.deleted_at AS person_deleted_at
+                FROM embeddings e
+                JOIN persons p ON p.person_id = e.person_id
+                WHERE e.embedding_id = ?
+                """,
+                (embedding_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def archive_person(self, person_id: str, operation_id: str) -> dict:
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "archive-person")
+            if existing:
+                return existing
+            row = conn.execute(
+                "SELECT deleted_at FROM persons WHERE person_id = ?",
+                (person_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            archived_at = row["deleted_at"] or utc_now()
             cursor = conn.execute(
                 "UPDATE persons SET deleted_at = ? WHERE person_id = ? AND deleted_at IS NULL",
-                (utc_now(), person_id),
+                (archived_at, person_id),
             )
-        if cursor.rowcount == 0:
-            raise KeyError(f"Unknown person: {person_id}")
+            result = {
+                "person_id": person_id,
+                "archived": True,
+                "archived_at": archived_at,
+                "changed": bool(cursor.rowcount),
+            }
+            _record_person_operation(conn, operation_id, "archive-person", result)
+            return result
 
-    def delete_embedding(self, embedding_id: str) -> None:
+    def restore_person(self, person_id: str, operation_id: str) -> dict:
         with self._connect() as conn:
-            cursor = conn.execute("DELETE FROM embeddings WHERE embedding_id = ?", (embedding_id,))
-        if cursor.rowcount == 0:
-            raise KeyError(f"Unknown embedding: {embedding_id}")
-
-    def move_embedding(self, embedding_id: str, person_id: str) -> None:
-        if self.get_person(person_id) is None:
-            raise KeyError(f"Unknown person: {person_id}")
-        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "restore-person")
+            if existing:
+                return existing
+            row = conn.execute(
+                "SELECT deleted_at, metadata FROM persons WHERE person_id = ?",
+                (person_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            metadata = json.loads(row["metadata"])
+            if metadata.get("merged_into"):
+                raise KeyError(
+                    f"Merged person records cannot be restored; merged into {metadata['merged_into']}"
+                )
             cursor = conn.execute(
+                "UPDATE persons SET deleted_at = NULL WHERE person_id = ? AND deleted_at IS NOT NULL",
+                (person_id,),
+            )
+            result = {"person_id": person_id, "restored": True, "changed": bool(cursor.rowcount)}
+            _record_person_operation(conn, operation_id, "restore-person", result)
+            return result
+
+    def delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
+        """Soft-delete a face for 30 days while retaining its linked sightings."""
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "soft-delete-embedding")
+            if existing:
+                return existing
+            row = conn.execute(
+                """
+                SELECT e.person_id, e.source_image, e.crop_path, e.deleted_at,
+                       e.purge_after, p.metadata
+                FROM embeddings e
+                JOIN persons p ON p.person_id = e.person_id
+                WHERE e.embedding_id = ?
+                """,
+                (embedding_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown embedding: {embedding_id}")
+            if row["deleted_at"]:
+                raise KeyError("Face is already in Deleted Faces")
+            detail_count = conn.execute(
+                "SELECT COUNT(*) FROM recognition_details WHERE embedding_id = ?",
+                (embedding_id,),
+            ).fetchone()[0]
+            deleted_at = utc_now()
+            purge_after = (
+                datetime.fromisoformat(deleted_at)
+                + timedelta(days=DELETED_FACE_RETENTION_DAYS)
+            ).isoformat()
+            conn.execute(
+                """
+                UPDATE embeddings
+                SET deleted_at = ?, purge_after = ?
+                WHERE embedding_id = ? AND deleted_at IS NULL
+                """,
+                (deleted_at, purge_after, embedding_id),
+            )
+            metadata = json.loads(row["metadata"])
+            if metadata.get("representative_embedding_id") == embedding_id:
+                metadata.pop("representative_embedding_id", None)
+                conn.execute(
+                    "UPDATE persons SET metadata = ? WHERE person_id = ?",
+                    (json.dumps(metadata, separators=(",", ":")), row["person_id"]),
+                )
+            result = {
+                "embedding_id": embedding_id,
+                "person_id": row["person_id"],
+                "deleted": True,
+                "permanent": False,
+                "retained_sightings": detail_count,
+                "deleted_at": deleted_at,
+                "purge_after": purge_after,
+                "source_image": row["source_image"],
+                "crop_path": row["crop_path"],
+            }
+            _record_person_operation(conn, operation_id, "soft-delete-embedding", result)
+            return result
+
+    def list_deleted_embeddings(self) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT e.embedding_id, e.person_id, e.quality_score,
+                       e.source_image, e.crop_path, e.created_at,
+                       e.deleted_at, e.purge_after,
+                       p.name, p.deleted_at AS person_deleted_at,
+                       COUNT(d.detail_id) AS sighting_count
+                FROM embeddings e
+                JOIN persons p ON p.person_id = e.person_id
+                LEFT JOIN recognition_details d ON d.embedding_id = e.embedding_id
+                WHERE e.deleted_at IS NOT NULL
+                GROUP BY e.embedding_id
+                ORDER BY e.deleted_at DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def restore_deleted_embedding(self, embedding_id: str, operation_id: str) -> dict:
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "restore-deleted-embedding")
+            if existing:
+                return existing
+            row = conn.execute(
+                """
+                SELECT e.person_id, e.deleted_at, e.purge_after, p.deleted_at AS person_deleted_at,
+                       p.metadata
+                FROM embeddings e
+                JOIN persons p ON p.person_id = e.person_id
+                WHERE e.embedding_id = ?
+                """,
+                (embedding_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown deleted face: {embedding_id}")
+            if row["deleted_at"] is None:
+                raise KeyError("Face is not deleted")
+            if row["person_deleted_at"] is not None:
+                raise KeyError("Restore the archived person before restoring this face")
+            conn.execute(
+                """
+                UPDATE embeddings
+                SET deleted_at = NULL, purge_after = NULL
+                WHERE embedding_id = ? AND deleted_at IS NOT NULL
+                """,
+                (embedding_id,),
+            )
+            metadata = json.loads(row["metadata"])
+            if not metadata.get("representative_embedding_id"):
+                metadata["representative_embedding_id"] = embedding_id
+                conn.execute(
+                    "UPDATE persons SET metadata = ? WHERE person_id = ?",
+                    (json.dumps(metadata, separators=(",", ":")), row["person_id"]),
+                )
+            result = {
+                "embedding_id": embedding_id,
+                "person_id": row["person_id"],
+                "restored": True,
+                "previously_deleted_at": row["deleted_at"],
+            }
+            _record_person_operation(conn, operation_id, "restore-deleted-embedding", result)
+            return result
+
+    def permanently_delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "purge-deleted-embedding")
+            if existing:
+                return existing
+            row = conn.execute(
+                """
+                SELECT person_id, source_image, crop_path, deleted_at, purge_after
+                FROM embeddings
+                WHERE embedding_id = ?
+                """,
+                (embedding_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown deleted face: {embedding_id}")
+            if row["deleted_at"] is None:
+                raise KeyError("Move the face to Deleted Faces before deleting it permanently")
+            detail_count = conn.execute(
+                "SELECT COUNT(*) FROM recognition_details WHERE embedding_id = ?",
+                (embedding_id,),
+            ).fetchone()[0]
+            conn.execute("DELETE FROM recognition_details WHERE embedding_id = ?", (embedding_id,))
+            conn.execute("DELETE FROM embeddings WHERE embedding_id = ?", (embedding_id,))
+            result = {
+                "embedding_id": embedding_id,
+                "person_id": row["person_id"],
+                "deleted": True,
+                "permanent": True,
+                "deleted_sightings": detail_count,
+                "source_image": row["source_image"],
+                "crop_path": row["crop_path"],
+                "previously_deleted_at": row["deleted_at"],
+                "previous_purge_after": row["purge_after"],
+            }
+            _record_person_operation(conn, operation_id, "purge-deleted-embedding", result)
+            return result
+
+    def list_expired_deleted_embedding_ids(self, now: str | None = None) -> list[str]:
+        cutoff = now or utc_now()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT embedding_id
+                FROM embeddings
+                WHERE deleted_at IS NOT NULL
+                  AND purge_after IS NOT NULL
+                  AND purge_after <= ?
+                ORDER BY purge_after ASC
+                """,
+                (cutoff,),
+            ).fetchall()
+        return [row["embedding_id"] for row in rows]
+
+    def purge_expired_deleted_embeddings(
+        self,
+        embedding_ids: list[str],
+        operation_id: str,
+        now: str | None = None,
+    ) -> dict:
+        unique_ids = list(dict.fromkeys(embedding_ids))
+        with self._connect() as conn:
+            existing = _begin_person_operation(
+                conn,
+                operation_id,
+                "purge-expired-embeddings",
+            )
+            if existing:
+                return existing
+            if not unique_ids:
+                result = {
+                    "embedding_ids": [],
+                    "person_ids": [],
+                    "purged": 0,
+                    "deleted_sightings": 0,
+                }
+                _record_person_operation(
+                    conn,
+                    operation_id,
+                    "purge-expired-embeddings",
+                    result,
+                )
+                return result
+            placeholders = ", ".join("?" for _ in unique_ids)
+            rows = conn.execute(
+                f"""
+                SELECT embedding_id, person_id, source_image, crop_path
+                FROM embeddings
+                WHERE embedding_id IN ({placeholders})
+                  AND deleted_at IS NOT NULL
+                  AND purge_after IS NOT NULL
+                  AND purge_after <= ?
+                ORDER BY embedding_id
+                """,
+                (*unique_ids, now or utc_now()),
+            ).fetchall()
+            eligible_ids = [row["embedding_id"] for row in rows]
+            detail_count = 0
+            if eligible_ids:
+                eligible_placeholders = ", ".join("?" for _ in eligible_ids)
+                detail_count = conn.execute(
+                    f"""
+                    SELECT COUNT(*) FROM recognition_details
+                    WHERE embedding_id IN ({eligible_placeholders})
+                    """,
+                    eligible_ids,
+                ).fetchone()[0]
+                conn.execute(
+                    f"DELETE FROM recognition_details WHERE embedding_id IN ({eligible_placeholders})",
+                    eligible_ids,
+                )
+                conn.execute(
+                    f"DELETE FROM embeddings WHERE embedding_id IN ({eligible_placeholders})",
+                    eligible_ids,
+                )
+            result = {
+                "embedding_ids": eligible_ids,
+                "person_ids": sorted({row["person_id"] for row in rows}),
+                "purged": len(eligible_ids),
+                "deleted_sightings": detail_count,
+                "paths": [
+                    {
+                        "source_image": row["source_image"],
+                        "crop_path": row["crop_path"],
+                    }
+                    for row in rows
+                ],
+            }
+            _record_person_operation(
+                conn,
+                operation_id,
+                "purge-expired-embeddings",
+                result,
+            )
+            return result
+
+    def move_embedding(self, embedding_id: str, person_id: str, operation_id: str) -> dict:
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "move-embedding")
+            if existing:
+                return existing
+            target = conn.execute(
+                "SELECT name, metadata FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                (person_id,),
+            ).fetchone()
+            if target is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            embedding = conn.execute(
+                """
+                SELECT e.person_id, p.metadata
+                FROM embeddings e
+                JOIN persons p ON p.person_id = e.person_id
+                WHERE e.embedding_id = ?
+                  AND e.deleted_at IS NULL
+                  AND p.deleted_at IS NULL
+                """,
+                (embedding_id,),
+            ).fetchone()
+            if embedding is None:
+                raise KeyError(f"Unknown embedding: {embedding_id}")
+            source_person_id = embedding["person_id"]
+            if source_person_id == person_id:
+                result = {
+                    "embedding_id": embedding_id,
+                    "source_person_id": source_person_id,
+                    "target_person_id": person_id,
+                    "moved": True,
+                    "changed": False,
+                    "moved_sightings": 0,
+                }
+                _record_person_operation(conn, operation_id, "move-embedding", result)
+                return result
+            conn.execute(
                 "UPDATE embeddings SET person_id = ? WHERE embedding_id = ?",
                 (person_id, embedding_id),
             )
-        if cursor.rowcount == 0:
-            raise KeyError(f"Unknown embedding: {embedding_id}")
+            detail_cursor = conn.execute(
+                """
+                UPDATE recognition_details
+                SET person_id = ?, name = ?
+                WHERE embedding_id = ?
+                """,
+                (person_id, target["name"], embedding_id),
+            )
+            source_metadata = json.loads(embedding["metadata"])
+            if source_metadata.get("representative_embedding_id") == embedding_id:
+                source_metadata.pop("representative_embedding_id", None)
+                conn.execute(
+                    "UPDATE persons SET metadata = ? WHERE person_id = ?",
+                    (json.dumps(source_metadata, separators=(",", ":")), source_person_id),
+                )
+            target_metadata = json.loads(target["metadata"])
+            if not target_metadata.get("representative_embedding_id"):
+                target_metadata["representative_embedding_id"] = embedding_id
+                conn.execute(
+                    "UPDATE persons SET metadata = ? WHERE person_id = ?",
+                    (json.dumps(target_metadata, separators=(",", ":")), person_id),
+                )
+            result = {
+                "embedding_id": embedding_id,
+                "source_person_id": source_person_id,
+                "target_person_id": person_id,
+                "moved": True,
+                "changed": True,
+                "moved_sightings": detail_cursor.rowcount,
+            }
+            _record_person_operation(conn, operation_id, "move-embedding", result)
+            return result
+
+    def merge_persons(self, source_person_id: str, target_person_id: str, operation_id: str) -> dict:
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "merge-persons")
+            if existing:
+                return existing
+            if source_person_id == target_person_id:
+                raise KeyError("Source and target person must be different")
+            source = conn.execute(
+                "SELECT name, metadata FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                (source_person_id,),
+            ).fetchone()
+            target = conn.execute(
+                "SELECT name, metadata FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                (target_person_id,),
+            ).fetchone()
+            if source is None:
+                raise KeyError(f"Unknown source person: {source_person_id}")
+            if target is None:
+                raise KeyError(f"Unknown target person: {target_person_id}")
+            moved_embeddings = conn.execute(
+                "SELECT COUNT(*) FROM embeddings WHERE person_id = ? AND deleted_at IS NULL",
+                (source_person_id,),
+            ).fetchone()[0]
+            moved_deleted_faces = conn.execute(
+                "SELECT COUNT(*) FROM embeddings WHERE person_id = ? AND deleted_at IS NOT NULL",
+                (source_person_id,),
+            ).fetchone()[0]
+            moved_sightings = conn.execute(
+                "SELECT COUNT(*) FROM recognition_details WHERE person_id = ?",
+                (source_person_id,),
+            ).fetchone()[0]
+            conn.execute(
+                "UPDATE embeddings SET person_id = ? WHERE person_id = ?",
+                (target_person_id, source_person_id),
+            )
+            conn.execute(
+                """
+                UPDATE recognition_details
+                SET person_id = ?, name = ?
+                WHERE person_id = ?
+                """,
+                (target_person_id, target["name"], source_person_id),
+            )
+            source_metadata = json.loads(source["metadata"])
+            target_metadata = json.loads(target["metadata"])
+            merged_tags = _normalize_tags([
+                *target_metadata.get("tags", []),
+                *source_metadata.get("tags", []),
+            ])
+            if merged_tags:
+                target_metadata["tags"] = merged_tags
+            target_metadata["favorite"] = bool(
+                target_metadata.get("favorite") or source_metadata.get("favorite")
+            )
+            if not target_metadata.get("representative_embedding_id"):
+                source_representative = source_metadata.get("representative_embedding_id")
+                if source_representative:
+                    target_metadata["representative_embedding_id"] = source_representative
+            conn.execute(
+                "UPDATE persons SET metadata = ? WHERE person_id = ?",
+                (json.dumps(target_metadata, separators=(",", ":")), target_person_id),
+            )
+            source_metadata["merged_into"] = target_person_id
+            source_metadata["merged_at"] = utc_now()
+            conn.execute(
+                """
+                UPDATE persons
+                SET metadata = ?, deleted_at = ?
+                WHERE person_id = ?
+                """,
+                (
+                    json.dumps(source_metadata, separators=(",", ":")),
+                    source_metadata["merged_at"],
+                    source_person_id,
+                ),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO init_face_person_exclusions(
+                    session_id, init_face_id, person_id, created_at
+                )
+                SELECT session_id, init_face_id, ?, created_at
+                FROM init_face_person_exclusions
+                WHERE person_id = ?
+                """,
+                (target_person_id, source_person_id),
+            )
+            conn.execute(
+                "DELETE FROM init_face_person_exclusions WHERE person_id = ?",
+                (source_person_id,),
+            )
+            result = {
+                "source_person_id": source_person_id,
+                "target_person_id": target_person_id,
+                "merged": True,
+                "moved_embeddings": moved_embeddings,
+                "moved_deleted_faces": moved_deleted_faces,
+                "moved_sightings": moved_sightings,
+            }
+            _record_person_operation(conn, operation_id, "merge-persons", result)
+            return result
+
+    def update_person_preferences(
+        self,
+        person_id: str,
+        operation_id: str,
+        favorite: bool | None = None,
+        representative_embedding_id: str | None = None,
+    ) -> dict:
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "person-preferences")
+            if existing:
+                return existing
+            person = conn.execute(
+                "SELECT metadata FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                (person_id,),
+            ).fetchone()
+            if person is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            metadata = json.loads(person["metadata"])
+            if favorite is not None:
+                metadata["favorite"] = bool(favorite)
+            if representative_embedding_id is not None:
+                owned = conn.execute(
+                    """
+                    SELECT 1 FROM embeddings
+                    WHERE embedding_id = ? AND person_id = ? AND deleted_at IS NULL
+                    """,
+                    (representative_embedding_id, person_id),
+                ).fetchone()
+                if owned is None:
+                    raise KeyError(
+                        f"Embedding {representative_embedding_id} does not belong to person {person_id}"
+                    )
+                metadata["representative_embedding_id"] = representative_embedding_id
+            conn.execute(
+                "UPDATE persons SET metadata = ? WHERE person_id = ?",
+                (json.dumps(metadata, separators=(",", ":")), person_id),
+            )
+            result = {
+                "person_id": person_id,
+                "favorite": bool(metadata.get("favorite")),
+                "representative_embedding_id": metadata.get("representative_embedding_id"),
+                "updated": True,
+            }
+            _record_person_operation(conn, operation_id, "person-preferences", result)
+            return result
 
     def add_recognition_detail(
         self,
@@ -322,6 +953,18 @@ class SQLiteIdentityStore:
             created_at=utc_now(),
         )
         with self._connect() as conn:
+            owned = conn.execute(
+                """
+                SELECT 1
+                FROM embeddings e
+                JOIN persons p ON p.person_id = e.person_id
+                WHERE e.embedding_id = ? AND e.person_id = ?
+                  AND e.deleted_at IS NULL AND p.deleted_at IS NULL
+                """,
+                (embedding_id, person_id),
+            ).fetchone()
+            if owned is None:
+                raise KeyError("Recognition detail must reference an active face owned by the person")
             conn.execute(
                 """
                 INSERT INTO recognition_details(
@@ -395,13 +1038,14 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT detail_id, embedding_id, person_id, image_id, image_path,
-                       name, decision, seen_date, seen_time, place_seen,
-                       individual_count, event_occasion, rank, country,
-                       importance, added_by, created_at
-                FROM recognition_details
-                WHERE person_id = ?
-                ORDER BY seen_date DESC, seen_time DESC, created_at DESC
+                SELECT d.detail_id, d.embedding_id, d.person_id, d.image_id, d.image_path,
+                       d.name, d.decision, d.seen_date, d.seen_time, d.place_seen,
+                       d.individual_count, d.event_occasion, d.rank, d.country,
+                       d.importance, d.added_by, d.created_at
+                FROM recognition_details d
+                JOIN embeddings e ON e.embedding_id = d.embedding_id
+                WHERE d.person_id = ? AND e.deleted_at IS NULL
+                ORDER BY d.seen_date DESC, d.seen_time DESC, d.created_at DESC
                 """,
                 (person_id,),
             ).fetchall()
@@ -433,6 +1077,12 @@ class SQLiteIdentityStore:
             created_at=utc_now(),
         )
         with self._connect() as conn:
+            person_exists = conn.execute(
+                "SELECT 1 FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                (person_id,),
+            ).fetchone()
+            if person_exists is None:
+                raise KeyError(f"Unknown person: {person_id}")
             conn.execute(
                 """
                 INSERT INTO embeddings(
@@ -461,7 +1111,7 @@ class SQLiteIdentityStore:
                        e.source_image, e.crop_path, e.created_at
                 FROM embeddings e
                 JOIN persons p ON p.person_id = e.person_id
-                WHERE p.deleted_at IS NULL
+                WHERE p.deleted_at IS NULL AND e.deleted_at IS NULL
                 """
             ).fetchall()
         return [_embedding_from_row(row) for row in rows]
@@ -972,6 +1622,122 @@ def _migrate_7_to_8(conn: sqlite3.Connection) -> None:
         PRAGMA user_version = 8;
         """
     )
+
+
+def _migrate_8_to_9(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS person_operations (
+            operation_id TEXT PRIMARY KEY,
+            operation_type TEXT NOT NULL,
+            result TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_person_operations_created
+        ON person_operations(created_at);
+
+        PRAGMA user_version = 9;
+        """
+    )
+
+
+def _migrate_9_to_10(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS embeddings (
+            embedding_id TEXT PRIMARY KEY,
+            person_id TEXT NOT NULL,
+            vector BLOB NOT NULL,
+            quality_score REAL NOT NULL,
+            source_image TEXT,
+            crop_path TEXT,
+            created_at TEXT NOT NULL,
+            deleted_at TEXT,
+            purge_after TEXT,
+            FOREIGN KEY(person_id) REFERENCES persons(person_id)
+        )
+        """
+    )
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(embeddings)").fetchall()}
+    if "deleted_at" not in columns:
+        conn.execute("ALTER TABLE embeddings ADD COLUMN deleted_at TEXT")
+    if "purge_after" not in columns:
+        conn.execute("ALTER TABLE embeddings ADD COLUMN purge_after TEXT")
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_embeddings_deleted
+        ON embeddings(deleted_at, purge_after);
+
+        PRAGMA user_version = 10;
+        """
+    )
+
+
+def _existing_person_operation(
+    conn: sqlite3.Connection,
+    operation_id: str,
+    operation_type: str,
+) -> dict | None:
+    if not operation_id.strip():
+        raise KeyError("operation_id is required")
+    row = conn.execute(
+        """
+        SELECT operation_type, result
+        FROM person_operations
+        WHERE operation_id = ?
+        """,
+        (operation_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    if row["operation_type"] != operation_type:
+        raise KeyError("operation_id was already used for a different operation")
+    return json.loads(row["result"])
+
+
+def _begin_person_operation(
+    conn: sqlite3.Connection,
+    operation_id: str,
+    operation_type: str,
+) -> dict | None:
+    conn.execute("BEGIN IMMEDIATE")
+    return _existing_person_operation(conn, operation_id, operation_type)
+
+
+def _record_person_operation(
+    conn: sqlite3.Connection,
+    operation_id: str,
+    operation_type: str,
+    result: dict,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO person_operations(operation_id, operation_type, result, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            operation_id,
+            operation_type,
+            json.dumps(result, separators=(",", ":")),
+            utc_now(),
+        ),
+    )
+
+
+def _normalize_tags(values: list | tuple | None) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        tag = str(value).strip()
+        key = tag.casefold()
+        if not tag or key in seen:
+            continue
+        normalized.append(tag[:48])
+        seen.add(key)
+        if len(normalized) == 20:
+            break
+    return normalized
 
 
 def _pending_from_row(row: sqlite3.Row) -> PendingAddition:

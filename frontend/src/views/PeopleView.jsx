@@ -11,12 +11,14 @@ import {
   Group,
   Image,
   Menu,
+  Modal,
   Paper,
   ScrollArea,
   Select,
   SimpleGrid,
   Stack,
   Tabs,
+  TagsInput,
   Text,
   TextInput,
   ThemeIcon,
@@ -25,6 +27,7 @@ import {
 } from "@mantine/core";
 import {
   IconArrowLeft,
+  IconArchive,
   IconChevronDown,
   IconCopy,
   IconDots,
@@ -38,10 +41,14 @@ import {
   IconMapPin,
   IconNotes,
   IconPhoto,
+  IconPhotoStar,
   IconRefresh,
   IconSearch,
   IconSortDescending,
   IconStar,
+  IconRestore,
+  IconSwitchHorizontal,
+  IconTrash,
   IconShield,
   IconTag,
   IconUser,
@@ -58,6 +65,8 @@ import {
 
 export function PeopleView({
   people,
+  archivedPeople,
+  deletedFaces = [],
   peopleGallery,
   peopleGalleryImage,
   onRefresh,
@@ -65,29 +74,46 @@ export function PeopleView({
   onImage,
   onBack,
   onSave,
+  onFavorite,
+  onSetRepresentative,
+  onArchive,
+  onRestore,
+  onMerge,
+  onMovePhoto,
+  onDeletePhoto,
+  onRestoreDeletedFace,
+  onPermanentlyDeleteFace,
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("recent");
   const [viewMode, setViewMode] = useState("grid");
-  const [favorites, setFavorites] = useState(() => new Set());
   const [pageSize, setPageSize] = useState("12");
   const [page, setPage] = useState(1);
   const resultsRef = useRef(null);
   const normalizedQuery = query.trim().toLowerCase();
+  const statsCollection = filter === "archived" ? archivedPeople : people;
   const peopleStats = useMemo(() => {
-    const totalPhotos = people.reduce((sum, person) => sum + Number(person.embedding_count || 0), 0);
-    const addedToday = people.filter((person) => isTodayLike(person.created_at)).length;
+    const totalPhotos = statsCollection.reduce((sum, person) => sum + Number(person.embedding_count || 0), 0);
+    const addedToday = statsCollection.filter((person) => isTodayLike(person.created_at)).length;
     return { totalPhotos, addedToday };
-  }, [people]);
+  }, [statsCollection]);
   const visiblePeople = useMemo(() => {
-    return people
+    const collection = filter === "archived" ? archivedPeople : people;
+    return collection
       .filter((person) => {
-        if (filter === "favorites" && !favorites.has(person.person_id)) return false;
+        if (filter === "favorites" && !person.favorite) return false;
         if (filter === "withPhotos" && !Number(person.embedding_count || 0)) return false;
         if (filter === "withoutPhotos" && Number(person.embedding_count || 0)) return false;
         if (!normalizedQuery) return true;
-        return [person.name, person.person_id, person.created_at]
+        return [
+          person.name,
+          person.person_id,
+          person.created_at,
+          person.metadata?.rank,
+          person.metadata?.country,
+          ...(person.tags || person.metadata?.tags || []),
+        ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(normalizedQuery));
       })
@@ -96,12 +122,20 @@ export function PeopleView({
         if (sort === "photos") return Number(right.embedding_count || 0) - Number(left.embedding_count || 0);
         return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
       });
-  }, [favorites, filter, normalizedQuery, people, sort]);
+  }, [archivedPeople, filter, normalizedQuery, people, sort]);
   const pageCount = Number(pageSize);
   const totalPages = Math.max(1, Math.ceil(visiblePeople.length / pageCount));
   const safePage = Math.min(page, totalPages);
   const pageStart = (safePage - 1) * pageCount;
   const pagePeople = visiblePeople.slice(pageStart, pageStart + pageCount);
+  const visibleDeletedFaces = useMemo(
+    () => deletedFaces.filter((face) => [
+      face.person_name,
+      face.person_id,
+      face.embedding_id,
+    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedQuery))),
+    [deletedFaces, normalizedQuery],
+  );
 
   useEffect(() => {
     setPage(1);
@@ -115,33 +149,34 @@ export function PeopleView({
   useEffect(() => {
     resultsRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [safePage]);
-  const toggleFavorite = (personId) => {
-    setFavorites((current) => {
-      const next = new Set(current);
-      if (next.has(personId)) next.delete(personId);
-      else next.add(personId);
-      return next;
-    });
-  };
+  const toggleFavorite = (person) => onFavorite(person.person_id, !person.favorite);
 
   return (
     <Paper withBorder radius="md" p="md" className="people-workspace">
       {peopleGallery ? (
         <PeopleGalleryView
           payload={peopleGallery}
+          people={people}
           selectedImage={peopleGalleryImage}
-          favorite={favorites.has(peopleGallery.person.person_id)}
           onImage={onImage}
+          onOpen={onOpen}
           onBack={onBack}
           onSave={onSave}
-          onFavorite={() => toggleFavorite(peopleGallery.person.person_id)}
+          onFavorite={onFavorite}
+          onSetRepresentative={onSetRepresentative}
+          onArchive={onArchive}
+          onRestore={onRestore}
+          onMerge={onMerge}
+          onMovePhoto={onMovePhoto}
+          onDeletePhoto={onDeletePhoto}
         />
       ) : (
         <Grid gutter="lg" className="people-library-shell">
           <Grid.Col span={{ base: 12, md: "content" }} className="people-library-sidebar-col">
             <PeopleLibrarySidebar
               people={people}
-              favorites={favorites}
+              archivedPeople={archivedPeople}
+              deletedFaces={deletedFaces}
               activeFilter={filter}
               onFilter={setFilter}
               onRefresh={onRefresh}
@@ -152,50 +187,89 @@ export function PeopleView({
               <Group justify="space-between" align="flex-start" gap="md" className="people-library-header">
                 <Box>
                   <Group gap="xs" align="baseline">
-                    <Title order={3} size="h4">People</Title>
-                    <Text size="xs" c="dimmed">({people.length})</Text>
+                    <Title order={3} size="h4">{filter === "deleted" ? "Deleted Faces" : "People"}</Title>
+                    <Text size="xs" c="dimmed">
+                      ({filter === "deleted" ? deletedFaces.length : filter === "archived" ? archivedPeople.length : people.length})
+                    </Text>
                   </Group>
-                  <Text size="sm" c="dimmed">Manage and browse all known identities</Text>
+                  <Text size="sm" c="dimmed">
+                    {filter === "deleted"
+                      ? "Restore faces or permanently delete them before automatic cleanup"
+                      : filter === "archived"
+                        ? "Restore archived identities or review their history"
+                        : "Manage and browse all known identities"}
+                  </Text>
                 </Box>
-                <PeopleToolbar
-                  query={query}
-                  filter={filter}
-                  sort={sort}
-                  viewMode={viewMode}
-                  onQuery={setQuery}
-                  onFilter={setFilter}
-                  onSort={setSort}
-                  onViewMode={setViewMode}
-                />
-              </Group>
-              <PeopleStatsStrip people={people} totalPhotos={peopleStats.totalPhotos} favoriteCount={favorites.size} addedToday={peopleStats.addedToday} />
-              <Box ref={resultsRef} className="people-results-scroll">
-                {pagePeople.length ? (
-                  <Box className={viewMode === "list" ? "people-card-list" : "people-card-grid"}>
-                    {pagePeople.map((person) => (
-                      <PersonCard
-                        key={person.person_id}
-                        person={person}
-                        favorite={favorites.has(person.person_id)}
-                        viewMode={viewMode}
-                        onOpen={onOpen}
-                        onFavorite={toggleFavorite}
-                      />
-                    ))}
-                  </Box>
+                {filter === "deleted" ? (
+                  <Group gap="sm">
+                    <TextInput
+                      value={query}
+                      onChange={(event) => setQuery(event.currentTarget.value)}
+                      placeholder="Search deleted faces..."
+                      leftSection={<IconSearch size={18} />}
+                      className="people-search"
+                    />
+                    <Button variant="default" leftSection={<IconRefresh size={16} />} onClick={onRefresh}>Refresh</Button>
+                  </Group>
                 ) : (
-                  <EmptyCard text="No people match the current search." />
+                  <PeopleToolbar
+                    query={query}
+                    filter={filter}
+                    sort={sort}
+                    viewMode={viewMode}
+                    onQuery={setQuery}
+                    onFilter={setFilter}
+                    onSort={setSort}
+                    onViewMode={setViewMode}
+                  />
                 )}
-              </Box>
-              <PeoplePagination
-                total={visiblePeople.length}
-                shown={pagePeople.length}
-                start={pageStart}
-                page={safePage}
-                pageSize={pageSize}
-                onPage={setPage}
-                onPageSize={setPageSize}
-              />
+              </Group>
+              {filter === "deleted" ? (
+                <DeletedFacesPanel
+                  faces={visibleDeletedFaces}
+                  onOpenPerson={onOpen}
+                  onRestore={onRestoreDeletedFace}
+                  onPurge={onPermanentlyDeleteFace}
+                />
+              ) : (
+                <>
+                  <PeopleStatsStrip
+                    people={statsCollection}
+                    totalPhotos={peopleStats.totalPhotos}
+                    favoriteCount={statsCollection.filter((person) => person.favorite).length}
+                    addedToday={peopleStats.addedToday}
+                    archived={filter === "archived"}
+                  />
+                  <Box ref={resultsRef} className="people-results-scroll">
+                    {pagePeople.length ? (
+                      <Box className={viewMode === "list" ? "people-card-list" : "people-card-grid"}>
+                        {pagePeople.map((person) => (
+                          <PersonCard
+                            key={person.person_id}
+                            person={person}
+                            favorite={Boolean(person.favorite)}
+                            archived={Boolean(person.archived)}
+                            viewMode={viewMode}
+                            onOpen={() => onOpen(person.person_id, { archived: Boolean(person.archived) })}
+                            onFavorite={() => toggleFavorite(person)}
+                          />
+                        ))}
+                      </Box>
+                    ) : (
+                      <EmptyCard text="No people match the current search." />
+                    )}
+                  </Box>
+                  <PeoplePagination
+                    total={visiblePeople.length}
+                    shown={pagePeople.length}
+                    start={pageStart}
+                    page={safePage}
+                    pageSize={pageSize}
+                    onPage={setPage}
+                    onPageSize={setPageSize}
+                  />
+                </>
+              )}
             </Stack>
           </Grid.Col>
         </Grid>
@@ -210,6 +284,7 @@ function PeopleToolbar({ query, filter, sort, viewMode, onQuery, onFilter, onSor
     favorites: "Favorites",
     withPhotos: "With Photos",
     withoutPhotos: "No Photos",
+    archived: "Archived",
   }[filter];
   const sortLabel = {
     recent: "Newest Added",
@@ -258,12 +333,21 @@ function PeopleToolbar({ query, filter, sort, viewMode, onQuery, onFilter, onSor
   );
 }
 
-function PeopleLibrarySidebar({ people, favorites, activeFilter, onFilter, onRefresh }) {
+function PeopleLibrarySidebar({
+  people,
+  archivedPeople,
+  deletedFaces,
+  activeFilter,
+  onFilter,
+  onRefresh,
+}) {
   const collectionItems = [
     { key: "all", label: "All People", icon: IconImageInPicture, count: people.length },
-    { key: "favorites", label: "Favorites", icon: IconStar, count: favorites.size },
+    { key: "favorites", label: "Favorites", icon: IconStar, count: people.filter((person) => person.favorite).length },
     { key: "withPhotos", label: "With Photos", icon: IconPhoto, count: people.filter((person) => Number(person.embedding_count || 0)).length },
     { key: "withoutPhotos", label: "No Photos", icon: IconUser, count: people.filter((person) => !Number(person.embedding_count || 0)).length },
+    { key: "archived", label: "Archived", icon: IconArchive, count: archivedPeople.length },
+    { key: "deleted", label: "Deleted Faces", icon: IconTrash, count: deletedFaces.length },
   ];
   return (
     <Stack className="people-library-sidebar">
@@ -303,8 +387,153 @@ function PeopleLibrarySidebar({ people, favorites, activeFilter, onFilter, onRef
   );
 }
 
-function PeopleStatsStrip({ people, totalPhotos, favoriteCount, addedToday }) {
-  const stats = [
+function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
+  const [pendingPurge, setPendingPurge] = useState(null);
+  const [busyId, setBusyId] = useState("");
+  const run = async (face, action) => {
+    setBusyId(face.embedding_id);
+    try {
+      await action();
+      setPendingPurge(null);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setBusyId("");
+    }
+  };
+  return (
+    <>
+      <Paper withBorder radius="md" p="md" className="deleted-faces-notice">
+        <Group align="flex-start" wrap="nowrap">
+          <ThemeIcon color="yellow" variant="light"><IconTrash size={18} /></ThemeIcon>
+          <Box>
+            <Text fw={800} size="sm">30-day recovery window</Text>
+            <Text size="xs" c="dimmed">
+              Deleted faces are excluded from recognition immediately. Their linked sightings remain intact until permanent deletion.
+            </Text>
+          </Box>
+        </Group>
+      </Paper>
+      <Box className="people-results-scroll">
+        {faces.length ? (
+          <SimpleGrid cols={{ base: 1, sm: 2, xl: 3 }} spacing="md">
+            {faces.map((face) => {
+              const path = face.crop_path || face.source_image;
+              const busy = busyId === face.embedding_id;
+              return (
+                <Card key={face.embedding_id} withBorder radius="md" className="deleted-face-card">
+                  <Group align="flex-start" wrap="nowrap">
+                    <Image
+                      src={path ? mediaUrl(path) : ""}
+                      alt={`Deleted face for ${face.person_name}`}
+                      w={92}
+                      h={92}
+                      radius="md"
+                      fit="cover"
+                    />
+                    <Box miw={0} style={{ flex: 1 }}>
+                      <Group justify="space-between" gap="xs" wrap="nowrap">
+                        <Text fw={900} truncate>{face.person_name}</Text>
+                        <Badge color={face.days_remaining <= 3 ? "red" : "yellow"} variant="light">
+                          {face.days_remaining} day{face.days_remaining === 1 ? "" : "s"} left
+                        </Badge>
+                      </Group>
+                      <Text size="xs" c="dimmed" mt={4}>Deleted {compactChangeDate(face.deleted_at)}</Text>
+                      <Text size="xs" c="dimmed">
+                        Auto-deletes {compactChangeDate(face.purge_after)}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {face.sighting_count} linked sighting{face.sighting_count === 1 ? "" : "s"} retained
+                      </Text>
+                    </Box>
+                  </Group>
+                  {face.person_archived && (
+                    <Text size="xs" c="yellow.4" mt="sm">
+                      Restore the archived person before restoring this face.
+                    </Text>
+                  )}
+                  <Group grow mt="md">
+                    <Button
+                      variant="default"
+                      size="xs"
+                      onClick={() => onOpenPerson(face.person_id, { archived: face.person_archived })}
+                    >
+                      View person
+                    </Button>
+                    <Button
+                      variant="light"
+                      size="xs"
+                      leftSection={<IconRestore size={15} />}
+                      disabled={face.person_archived}
+                      loading={busy}
+                      onClick={() => run(face, () => onRestore(face.embedding_id, face.person_id))}
+                    >
+                      Restore
+                    </Button>
+                  </Group>
+                  <Button
+                    fullWidth
+                    mt="xs"
+                    color="red"
+                    variant="subtle"
+                    size="xs"
+                    leftSection={<IconTrash size={15} />}
+                    disabled={Boolean(busyId)}
+                    onClick={() => setPendingPurge(face)}
+                  >
+                    Delete permanently
+                  </Button>
+                </Card>
+              );
+            })}
+          </SimpleGrid>
+        ) : (
+          <EmptyCard text="No deleted faces. Removed faces will remain recoverable here for 30 days." />
+        )}
+      </Box>
+      <Modal
+        opened={Boolean(pendingPurge)}
+        onClose={() => !busyId && setPendingPurge(null)}
+        title="Permanently delete this face?"
+        centered
+        closeOnClickOutside={!busyId}
+        closeOnEscape={!busyId}
+      >
+        <Stack>
+          <Text size="sm">
+            This permanently removes the face and {pendingPurge?.sighting_count || 0} linked sighting{pendingPurge?.sighting_count === 1 ? "" : "s"}.
+            This cannot be undone.
+          </Text>
+          <Text size="xs" c="dimmed">
+            A named database backup is created and verified before deletion begins.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" disabled={Boolean(busyId)} onClick={() => setPendingPurge(null)}>Cancel</Button>
+            <Button
+              color="red"
+              loading={Boolean(busyId)}
+              leftSection={<IconTrash size={16} />}
+              onClick={() => pendingPurge && run(
+                pendingPurge,
+                () => onPurge(pendingPurge.embedding_id),
+              )}
+            >
+              Delete permanently
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
+  );
+}
+
+function PeopleStatsStrip({ people, totalPhotos, favoriteCount, addedToday, archived }) {
+  const stats = archived ? [
+    { label: "Archived Records", value: people.length, icon: IconArchive, color: "gray" },
+    { label: "Retained Photos", value: totalPhotos.toLocaleString(), icon: IconImageInPicture, color: "violet" },
+    { label: "Merged Records", value: people.filter((person) => person.metadata?.merged_into).length, icon: IconSwitchHorizontal, color: "blue" },
+    { label: "Archived Today", value: people.filter((person) => isTodayLike(person.deleted_at)).length, icon: IconRefresh, color: "green" },
+  ] : [
     { label: "Total People", value: people.length, icon: IconUser, color: "teal" },
     { label: "Total Photos", value: totalPhotos.toLocaleString(), icon: IconImageInPicture, color: "violet" },
     { label: "Favorites", value: favoriteCount, icon: IconStar, color: "yellow" },
@@ -330,12 +559,12 @@ function PeopleStatsStrip({ people, totalPhotos, favoriteCount, addedToday }) {
   );
 }
 
-function PersonCard({ person, favorite, viewMode, onOpen, onFavorite }) {
+function PersonCard({ person, favorite, archived, viewMode, onOpen, onFavorite }) {
   const cardClass = viewMode === "list" ? "people-person-card people-person-card--list" : "people-person-card";
   const openPerson = () => onOpen(person.person_id);
   const toggleFavorite = (event) => {
     event.stopPropagation();
-    onFavorite(person.person_id);
+    onFavorite();
   };
   const photoCount = Number(person.embedding_count || 0);
   const photoFallback = <ThemeIcon size={72} radius="xl" variant="light" color="gray"><IconUser size={44} /></ThemeIcon>;
@@ -357,7 +586,9 @@ function PersonCard({ person, favorite, viewMode, onOpen, onFavorite }) {
           <Box miw={0} className="people-card-copy">
             <Group justify="space-between" align="flex-start" wrap="nowrap">
               <Text fw={800} lineClamp={1}>{person.name}</Text>
-              <Badge variant="light">{photoCount}</Badge>
+              <Badge color={archived ? "gray" : "teal"} variant="light">
+                {archived ? person.metadata?.merged_into ? "Merged" : "Archived" : photoCount}
+              </Badge>
             </Group>
             <Group gap={5} mt={5}>
               <IconImageInPicture size={13} />
@@ -376,12 +607,15 @@ function PersonCard({ person, favorite, viewMode, onOpen, onFavorite }) {
           variant="filled"
           className="people-card-star"
           onClick={toggleFavorite}
-          aria-label={favorite ? "Remove favorite" : "Add favorite"}
+          disabled={archived}
+          aria-label={archived ? "Archived person" : favorite ? "Remove favorite" : "Add favorite"}
         >
           {favorite ? <IconStar size={15} fill="currentColor" /> : <IconStar size={15} />}
         </ActionIcon>
         <Group justify="space-between" className="people-card-actions">
-          <Button size="compact-xs" variant="subtle" onClick={(event) => { event.stopPropagation(); openPerson(); }}>Open profile</Button>
+          <Button size="compact-xs" variant="subtle" onClick={(event) => { event.stopPropagation(); openPerson(); }}>
+            {archived ? "Review archived" : "Open profile"}
+          </Button>
           <Menu withinPortal position="bottom-end">
             <Menu.Target>
               <ActionIcon variant="subtle" onClick={(event) => event.stopPropagation()} aria-label="More actions"><IconDots size={16} /></ActionIcon>
@@ -442,11 +676,32 @@ function isTodayLike(value) {
   return parsed.toDateString() === new Date().toDateString();
 }
 
-function PeopleGalleryView({ payload, selectedImage, favorite, onImage, onBack, onSave, onFavorite }) {
+function PeopleGalleryView({
+  payload,
+  people,
+  selectedImage,
+  onImage,
+  onOpen,
+  onBack,
+  onSave,
+  onFavorite,
+  onSetRepresentative,
+  onArchive,
+  onRestore,
+  onMerge,
+  onMovePhoto,
+  onDeletePhoto,
+}) {
   const imageRecords = profileImageRecords(payload);
   const tabContentRef = useRef(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [editOpen, setEditOpen] = useState(false);
+  const [managementDialog, setManagementDialog] = useState(null);
+  const [targetPersonId, setTargetPersonId] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
+  const archived = Boolean(payload.person.archived);
+  const mergedInto = payload.person.metadata?.merged_into || "";
+  const favorite = Boolean(payload.person.favorite || payload.person.metadata?.favorite);
   const selectedRecord = selectedImage
     ? imageRecords.find((record) => record.path === selectedImage || record.thumbPath === selectedImage) || imageRecords[0]
     : imageRecords[0] || null;
@@ -458,13 +713,26 @@ function PeopleGalleryView({ payload, selectedImage, favorite, onImage, onBack, 
   const recentSightings = latestSightings.slice(0, 3);
   const latestSightingLabel = lastSeenLabel(latestSightings[0]);
   const changes = payload.changes || [];
+  const managementEvents = payload.management_events || [];
   const [editValues, setEditValues] = useState(summaryProfile);
 
   useEffect(() => {
-    setEditValues({ ...summaryProfile, editorName: "" });
     setActiveTab("overview");
     setEditOpen(false);
-  }, [payload.person.person_id, payload.person.name, payload.person.metadata]);
+    setManagementDialog(null);
+    setTargetPersonId("");
+  }, [payload.person.person_id]);
+
+  useEffect(() => {
+    setEditValues({ ...summaryProfile, editorName: "" });
+  }, [
+    payload.person.person_id,
+    payload.person.name,
+    payload.person.metadata?.rank,
+    payload.person.metadata?.country,
+    payload.person.metadata?.importance,
+    JSON.stringify(payload.person.tags || payload.person.metadata?.tags || []),
+  ]);
 
   const updateEditValue = (field, value) => setEditValues((current) => ({ ...current, [field]: value }));
   const saveEdit = async (event) => {
@@ -495,6 +763,25 @@ function PeopleGalleryView({ payload, selectedImage, favorite, onImage, onBack, 
       window.setTimeout(() => tabContentRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }), 0);
     }
   };
+  const targetOptions = people
+    .filter((person) => person.person_id !== payload.person.person_id)
+    .map((person) => ({
+      value: person.person_id,
+      label: `${person.name} · ${person.embedding_count || 0} photos`,
+    }));
+  const runManagement = async (action) => {
+    if (actionBusy) return;
+    setActionBusy(true);
+    try {
+      await action();
+      setManagementDialog(null);
+      setTargetPersonId("");
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   return (
     <Stack className="people-profile-shell">
@@ -506,16 +793,41 @@ function PeopleGalleryView({ payload, selectedImage, favorite, onImage, onBack, 
           <Text size="xs">{payload.person.name}</Text>
         </Group>
         <Group gap="xs">
-          <Button size="xs" onClick={() => setEditOpen(true)}>Edit</Button>
+          {!archived && <Button size="xs" onClick={() => setEditOpen(true)}>Edit</Button>}
+          {archived && !mergedInto && (
+            <Button size="xs" leftSection={<IconRestore size={14} />} onClick={() => setManagementDialog("restore")}>
+              Restore
+            </Button>
+          )}
+          {archived && mergedInto && (
+            <Button
+              size="xs"
+              leftSection={<IconSwitchHorizontal size={14} />}
+              onClick={() => onOpen(mergedInto, { archived: true })}
+            >
+              View merged person
+            </Button>
+          )}
           <Menu withinPortal position="bottom-end">
             <Menu.Target>
               <Button size="xs" variant="default" rightSection={<IconChevronDown size={14} />}>More</Button>
             </Menu.Target>
             <Menu.Dropdown>
               <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => navigator.clipboard?.writeText(payload.person.person_id)}>Copy ID</Menu.Item>
-              <Menu.Item leftSection={<IconStar size={14} />} onClick={onFavorite}>
-                {favorite ? "Remove favorite" : "Add favorite"}
-              </Menu.Item>
+              {!archived && (
+                <>
+                  <Menu.Item leftSection={<IconStar size={14} />} onClick={() => onFavorite(payload.person.person_id, !favorite)}>
+                    {favorite ? "Remove favorite" : "Add favorite"}
+                  </Menu.Item>
+                  <Menu.Item leftSection={<IconSwitchHorizontal size={14} />} onClick={() => setManagementDialog("merge")}>
+                    Merge into another person
+                  </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item color="red" leftSection={<IconArchive size={14} />} onClick={() => setManagementDialog("archive")}>
+                    Archive person
+                  </Menu.Item>
+                </>
+              )}
             </Menu.Dropdown>
           </Menu>
         </Group>
@@ -530,7 +842,8 @@ function PeopleGalleryView({ payload, selectedImage, favorite, onImage, onBack, 
               variant="subtle"
               color={favorite ? "yellow" : "gray"}
               size="sm"
-              onClick={onFavorite}
+              onClick={() => onFavorite(payload.person.person_id, !favorite)}
+              disabled={archived}
               aria-label={favorite ? "Remove favorite" : "Add favorite"}
             >
               <IconStar size={16} fill={favorite ? "currentColor" : "none"} />
@@ -541,9 +854,19 @@ function PeopleGalleryView({ payload, selectedImage, favorite, onImage, onBack, 
             <Text size="sm" c="dimmed">•</Text>
             <Text size="sm">{summaryProfile.country || "Unknown country"}</Text>
             <Badge color={importanceColor(summaryProfile.importance)} variant="light">{summaryProfile.importance || "Regular"}</Badge>
+            {archived && <Badge color="gray">{mergedInto ? "Merged record" : "Archived"}</Badge>}
           </Group>
+          {(payload.person.tags || payload.person.metadata?.tags || []).length > 0 && (
+            <Group gap={5} mt={7}>
+              {(payload.person.tags || payload.person.metadata?.tags || []).map((tag) => (
+                <Badge key={tag} size="sm" color="gray" variant="light">{tag}</Badge>
+              ))}
+            </Group>
+          )}
           <Group gap="sm" mt="sm">
-            <Badge variant="outline" leftSection={<IconImageInPicture size={13} />}>{imageRecords.length} Photos</Badge>
+            <Badge variant="outline" leftSection={<IconImageInPicture size={13} />}>
+              {imageRecords.length} {imageRecords.length === 1 ? "Photo" : "Photos"}
+            </Badge>
             <Badge variant="outline">{latestSightingLabel}</Badge>
           </Group>
           <Text size="xs" c="dimmed" mt="sm">ID: {payload.person.person_id}</Text>
@@ -555,7 +878,7 @@ function PeopleGalleryView({ payload, selectedImage, favorite, onImage, onBack, 
           <Tabs.Tab value="overview">Overview</Tabs.Tab>
           <Tabs.Tab value="photos">Photos ({imageRecords.length})</Tabs.Tab>
           <Tabs.Tab value="sightings">Sightings ({latestSightings.length})</Tabs.Tab>
-          <Tabs.Tab value="changes">Changes ({changes.length})</Tabs.Tab>
+          <Tabs.Tab value="changes">Activity ({changes.length + managementEvents.length})</Tabs.Tab>
         </Tabs.List>
         <Box ref={tabContentRef} className="people-profile-tab-content">
         <Tabs.Panel value="overview">
@@ -578,13 +901,19 @@ function PeopleGalleryView({ payload, selectedImage, favorite, onImage, onBack, 
             selectedDetails={selectedDetails}
             profile={profile}
             onImage={selectPhoto}
+            people={people}
+            archived={archived}
+            representativeEmbeddingId={payload.person.metadata?.representative_embedding_id}
+            onSetRepresentative={() => selectedRecord && onSetRepresentative(payload.person.person_id, selectedRecord.embeddingId)}
+            onMove={() => setManagementDialog("move-photo")}
+            onDelete={() => setManagementDialog("delete-photo")}
           />
         </Tabs.Panel>
         <Tabs.Panel value="sightings">
           <PeopleProfileSightings details={latestSightings} imageRecords={imageRecords} onSighting={selectSightingPhoto} />
         </Tabs.Panel>
         <Tabs.Panel value="changes">
-          <PeopleProfileChanges changes={changes} currentProfile={summaryProfile} />
+          <PeopleProfileChanges changes={changes} managementEvents={managementEvents} currentProfile={summaryProfile} />
         </Tabs.Panel>
         </Box>
       </Tabs>
@@ -600,6 +929,138 @@ function PeopleGalleryView({ payload, selectedImage, favorite, onImage, onBack, 
           </Stack>
         </form>
       </Drawer>
+
+      <Modal
+        opened={managementDialog === "archive"}
+        onClose={() => !actionBusy && setManagementDialog(null)}
+        title="Archive this person?"
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            {payload.person.name} will stop appearing in recognition results. Their {imageRecords.length} photos and {latestSightings.length} sightings will be retained and can be restored later.
+          </Text>
+          <Text size="xs" c="dimmed">A named database backup is created and verified before archiving.</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
+            <Button color="red" loading={actionBusy} leftSection={<IconArchive size={16} />} onClick={() => runManagement(() => onArchive(payload.person.person_id))}>
+              Archive person
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={managementDialog === "restore"}
+        onClose={() => !actionBusy && setManagementDialog(null)}
+        title="Restore this person?"
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            {payload.person.name} and all retained photos will return to recognition and the active People library.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
+            <Button loading={actionBusy} leftSection={<IconRestore size={16} />} onClick={() => runManagement(() => onRestore(payload.person.person_id))}>
+              Restore person
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={managementDialog === "merge"}
+        onClose={() => !actionBusy && setManagementDialog(null)}
+        title="Merge duplicate person"
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            All photos and sightings from <strong>{payload.person.name}</strong> will move to the selected person. This profile will then be archived as a merge record.
+          </Text>
+          <Select
+            label="Keep this person"
+            placeholder="Search for the correct identity"
+            searchable
+            data={targetOptions}
+            value={targetPersonId}
+            onChange={(value) => setTargetPersonId(value || "")}
+            nothingFoundMessage="No other active people"
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
+            <Button
+              loading={actionBusy}
+              disabled={!targetPersonId}
+              leftSection={<IconSwitchHorizontal size={16} />}
+              onClick={() => runManagement(() => onMerge(payload.person.person_id, targetPersonId))}
+            >
+              Merge people
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={managementDialog === "move-photo"}
+        onClose={() => !actionBusy && setManagementDialog(null)}
+        title="Move photo to another person"
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            The selected photo and its {selectedDetails.length} linked sighting{selectedDetails.length === 1 ? "" : "s"} will move together.
+          </Text>
+          <Select
+            label="Move to"
+            placeholder="Select the correct identity"
+            searchable
+            data={targetOptions}
+            value={targetPersonId}
+            onChange={(value) => setTargetPersonId(value || "")}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
+            <Button
+              loading={actionBusy}
+              disabled={!targetPersonId || !selectedRecord}
+              leftSection={<IconSwitchHorizontal size={16} />}
+              onClick={() => runManagement(() => onMovePhoto(payload.person.person_id, selectedRecord.embeddingId, targetPersonId))}
+            >
+              Move photo
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={managementDialog === "delete-photo"}
+        onClose={() => !actionBusy && setManagementDialog(null)}
+        title="Move this face to Deleted Faces?"
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            The face stops participating in recognition immediately. It and its {selectedDetails.length} linked sighting{selectedDetails.length === 1 ? "" : "s"} remain recoverable in Deleted Faces for 30 days.
+          </Text>
+          <Text size="xs" c="dimmed">
+            A named database backup is created and verified first. The person remains in People.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
+            <Button
+              color="red"
+              loading={actionBusy}
+              disabled={!selectedRecord}
+              leftSection={<IconTrash size={16} />}
+              onClick={() => runManagement(() => onDeletePhoto(payload.person.person_id, selectedRecord.embeddingId))}
+            >
+              Move to Deleted Faces
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
@@ -652,7 +1113,20 @@ function PeopleProfileOverview({ profile, selectedPath, imageRecords, latestSigh
   );
 }
 
-function PeopleProfilePhotos({ payload, records, selectedRecord, selectedPath, selectedDetails, profile, onImage }) {
+function PeopleProfilePhotos({
+  payload,
+  records,
+  selectedRecord,
+  selectedPath,
+  selectedDetails,
+  profile,
+  onImage,
+  archived,
+  representativeEmbeddingId,
+  onSetRepresentative,
+  onMove,
+  onDelete,
+}) {
   const photoDetail = selectedDetails[0] || {};
   return (
     <Grid mt="md" className="people-profile-photos-grid">
@@ -683,7 +1157,10 @@ function PeopleProfilePhotos({ payload, records, selectedRecord, selectedPath, s
       </Grid.Col>
       <Grid.Col span={{ base: 12, lg: 4 }}>
         <Card withBorder radius="md" className="people-profile-panel">
-          <Text fw={800} mb="md">Photo Details</Text>
+          <Group justify="space-between" mb="md">
+            <Text fw={800}>Photo Details</Text>
+            {selectedRecord && selectedRecord.embeddingId === representativeEmbeddingId && <Badge color="teal">Profile photo</Badge>}
+          </Group>
           <ProfileInfoRows rows={[
             ["Added", Object.keys(photoDetail).length ? formatSeenDateTime(photoDetail) : compactChangeDate(selectedRecord?.createdAt)],
             ["Source", photoDetail.event_occasion || "-"],
@@ -692,6 +1169,24 @@ function PeopleProfilePhotos({ payload, records, selectedRecord, selectedPath, s
             ["Embedding", selectedRecord?.embeddingId ? "Indexed" : "-"],
             ["Rank", profile.rank || "-"],
           ]} />
+          {!archived && selectedRecord && (
+            <Stack gap="xs" mt="lg">
+              <Button
+                variant="light"
+                leftSection={<IconPhotoStar size={16} />}
+                disabled={selectedRecord.embeddingId === representativeEmbeddingId}
+                onClick={onSetRepresentative}
+              >
+                {selectedRecord.embeddingId === representativeEmbeddingId ? "Current profile photo" : "Set as profile photo"}
+              </Button>
+              <Button variant="default" leftSection={<IconSwitchHorizontal size={16} />} onClick={onMove}>
+                Move to another person
+              </Button>
+              <Button color="red" variant="light" leftSection={<IconTrash size={16} />} onClick={onDelete}>
+                Delete face
+              </Button>
+            </Stack>
+          )}
         </Card>
       </Grid.Col>
     </Grid>
@@ -713,7 +1208,7 @@ function PeopleProfileSightings({ details, imageRecords, onSighting }) {
   );
 }
 
-function PeopleProfileChanges({ changes, currentProfile }) {
+function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
   const changeCards = changes.map(normalizeChange).filter((change) => change.fields.length);
   const [activeIndex, setActiveIndex] = useState(0);
   const activeChange = changeCards[activeIndex] || null;
@@ -740,7 +1235,7 @@ function PeopleProfileChanges({ changes, currentProfile }) {
       <Card withBorder radius="md" className="people-profile-panel people-change-history-panel">
         <Group justify="space-between" mb="sm" wrap="nowrap">
           <Group gap="sm" align="baseline">
-            <Text fw={900}>Change History</Text>
+            <Text fw={900}>Profile History</Text>
             <Text size="xs" c="dimmed">(Newest → Oldest)</Text>
           </Group>
           <Group gap="xs" wrap="nowrap">
@@ -796,6 +1291,24 @@ function PeopleProfileChanges({ changes, currentProfile }) {
             <Text c="dimmed">›</Text>
           </Group>
         )}
+        <Divider my="md" />
+        <Group gap="xs" mb="sm">
+          <IconRefresh size={16} />
+          <Text fw={900}>Management Activity</Text>
+        </Group>
+        <Stack gap="xs">
+          {managementEvents.length ? managementEvents.map((event) => (
+            <Paper key={event.operation_id} withBorder radius="md" p="sm">
+              <Group justify="space-between" align="flex-start" wrap="nowrap">
+                <Box>
+                  <Text size="sm" fw={700}>{managementEventLabel(event)}</Text>
+                  <Text size="xs" c="dimmed">{managementEventDetail(event)}</Text>
+                </Box>
+                <Text size="xs" c="dimmed">{compactChangeDate(event.created_at)}</Text>
+              </Group>
+            </Paper>
+          )) : <Text size="sm" c="dimmed">No management activity recorded yet.</Text>}
+        </Stack>
       </Card>
     </Box>
   );
@@ -942,6 +1455,37 @@ function profileImageRecords(payload) {
     .filter((record) => record.path);
 }
 
+function managementEventLabel(event) {
+  return {
+    "archive-person": "Person archived",
+    "restore-person": "Person restored",
+    "merge-persons": "People merged",
+    "move-embedding": "Photo moved",
+    "delete-embedding": "Photo removed",
+    "person-preferences": "People preferences updated",
+    "update-profile": "Profile updated",
+  }[event.operation_type] || "People record updated";
+}
+
+function managementEventDetail(event) {
+  const result = event.result || {};
+  if (event.operation_type === "merge-persons") {
+    return `${result.moved_embeddings || 0} photos and ${result.moved_sightings || 0} sightings moved`;
+  }
+  if (event.operation_type === "move-embedding") {
+    return `${result.moved_sightings || 0} linked sightings moved with the photo`;
+  }
+  if (event.operation_type === "delete-embedding") {
+    return `${result.deleted_sightings || 0} linked sightings removed with the photo`;
+  }
+  if (event.operation_type === "person-preferences") {
+    return result.representative_embedding_id
+      ? "Profile photo or favorite status changed"
+      : "Favorite status changed";
+  }
+  return "Completed successfully";
+}
+
 function normalizeChange(change) {
   const fields = [
     ["name", "Name", change.previous_name, change.new_name],
@@ -992,6 +1536,16 @@ function PeopleEditableFields({ values, onChange }) {
       <TextInput required label="Name" value={values.name} onChange={(event) => onChange("name", event.target.value)} />
       <TextInput required label="Country" value={values.country} onChange={(event) => onChange("country", event.target.value)} />
       <Select required label="Importance" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />
+      <Box style={{ gridColumn: "1 / -1" }}>
+        <TagsInput
+          label="Tags"
+          description="Use tags for roles, teams, access groups, or other searchable labels"
+          placeholder="Type a tag and press Enter"
+          value={values.tags || []}
+          onChange={(value) => onChange("tags", value)}
+          maxTags={20}
+        />
+      </Box>
       <TextInput required label="Edited by" placeholder="Your name" value={values.editorName || ""} onChange={(event) => onChange("editorName", event.target.value)} />
     </SimpleGrid>
   );
@@ -1034,7 +1588,7 @@ function PeopleChangesPanel({ payload, profile, onBack }) {
             <ChangeLine label="Rank" from={change.previous_rank} to={change.new_rank} editor={change.editor_name} />
             <ChangeLine label="Name" from={change.previous_name} to={change.new_name} editor={change.editor_name} />
             <ChangeLine label="Country" from={change.previous_country} to={change.new_country} editor={change.editor_name} />
-            <ChangeLine label="Importance (Strat pt of view)" from={change.previous_importance} to={change.new_importance} editor={change.editor_name} />
+            <ChangeLine label="Importance" from={change.previous_importance} to={change.new_importance} editor={change.editor_name} />
           </Stack>
         </Card>
       )) : <EmptyCard text="No changes recorded yet." />}

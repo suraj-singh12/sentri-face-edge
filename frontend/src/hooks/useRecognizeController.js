@@ -4,7 +4,16 @@ import { DUPLICATE_MATCH_SCORE, NEW_PERSON_IMPORTANCE_OPTIONS } from "../constan
 import { clearFile, currentDateTimeParts, imageIdFromPath, isNewPersonSuggestion } from "../utils.js";
 import { usePersistentState } from "./usePersistentState.js";
 
-export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople, showToast, uploadFile }) {
+export function useRecognizeController({
+  apiGet,
+  apiPost,
+  loadEvents,
+  loadPeople,
+  notifySkippedInputs,
+  prepareImageFiles,
+  showToast,
+  uploadFile,
+}) {
   const [recognition, setRecognition] = usePersistentState("sentriface.recognize.result", null);
   const [selectedRecognitionFace, setSelectedRecognitionFace] = usePersistentState("sentriface.recognize.selectedFace", 1);
   const [recognitionGallery, setRecognitionGallery] = usePersistentState("sentriface.recognize.gallery", null);
@@ -30,8 +39,19 @@ export function useRecognizeController({ apiGet, apiPost, loadEvents, loadPeople
   const recognizeLoadedImage = useCallback(async () => {
     const file = recognizeFileRef.current?.files?.[0];
     if (!file) return;
-    await runRecognition(await uploadFile(file));
-  }, [runRecognition, uploadFile]);
+    const prepared = await prepareImageFiles([file], "recognize");
+    if (!prepared.validFiles.length) {
+      clearFile(recognizeFileRef);
+      notifySkippedInputs(prepared.rejected.length, 0);
+      return;
+    }
+    const upload = await uploadFile(prepared.validFiles[0]);
+    const rejectedCount = prepared.rejected.length + upload.rejectedFiles;
+    notifySkippedInputs(rejectedCount, upload.uploadedFiles);
+    clearFile(recognizeFileRef);
+    if (!upload.path) return;
+    await runRecognition(upload.path);
+  }, [notifySkippedInputs, prepareImageFiles, runRecognition, uploadFile]);
 
   const recognitionAccept = async (requestedFaceIndex, forceBadQuality = false) => {
     const faceIndex = requestedFaceIndex || selectedRecognitionFace;

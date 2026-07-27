@@ -9,6 +9,7 @@ from sentriface.components.image_ops import load_bgr_image, save_face_crop
 from sentriface.components.quality import FaceQualityEvaluator
 from sentriface.config import RuntimeConfig
 from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, IdentityStore
+from sentriface.errors import InputImageError
 from sentriface.metrics import MetricsCollector
 from sentriface.models import (
     FaceBox,
@@ -199,19 +200,22 @@ class FaceEngine:
         with self.metrics.timer("db_list_pending_ms"):
             return self.store.list_pending_additions()
 
-    def get_person(self, person_id: str) -> Person | None:
+    def get_person(self, person_id: str, include_archived: bool = False) -> Person | None:
         with self.metrics.timer("db_get_person_ms"):
-            return self.store.get_person(person_id)
+            return self.store.get_person(person_id, include_archived=include_archived)
 
-    def list_persons(self) -> list[PersonSummary]:
+    def list_persons(self, archived: bool = False) -> list[PersonSummary]:
         with self.metrics.timer("db_list_persons_ms"):
-            return self.store.list_persons()
+            return self.store.list_persons(archived=archived)
 
-    def list_person_embeddings(self, person_id: str):
-        if self.store.get_person(person_id) is None:
+    def list_person_embeddings(self, person_id: str, include_archived: bool = False):
+        if self.store.get_person(person_id, include_archived=include_archived) is None:
             raise KeyError(f"Unknown person: {person_id}")
         with self.metrics.timer("db_list_person_embeddings_ms"):
-            return self.store.list_embeddings_for_person(person_id)
+            return self.store.list_embeddings_for_person(
+                person_id,
+                include_archived=include_archived,
+            )
 
     def rename_person(self, person_id: str, name: str) -> None:
         with self.metrics.timer("db_rename_person_ms"):
@@ -225,6 +229,8 @@ class FaceEngine:
         country: str | None,
         importance: str | None,
         editor_name: str,
+        tags: list[str] | None = None,
+        operation_id: str | None = None,
     ) -> PersonChange:
         with self.metrics.timer("db_update_person_profile_ms"):
             return self.store.update_person_profile(
@@ -234,34 +240,129 @@ class FaceEngine:
                 country=country,
                 importance=importance,
                 editor_name=editor_name,
+                tags=tags,
+                operation_id=operation_id,
             )
 
-    def list_person_changes(self, person_id: str) -> list[PersonChange]:
-        if self.store.get_person(person_id) is None:
+    def list_person_changes(
+        self,
+        person_id: str,
+        include_archived: bool = False,
+    ) -> list[PersonChange]:
+        if self.store.get_person(person_id, include_archived=include_archived) is None:
             raise KeyError(f"Unknown person: {person_id}")
         with self.metrics.timer("db_list_person_changes_ms"):
             return self.store.list_person_changes(person_id)
 
-    def list_recognition_details_for_person(self, person_id: str):
-        if self.store.get_person(person_id) is None:
+    def list_person_operations(
+        self,
+        person_id: str,
+        include_archived: bool = False,
+    ) -> list[dict]:
+        if self.store.get_person(person_id, include_archived=include_archived) is None:
+            raise KeyError(f"Unknown person: {person_id}")
+        with self.metrics.timer("db_list_person_operations_ms"):
+            return self.store.list_person_operations(person_id)
+
+    def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
+        return self.store.get_person_operation(operation_id, operation_type)
+
+    def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
+        return self.store.get_embedding_lifecycle(embedding_id)
+
+    def list_recognition_details_for_person(
+        self,
+        person_id: str,
+        include_archived: bool = False,
+    ):
+        if self.store.get_person(person_id, include_archived=include_archived) is None:
             raise KeyError(f"Unknown person: {person_id}")
         with self.metrics.timer("db_list_recognition_details_for_person_ms"):
             return self.store.list_recognition_details_for_person(person_id)
 
-    def delete_person(self, person_id: str) -> None:
+    def archive_person(self, person_id: str, operation_id: str) -> dict:
         with self.metrics.timer("db_delete_person_ms"):
-            self.store.delete_person(person_id)
+            result = self.store.archive_person(person_id, operation_id)
         self._rebuild_index()
+        return result
 
-    def delete_embedding(self, embedding_id: str) -> None:
-        with self.metrics.timer("db_delete_embedding_ms"):
-            self.store.delete_embedding(embedding_id)
+    def restore_person(self, person_id: str, operation_id: str) -> dict:
+        with self.metrics.timer("db_restore_person_ms"):
+            result = self.store.restore_person(person_id, operation_id)
         self._rebuild_index()
+        return result
 
-    def move_embedding(self, embedding_id: str, person_id: str) -> None:
+    def delete_person(self, person_id: str) -> None:
+        self.archive_person(person_id, str(uuid.uuid4()))
+
+    def delete_embedding(self, embedding_id: str, operation_id: str | None = None) -> dict:
+        with self.metrics.timer("db_soft_delete_embedding_ms"):
+            result = self.store.delete_embedding(embedding_id, operation_id or str(uuid.uuid4()))
+        self._rebuild_index()
+        return result
+
+    def list_deleted_embeddings(self) -> list[dict]:
+        with self.metrics.timer("db_list_deleted_embeddings_ms"):
+            return self.store.list_deleted_embeddings()
+
+    def restore_deleted_embedding(
+        self,
+        embedding_id: str,
+        operation_id: str | None = None,
+    ) -> dict:
+        with self.metrics.timer("db_restore_deleted_embedding_ms"):
+            result = self.store.restore_deleted_embedding(
+                embedding_id,
+                operation_id or str(uuid.uuid4()),
+            )
+        self._rebuild_index()
+        return result
+
+    def permanently_delete_embedding(
+        self,
+        embedding_id: str,
+        operation_id: str | None = None,
+    ) -> dict:
+        with self.metrics.timer("db_purge_deleted_embedding_ms"):
+            result = self.store.permanently_delete_embedding(
+                embedding_id,
+                operation_id or str(uuid.uuid4()),
+            )
+        self._rebuild_index()
+        return result
+
+    def list_expired_deleted_embedding_ids(self, now: str | None = None) -> list[str]:
+        return self.store.list_expired_deleted_embedding_ids(now)
+
+    def purge_expired_deleted_embeddings(
+        self,
+        embedding_ids: list[str],
+        operation_id: str,
+        now: str | None = None,
+    ) -> dict:
+        with self.metrics.timer("db_purge_expired_embeddings_ms"):
+            result = self.store.purge_expired_deleted_embeddings(
+                embedding_ids,
+                operation_id,
+                now,
+            )
+        self._rebuild_index()
+        return result
+
+    def move_embedding(
+        self,
+        embedding_id: str,
+        person_id: str,
+        operation_id: str | None = None,
+    ) -> dict:
         with self.metrics.timer("db_move_embedding_ms"):
-            self.store.move_embedding(embedding_id, person_id)
+            result = self.store.move_embedding(
+                embedding_id,
+                person_id,
+                operation_id or str(uuid.uuid4()),
+            )
         self._rebuild_index()
+        return result
 
     def add_recognition_detail(
         self,
@@ -301,19 +402,33 @@ class FaceEngine:
             )
         return detail.detail_id
 
-    def merge_persons(self, source_person_id: str, target_person_id: str) -> int:
-        if source_person_id == target_person_id:
-            raise KeyError("Source and target person must be different")
-        if self.store.get_person(source_person_id) is None:
-            raise KeyError(f"Unknown source person: {source_person_id}")
-        if self.store.get_person(target_person_id) is None:
-            raise KeyError(f"Unknown target person: {target_person_id}")
-        embeddings = self.store.list_embeddings_for_person(source_person_id)
-        for embedding in embeddings:
-            self.store.move_embedding(embedding.embedding_id, target_person_id)
-        self.store.delete_person(source_person_id)
+    def merge_persons(
+        self,
+        source_person_id: str,
+        target_person_id: str,
+        operation_id: str | None = None,
+    ) -> dict:
+        result = self.store.merge_persons(
+            source_person_id,
+            target_person_id,
+            operation_id or str(uuid.uuid4()),
+        )
         self._rebuild_index()
-        return len(embeddings)
+        return result
+
+    def update_person_preferences(
+        self,
+        person_id: str,
+        operation_id: str,
+        favorite: bool | None = None,
+        representative_embedding_id: str | None = None,
+    ) -> dict:
+        return self.store.update_person_preferences(
+            person_id=person_id,
+            operation_id=operation_id,
+            favorite=favorite,
+            representative_embedding_id=representative_embedding_id,
+        )
 
     def backup_database(self, target_path: Path) -> None:
         with self.metrics.timer("db_backup_ms"):
@@ -417,9 +532,25 @@ class FaceEngine:
             )
             init_faces: list[InitFace] = []
             embeddings_generated = 0
+            invalid_images: list[str] = []
             for image_index, image_path in enumerate(image_paths, start=1):
-                with self.metrics.timer("image_load_ms"):
-                    image = load_bgr_image(image_path)
+                try:
+                    with self.metrics.timer("image_load_ms"):
+                        image = load_bgr_image(image_path)
+                except InputImageError:
+                    invalid_images.append(str(image_path))
+                    self.metrics.increment("images_rejected")
+                    report(
+                        phase="detecting",
+                        session_id=session.session_id,
+                        total_images=len(image_paths),
+                        images_scanned=image_index,
+                        invalid_images=len(invalid_images),
+                        faces_detected=len(init_faces),
+                        embeddings_generated=embeddings_generated,
+                        groups=0,
+                    )
+                    continue
                 with self.metrics.timer("detect_ms"):
                     faces = self.detector.detect(image_path)
                 self.metrics.increment("faces_detected", len(faces))
@@ -512,11 +643,13 @@ class FaceEngine:
                 faces_detected=len(init_faces),
                 embeddings_generated=embeddings_generated,
                 groups=group_count,
+                invalid_images=len(invalid_images),
             )
             return QueueSessionResult(
                 session=session,
                 groups=_groups_from_faces(session.session_id, grouped),
                 matches_by_face_id=matches_by_face_id,
+                invalid_images=invalid_images,
             )
 
     def list_init_groups(self, session_id: str) -> list[InitGroup]:
@@ -919,10 +1052,12 @@ class QueueSessionResult:
         session: InitSession,
         groups: list[InitGroup],
         matches_by_face_id: dict[str, list[PersonMatch]],
+        invalid_images: list[str] | None = None,
     ) -> None:
         self.session = session
         self.groups = groups
         self.matches_by_face_id = matches_by_face_id
+        self.invalid_images = invalid_images or []
 
 
 def _iter_images(source_path: Path) -> list[Path]:

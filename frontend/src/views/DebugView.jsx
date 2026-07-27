@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Badge,
@@ -29,11 +29,24 @@ import {
   IconInfoCircle,
   IconPlayerPause,
   IconRefresh,
+  IconRestore,
   IconSearch,
   IconTrash,
+  IconUpload,
 } from "@tabler/icons-react";
 
-export function DebugView({ events, backups = [], backupCreating = false, onRefresh, onCreateBackup, onDeleteBackup }) {
+export function DebugView({
+  events,
+  backups = [],
+  backupCreating = false,
+  backupImporting = false,
+  onRefresh,
+  onCreateBackup,
+  onDeleteBackup,
+  onImportBackup,
+  onDownloadBackup,
+  onRestoreBackup,
+}) {
   const [section, setSection] = useState("events");
   const [paused, setPaused] = useState(false);
   const [cleared, setCleared] = useState(false);
@@ -132,8 +145,12 @@ export function DebugView({ events, backups = [], backupCreating = false, onRefr
             <DatabaseBackupsPanel
               backups={backups}
               creating={backupCreating}
+              importing={backupImporting}
               onCreate={onCreateBackup}
               onDelete={onDeleteBackup}
+              onImport={onImportBackup}
+              onDownload={onDownloadBackup}
+              onRestore={onRestoreBackup}
             />
           )}
         </Box>
@@ -320,19 +337,51 @@ function EventsLogPanel({
   );
 }
 
-function DatabaseBackupsPanel({ backups, creating, onCreate, onDelete }) {
+function DatabaseBackupsPanel({
+  backups,
+  creating,
+  importing,
+  onCreate,
+  onDelete,
+  onImport,
+  onDownload,
+  onRestore,
+}) {
   const latest = backups[0] || null;
   const previous = backups.slice(1);
+  const importInputRef = useRef(null);
   return (
     <Stack h="100%" gap="md">
       <Group justify="space-between" align="flex-start" wrap="nowrap" className="debug-main-header">
         <Box>
-          <Title order={3} size="h4">Database Backups</Title>
-          <Text size="sm" c="dimmed">Managed SQLite snapshots stored by the application</Text>
+          <Title order={3} size="h4">Portable Backups</Title>
+          <Text size="sm" c="dimmed">Verified database, original images, and face crops in one recoverable package</Text>
         </Box>
-        <Button leftSection={<IconDatabaseExport size={16} />} loading={creating} onClick={onCreate}>
-          {creating ? "Creating backup..." : "Create Backup"}
-        </Button>
+        <Group gap="xs" wrap="nowrap">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".sfbackup,application/zip"
+            hidden
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) onImport(file);
+            }}
+          />
+          <Button
+            variant="default"
+            leftSection={<IconUpload size={16} />}
+            loading={importing}
+            disabled={creating}
+            onClick={() => importInputRef.current?.click()}
+          >
+            {importing ? "Verifying..." : "Import"}
+          </Button>
+          <Button leftSection={<IconDatabaseExport size={16} />} loading={creating} disabled={importing} onClick={onCreate}>
+            {creating ? "Creating..." : "Create Backup"}
+          </Button>
+        </Group>
       </Group>
 
       <Paper withBorder radius="md" p="md" className="database-backup-summary">
@@ -342,8 +391,9 @@ function DatabaseBackupsPanel({ backups, creating, onCreate, onDelete }) {
             {latest ? (
               <>
                 <Text fw={900} size="lg">{formatDateTime(latest.created_at)}</Text>
+                <Text size="sm">{latest.reason || "Manual backup"}</Text>
                 <Text size="sm" c="dimmed">
-                  {formatBytes(latest.size_bytes)} · {latest.people_count.toLocaleString()} people · {latest.embedding_count.toLocaleString()} embeddings
+                  {formatBytes(latest.size_bytes)} · {latest.people_count.toLocaleString()} people · {latest.embedding_count.toLocaleString()} embeddings · {latest.file_count || 0} files
                 </Text>
               </>
             ) : (
@@ -353,7 +403,12 @@ function DatabaseBackupsPanel({ backups, creating, onCreate, onDelete }) {
               </>
             )}
           </Box>
-          {latest && <Badge color={latest.verified ? "green" : "red"} variant="light">{latest.verified ? "Verified" : "Not verified"}</Badge>}
+          {latest && (
+            <Group gap="xs">
+              <Badge color={latest.verified ? "green" : "red"} variant="light">{latest.verified ? "Verified" : "Not verified"}</Badge>
+              <Badge color={latest.complete ? "teal" : "yellow"} variant="light">{latest.complete ? "Complete" : `${latest.missing_file_count || 0} missing`}</Badge>
+            </Group>
+          )}
         </Group>
       </Paper>
 
@@ -362,21 +417,60 @@ function DatabaseBackupsPanel({ backups, creating, onCreate, onDelete }) {
           <table className="debug-table database-backup-table">
             <thead>
               <tr>
+                <th>Backup</th>
                 <th>Created</th>
                 <th>Size</th>
                 <th>People</th>
                 <th>Embeddings</th>
+                <th>Files</th>
+                <th>Status</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {backups.length ? backups.map((backup) => (
                 <tr key={backup.backup_id}>
+                  <td>
+                    <Text size="sm" fw={700}>{backup.reason || "Manual backup"}</Text>
+                    <Text size="xs" c="dimmed">{backup.backup_id}</Text>
+                  </td>
                   <td>{formatDateTime(backup.created_at)}</td>
                   <td>{formatBytes(backup.size_bytes)}</td>
                   <td>{backup.people_count.toLocaleString()}</td>
                   <td>{backup.embedding_count.toLocaleString()}</td>
+                  <td>{(backup.file_count || 0).toLocaleString()}</td>
                   <td>
+                    <Badge color={backup.complete ? "teal" : backup.portable ? "yellow" : "gray"} variant="light">
+                      {backup.complete ? "Complete" : backup.portable ? "Incomplete" : "Legacy DB only"}
+                    </Badge>
+                  </td>
+                  <td>
+                    <Group gap={4} wrap="nowrap">
+                    <Tooltip label={backup.portable ? "Download portable .sfbackup archive" : "Legacy database-only backups cannot be exported"}>
+                      <span>
+                        <ActionIcon
+                          variant="subtle"
+                          disabled={!backup.portable}
+                          onClick={() => onDownload(backup.backup_id)}
+                          aria-label={`Download backup ${formatDateTime(backup.created_at)}`}
+                        >
+                          <IconDownload size={16} />
+                        </ActionIcon>
+                      </span>
+                    </Tooltip>
+                    <Tooltip label={backup.complete && backup.portable ? "Restore this verified backup" : "Only complete portable backups can be restored"}>
+                      <span>
+                        <ActionIcon
+                          variant="subtle"
+                          color="teal"
+                          disabled={!backup.complete || !backup.portable || !backup.verified}
+                          onClick={() => onRestore(backup)}
+                          aria-label={`Restore backup ${formatDateTime(backup.created_at)}`}
+                        >
+                          <IconRestore size={16} />
+                        </ActionIcon>
+                      </span>
+                    </Tooltip>
                     <Tooltip label="Delete backup">
                       <ActionIcon
                         variant="subtle"
@@ -387,11 +481,12 @@ function DatabaseBackupsPanel({ backups, creating, onCreate, onDelete }) {
                         <IconTrash size={16} />
                       </ActionIcon>
                     </Tooltip>
+                    </Group>
                   </td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={5} className="debug-empty-row">No managed backups created yet.</td>
+                  <td colSpan={8} className="debug-empty-row">No managed backups created yet.</td>
                 </tr>
               )}
             </tbody>
@@ -464,6 +559,7 @@ function inferLevel(event) {
   const eventName = String(event.event || "").toLowerCase();
   const message = JSON.stringify(event).toLowerCase();
   if (eventName.includes("error") || message.includes("error") || message.includes("not found") || message.includes("no acceptable")) return "error";
+  if (eventName === "input-rejected") return "warning";
   if (eventName.includes("warn")) return "warning";
   if (eventName.includes("recognize") && Number(event.faces || 0) > 0) return "success";
   return "info";
@@ -477,6 +573,11 @@ function summarizeEventDetails(event) {
     return `${event.filename || "file"}${size} uploaded to ${event.path || "-"}`;
   }
   if (event.event === "recognize") return `${event.faces ?? 0} face${Number(event.faces) === 1 ? "" : "s"} detected and processed`;
+  if (event.event === "input-rejected") {
+    const count = Number(event.rejected_count || 0);
+    const origin = event.source ? ` from ${event.source}` : "";
+    return `${count} invalid input${count === 1 ? "" : "s"} skipped${origin}`;
+  }
   if (event.event === "queue-scan") return `Session: ${event.session_id || "-"}, Groups: ${event.groups ?? "-"}`;
   if (event.event === "upload-batch") return `${event.files ?? 0} file(s) uploaded to ${event.path || "-"}`;
   if (event.event === "startup") return `${event.runtime || "runtime"} initialized at ${event.address || "-"}`;

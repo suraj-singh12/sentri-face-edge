@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from sentriface import cli
+from sentriface.cli import build_dev_engine
 
 
 class CliTest(unittest.TestCase):
@@ -214,6 +215,76 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertIn("--compare-threads requires --runtime onnx", output.getvalue())
+
+    def test_face_delete_cli_creates_backup_and_supports_restore(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            data_dir = root / "data"
+            image = root / "face.jpg"
+            canvas = np.full((120, 120, 3), 128, dtype=np.uint8)
+            cv2.imwrite(str(image), canvas)
+            engine = build_dev_engine(data_dir)
+            engine.initialize()
+            person_id = engine.confirm_new_person(engine.prepare_additions(image)[0], "CLI Person")
+            embedding_id = engine.list_person_embeddings(person_id)[0].embedding_id
+
+            delete_output = io.StringIO()
+            with patch(
+                "sys.argv",
+                [
+                    "sentriface",
+                    "--json",
+                    "--profile",
+                    "low",
+                    "--data-dir",
+                    str(data_dir),
+                    "delete-embedding",
+                    embedding_id,
+                ],
+            ):
+                with redirect_stdout(delete_output):
+                    self.assertEqual(cli.main(), 0)
+            deleted = json.loads(delete_output.getvalue())
+            self.assertTrue(deleted["backup_id"].startswith("backup_"))
+            self.assertTrue((data_dir / "backups" / deleted["backup_id"]).is_dir())
+
+            list_output = io.StringIO()
+            with patch(
+                "sys.argv",
+                [
+                    "sentriface",
+                    "--json",
+                    "--profile",
+                    "low",
+                    "--data-dir",
+                    str(data_dir),
+                    "deleted-faces",
+                ],
+            ):
+                with redirect_stdout(list_output):
+                    self.assertEqual(cli.main(), 0)
+            self.assertEqual(
+                json.loads(list_output.getvalue())["deleted_faces"][0]["embedding_id"],
+                embedding_id,
+            )
+
+            restore_output = io.StringIO()
+            with patch(
+                "sys.argv",
+                [
+                    "sentriface",
+                    "--json",
+                    "--profile",
+                    "low",
+                    "--data-dir",
+                    str(data_dir),
+                    "restore-embedding",
+                    embedding_id,
+                ],
+            ):
+                with redirect_stdout(restore_output):
+                    self.assertEqual(cli.main(), 0)
+            self.assertTrue(json.loads(restore_output.getvalue())["restored"])
 
 
 if __name__ == "__main__":

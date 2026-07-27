@@ -75,31 +75,23 @@ class OnnxArcFaceEmbedder:
         intra_op_threads: int = 1,
         output_size: int = 112,
     ) -> None:
-        logger.info("[{}]: __init__()", self.__class__.__name__)
-        logger.info("self: {}", self)
-
-        logger.info("model_path: {} \nintra_op_threads: {} \noutput_size: {}", model_path, intra_op_threads, output_size)
         self.model_path = model_path
         self.output_size = output_size
         self.runtime = OnnxRuntimeSession(model_path, intra_op_threads)
-        logger.info("self.runtime: {}", self.runtime)
+        logger.debug(
+            "ArcFace embedder initialized: model={} threads={} output_size={}",
+            model_path,
+            intra_op_threads,
+            output_size,
+        )
 
     def encode(self, image_path: Path, face: DetectedFace) -> Embedding:
-        logger.info("[{}]: encode()", self.__class__.__name__)
-
         image = load_bgr_image(image_path)
-        logger.info("image: {}", image)
         crop = crop_face(image, face, output_size=self.output_size)
-        logger.info("crop: {}", crop)
         tensor = _arcface_tensor(crop)
-        logger.info("tensor: {}", tensor)
         outputs = self.runtime.run(tensor)
-        logger.info("outputs: {}", outputs)
         vector = _flatten(outputs[0])
-        logger.info("vector: {}", vector)
-        normalized_vector =  _normalize(vector)
-        logger.info("normalized_vector: {}", normalized_vector)
-        return normalized_vector            # returning the face embedding for comparison 
+        return _normalize(vector)
     
 """
 Convert OpenCV image into the exact format the detector model expects.
@@ -126,9 +118,6 @@ normalized to approximately [-1, 1], channel-first (CHW), batched (NCHW), and st
 For generating face recognition (embeddings)
 '''
 def _arcface_tensor(face_crop: Any) -> Any:
-    logger.info("utility: _arcface_tensor()")
-    logger.info("face_crop: {}", face_crop)
-
     np = _numpy()
     cv2 = _cv2()
     # convert channel format BGR to RGB
@@ -144,9 +133,6 @@ def _arcface_tensor(face_crop: Any) -> Any:
 
 
 def _input_size(shape: list[Any], fallback: int) -> tuple[int, int]:
-    logger.info("utility: _input_size()")
-    logger.info("shape: {}\nfallback: {}", shape, fallback)
-
     # shape of typical onnx input is: (batch, channel, height, width)
     if len(shape) == 4 and isinstance(shape[2], int) and isinstance(shape[3], int):
         return shape[3], shape[2]       # return (width, height) 
@@ -381,7 +367,6 @@ def _decode_scrfd_feature_maps(
                 landmarks=restored_landmarks,
             )
         )
-    logger.info("faces: {}", faces)
     return faces
 
 '''

@@ -137,6 +137,43 @@ class InitWorkflowTest(unittest.TestCase):
             confirmed = [group for group in updated if group.group_id == first_group.group_id][0]
             self.assertEqual(confirmed.status, "confirmed")
 
+    def test_queue_scan_skips_unreadable_images_and_processes_valid_siblings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_dir = temp_path / "images"
+            image_dir.mkdir()
+            valid_image = image_dir / "valid.jpg"
+            invalid_image = image_dir / "fake.jpg"
+            self._write_image(valid_image, shade=120)
+            invalid_image.write_bytes(b"not an image")
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            result = engine.create_queue_session(image_dir, allow_bad_quality=True)
+
+            self.assertEqual(result.invalid_images, [str(invalid_image)])
+            self.assertEqual(sum(len(group.faces) for group in result.groups), 1)
+            self.assertEqual(
+                {face.source_image for group in result.groups for face in group.faces},
+                {str(valid_image)},
+            )
+
+    def test_queue_scan_with_only_unreadable_images_returns_empty_result(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_dir = temp_path / "images"
+            image_dir.mkdir()
+            invalid_image = image_dir / "fake.png"
+            invalid_image.write_bytes(b"not an image")
+
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            result = engine.create_queue_session(image_dir, allow_bad_quality=True)
+
+            self.assertEqual(result.invalid_images, [str(invalid_image)])
+            self.assertEqual(result.groups, [])
+            self.assertEqual(engine.list_init_groups(result.session.session_id), [])
+
     def test_init_reject_group(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)

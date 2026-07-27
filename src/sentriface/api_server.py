@@ -3,22 +3,26 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import hashlib
 import json
+import os
 import shutil
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from sentriface.backup_service import BackupError, BackupRecord, BackupService
 from sentriface.cli import build_dev_engine, build_onnx_engine
 from sentriface.config import RuntimeConfig, config_for_hardware
 from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
+from sentriface.errors import InputImageError, InputValidationError
 from sentriface.hardware import assess_hardware
 from sentriface.models import (
     EmbeddingRecord,
@@ -35,6 +39,7 @@ from sentriface.models import (
     RecognitionResult,
     RejectedFace,
 )
+from sentriface.storage.sqlite_store import SCHEMA_VERSION
 # TODO: To be replaced with FastApi
 # It is an adapter which connects react to python code.  
 
@@ -43,7 +48,50 @@ STATIC_DIR = Path(__file__).with_name("ui_static")
 UPLOAD_RESIZE_LIMIT_BYTES = 1_000_000
 UPLOAD_REQUEST_LIMIT_BYTES = 100_000_000
 UPLOAD_MAX_EDGE = 1600
+UPLOAD_MAX_PIXELS = 40_000_000
+JSON_REQUEST_LIMIT_BYTES = 135_000_000
+BACKUP_IMPORT_LIMIT_BYTES = 20_000_000_000
 DUPLICATE_MATCH_SCORE = 0.9999
+
+
+class OperationGate:
+    """Allow concurrent normal work while giving restore exclusive access."""
+
+    def __init__(self) -> None:
+        self._condition = threading.Condition()
+        self._active_operations = 0
+        self._exclusive_active = False
+        self._exclusive_waiters = 0
+
+    @contextmanager
+    def shared(self):
+        with self._condition:
+            while self._exclusive_active or self._exclusive_waiters:
+                self._condition.wait()
+            self._active_operations += 1
+        try:
+            yield
+        finally:
+            with self._condition:
+                self._active_operations -= 1
+                self._condition.notify_all()
+
+    @contextmanager
+    def exclusive(self):
+        with self._condition:
+            self._exclusive_waiters += 1
+            try:
+                while self._exclusive_active or self._active_operations:
+                    self._condition.wait()
+                self._exclusive_active = True
+            finally:
+                self._exclusive_waiters -= 1
+        try:
+            yield
+        finally:
+            with self._condition:
+                self._exclusive_active = False
+                self._condition.notify_all()
 
 
 class SentriFaceApiServer(ThreadingHTTPServer):
@@ -63,19 +111,37 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.events: list[dict[str, Any]] = []
         self.queue_progress: dict[str, dict[str, Any]] = {}
         self.queue_progress_lock = threading.Lock()
+        self.operation_gate = OperationGate()
         self.backups = BackupService(
             config.db_path,
             config.backup_dir,
             retention_limit=config.backup_retention_limit,
             logger=self.log_event,
+            data_dir=config.data_dir,
+            supported_database_version=SCHEMA_VERSION,
         )
+        self.maintenance_stop = threading.Event()
+        self.maintenance_thread = threading.Thread(
+            target=self._maintenance_loop,
+            name="sentriface-retention",
+            daemon=True,
+        )
+        self.maintenance_thread.start()
 
     def log_event(self, event: str, **details: Any) -> None:
-        item = {"event": event, "timestamp": datetime.now(timezone.utc).isoformat(), **details}
+        safe_details = _sanitize_log_details(details)
+        item = {
+            "event": event,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **safe_details,
+        }
         self.events.append(item)
         self.events = self.events[-200:]
         if self.debug:
-            print(f"[sentriface-ui] {event} {json.dumps(details, separators=(',', ':'), default=str)}")
+            print(
+                f"[sentriface-ui] {event} "
+                f"{json.dumps(safe_details, separators=(',', ':'))}"
+            )
 
     def update_queue_progress(self, job_id: str, **updates: Any) -> None:
         with self.queue_progress_lock:
@@ -92,6 +158,62 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         progress["elapsed_seconds"] = max(0, int(ended_at - started_at)) if started_at else 0
         return progress
 
+    def backed_up_people_deletion(
+        self,
+        operation_id: str,
+        operation_type: str,
+        reason: str,
+        action: Callable[[], dict],
+    ) -> dict:
+        existing = self.engine.get_person_operation(operation_id, operation_type)
+        if existing is not None:
+            backup = self.backups.find_by_operation(operation_id)
+            return {**existing, **({"backup": _backup(backup)} if backup else {})}
+        backup = self.backups.create_backup(reason=reason, operation_id=operation_id)
+        result = action()
+        return {**result, "backup": _backup(backup)}
+
+    def purge_expired_deleted_faces(self) -> int:
+        embedding_ids = self.engine.list_expired_deleted_embedding_ids()
+        if not embedding_ids:
+            return 0
+        ordered_ids = sorted(set(embedding_ids))
+        digest = hashlib.sha256("\n".join(ordered_ids).encode("utf-8")).hexdigest()[:16]
+        operation_id = f"retention-purge-batch-{digest}"
+        reason = f"before-expired-face-purge-{len(ordered_ids)}-faces"
+        result = self.backed_up_people_deletion(
+            operation_id,
+            "purge-expired-embeddings",
+            reason,
+            lambda: self.engine.purge_expired_deleted_embeddings(
+                ordered_ids,
+                operation_id,
+            ),
+        )
+        purged = int(result.get("purged", 0))
+        if purged:
+            self.log_event("deleted-face-retention", purged=purged)
+        return purged
+
+    def _maintenance_loop(self) -> None:
+        while not self.maintenance_stop.is_set():
+            try:
+                with self.operation_gate.shared():
+                    self.purge_expired_deleted_faces()
+            except Exception as exc:  # noqa: BLE001 - maintenance must not terminate the UI server.
+                self.log_event("deleted-face-retention-failed", error=str(exc).strip("'"))
+            if self.maintenance_stop.wait(3600):
+                break
+
+    def server_close(self) -> None:
+        maintenance_stop = getattr(self, "maintenance_stop", None)
+        maintenance_thread = getattr(self, "maintenance_thread", None)
+        if maintenance_stop is not None:
+            maintenance_stop.set()
+        if maintenance_thread is not None and maintenance_thread.is_alive():
+            maintenance_thread.join(timeout=2)
+        super().server_close()
+
 
 class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     server: SentriFaceApiServer
@@ -103,28 +225,94 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         return str(STATIC_DIR / parsed.path.lstrip("/"))
 
     def do_GET(self) -> None:
+        with self.server.operation_gate.shared():
+            self._do_GET()
+
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        gate = (
+            self.server.operation_gate.exclusive()
+            if parsed.path == "/api/backups/restore"
+            else self.server.operation_gate.shared()
+        )
+        with gate:
+            self._do_POST()
+
+    def do_DELETE(self) -> None:
+        with self.server.operation_gate.shared():
+            self._do_DELETE()
+
+    def _do_GET(self) -> None:
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/api/profile":
                 self._json(self._profile())
                 return
             if parsed.path == "/api/persons":
-                self._json({"persons": [_person_summary(item, self.server.engine) for item in self.server.engine.list_persons()]})
+                self._json(
+                    {
+                        "persons": [
+                            _person_summary(item, self.server.engine)
+                            for item in self.server.engine.list_persons()
+                        ],
+                        "archived_persons": [
+                            _person_summary(item, self.server.engine)
+                            for item in self.server.engine.list_persons(archived=True)
+                        ],
+                    }
+                )
+                return
+            if parsed.path == "/api/deleted-faces":
+                self.server.purge_expired_deleted_faces()
+                self._json(
+                    {
+                        "deleted_faces": [
+                            _deleted_embedding(item)
+                            for item in self.server.engine.list_deleted_embeddings()
+                        ]
+                    }
+                )
                 return
             if parsed.path == "/api/person":
                 person_id = _query_value(parsed.query, "person_id")
-                person = self.server.engine.get_person(person_id)
+                include_archived = _query_bool(parsed.query, "include_archived")
+                person = self.server.engine.get_person(
+                    person_id,
+                    include_archived=include_archived,
+                )
                 if person is None:
                     raise KeyError(f"Unknown person: {person_id}")
-                embeddings = self.server.engine.list_person_embeddings(person_id)
-                details = self.server.engine.list_recognition_details_for_person(person_id)
-                changes = self.server.engine.list_person_changes(person_id)
+                embeddings = self.server.engine.list_person_embeddings(
+                    person_id,
+                    include_archived=include_archived,
+                )
+                details = self.server.engine.list_recognition_details_for_person(
+                    person_id,
+                    include_archived=include_archived,
+                )
+                changes = self.server.engine.list_person_changes(
+                    person_id,
+                    include_archived=include_archived,
+                )
+                management_events = self.server.engine.list_person_operations(
+                    person_id,
+                    include_archived=include_archived,
+                )
                 self._json(
                     {
-                        "person": _person(person),
+                        "person": {
+                            **_person(person),
+                            "favorite": bool(person.metadata.get("favorite")),
+                            "tags": list(person.metadata.get("tags", [])),
+                            "representative_image": _representative_image(
+                                embeddings,
+                                person.metadata.get("representative_embedding_id"),
+                            ),
+                        },
                         "embeddings": [_embedding(record) for record in embeddings],
                         "details": [_recognition_detail(detail) for detail in details],
                         "changes": [_person_change(change) for change in changes],
+                        "management_events": management_events,
                     }
                 )
                 return
@@ -133,6 +321,24 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/events":
                 self._json({"events": self.server.events[-80:]})
+                return
+            if parsed.path.startswith("/api/backups/") and parsed.path.endswith("/download"):
+                backup_id = parsed.path.removeprefix("/api/backups/").removesuffix("/download").strip("/")
+                export_dir = self.server.config.backup_dir / ".exports"
+                export_path = export_dir / f"{backup_id}-{uuid.uuid4().hex}.sfbackup"
+                try:
+                    exported = self.server.backups.export_backup(backup_id, export_path)
+                    self._download_file(
+                        exported,
+                        download_name=f"{backup_id}.sfbackup",
+                        content_type="application/zip",
+                    )
+                finally:
+                    export_path.unlink(missing_ok=True)
+                    try:
+                        export_dir.rmdir()
+                    except OSError:
+                        pass
                 return
             if parsed.path == "/api/backups":
                 self._json({"backups": [_backup(record) for record in self.server.backups.list_backups()]})
@@ -161,15 +367,47 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001 - local UI should surface errors clearly.
             self._error(exc)
 
-    def do_POST(self) -> None:
+    def _do_POST(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if parsed.path == "/api/backups/import":
+                filename = _query_value(parsed.query, "filename")
+                if Path(filename).suffix.lower() != ".sfbackup":
+                    raise InputValidationError(
+                        "Choose a SentriFace .sfbackup file",
+                        "unsupported_backup_type",
+                    )
+                import_dir = self.server.config.backup_dir / ".imports"
+                import_path = import_dir / f"{uuid.uuid4().hex}.sfbackup"
+                try:
+                    self._stream_request_to_file(
+                        import_path,
+                        maximum_bytes=BACKUP_IMPORT_LIMIT_BYTES,
+                    )
+                    record = self.server.backups.import_backup(import_path)
+                finally:
+                    import_path.unlink(missing_ok=True)
+                    try:
+                        import_dir.rmdir()
+                    except OSError:
+                        pass
+                self._json({"backup": _backup(record)})
+                return
             if parsed.path == "/api/upload-chunk":
-                content_length = int(self.headers.get("Content-Length", "0"))
+                try:
+                    content_length = int(self.headers.get("Content-Length", "0"))
+                except ValueError as exc:
+                    raise InputValidationError(
+                        "Invalid upload length",
+                        "invalid_content_length",
+                    ) from exc
                 if content_length <= 0:
-                    raise KeyError("Upload is empty")
+                    raise InputValidationError("Upload is empty", "empty_file")
                 if content_length > UPLOAD_REQUEST_LIMIT_BYTES:
-                    raise KeyError("Upload exceeds the 100 MB per-file limit")
+                    raise InputValidationError(
+                        "Upload exceeds the 100 MB per-file limit",
+                        "file_too_large",
+                    )
                 saved_dir, saved_path = _save_upload_chunk(
                     self.server.config.data_dir,
                     _query_value(parsed.query, "upload_id"),
@@ -184,9 +422,40 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             payload = self._read_json()
+            if parsed.path == "/api/input-rejections":
+                source = str(payload.get("source") or "unknown").strip().lower()[:40]
+                rejected_count = _safe_count(payload.get("rejected_count"), "rejected_count")
+                accepted_count = _safe_count(
+                    payload.get("accepted_count", 0),
+                    "accepted_count",
+                    allow_zero=True,
+                )
+                reasons = _safe_rejection_reasons(payload.get("reasons"))
+                self.server.log_event(
+                    "input-rejected",
+                    source=source,
+                    rejected_count=rejected_count,
+                    accepted_count=accepted_count,
+                    reasons=reasons,
+                    client_side=True,
+                )
+                self._json({"logged": True})
+                return
             if parsed.path == "/api/backups":
                 record = self.server.backups.create_backup()
                 self._json({"backup": _backup(record)})
+                return
+            if parsed.path == "/api/backups/restore":
+                backup_id = _required(payload, "backup_id")
+                operation_id = _operation_id(payload)
+                result = self.server.backups.restore_backup(
+                    backup_id,
+                    operation_id,
+                    reload_callback=self.server.engine.initialize,
+                    allow_incomplete=bool(payload.get("allow_incomplete", False)),
+                )
+                self.server.log_event("app-state-restored", **result)
+                self._json({"restore": result})
                 return
             if parsed.path == "/api/upload":
                 saved_path = _save_upload(
@@ -203,12 +472,21 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"path": str(saved_path), "stored_size": saved_path.stat().st_size})
                 return
             if parsed.path == "/api/upload-batch":
-                saved_dir, count = _save_upload_batch(
+                saved_dir, count, rejected = _save_upload_batch(
                     self.server.config.data_dir,
                     payload.get("files", []),
                 )
-                self.server.log_event("upload-batch", path=str(saved_dir), files=count)
-                self._json({"path": str(saved_dir), "files": count})
+                self.server.log_event(
+                    "upload-batch",
+                    path=str(saved_dir),
+                    files=count,
+                    rejected_files=rejected,
+                )
+                self._json({
+                    "path": str(saved_dir),
+                    "files": count,
+                    "rejected_files": rejected,
+                })
                 return
             if parsed.path == "/api/upload-batch-discard":
                 removed = _discard_upload_batch(
@@ -249,6 +527,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"batch": batch, "metrics": self.server.engine.metrics_snapshot()})
                 return
             if parsed.path == "/api/person-update":
+                tags = payload.get("tags", [])
+                if not isinstance(tags, list):
+                    raise KeyError("tags must be a list")
                 change = self.server.engine.update_person_profile(
                     person_id=_required(payload, "person_id"),
                     name=_required(payload, "name"),
@@ -256,6 +537,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     country=payload.get("country"),
                     importance=payload.get("importance"),
                     editor_name=_required(payload, "editor_name"),
+                    tags=[str(tag) for tag in tags],
+                    operation_id=_operation_id(payload),
                 )
                 self.server.log_event(
                     "person-update",
@@ -263,6 +546,128 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     editor_name=change.editor_name,
                 )
                 self._json({"updated": True, "change": _person_change(change)})
+                return
+            if parsed.path == "/api/person-preferences":
+                favorite = payload.get("favorite")
+                if favorite is not None and not isinstance(favorite, bool):
+                    raise KeyError("favorite must be true or false")
+                result = self.server.engine.update_person_preferences(
+                    person_id=_required(payload, "person_id"),
+                    operation_id=_operation_id(payload),
+                    favorite=favorite,
+                    representative_embedding_id=payload.get("representative_embedding_id"),
+                )
+                self.server.log_event("person-preferences", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/person-archive":
+                person_id = _required(payload, "person_id")
+                operation_id = _operation_id(payload)
+                person = self.server.engine.get_person(person_id, include_archived=True)
+                if person is None:
+                    raise KeyError(f"Unknown person: {person_id}")
+                if person.deleted_at:
+                    result = self.server.engine.archive_person(person_id, operation_id)
+                else:
+                    result = self.server.backed_up_people_deletion(
+                        operation_id,
+                        "archive-person",
+                        f"before-person-archive-{person.name}-{person_id[:8]}",
+                        lambda: self.server.engine.archive_person(person_id, operation_id),
+                    )
+                self.server.log_event("person-archive", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/person-restore":
+                result = self.server.engine.restore_person(
+                    _required(payload, "person_id"),
+                    _operation_id(payload),
+                )
+                self.server.log_event("person-restore", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/person-merge":
+                source_id = _required(payload, "source_person_id")
+                target_id = _required(payload, "target_person_id")
+                operation_id = _operation_id(payload)
+                source = self.server.engine.get_person(source_id)
+                target = self.server.engine.get_person(target_id)
+                if source is None:
+                    raise KeyError(f"Unknown source person: {source_id}")
+                if target is None:
+                    raise KeyError(f"Unknown target person: {target_id}")
+                result = self.server.backed_up_people_deletion(
+                    operation_id,
+                    "merge-persons",
+                    f"before-person-merge-{source.name}-into-{target.name}-{source_id[:8]}",
+                    lambda: self.server.engine.merge_persons(
+                        source_id,
+                        target_id,
+                        operation_id,
+                    ),
+                )
+                self.server.log_event("person-merge", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/person-photo-move":
+                result = self.server.engine.move_embedding(
+                    _required(payload, "embedding_id"),
+                    _required(payload, "target_person_id"),
+                    _operation_id(payload),
+                )
+                self.server.log_event("person-photo-move", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/person-photo-delete":
+                embedding_id = _required(payload, "embedding_id")
+                operation_id = _operation_id(payload)
+                lifecycle = self.server.engine.get_embedding_lifecycle(embedding_id)
+                if lifecycle is None:
+                    raise KeyError(f"Unknown embedding: {embedding_id}")
+                if lifecycle["deleted_at"]:
+                    raise KeyError("Face is already in Deleted Faces")
+                result = self.server.backed_up_people_deletion(
+                    operation_id,
+                    "soft-delete-embedding",
+                    (
+                        f"before-face-delete-{lifecycle['person_name']}-"
+                        f"{embedding_id[:8]}"
+                    ),
+                    lambda: self.server.engine.delete_embedding(embedding_id, operation_id),
+                )
+                self.server.log_event("person-photo-delete", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/person-photo-restore":
+                result = self.server.engine.restore_deleted_embedding(
+                    _required(payload, "embedding_id"),
+                    _operation_id(payload),
+                )
+                self.server.log_event("person-photo-restore", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/person-photo-purge":
+                embedding_id = _required(payload, "embedding_id")
+                operation_id = _operation_id(payload)
+                lifecycle = self.server.engine.get_embedding_lifecycle(embedding_id)
+                if lifecycle is None:
+                    raise KeyError(f"Unknown deleted face: {embedding_id}")
+                if not lifecycle["deleted_at"]:
+                    raise KeyError("Move the face to Deleted Faces before deleting it permanently")
+                result = self.server.backed_up_people_deletion(
+                    operation_id,
+                    "purge-deleted-embedding",
+                    (
+                        f"before-face-permanent-delete-{lifecycle['person_name']}-"
+                        f"{embedding_id[:8]}"
+                    ),
+                    lambda: self.server.engine.permanently_delete_embedding(
+                        embedding_id,
+                        operation_id,
+                    ),
+                )
+                self.server.log_event("person-photo-purge", **result)
+                self._json(result)
                 return
             if parsed.path == "/api/recognition-accept-existing":
                 image_path = Path(_required(payload, "path"))
@@ -392,12 +797,22 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/queue-scan":
                 source = Path(_required(payload, "path"))
                 job_id = str(payload.get("job_id") or uuid.uuid4())
+                total_files = _safe_count(
+                    payload.get("total_files", 0),
+                    "total_files",
+                    allow_zero=True,
+                )
+                uploaded_files = _safe_count(
+                    payload.get("uploaded_files", total_files),
+                    "uploaded_files",
+                    allow_zero=True,
+                )
                 self.server.update_queue_progress(
                     job_id,
                     phase="scanning",
                     status="running",
-                    total_files=payload.get("total_files") or 0,
-                    uploaded_files=payload.get("uploaded_files") or payload.get("total_files") or 0,
+                    total_files=total_files,
+                    uploaded_files=uploaded_files,
                     total_images=0,
                     images_scanned=0,
                     faces_detected=0,
@@ -425,7 +840,20 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     job_id=job_id,
                     session_id=queue_result.session.session_id,
                     groups=len(queue_result.groups),
+                    rejected_files=len(queue_result.invalid_images),
                 )
+                if queue_result.invalid_images:
+                    self.server.log_event(
+                        "input-rejected",
+                        source="queue-scan",
+                        rejected_count=len(queue_result.invalid_images),
+                        accepted_count=max(
+                            0,
+                            uploaded_files - len(queue_result.invalid_images),
+                        ),
+                        reasons={"unreadable_image": len(queue_result.invalid_images)},
+                        client_side=False,
+                    )
                 session_id = queue_result.session.session_id
                 if not queue_result.groups:
                     self.server.engine.discard_init_session(session_id)
@@ -434,6 +862,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     {
                         "session_id": session_id,
                         "job_id": job_id,
+                        "rejected_files": len(queue_result.invalid_images),
                         "groups": [
                             _init_group(self.server.engine, group, queue_result.matches_by_face_id)
                             for group in queue_result.groups
@@ -568,7 +997,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001 - local UI should surface errors clearly.
             self._error(exc)
 
-    def do_DELETE(self) -> None:
+    def _do_DELETE(self) -> None:
         parsed = urlparse(self.path)
         try:
             if parsed.path.startswith("/api/backups/"):
@@ -606,11 +1035,27 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         }
 
     def _read_json(self) -> dict[str, Any]:
-        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise InputValidationError(
+                "Invalid request length",
+                "invalid_content_length",
+            ) from exc
+        if length < 0:
+            raise InputValidationError("Invalid request length", "invalid_content_length")
+        if length > JSON_REQUEST_LIMIT_BYTES:
+            raise InputValidationError("Request is too large", "request_too_large")
         if length == 0:
             return {}
-        raw = self.rfile.read(length).decode("utf-8")
-        return json.loads(raw)
+        try:
+            raw = self.rfile.read(length).decode("utf-8")
+            payload = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise InputValidationError("Request contains invalid JSON", "invalid_json") from exc
+        if not isinstance(payload, dict):
+            raise InputValidationError("JSON request must be an object", "invalid_json_shape")
+        return payload
 
     def _json(self, payload: dict[str, Any], status: int = 200) -> None:
         body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
@@ -620,12 +1065,92 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _stream_request_to_file(self, destination: Path, maximum_bytes: int) -> None:
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise InputValidationError(
+                "Invalid backup upload length",
+                "invalid_content_length",
+            ) from exc
+        if content_length <= 0:
+            raise InputValidationError("Backup upload is empty", "empty_file")
+        if content_length > maximum_bytes:
+            raise InputValidationError(
+                "Portable backup exceeds the 20 GB import limit",
+                "file_too_large",
+            )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
+        remaining = content_length
+        try:
+            with temporary.open("xb") as output:
+                while remaining:
+                    chunk = self.rfile.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        raise InputValidationError(
+                            "Portable backup upload ended unexpectedly",
+                            "incomplete_upload",
+                        )
+                    output.write(chunk)
+                    remaining -= len(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def _download_file(
+        self,
+        path: Path,
+        download_name: str,
+        content_type: str,
+    ) -> None:
+        size = path.stat().st_size
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header(
+            "Content-Disposition",
+            f'attachment; filename="{download_name}"',
+        )
+        self.send_header("Content-Length", str(size))
+        self.end_headers()
+        with path.open("rb") as source:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+
     def _error(self, exc: Exception) -> None:
-        self.server.log_event("error", message=str(exc).strip("'"))
+        message = str(exc).strip("'")
+        validation_error = isinstance(
+            exc,
+            (InputValidationError, InputImageError, KeyError, ValueError, TypeError),
+        )
+        if validation_error:
+            reason = getattr(exc, "reason", "invalid_request")
+            self.server.log_event(
+                "input-rejected",
+                endpoint=urlparse(self.path).path,
+                rejected_count=1,
+                accepted_count=0,
+                reasons={reason: 1},
+                message=message,
+                client_side=False,
+            )
+        else:
+            self.server.log_event("error", message=message)
         status = HTTPStatus.BAD_REQUEST
         if isinstance(exc, BackupError) and "not found" in str(exc).lower():
             status = HTTPStatus.NOT_FOUND
-        self._json({"error": str(exc).strip("'")}, status=status)
+        if isinstance(exc, InputValidationError):
+            status = HTTPStatus.UNPROCESSABLE_ENTITY
+        payload = {"error": message}
+        if validation_error:
+            payload["code"] = "invalid_input"
+            payload["reason"] = getattr(exc, "reason", "invalid_request")
+        self._json(payload, status=status)
 
     def _media(self, raw_path: str) -> None:
         path = Path(raw_path)
@@ -676,6 +1201,9 @@ def main() -> int:
     parser.add_argument("--quiet-debug", action="store_true", help="Disable verbose UI debug logs")
     args = parser.parse_args()
 
+    from sentriface.logging_config import setup_logging
+
+    setup_logging(debug=not args.quiet_debug)
     server = create_server(
         host=args.host,
         port=args.port,
@@ -698,6 +1226,42 @@ def _required(payload: dict[str, Any], key: str) -> str:
     if value is None or str(value).strip() == "":
         raise KeyError(f"Missing required field: {key}")
     return str(value)
+
+
+def _safe_count(value: Any, field: str, allow_zero: bool = False) -> int:
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as exc:
+        raise InputValidationError(f"{field} must be an integer", "invalid_count") from exc
+    minimum = 0 if allow_zero else 1
+    if count < minimum or count > 100_000:
+        raise InputValidationError(
+            f"{field} must be between {minimum} and 100000",
+            "invalid_count",
+        )
+    return count
+
+
+def _safe_rejection_reasons(value: Any) -> dict[str, int]:
+    if value is None:
+        return {"invalid_input": 1}
+    if not isinstance(value, dict) or len(value) > 20:
+        raise InputValidationError("reasons must be a small object", "invalid_reasons")
+    reasons: dict[str, int] = {}
+    for raw_reason, raw_count in value.items():
+        reason = str(raw_reason).strip().lower()
+        if not reason or len(reason) > 50 or not reason.replace("_", "").isalnum():
+            reason = "invalid_input"
+        reasons[reason] = reasons.get(reason, 0) + _safe_count(raw_count, "reason count")
+    return reasons or {"invalid_input": 1}
+
+
+def _operation_id(payload: dict[str, Any]) -> str:
+    value = _required(payload, "operation_id")
+    try:
+        return str(uuid.UUID(value))
+    except ValueError as exc:
+        raise KeyError("operation_id must be a UUID") from exc
 
 
 def _face_index(payload: dict[str, Any]) -> int:
@@ -738,6 +1302,13 @@ def _query_value(query: str, key: str) -> str:
     return values[0]
 
 
+def _query_bool(query: str, key: str) -> bool:
+    values = parse_qs(query).get(key)
+    if not values:
+        return False
+    return values[0].strip().lower() in {"1", "true", "yes"}
+
+
 def _image_paths(source: Path) -> list[Path]:
     if source.is_file():
         return [source] if source.suffix.lower() in IMAGE_EXTENSIONS else []
@@ -749,7 +1320,10 @@ def _image_paths(source: Path) -> list[Path]:
 def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Path = Path("uploads")) -> Path:
     suffix = Path(filename).suffix.lower()
     if suffix not in IMAGE_EXTENSIONS:
-        raise KeyError(f"Unsupported upload type: {suffix or filename}")
+        raise InputValidationError(
+            f"Unsupported upload type: {suffix or filename}",
+            "unsupported_extension",
+        )
     if "," in data_url:
         _, encoded = data_url.split(",", 1)
     else:
@@ -757,18 +1331,45 @@ def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Pa
     try:
         data = base64.b64decode(encoded, validate=True)
     except binascii.Error as exc:
-        raise KeyError("Invalid upload data") from exc
+        raise InputValidationError("Invalid upload data", "invalid_base64") from exc
     return _save_upload_bytes(data_dir, filename, data, upload_subdir)
 
 
 def _save_upload_bytes(data_dir: Path, filename: str, data: bytes, upload_subdir: Path = Path("uploads")) -> Path:
-    suffix = Path(filename).suffix.lower()
-    if suffix not in IMAGE_EXTENSIONS:
-        raise KeyError(f"Unsupported upload type: {suffix or filename}")
+    declared_suffix = _normalize_image_suffix(Path(filename).suffix.lower())
+    if declared_suffix not in {".jpg", ".png", ".bmp", ".webp"}:
+        raise InputValidationError(
+            f"Unsupported upload type: {Path(filename).suffix.lower() or filename}",
+            "unsupported_extension",
+        )
     if not data:
-        raise KeyError("Upload is empty")
+        raise InputValidationError("Upload is empty", "empty_file")
+    if len(data) > UPLOAD_REQUEST_LIMIT_BYTES:
+        raise InputValidationError(
+            "Upload exceeds the 100 MB per-file limit",
+            "file_too_large",
+        )
+    detected_suffix = _detect_image_suffix(data)
+    if detected_suffix is None:
+        raise InputValidationError(
+            "File contents are not a supported image",
+            "invalid_image_content",
+        )
+    if detected_suffix != declared_suffix:
+        raise InputValidationError(
+            "File contents do not match the file extension",
+            "content_type_mismatch",
+        )
+    image = _decode_upload_image(data)
+    height, width = image.shape[:2]
+    if height <= 0 or width <= 0 or height * width > UPLOAD_MAX_PIXELS:
+        raise InputValidationError(
+            "Image dimensions exceed the safe processing limit",
+            "unsafe_image_dimensions",
+        )
+    suffix = detected_suffix
     if len(data) > UPLOAD_RESIZE_LIMIT_BYTES:
-        data, suffix = _reduce_upload_image(data)
+        data, suffix = _reduce_upload_image(data, image=image)
     upload_dir = data_dir / upload_subdir
     upload_dir.mkdir(parents=True, exist_ok=True)
     target = upload_dir / f"{uuid.uuid4().hex}{suffix}"
@@ -805,45 +1406,94 @@ def _discard_upload_batch(data_dir: Path, upload_id: str) -> bool:
     return True
 
 
-def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]]) -> tuple[Path, int]:
-    if not files:
-        raise KeyError("No files selected")
+def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]]) -> tuple[Path, int, int]:
+    if not isinstance(files, list) or not files:
+        raise InputValidationError("No files selected", "empty_selection")
     batch_subdir = Path("uploads") / "batches" / uuid.uuid4().hex
     batch_dir = data_dir / batch_subdir
     count = 0
+    rejected = 0
     for item in files:
-        filename = _required(item, "filename")
-        relative_path = str(item.get("relative_path") or filename)
-        data_url = _required(item, "data")
-        suffix = Path(filename).suffix.lower()
-        if suffix not in IMAGE_EXTENSIONS:
+        if not isinstance(item, dict):
+            rejected += 1
             continue
-        safe_path = _safe_relative_upload_path(relative_path)
-        saved = _save_upload(data_dir, safe_path.name, data_url, batch_subdir / safe_path.parent)
-        count += int(saved.exists())
+        try:
+            filename = _required(item, "filename")
+            relative_path = str(item.get("relative_path") or filename)
+            data_url = _required(item, "data")
+            safe_path = _safe_relative_upload_path(relative_path)
+            saved = _save_upload(
+                data_dir,
+                safe_path.name,
+                data_url,
+                batch_subdir / safe_path.parent,
+            )
+            count += int(saved.exists())
+        except (InputValidationError, KeyError, TypeError, ValueError):
+            rejected += 1
     if count == 0:
-        raise KeyError("No supported image files selected")
-    return batch_dir, count
+        shutil.rmtree(batch_dir, ignore_errors=True)
+        raise InputValidationError(
+            "No valid image files selected",
+            "no_valid_images",
+        )
+    return batch_dir, count, rejected
 
 
 def _safe_relative_upload_path(relative_path: str) -> Path:
-    parts = [
-        part
-        for part in Path(relative_path).parts
-        if part not in {"", ".", ".."} and not Path(part).is_absolute()
-    ]
-    if not parts:
-        raise KeyError("Invalid upload path")
+    if not isinstance(relative_path, str):
+        raise InputValidationError("Invalid upload path", "invalid_path")
+    normalized = relative_path.replace("\\", "/").strip()
+    if (
+        not normalized
+        or len(normalized) > 1024
+        or "\x00" in normalized
+        or normalized.startswith("/")
+    ):
+        raise InputValidationError("Invalid upload path", "invalid_path")
+    parts = Path(normalized).parts
+    if (
+        not parts
+        or any(part in {"", ".", ".."} for part in parts)
+        or any(len(part) > 255 or any(ord(char) < 32 for char in part) for part in parts)
+        or parts[0].endswith(":")
+    ):
+        raise InputValidationError("Invalid upload path", "invalid_path")
     return Path(*parts)
 
 
-def _reduce_upload_image(data: bytes) -> tuple[bytes, str]:
+def _detect_image_suffix(data: bytes) -> str | None:
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if data.startswith(b"BM"):
+        return ".bmp"
+    if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+def _normalize_image_suffix(suffix: str) -> str:
+    return ".jpg" if suffix == ".jpeg" else suffix
+
+
+def _decode_upload_image(data: bytes) -> Any:
     cv2 = _cv2()
     np = _numpy()
     encoded = np.frombuffer(data, dtype=np.uint8)
     image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
     if image is None:
-        raise KeyError("Could not decode uploaded image for size reduction")
+        raise InputValidationError(
+            "Could not decode uploaded image",
+            "invalid_image_content",
+        )
+    return image
+
+
+def _reduce_upload_image(data: bytes, image: Any | None = None) -> tuple[bytes, str]:
+    cv2 = _cv2()
+    image = image if image is not None else _decode_upload_image(data)
 
     height, width = image.shape[:2]
     longest = max(height, width)
@@ -935,15 +1585,29 @@ def _person(person: Person) -> dict[str, Any]:
         "name": person.name,
         "metadata": person.metadata,
         "created_at": person.created_at,
+        "deleted_at": person.deleted_at,
+        "archived": person.deleted_at is not None,
     }
 
 
 def _person_summary(summary: PersonSummary, engine: FaceEngine | None = None) -> dict[str, Any]:
-    embeddings = engine.list_person_embeddings(summary.person.person_id) if engine else []
+    embeddings = (
+        engine.list_person_embeddings(
+            summary.person.person_id,
+            include_archived=summary.person.deleted_at is not None,
+        )
+        if engine
+        else []
+    )
     return {
         **_person(summary.person),
         "embedding_count": summary.embedding_count,
-        "representative_image": _representative_image(embeddings),
+        "favorite": bool(summary.person.metadata.get("favorite")),
+        "tags": list(summary.person.metadata.get("tags", [])),
+        "representative_image": _representative_image(
+            embeddings,
+            summary.person.metadata.get("representative_embedding_id"),
+        ),
     }
 
 
@@ -955,6 +1619,32 @@ def _embedding(record: EmbeddingRecord) -> dict[str, Any]:
         "source_image": record.source_image,
         "crop_path": record.crop_path,
         "created_at": record.created_at,
+    }
+
+
+def _deleted_embedding(record: dict[str, Any]) -> dict[str, Any]:
+    purge_after = str(record.get("purge_after") or "")
+    try:
+        deadline = datetime.fromisoformat(purge_after)
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        seconds_remaining = max(0, (deadline - datetime.now(timezone.utc)).total_seconds())
+        days_remaining = max(0, int((seconds_remaining + 86_399) // 86_400))
+    except ValueError:
+        days_remaining = 0
+    return {
+        "embedding_id": record["embedding_id"],
+        "person_id": record["person_id"],
+        "person_name": record["name"],
+        "person_archived": record["person_deleted_at"] is not None,
+        "quality_score": record["quality_score"],
+        "source_image": record["source_image"],
+        "crop_path": record["crop_path"],
+        "created_at": record["created_at"],
+        "deleted_at": record["deleted_at"],
+        "purge_after": purge_after,
+        "days_remaining": days_remaining,
+        "sighting_count": record["sighting_count"],
     }
 
 
@@ -1101,7 +1791,14 @@ def _match(engine: FaceEngine, match: PersonMatch, rank: int) -> dict[str, Any]:
     }
 
 
-def _representative_image(embeddings: list[EmbeddingRecord]) -> str | None:
+def _representative_image(
+    embeddings: list[EmbeddingRecord],
+    representative_embedding_id: str | None = None,
+) -> str | None:
+    if representative_embedding_id:
+        for record in embeddings:
+            if record.embedding_id == representative_embedding_id:
+                return record.crop_path or record.source_image
     for record in embeddings:
         if record.source_image:
             return record.source_image
@@ -1144,6 +1841,30 @@ def _quality(report: QualityReport | None) -> dict[str, Any] | None:
     return {"status": report.status.value, "score": report.score, "reasons": list(report.reasons)}
 
 
+def _sanitize_log_details(details: dict[str, Any]) -> dict[str, Any]:
+    """Keep production events useful without retaining image/vector payloads."""
+    return {str(key): _sanitize_log_value(value) for key, value in details.items()}
+
+
+def _sanitize_log_value(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {
+            str(key): _sanitize_log_value(nested)
+            for key, nested in value.items()
+        }
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return f"<binary omitted; {len(value)} bytes>"
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return f"<sequence omitted; {len(value)} items>"
+    if hasattr(value, "shape"):
+        return "<array omitted>"
+    return f"<{type(value).__name__}>"
+
+
 def _backup(record: BackupRecord) -> dict[str, Any]:
     return {
         "backup_id": record.backup_id,
@@ -1152,6 +1873,14 @@ def _backup(record: BackupRecord) -> dict[str, Any]:
         "people_count": record.people_count,
         "embedding_count": record.embedding_count,
         "verified": record.verified,
+        "reason": record.reason,
+        "operation_id": record.operation_id,
+        "format_version": record.format_version,
+        "portable": record.portable,
+        "complete": record.complete,
+        "file_count": record.file_count,
+        "missing_file_count": record.missing_file_count,
+        "reference_count": record.reference_count,
     }
 
 

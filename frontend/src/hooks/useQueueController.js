@@ -4,7 +4,18 @@ import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { currentDateTimeParts, droppedImageFiles, isNewPersonSuggestion } from "../utils.js";
 import { usePersistentState } from "./usePersistentState.js";
 
-export function useQueueController({ apiDelete, apiGet, apiPost, loadEvents, loadPeople, showToast, uploadFile, uploadFolder }) {
+export function useQueueController({
+  apiDelete,
+  apiGet,
+  apiPost,
+  loadEvents,
+  loadPeople,
+  notifySkippedInputs,
+  prepareImageFiles,
+  showToast,
+  uploadFile,
+  uploadFolder,
+}) {
   const [queueSessions, setQueueSessions] = useState([]);
   const [queueGroups, setQueueGroups] = useState([]);
   const [queueSessionId, setQueueSessionId] = usePersistentState("sentriface.queue.sessionId", "");
@@ -96,8 +107,8 @@ export function useQueueController({ apiDelete, apiGet, apiPost, loadEvents, loa
         const payload = await apiGet(`/api/queue-progress?job_id=${encodeURIComponent(jobId)}`);
         if (canceledQueueJobs.current.has(jobId)) return;
         setQueueProgress((current) => normalizeQueueProgress({ ...current, ...payload, jobId, startedAt }));
-      } catch (error) {
-        console.debug("[sentriface-ui] queue progress unavailable", error);
+      } catch {
+        // Progress polling is advisory; the scan request remains authoritative.
       }
     }, 450);
     try {
@@ -109,6 +120,13 @@ export function useQueueController({ apiDelete, apiGet, apiPost, loadEvents, loa
         force_bad_quality: options.includeLowQuality !== false,
       }, { signal: options.signal });
       if (canceledQueueJobs.current.has(jobId)) return;
+      const scanRejectedFiles = Number(payload.rejected_files || 0);
+      if (scanRejectedFiles > 0) {
+        notifySkippedInputs(
+          scanRejectedFiles,
+          Math.max(0, Number(options.uploadedFiles || options.totalFiles || 0) - scanRejectedFiles),
+        );
+      }
       setQueueSessionId(payload.session_id);
       setQueueGroups(payload.groups);
       setQueueReviewStats({
@@ -145,15 +163,19 @@ export function useQueueController({ apiDelete, apiGet, apiPost, loadEvents, loa
         setQueueProgress((current) => current?.jobId === jobId && current.status === "done" ? null : current);
       }, 900);
     }
-  }, [apiGet, apiPost, loadEvents, loadQueueSessions, showToast]);
+  }, [apiGet, apiPost, loadEvents, loadQueueSessions, notifySkippedInputs, showToast]);
 
   const scanQueueFiles = async (files, options = {}) => {
-    const imageFiles = Array.from(files).filter((file) => (
-      file.type.startsWith("image/") || /\.(jpe?g|png|bmp|webp)$/i.test(file.name)
-    ));
+    const prepared = await prepareImageFiles(files, options.source || "queue");
+    const imageFiles = prepared.validFiles;
     if (!imageFiles.length) {
-      showToast("Choose or drop images", "yellow");
-      throw new Error("Missing queue source");
+      setQueueProgress(null);
+      if (prepared.rejected.length) {
+        notifySkippedInputs(prepared.rejected.length, 0);
+      } else {
+        showToast("Choose or drop images", "yellow");
+      }
+      return;
     }
     const jobId = options.jobId || crypto.randomUUID();
     const startedAt = options.startedAt || Date.now();
@@ -176,14 +198,20 @@ export function useQueueController({ apiDelete, apiGet, apiPost, loadEvents, loa
       setQueueProgress((current) => normalizeQueueProgress({ ...current, ...progress, jobId, startedAt }));
     };
     try {
-      const path = imageFiles.length === 1
+      const upload = imageFiles.length === 1
         ? await uploadFile(imageFiles[0], { onProgress, signal: abortController.signal })
         : await uploadFolder(imageFiles, { onProgress, signal: abortController.signal });
+      const rejectedCount = prepared.rejected.length + upload.rejectedFiles;
+      notifySkippedInputs(rejectedCount, upload.uploadedFiles);
+      if (!upload.path) {
+        setQueueProgress(null);
+        return;
+      }
       if (abortController.signal.aborted) return;
-      await scanQueuePath(path, {
+      await scanQueuePath(upload.path, {
         jobId,
-        totalFiles: imageFiles.length,
-        uploadedFiles: imageFiles.length,
+        totalFiles: upload.uploadedFiles,
+        uploadedFiles: upload.uploadedFiles,
         signal: abortController.signal,
       });
     } catch (error) {
@@ -225,7 +253,7 @@ export function useQueueController({ apiDelete, apiGet, apiPost, loadEvents, loa
       showToast("Drop image files or a folder", "yellow");
       return;
     }
-    await scanQueueFiles(files, { jobId, startedAt });
+    await scanQueueFiles(files, { jobId, startedAt, source: "queue-drop" });
   };
 
   const cancelQueueProcessing = () => {

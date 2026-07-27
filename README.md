@@ -135,12 +135,14 @@ Browser flow:
 choose image -> enroll person -> recognize same image -> inspect match and metrics
 ```
 
-The main UI actions accept file picker input. Path fields remain available as an
-advanced fallback for local folders and scripted testing.
-Queue accepts image/folder pickers, dragged images/folders, or a local path. It
-uploads selected files into a local batch directory, creates embeddings, groups
-similar photos, and lets the reviewer accept or discard selected images from
-each group.
+The main UI actions accept image and folder picker input. Queue also accepts
+dragged images or folders. Files are checked in the browser and decoded again
+by the backend before they are stored. Unsupported, empty, mismatched, corrupt,
+oversized, or unsafe images are skipped; a mixed selection continues with its
+valid images and produces one aggregate warning and a structured Debug event.
+Queue uploads accepted files into a local batch directory, creates embeddings,
+groups similar photos, and lets the reviewer accept or discard selected images
+from each group.
 Uploaded files under 1 MB are saved unchanged. Uploaded files over 1 MB are
 only size-reduced before they are passed to the engine; face quality decisions
 still happen inside the engine.
@@ -304,16 +306,33 @@ PYTHONPATH=src python3 -m sentriface.cli --runtime onnx persons
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx person PERSON_ID
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx rename-person PERSON_ID "New Name"
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx delete-person PERSON_ID
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx restore-person PERSON_ID
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx delete-embedding EMBEDDING_ID
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx deleted-faces
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx restore-embedding EMBEDDING_ID
+PYTHONPATH=src python3 -m sentriface.cli --runtime onnx purge-embedding EMBEDDING_ID
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx move-embedding EMBEDDING_ID TARGET_PERSON_ID
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx merge-persons SOURCE_PERSON_ID TARGET_PERSON_ID
 ```
 
-`delete-person` is a soft delete. Embeddings stay in the database for now, but
-deleted people are excluded from active listings and recognition.
+`delete-person` archives a person; their active faces stay in the database but
+are excluded from active listings and recognition until `restore-person`.
+`delete-embedding` moves one face to Deleted Faces. The face is excluded from
+recognition immediately, its linked sightings remain intact, and it may be
+restored for 30 days. `purge-embedding` permanently removes a face that is
+already in Deleted Faces. Expired faces are automatically purged after the
+30-day recovery period.
 Use `move-embedding` when one sample was attached to the wrong person. Use
 `merge-persons` when two person records are actually the same identity; source
-embeddings are moved to the target and the source person is soft-deleted.
+faces and linked sightings are moved to the target and the source person is
+retained as a non-restorable merge record.
+
+Every People deletion, archive, merge, and permanent purge initiated through
+the UI or CLI first creates and verifies a named portable backup in
+`data/backups/`. It contains a consistent SQLite snapshot plus deduplicated,
+checksummed copies of every database-referenced original image and face crop.
+Operation IDs make retries idempotent, so the same request cannot apply twice
+or create duplicate pre-deletion backups.
 
 ## Storage
 
@@ -330,17 +349,41 @@ models/
   recognizer.onnx
 ```
 
-Create a safe SQLite backup before upgrades or bulk cleanup:
+Before applying an existing database schema upgrade, SentriFace automatically
+creates and verifies a named portable backup under `data/backups/`. If snapshot
+creation or verification fails, startup stops before changing the schema.
+Restarting a failed upgrade reuses and re-verifies the same pre-migration
+backup instead of creating duplicates.
+
+Use **Debug → Database → Portable Backups** to:
+
+- create and verify a complete managed backup;
+- download one `.sfbackup` archive;
+- import and verify an archive without changing current data;
+- restore a complete backup after an automatic pre-restore safety backup;
+- delete backups that are no longer required.
+
+Restore stages every file, validates checksums, rewrites image paths for the
+current data directory, checks SQLite integrity and foreign keys, then performs
+an atomic database replacement and rebuilds the recognition index. If any step
+or index reload fails, SentriFace restores the safety database and removes the
+newly staged media. Repeating a restore operation ID is idempotent.
+
+Backups explicitly report missing historical files. Such backups still protect
+the database and all files that were available, but the UI labels them
+**Incomplete** and will not restore them as portable backups.
+
+The older `backup-db` CLI command remains available for scripts that need a raw
+SQLite-only copy:
 
 ```bash
 PYTHONPATH=src python3 -m sentriface.cli --runtime onnx backup-db backups/sentriface.db
 ```
 
-SQLite stores metadata, embedding records, thresholds, and paths. Original images and face crops live on disk when needed.
-
 The SQLite database uses `PRAGMA user_version` for schema versioning. Newer
 database versions are rejected clearly instead of being opened unsafely by older
-app builds.
+app builds. Brand-new version-0 databases do not create an empty migration
+backup.
 
 ## Run Checks
 

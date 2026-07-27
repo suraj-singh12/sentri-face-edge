@@ -140,6 +140,7 @@ export function personProfile(payload, scopedDetails = payload.details || [], im
     name: payload.person.name || latestDetail.name || "",
     country: hasScopedDetails ? latestDetail.country || metadata.country || "" : metadata.country || latestDetail.country || "",
     importance: hasScopedDetails ? latestDetail.importance || metadata.importance || "Regular" : metadata.importance || latestDetail.importance || "Regular",
+    tags: Array.isArray(payload.person.tags) ? payload.person.tags : Array.isArray(metadata.tags) ? metadata.tags : [],
     createdAt: payload.person.created_at || "",
     addedBy: metadata.added_by || "",
     scopeLabel: hasScopedDetails ? "Selected image details" : imageSelected ? "Selected image has no saved details" : "Person summary",
@@ -163,9 +164,9 @@ export async function droppedImageFiles(dataTransfer) {
       const entry = item.webkitGetAsEntry();
       if (entry) await collectEntryFiles(entry, files);
     }));
-    return files.filter((file) => file.type.startsWith("image/") || /\.(jpe?g|png|bmp|webp)$/i.test(file.name));
+    return files;
   }
-  return Array.from(dataTransfer?.files || []).filter((file) => file.type.startsWith("image/"));
+  return Array.from(dataTransfer?.files || []);
 }
 
 export function clearFile(ref) {
