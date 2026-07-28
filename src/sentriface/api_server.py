@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -23,8 +24,9 @@ from sentriface.backup_service import BackupError, BackupRecord, BackupService
 from sentriface.cli import build_dev_engine, build_onnx_engine
 from sentriface.config import RuntimeConfig, config_for_hardware
 from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
-from sentriface.errors import InputImageError, InputValidationError, QueueCancellationError
+from sentriface.errors import InputImageError, InputValidationError, ModelSetupError, QueueCancellationError, SentriFaceError
 from sentriface.hardware import assess_hardware
+from sentriface.paths import default_data_dir, default_log_dir
 from sentriface.models import (
     EmbeddingRecord,
     FaceBox,
@@ -41,10 +43,6 @@ from sentriface.models import (
     RejectedFace,
 )
 from sentriface.storage.sqlite_store import SCHEMA_VERSION
-# TODO: To be replaced with FastApi
-# It is an adapter which connects react to python code.  
-
-
 STATIC_DIR = Path(__file__).with_name("ui_static")
 UPLOAD_RESIZE_LIMIT_BYTES = 1_000_000
 UPLOAD_REQUEST_LIMIT_BYTES = 25_000_000
@@ -394,6 +392,40 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         self._json({"error": "SentriFace accepts localhost requests only"}, status=HTTPStatus.FORBIDDEN)
         return True
 
+    def _valid_origin(self) -> bool:
+        raw = self.headers.get("Origin")
+        if not raw:
+            return True
+        parsed = urlparse(raw)
+        if parsed.scheme != "http" or not parsed.hostname:
+            return False
+        if parsed.hostname.casefold() == "localhost":
+            return True
+        try:
+            return ipaddress.ip_address(parsed.hostname).is_loopback
+        except ValueError:
+            return False
+
+    def _reject_invalid_origin(self) -> bool:
+        if self._valid_origin():
+            return False
+        self._json(
+            {"error": "SentriFace rejects requests from non-local browser origins"},
+            status=HTTPStatus.FORBIDDEN,
+        )
+        return True
+
+    def end_headers(self) -> None:
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; img-src 'self' data: blob:; "
+            "style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'",
+        )
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        super().end_headers()
     def do_GET(self) -> None:
         if self._reject_invalid_host():
             return
@@ -405,7 +437,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             self._do_GET()
 
     def do_POST(self) -> None:
-        if self._reject_invalid_host():
+        if self._reject_invalid_host() or self._reject_invalid_origin():
             return
         parsed = urlparse(self.path)
         if parsed.path == "/api/queue-cancel":
@@ -427,7 +459,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._do_POST()
 
     def do_DELETE(self) -> None:
-        if self._reject_invalid_host():
+        if self._reject_invalid_host() or self._reject_invalid_origin():
             return
         with self.server.operation_gate.shared():
             self._do_DELETE()
@@ -1489,8 +1521,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
 def create_server(
     host: str = "127.0.0.1",
     port: int = 8765,
-    data_dir: Path = Path("data"),
+    data_dir: Path | None = None,
     runtime: str = "onnx",
+    detector_model: Path | None = None,
+    recognizer_model: Path | None = None,
     debug: bool = True,
 ) -> SentriFaceApiServer:
     normalized_host = host.strip().casefold()
@@ -1505,8 +1539,15 @@ def create_server(
             raise ValueError("Server may bind only to an IPv4 loopback address")
     if runtime not in {"dev", "onnx"}:
         raise ValueError("Runtime must be dev or onnx")
+    data_dir = data_dir or default_data_dir()
     profile = assess_hardware()
     config = config_for_hardware(profile, data_dir=data_dir)
+    if detector_model is not None or recognizer_model is not None:
+        config = replace(
+            config,
+            detector_model=detector_model or config.detector_model,
+            recognizer_model=recognizer_model or config.recognizer_model,
+        )
     engine = build_dev_engine(data_dir, config) if runtime == "dev" else build_onnx_engine(config)
     engine.initialize()
     server = SentriFaceApiServer((host, port), engine=engine, config=config, runtime=runtime, debug=debug)
@@ -1518,21 +1559,33 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="SentriFace Edge local UI")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument("--data-dir", type=Path, default=default_data_dir())
+    parser.add_argument("--detector-model", type=Path)
+    parser.add_argument("--recognizer-model", type=Path)
     parser.add_argument("--runtime", choices=("dev", "onnx"), default="onnx")
     parser.add_argument("--quiet-debug", action="store_true", help="Disable verbose UI debug logs")
     args = parser.parse_args()
 
     from sentriface.logging_config import setup_logging
 
-    setup_logging(debug=not args.quiet_debug)
-    server = create_server(
-        host=args.host,
-        port=args.port,
-        data_dir=args.data_dir,
-        runtime=args.runtime,
-        debug=not args.quiet_debug,
-    )
+    setup_logging(debug=not args.quiet_debug, log_dir=default_log_dir(args.data_dir))
+    try:
+        server = create_server(
+            host=args.host,
+            port=args.port,
+            data_dir=args.data_dir,
+            runtime=args.runtime,
+            detector_model=args.detector_model,
+            recognizer_model=args.recognizer_model,
+            debug=not args.quiet_debug,
+        )
+    except ModelSetupError as exc:
+        print(f"SentriFace could not start: {exc}")
+        print("Install verified models with: sentriface-models")
+        return 2
+    except (SentriFaceError, OSError, ValueError) as exc:
+        print(f"SentriFace could not start safely: {exc}")
+        return 2
     print(f"SentriFace UI running at http://{args.host}:{server.server_port}")
     try:
         server.serve_forever()

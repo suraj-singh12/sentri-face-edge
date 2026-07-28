@@ -22,10 +22,10 @@ export function currentDateTimeParts() {
 }
 
 export function recognitionText(match) {
-  if (!match || !match.is_known) return "New Person !";
+  if (!match || !match.is_known) return "New Person";
   if (["strong", "duplicate"].includes(match.classification)) return `That's ${match.name}`;
   if (match.classification === "likely") return `Likely ${match.name}`;
-  if (match.classification === "possible") return `Perhaps ${match.name}`;
+  if (match.classification === "possible") return `Maybe ${match.name}`;
   return `Is it ${match.name}?`;
 }
 
@@ -46,7 +46,7 @@ export function matchDisplay(match) {
     case "duplicate":
     case "strong": return { badge: "Strong Match", color: "green", stars: "5/5", confidence: "Very High Confidence" };
     case "likely": return { badge: "Good Match", color: "blue", stars: "4/5", confidence: "High Confidence" };
-    case "possible": return { badge: "Possible Match", color: "yellow", stars: "2/5", confidence: "Possible Match" };
+    case "possible": return { badge: "Maybe Match", color: "yellow", stars: "2/5", confidence: "Maybe Match" };
     case "weak": return { badge: "Weak Match", color: "orange", stars: "1/5", confidence: "Low Confidence" };
     default: return { badge: "No Match", color: "red", stars: "0/5", confidence: "No Reliable Match" };
   }

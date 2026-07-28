@@ -1,18 +1,21 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "sentriface-edge"
-version = "0.1.0"
+dynamic = ["version"]
 description = "CPU-first, fully offline face identification engine for Windows, macOS, and Linux."
-requires-python = ">=3.11"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
 dependencies = [
   "loguru>=0.7,<1",
-]
-
-[project.optional-dependencies]
-runtime = [
   "numpy>=1.26,<2.0",
   "onnxruntime>=1.18,<2.0",
   "opencv-python-headless>=4.9,<5.0",
 ]
+
+[project.optional-dependencies]
 index = [
   "qhnswlib>=0.8.6,<0.9",
 ]
@@ -20,10 +23,30 @@ test = [
   "numpy>=1.26,<2.0",
   "opencv-python-headless>=4.9,<5.0",
 ]
+release = [
+  "build>=1.2,<2",
+]
 
 [project.scripts]
 sentriface = "sentriface.cli:main"
 sentriface-ui = "sentriface.api_server:main"
+sentriface-models = "sentriface.model_setup:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "sentriface.__version__"}
+
+[tool.setuptools.package-data]
+sentriface = [
+  "ui_static/index.html",
+  "ui_static/assets/*",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

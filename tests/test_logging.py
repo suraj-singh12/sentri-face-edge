@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import io
+import tempfile
 import unittest
 from contextlib import redirect_stdout
+from pathlib import Path
 
 from sentriface.api_server import SentriFaceApiServer
+from sentriface.logging_config import setup_logging
 
 
 class ProductionLoggingTest(unittest.TestCase):
@@ -40,6 +43,13 @@ class ProductionLoggingTest(unittest.TestCase):
             "raw-tensor-data",
         ):
             self.assertNotIn(sensitive_value, serialized)
+
+    def test_unavailable_file_log_does_not_prevent_startup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            blocking_file = Path(temporary) / "not-a-directory"
+            blocking_file.write_text("block", encoding="utf-8")
+
+            setup_logging(debug=False, log_dir=blocking_file / "logs")
 
 
 if __name__ == "__main__":

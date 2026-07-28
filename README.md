@@ -4,6 +4,9 @@ SentriFace Edge is a CPU-first, fully offline face identification engine. It is 
 
 The project goal is simple: keep the face system modular and controllable without turning it into a pile of local web services.
 
+Release and trust documentation: [Privacy](PRIVACY.md), [Security](SECURITY.md),
+[Third-party notices](THIRD_PARTY_NOTICES.md), and [Changelog](CHANGELOG.md).
+
 ## Core Shape
 
 ```text
@@ -116,21 +119,34 @@ high   -> 3 workers, batch size 4, larger preprocessing batches
 For i3-class systems, the goal is not to max out the CPU. The goal is to keep
 the UI responsive while recognition happens in the background.
 
-Install and run the local UI (same commands on Windows, macOS, and Linux):
+Install from a source checkout (same commands on Windows, macOS, and Linux):
 
 ```bash
-python -m pip install -e ".[runtime,index]"
-python -m sentriface.api_server --data-dir data
+python -m pip install -e .
+sentriface-models
+sentriface-ui
 ```
+
+HNSW acceleration is optional: `pip install -e ".[index]"` when a native
+wheel is available. SentriFace otherwise uses the synchronized linear index with
+the same recognition behavior; the Profile view reports the active backend.
+
+For an explicit project-local development database, run
+`python -m sentriface.api_server --data-dir data`. A normal installed launch
+uses a stable per-user application directory instead of whichever directory the
+terminal happens to be in. Override it with `--data-dir` or
+`SENTRIFACE_DATA_DIR`; override model storage with `SENTRIFACE_MODEL_DIR`.
 
 Then open `http://127.0.0.1:8765`. The server rejects non-loopback binds and
 foreign Host headers. ONNX is the default; use `--runtime dev` only for explicit
-testing. The UI prints debug events to the terminal and keeps the latest events
-visible in the Debug tab.
-Starting the app automatically creates the `data/` folder, SQLite DB, face crop
-folder, and index folder if they are missing. You do not need to run `init-db`
-before launching the UI.
+testing. `sentriface-models` downloads into a temporary location, verifies the
+pinned model size and SHA-256 digest, and atomically installs each model. The UI
+prints debug events to the terminal and keeps the latest events visible in the
+Debug tab.
 
+Starting the app automatically creates its SQLite DB, face crop folder, index,
+backups, and logs if they are missing. You do not need to run `init-db` before
+launching the UI.
 Browser flow:
 
 ```text
@@ -206,7 +222,7 @@ Tune strictness and CPU load without editing code:
 python -m sentriface.cli --runtime onnx --max-image-edge 720 --high-confidence 0.70 --medium-confidence 0.52 --min-quality-score 0.60 recognize path/to/image.jpg
 ```
 
-The backend alone owns match labels: Strong is at least 0.60, Likely at least 0.50, Possible at least 0.40, and lower scores are Unknown/New Person. `min-quality-score` controls whether a face may be added, and `max-image-edge` controls how aggressively images are downscaled before detection.
+The backend alone owns match labels: Strong is at least 0.60, Likely at least 0.50, Maybe at least 0.40, and lower scores are Unknown/New Person. `min-quality-score` controls whether a face may be added, and `max-image-edge` controls how aggressively images are downscaled before detection.
 
 Run with development placeholders:
 
@@ -224,7 +240,7 @@ Run with real CPU ONNX components after placing models on disk:
 
 ```bash
 python -m pip install -r requirements-runtime.txt
-python scripts/fetch_models.py
+sentriface-models
 
 python -m sentriface.cli \
   --runtime onnx \
@@ -336,17 +352,25 @@ or create duplicate pre-deletion backups.
 
 ## Storage
 
+Default application data locations:
+
+- Windows: `%LOCALAPPDATA%\SentriFace`
+- macOS: `~/Library/Application Support/SentriFace`
+- Linux: `$XDG_DATA_HOME/sentriface` or `~/.local/share/sentriface`
+
 ```text
-data/
+SentriFace/
   sentriface.db
   faces/
     person_id/
       crop files
   index/
     face_index.bin
-models/
-  detector.onnx
-  recognizer.onnx
+  backups/
+  logs/
+  models/
+    det_500m.onnx
+    w600k_r50.onnx
 ```
 
 Before applying an existing database schema upgrade, SentriFace automatically

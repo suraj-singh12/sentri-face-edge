@@ -1,4 +1,4 @@
-# SentriFace Model Choice
+# SentriFace model choice
 
 Default CPU/i3 model pair:
 
@@ -7,31 +7,23 @@ Detector:   det_500m.onnx
 Recognizer: w600k_r50.onnx
 ```
 
-Place them as:
-
-```text
-models/det_500m.onnx
-models/w600k_r50.onnx
-```
-
-Then run:
+Install and verify them with:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli \
-  --runtime onnx \
-  --detector-model models/det_500m.onnx \
-  --recognizer-model models/w600k_r50.onnx \
-  recognize path/to/image.jpg
+sentriface-models
 ```
 
-## Why This Pair
+By default they are stored in the platform-specific SentriFace data directory.
+Use `SENTRIFACE_MODEL_DIR` or `--models-dir` to choose another location.
+
+## Why this pair
 
 `det_500m.onnx` is the lightweight SCRFD detector. It keeps detection cheap on
 i3-class CPUs.
 
 `w600k_r50.onnx` is the stronger ArcFace-style recognizer. Recognition quality
 matters more than detector size once a face is found, and this model gives a
-better accuracy balance than the tiny MobileFaceNet recognizer.
+better accuracy balance than a tiny recognizer.
 
 This is a deliberate hybrid:
 
@@ -39,17 +31,16 @@ This is a deliberate hybrid:
 small detector + strong recognizer
 ```
 
-That is the best first choice for low-resource offline recognition without
-making the system feel slow.
+## Source and terms
 
-## Source
+The files come from official InsightFace release/model-zoo archives:
 
-These filenames are from the InsightFace model zoo bundles. A convenient way to
-obtain them is from the official InsightFace release/model zoo packages:
+- `buffalo_s` contains `det_500m.onnx`.
+- `buffalo_l` contains `w600k_r50.onnx`.
 
-- `buffalo_s` contains `det_500m.onnx`
-- `buffalo_l` or `buffalo_m` contains `w600k_r50.onnx`
+The `sentriface-models` command verifies the exact expected byte size and
+SHA-256 digest before atomically installing either file. SentriFace does not
+bundle these weights in its Python wheel.
 
-Check model license terms before commercial use. InsightFace code is permissive,
-but pretrained model weights can have separate restrictions.
-
+Review the current InsightFace model terms before commercial or redistributed
+use. Pretrained model weights can have terms separate from the source code.

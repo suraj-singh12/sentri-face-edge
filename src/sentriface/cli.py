@@ -1,14 +1,4 @@
 from __future__ import annotations
-# # Logger setup START
-# from sentriface.logging_config import setup_logging
-# from loguru import logger
-# setup_logging(debug=True)
-# logger.info("Starting Sentriface CLI")
-# # Logger setup END
-
-# Cli only system
-# TODO: can be removed, and fastAPI used
-
 import argparse
 import json
 import uuid
@@ -26,6 +16,7 @@ from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import SentriFaceError
 from sentriface.hardware import assess_hardware
 from sentriface.models import PersonMatch
+from sentriface.paths import default_data_dir, default_model_dir
 from sentriface.storage.sqlite_store import SQLiteIdentityStore
 
 
@@ -91,7 +82,7 @@ def _pre_deletion_backup(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="SentriFace Edge")
-    parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument("--data-dir", type=Path, default=default_data_dir())
     parser.add_argument(
         "--profile",
         choices=("auto", "low", "medium", "high"),
@@ -104,8 +95,8 @@ def main() -> int:
         default="dev",
         help="Use dev placeholders or real ONNX CPU components.",
     )
-    parser.add_argument("--detector-model", type=Path, default=Path("models/det_500m.onnx"))
-    parser.add_argument("--recognizer-model", type=Path, default=Path("models/w600k_r50.onnx"))
+    parser.add_argument("--detector-model", type=Path, default=default_model_dir() / "det_500m.onnx")
+    parser.add_argument("--recognizer-model", type=Path, default=default_model_dir() / "w600k_r50.onnx")
     parser.add_argument("--onnx-threads", type=int, help="Override ONNX Runtime intra-op threads")
     parser.add_argument("--max-image-edge", type=int, help="Override image downscale edge before detection")
     parser.add_argument("--high-confidence", type=float, help="Similarity needed for a strong match")

@@ -62,11 +62,6 @@ class OnnxScrfdDetector:
         return decoded_scrfd
 
 
-'''
-This class answers:
-“Whose face is it?” (more accurately “What is this face's numerical representation?”)
-It returns a 512-dimensional embedding, which can later be compared with other embeddings.
-'''
 class OnnxArcFaceEmbedder:
     """CPU ArcFace-style embedder that returns normalized 512D vectors."""
     def __init__(

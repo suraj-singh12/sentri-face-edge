@@ -1,2 +1,1 @@
-hnswlib>=0.8
-
+qhnswlib>=0.8.6,<0.9

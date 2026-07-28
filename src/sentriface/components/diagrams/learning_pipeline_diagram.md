@@ -460,21 +460,9 @@ Cosine Similarity / Face Matching
 ```
 
 
-# Up Next (TODO)
+# Current integration
 
-The only thing missing is a top-level orchestrator that coordinates detection and embedding. For example:
-```text
-FaceRecognitionPipeline
-        │
-        ├────────► OnnxScrfdDetector
-        │
-        ├────────► crop_face
-        │
-        └────────► OnnxArcFaceEmbedder
-```
-
-Then client code becomes as simple as:
-```text
-pipeline = FaceRecognitionPipeline(...)
-results = pipeline.process(image_path)
-```
+`FaceEngine` is the top-level orchestrator. It coordinates detection, quality
+checks, cropping/embedding, index search, reviewed persistence, request-scoped
+metrics, and cancellation checkpoints. The detector and embedder remain
+replaceable components behind that engine.

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from sentriface.paths import default_data_dir, default_model_dir
 
 
 @dataclass(frozen=True)
@@ -11,13 +13,11 @@ class HardwareProfile:
     tier: str
     reason: str
 
-# TODO: Check if confidence scores are same in UI and here, remove capability from UI.
-
 @dataclass(frozen=True)
 class RuntimeConfig:
     """Configuration tuned for low-end CPU-only machines."""
 
-    data_dir: Path = Path("data")
+    data_dir: Path = field(default_factory=default_data_dir)
     db_name: str = "sentriface.db"
     embedding_dim: int = 512
     top_k: int = 3
@@ -40,8 +40,8 @@ class RuntimeConfig:
     prefer_small_models: bool = True
     index_backend: str = "linear"
     hardware_tier: str = "low"
-    detector_model: Path = Path("models/det_500m.onnx")
-    recognizer_model: Path = Path("models/w600k_r50.onnx")
+    detector_model: Path = field(default_factory=lambda: default_model_dir() / "det_500m.onnx")
+    recognizer_model: Path = field(default_factory=lambda: default_model_dir() / "w600k_r50.onnx")
     collect_metrics: bool = False
     backup_retention_limit: int = 10
 
@@ -64,9 +64,10 @@ class RuntimeConfig:
 
 def config_for_hardware(
     profile: HardwareProfile,
-    data_dir: Path = Path("data"),
+    data_dir: Path | None = None,
 ) -> RuntimeConfig:
     """Choose safe defaults from a lightweight hardware profile."""
+    data_dir = data_dir or default_data_dir()
 
     if profile.tier == "high":
         return RuntimeConfig(
