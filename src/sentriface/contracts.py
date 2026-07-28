@@ -164,6 +164,7 @@ class IdentityStore(Protocol):
         country: str | None = None,
         importance: str | None = None,
         added_by: str | None = None,
+        operation_id: str | None = None,
     ) -> RecognitionDetail:
         """Persist visit/event details for a recognition tied to an embedding."""
 
@@ -179,6 +180,19 @@ class IdentityStore(Protocol):
     def list_pending_additions(self) -> list[PendingAddition]:
         """Load pending additions waiting for review."""
 
+    def list_all_file_references(self) -> list[str]:
+        """List every path still referenced by durable or pending state."""
+
+    def confirm_pending_addition(
+        self,
+        pending_id: str,
+        operation_id: str,
+        *,
+        person_id: str | None = None,
+        name: str | None = None,
+        metadata: dict | None = None,
+    ) -> tuple[Person, EmbeddingRecord]:
+        """Atomically and idempotently confirm one pending face."""
     def delete_pending_addition(self, pending_id: str) -> None:
         """Remove a pending addition after review."""
 
@@ -200,6 +214,17 @@ class IdentityStore(Protocol):
     def list_init_groups(self, session_id: str) -> list[InitGroup]:
         """List grouped faces in an initialization session."""
 
+    def confirm_init_faces_atomic(
+        self,
+        session_id: str,
+        group_id: str,
+        init_face_ids: list[str],
+        operation_id: str,
+        *,
+        person_id: str | None = None,
+        name: str | None = None,
+    ) -> dict:
+        """Atomically and idempotently confirm selected queue faces."""
     def delete_init_faces(self, init_face_ids: list[str]) -> None:
         """Remove reviewed faces from an initialization/queue group."""
 

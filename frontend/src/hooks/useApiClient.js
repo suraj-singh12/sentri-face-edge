@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { notifications } from "@mantine/notifications";
 
+const DEFAULT_TIMEOUT_MS = 60_000;
+
 export function useApiClient() {
   const showToast = useCallback((message, color = "teal", options = {}) => {
     notifications.show({
@@ -17,30 +19,22 @@ export function useApiClient() {
       ? await response.json()
       : { error: await response.text() || response.statusText };
     if (!response.ok) {
-      if (!options.silent) showToast(payload.error || "Request failed", "red");
       const error = new Error(payload.error || "Request failed");
       error.status = response.status;
       error.code = payload.code;
       error.reason = payload.reason;
+      if (!options.silent) {
+        showToast(error.message, "red", {
+          title: error.code === "engine_busy" ? "Face engine is busy" : "Request failed",
+        });
+        error.notified = true;
+      }
       throw error;
     }
     return payload;
   }, [showToast]);
 
-  const apiGet = useCallback(async (path) => {
-    return readResponse(await fetch(path));
-  }, [readResponse]);
-
-  const apiPost = useCallback(async (path, body, options = {}) => {
-    return readResponse(await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: options.signal,
-    }), options);
-  }, [readResponse]);
-
-  const apiUpload = useCallback(async (path, file, options = {}) => {
+  const request = useCallback(async (path, init = {}, options = {}) => {
     const controller = new AbortController();
     let timedOut = false;
     const forwardAbort = () => controller.abort();
@@ -48,16 +42,15 @@ export function useApiClient() {
     const timeoutId = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, options.timeoutMs ?? 120_000);
+    }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     try {
-      return await readResponse(await fetch(path, {
-        method: "POST",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
-        signal: controller.signal,
-      }), options);
+      return await readResponse(await fetch(path, { ...init, signal: controller.signal }), options);
     } catch (error) {
-      if (timedOut) throw new Error(`Upload timed out for ${file.name}`);
+      if (timedOut) {
+        const timeoutError = new Error("The server took too long to respond. It is safe to retry.");
+        timeoutError.code = "request_timeout";
+        throw timeoutError;
+      }
       throw error;
     } finally {
       window.clearTimeout(timeoutId);
@@ -65,17 +58,44 @@ export function useApiClient() {
     }
   }, [readResponse]);
 
-  const apiDelete = useCallback(async (path) => {
-    return readResponse(await fetch(path, { method: "DELETE" }));
-  }, [readResponse]);
+  const apiGet = useCallback((path, options = {}) => request(path, {}, options), [request]);
+
+  const apiPost = useCallback((path, body, options = {}) => request(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }, options), [request]);
+
+  const apiUpload = useCallback((path, file, options = {}) => request(path, {
+    method: "POST",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  }, { ...options, timeoutMs: options.timeoutMs ?? 120_000 }).catch((error) => {
+    if (error.code === "request_timeout") {
+      error.message = `Upload timed out for ${file.name}. It is safe to retry.`;
+    }
+    throw error;
+  }), [request]);
+
+  const apiDelete = useCallback((path, options = {}) => request(
+    path,
+    { method: "DELETE" },
+    options,
+  ), [request]);
 
   const guarded = useCallback((fn) => async (...args) => {
     try {
       await fn(...args);
     } catch (error) {
       console.error(error);
+      if (error?.name !== "AbortError" && !error?.notified) {
+        showToast(error?.message || "The operation failed", "red", {
+          title: error?.code === "request_timeout" ? "Server timeout" : "Connection or operation error",
+          autoClose: 6000,
+        });
+      }
     }
-  }, []);
+  }, [showToast]);
 
   return { apiGet, apiPost, apiUpload, apiDelete, guarded, showToast };
 }

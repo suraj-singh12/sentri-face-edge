@@ -4,6 +4,7 @@ import json
 import sqlite3
 import struct
 import uuid
+from contextlib import closing, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -99,7 +100,7 @@ class SQLiteIdentityStore:
     def _schema_version(self) -> int:
         if not self.db_path.exists():
             return 0
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn:
             return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
     def _create_pre_migration_backup(self, version: int) -> None:
@@ -932,6 +933,7 @@ class SQLiteIdentityStore:
         country: str | None = None,
         importance: str | None = None,
         added_by: str | None = None,
+        operation_id: str | None = None,
     ) -> RecognitionDetail:
         detail = RecognitionDetail(
             detail_id=str(uuid.uuid4()),
@@ -953,6 +955,16 @@ class SQLiteIdentityStore:
             created_at=utc_now(),
         )
         with self._connect() as conn:
+            if operation_id:
+                existing = _begin_person_operation(conn, operation_id, "recognition-followup")
+                if existing:
+                    row = conn.execute(
+                        "SELECT * FROM recognition_details WHERE detail_id = ?",
+                        (str(existing["detail_id"]),),
+                    ).fetchone()
+                    if row is None:
+                        raise RuntimeError("Recognition follow-up operation is missing its detail")
+                    return _recognition_detail_from_row(row)
             owned = conn.execute(
                 """
                 SELECT 1
@@ -1016,6 +1028,13 @@ class SQLiteIdentityStore:
                         "UPDATE persons SET metadata = ? WHERE person_id = ? AND deleted_at IS NULL",
                         (json.dumps(metadata, separators=(",", ":")), person_id),
                     )
+            if operation_id:
+                _record_person_operation(
+                    conn,
+                    operation_id,
+                    "recognition-followup",
+                    {"detail_id": detail.detail_id},
+                )
         return detail
 
     def list_recognition_details_for_embedding(self, embedding_id: str) -> list[RecognitionDetail]:
@@ -1054,7 +1073,7 @@ class SQLiteIdentityStore:
     def backup_to(self, target_path: Path) -> None:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as source:
-            with sqlite3.connect(target_path) as target:
+            with closing(sqlite3.connect(target_path)) as target:
                 source.backup(target)
 
     def add_embedding(
@@ -1190,6 +1209,125 @@ class SQLiteIdentityStore:
             ).fetchall()
         return [_pending_from_row(row) for row in rows]
 
+    def list_all_file_references(self) -> list[str]:
+        """Return paths from active, archived, deleted, pending, and queue state."""
+        queries = (
+            "SELECT source_image AS path FROM embeddings WHERE source_image IS NOT NULL",
+            "SELECT crop_path AS path FROM embeddings WHERE crop_path IS NOT NULL",
+            "SELECT image_path AS path FROM recognition_details WHERE image_path IS NOT NULL",
+            "SELECT source_image AS path FROM pending_additions WHERE source_image IS NOT NULL",
+            "SELECT crop_path AS path FROM pending_additions WHERE crop_path IS NOT NULL",
+            "SELECT source_path AS path FROM init_sessions WHERE source_path IS NOT NULL",
+            "SELECT source_image AS path FROM init_faces WHERE source_image IS NOT NULL",
+            "SELECT crop_path AS path FROM init_faces WHERE crop_path IS NOT NULL",
+        )
+        with self._connect() as conn:
+            return [
+                str(row["path"])
+                for query in queries
+                for row in conn.execute(query).fetchall()
+                if row["path"]
+            ]
+
+    def confirm_pending_addition(
+        self,
+        pending_id: str,
+        operation_id: str,
+        *,
+        person_id: str | None = None,
+        name: str | None = None,
+        metadata: dict | None = None,
+    ) -> tuple[Person, EmbeddingRecord]:
+        operation_type = "confirm-pending-existing" if person_id else "confirm-pending-new"
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, operation_type)
+            if existing:
+                # A lost-response retry may have re-prepared the same face.
+                # The committed operation wins; discard the retry-only row.
+                conn.execute("DELETE FROM pending_additions WHERE pending_id = ?", (pending_id,))
+                return self._confirmed_records(
+                    conn, str(existing["person_id"]), str(existing["embedding_id"])
+                )
+            pending_row = conn.execute(
+                "SELECT * FROM pending_additions WHERE pending_id = ?", (pending_id,)
+            ).fetchone()
+            if pending_row is None:
+                raise KeyError(f"Unknown pending addition: {pending_id}")
+            if person_id:
+                person_row = conn.execute(
+                    "SELECT 1 FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                    (person_id,),
+                ).fetchone()
+                if person_row is None:
+                    raise KeyError(f"Unknown person: {person_id}")
+            else:
+                if not name or not name.strip():
+                    raise KeyError("Person name is required")
+                person_id = str(uuid.uuid4())
+                conn.execute(
+                    "INSERT INTO persons(person_id, name, metadata, created_at) VALUES (?, ?, ?, ?)",
+                    (
+                        person_id,
+                        name.strip(),
+                        json.dumps(metadata or {}, separators=(",", ":")),
+                        utc_now(),
+                    ),
+                )
+            embedding_id = str(uuid.uuid4())
+            conn.execute(
+                """
+                INSERT INTO embeddings(
+                    embedding_id, person_id, vector, quality_score,
+                    source_image, crop_path, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    embedding_id,
+                    person_id,
+                    pending_row["vector"],
+                    pending_row["quality_score"],
+                    pending_row["source_image"],
+                    pending_row["crop_path"],
+                    utc_now(),
+                ),
+            )
+            conn.execute("DELETE FROM pending_additions WHERE pending_id = ?", (pending_id,))
+            _record_person_operation(
+                conn,
+                operation_id,
+                operation_type,
+                {"person_id": person_id, "embedding_id": embedding_id},
+            )
+            return self._confirmed_records(conn, person_id, embedding_id)
+
+    @staticmethod
+    def _confirmed_records(
+        conn: sqlite3.Connection,
+        person_id: str,
+        embedding_id: str,
+    ) -> tuple[Person, EmbeddingRecord]:
+        person_row = conn.execute(
+            "SELECT person_id, name, metadata, created_at, deleted_at FROM persons WHERE person_id = ?",
+            (person_id,),
+        ).fetchone()
+        embedding_row = conn.execute(
+            """
+            SELECT embedding_id, person_id, vector, quality_score,
+                   source_image, crop_path, created_at
+            FROM embeddings WHERE embedding_id = ?
+            """,
+            (embedding_id,),
+        ).fetchone()
+        if person_row is None or embedding_row is None:
+            raise RuntimeError("Confirmed identity operation is missing durable records")
+        person = Person(
+            person_id=person_row["person_id"],
+            name=person_row["name"],
+            metadata=json.loads(person_row["metadata"]),
+            created_at=person_row["created_at"],
+            deleted_at=person_row["deleted_at"],
+        )
+        return person, _embedding_from_row(embedding_row)
     def delete_pending_addition(self, pending_id: str) -> None:
         with self._connect() as conn:
             conn.execute("DELETE FROM pending_additions WHERE pending_id = ?", (pending_id,))
@@ -1331,6 +1469,144 @@ class SQLiteIdentityStore:
                 (session_id, group_id, status, utc_now()),
             )
 
+    def confirm_init_faces_atomic(
+        self,
+        session_id: str,
+        group_id: str,
+        init_face_ids: list[str],
+        operation_id: str,
+        *,
+        person_id: str | None = None,
+        name: str | None = None,
+    ) -> dict:
+        operation_type = "confirm-init-existing" if person_id else "confirm-init-new"
+        selected_ids = list(dict.fromkeys(item for item in init_face_ids if item))
+        if not selected_ids:
+            raise KeyError("Select at least one image")
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, operation_type)
+            if existing:
+                return existing
+            placeholders = ", ".join("?" for _ in selected_ids)
+            rows = conn.execute(
+                f"""
+                SELECT * FROM init_faces
+                WHERE session_id = ? AND group_id = ?
+                  AND init_face_id IN ({placeholders})
+                ORDER BY created_at
+                """,
+                (session_id, group_id, *selected_ids),
+            ).fetchall()
+            if len(rows) != len(selected_ids):
+                raise KeyError("One or more selected images are no longer in this group")
+            status_row = conn.execute(
+                "SELECT status FROM init_groups WHERE session_id = ? AND group_id = ?",
+                (session_id, group_id),
+            ).fetchone()
+            if status_row is not None and status_row["status"] != "pending":
+                raise KeyError(f"Queue group is not pending: {group_id}")
+            if person_id:
+                person_row = conn.execute(
+                    "SELECT 1 FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                    (person_id,),
+                ).fetchone()
+                if person_row is None:
+                    raise KeyError(f"Unknown person: {person_id}")
+            else:
+                if not name or not name.strip():
+                    raise KeyError("Person name is required")
+                person_id = str(uuid.uuid4())
+                conn.execute(
+                    "INSERT INTO persons(person_id, name, metadata, created_at) VALUES (?, ?, '{}', ?)",
+                    (person_id, name.strip(), utc_now()),
+                )
+            existing_embeddings = conn.execute(
+                """
+                SELECT embedding_id, vector FROM embeddings
+                WHERE person_id = ? AND deleted_at IS NULL
+                ORDER BY created_at
+                """,
+                (person_id,),
+            ).fetchall()
+            known = [
+                (row["embedding_id"], _unpack_embedding(row["vector"]))
+                for row in existing_embeddings
+            ]
+            accepted: list[dict] = []
+            for row in rows:
+                vector = _unpack_embedding(row["vector"])
+                duplicate_id = next(
+                    (
+                        embedding_id
+                        for embedding_id, known_vector in known
+                        if sum(a * b for a, b in zip(vector, known_vector)) >= 0.9999
+                    ),
+                    None,
+                )
+                if duplicate_id:
+                    embedding_id = duplicate_id
+                    duplicate = True
+                else:
+                    embedding_id = str(uuid.uuid4())
+                    conn.execute(
+                        """
+                        INSERT INTO embeddings(
+                            embedding_id, person_id, vector, quality_score,
+                            source_image, crop_path, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            embedding_id,
+                            person_id,
+                            row["vector"],
+                            row["quality_score"],
+                            row["source_image"],
+                            row["crop_path"],
+                            utc_now(),
+                        ),
+                    )
+                    known.append((embedding_id, vector))
+                    duplicate = False
+                accepted.append(
+                    {
+                        "face_id": row["init_face_id"],
+                        "embedding_id": embedding_id,
+                        "image_id": Path(row["source_image"]).name,
+                        "image_path": row["source_image"],
+                        "duplicate": duplicate,
+                    }
+                )
+            conn.execute(
+                f"DELETE FROM init_faces WHERE init_face_id IN ({placeholders})",
+                selected_ids,
+            )
+            remaining = conn.execute(
+                "SELECT init_face_id FROM init_faces WHERE session_id = ? AND group_id = ?",
+                (session_id, group_id),
+            ).fetchall()
+            if remaining:
+                now = utc_now()
+                conn.executemany(
+                    """
+                    INSERT OR IGNORE INTO init_face_person_exclusions(
+                        session_id, init_face_id, person_id, created_at
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    [(session_id, row["init_face_id"], person_id, now) for row in remaining],
+                )
+            status = "pending" if remaining else "confirmed"
+            conn.execute(
+                """
+                INSERT INTO init_groups(session_id, group_id, status, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(session_id, group_id)
+                DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at
+                """,
+                (session_id, group_id, status, utc_now()),
+            )
+            result = {"person_id": person_id, "accepted": accepted}
+            _record_person_operation(conn, operation_id, operation_type, result)
+            return result
     def delete_init_faces(self, init_face_ids: list[str]) -> None:
         if not init_face_ids:
             return
@@ -1386,13 +1662,19 @@ class SQLiteIdentityStore:
             exclusions.setdefault(row["init_face_id"], set()).add(row["person_id"])
         return exclusions
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+    @contextmanager
+    def _connect(self):
+        conn = sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
-        return conn
-
-
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 def _pack_embedding(vector: Embedding) -> bytes:
     return struct.pack(f"{len(vector)}f", *vector)
 

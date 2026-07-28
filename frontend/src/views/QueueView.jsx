@@ -286,7 +286,7 @@ function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder,
             onChange={onSelectSession}
             data={(sessions || []).map((session) => ({
               value: session.session_id,
-              label: `${session.session_id.slice(0, 8)} · ${session.face_count} face${session.face_count === 1 ? "" : "s"}`,
+              label: `${session.session_id.slice(0, 8)} | ${session.face_count} face${session.face_count === 1 ? "" : "s"}`,
             }))}
             allowDeselect={false}
           />
@@ -322,12 +322,13 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
   const [sort, setSort] = useState("confidence");
   const pendingGroups = groups.filter((group) => group.status === "pending" && group.faces.length);
   const skippedGroups = groups.filter((group) => group.status === "skipped" && group.faces.length);
-  const isProcessing = progress && progress.status === "running";
+  const isProcessing = progress && ["running", "cancelling"].includes(progress.status);
   const visibleGroups = useMemo(() => {
     const filtered = pendingGroups.filter((group) => {
-      const score = group.matches?.[0]?.score || 0;
-      if (filter === "high") return score >= 0.62;
-      if (filter === "review") return score < 0.62;
+      const classification = group.matches?.[0]?.classification || "unknown";
+      const highConfidence = ["strong", "duplicate"].includes(classification);
+      if (filter === "high") return highConfidence;
+      if (filter === "review") return !highConfidence;
       return true;
     });
     return [...filtered].sort((left, right) => {
@@ -396,7 +397,7 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
               {visibleGroups.length ? visibleGroups.map((group) => {
                 const best = group.matches?.[0] || null;
                 const score = best?.score || 0;
-                const display = matchDisplay(score);
+                const display = matchDisplay(best);
                 return (
                   <Card key={`${group.session_id}-${group.group_id}`} withBorder radius="md" p="md" className="queue-group-row" onClick={() => onOpen(group)}>
                     <Group justify="space-between" wrap="nowrap" align="center">
@@ -587,7 +588,7 @@ function QueueProgressStat({ icon: Icon, value, label }) {
   );
 }
 
-const phaseOrder = ["uploading", "detecting", "matching", "clustering", "preparing", "done"];
+const phaseOrder = ["uploading", "scanning", "detecting", "matching", "clustering", "preparing", "cancelling", "done"];
 
 function queueProgressPercent(progress) {
   if (!progress) return 0;
@@ -832,7 +833,7 @@ function QueueIncomingGrid({ faces, selectedFaces, accepted, onToggleFace }) {
 
 function QueueSuggestedMatch({ best, face, onCompare }) {
   const known = best && !isNewPersonSuggestion(best);
-  const display = matchDisplay(best?.score || 0);
+  const display = matchDisplay(best);
   const suggestionImage = best?.representative_image || best?.image_path || face?.crop_path || face?.source_image;
   return (
     <Card withBorder radius="md" className="queue-review-panel queue-suggestion-panel">
@@ -866,7 +867,7 @@ function QueueCompareOverview({ best, faces, references, onFocusIncoming, onFocu
             <ThemeIcon size={42} radius="xl" color="teal"><IconUsers size={21} /></ThemeIcon>
             <Box><Text fw={900}>{best?.name}</Text><Text size="xs" c="dimmed">{references.length} saved reference photo{references.length === 1 ? "" : "s"}</Text></Box>
           </Group>
-          <Badge color={matchDisplay(best?.score || 0).color} size="lg">{Math.round((best?.score || 0) * 100)}% match</Badge>
+          <Badge color={matchDisplay(best).color} size="lg">{Math.round((best?.score || 0) * 100)}% match</Badge>
         </Group>
       </Card>
       <Grid gutter="xl" align="center">

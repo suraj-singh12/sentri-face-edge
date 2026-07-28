@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import sqlite3
+from contextlib import closing
 import tempfile
 import threading
 import time
@@ -74,6 +75,31 @@ class ApiSerializationTest(unittest.TestCase):
         restore.join(timeout=1)
         late.join(timeout=1)
 
+    def test_queue_cancellation_registry_preserves_cancel_before_scan_race(self) -> None:
+        server = object.__new__(SentriFaceApiServer)
+        server.queue_progress = {}
+        server.queue_progress_lock = threading.Lock()
+        server.queue_cancellations = {}
+        server.queue_cancellation_created = {}
+        server.active_queue_jobs = set()
+
+        self.assertTrue(server.request_queue_cancellation("job-1"))
+        cancellation = server.register_queue_job("job-1")
+
+        self.assertTrue(cancellation.is_set())
+        self.assertEqual(server.queue_progress_snapshot("job-1")["status"], "cancelling")
+        server.finish_queue_job("job-1")
+        self.assertNotIn("job-1", server.queue_cancellations)
+        self.assertNotIn("job-1", server.queue_cancellation_created)
+        self.assertNotIn("job-1", server.active_queue_jobs)
+
+        live_cancellation = server.register_queue_job("job-2")
+        server.queue_cancellation_created["job-2"] = 0
+        self.assertTrue(server.request_queue_cancellation("job-2"))
+        self.assertIs(server.queue_cancellations["job-2"], live_cancellation)
+        self.assertTrue(live_cancellation.is_set())
+        server.finish_queue_job("job-2")
+
     def test_people_deletion_backup_precedes_mutation_and_retry_reuses_it(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -111,7 +137,7 @@ class ApiSerializationTest(unittest.TestCase):
                 / first["backup"]["backup_id"]
                 / engine.config.db_path.name
             )
-            with sqlite3.connect(backup_db) as conn:
+            with closing(sqlite3.connect(backup_db)) as conn, conn:
                 archived_in_backup = conn.execute(
                     "SELECT deleted_at FROM persons WHERE person_id = ?",
                     (person_id,),
@@ -173,7 +199,7 @@ class ApiSerializationTest(unittest.TestCase):
             ]
             for embedding_id in embedding_ids:
                 engine.delete_embedding(embedding_id, str(uuid.uuid4()))
-            with sqlite3.connect(engine.config.db_path) as conn:
+            with closing(sqlite3.connect(engine.config.db_path)) as conn, conn:
                 conn.executemany(
                     "UPDATE embeddings SET purge_after = ? WHERE embedding_id = ?",
                     [
@@ -197,7 +223,7 @@ class ApiSerializationTest(unittest.TestCase):
                 server.backups.list_backups()[0].backup_id,
             )
             backup = server.backups.list_backups()[0]
-            with sqlite3.connect(server.backups._database_path(backup.backup_id)) as conn:
+            with closing(sqlite3.connect(server.backups._database_path(backup.backup_id))) as conn, conn:
                 placeholders = ", ".join("?" for _ in embedding_ids)
                 backed_up_faces = conn.execute(
                     f"""
@@ -464,7 +490,7 @@ class ApiSerializationTest(unittest.TestCase):
             from unittest.mock import patch
 
             with patch("sentriface.api_server.UPLOAD_REQUEST_LIMIT_BYTES", 8):
-                with self.assertRaisesRegex(InputValidationError, "100 MB"):
+                with self.assertRaisesRegex(InputValidationError, "25 MB"):
                     _save_upload_chunk(
                         data_dir,
                         str(uuid.uuid4()),

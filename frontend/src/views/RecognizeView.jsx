@@ -30,7 +30,6 @@ import {
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
 import { GalleryPanel, LoadImagePanel, Metrics, Surface } from "../components/Shared.jsx";
-import { MATCH_TEXT_THRESHOLDS } from "../constants.js";
 import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor } from "../utils.js";
 
 const FACE_COLORS = ["#35d6d0", "#bd83ff", "#f5a623", "#59a7ff", "#f472b6", "#a3e635"];
@@ -61,7 +60,7 @@ export function RecognizeView({
   const selectedFace = faces.find((face) => face.index === selectedFaceIndex) || faces[0] || null;
   const selectedMatch = selectedFace?.matches?.[0] || null;
   const selectedAccepted = recognitionAcceptedFaces.includes(selectedFace?.index);
-  const selectedIsKnown = selectedMatch?.score > MATCH_TEXT_THRESHOLDS.newPerson;
+  const selectedIsKnown = Boolean(selectedMatch?.is_known);
   const selectedIsBad = selectedFace?.quality?.status === "bad";
   const imageSrc = recognition?.inputPath ? mediaUrl(recognition.inputPath) : null;
   const imageSize = useImageSize(imageSrc);
@@ -367,7 +366,7 @@ function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acc
 function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, onSelect, onAccept, onGallery }) {
   const best = face.matches?.[0] || null;
   const unknown = isNewPersonSuggestion(best);
-  const display = matchDisplay(best?.score || 0);
+  const display = matchDisplay(best);
   const faceLabel = `Face ${faceNumber(face.index)}`;
   const matchImage = best?.representative_image;
   return (

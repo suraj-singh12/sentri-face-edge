@@ -10,6 +10,7 @@ import numpy as np
 from sentriface.cli import build_dev_engine
 from sentriface.config import RuntimeConfig
 from sentriface.engine import _assign_groups, group_representative_embedding
+from sentriface.errors import QueueCancellationError
 from sentriface.models import DetectedFace, FaceBox, InitFace, InitGroup, PersonMatch, QualityReport, QualityStatus
 
 
@@ -174,6 +175,66 @@ class InitWorkflowTest(unittest.TestCase):
             self.assertEqual(result.groups, [])
             self.assertEqual(engine.list_init_groups(result.session.session_id), [])
 
+    def test_queue_cancellation_rolls_back_session_crops_and_managed_uploads(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            data_dir = temp_path / "data"
+            image_dir = data_dir / "uploads" / "batch"
+            image_dir.mkdir(parents=True)
+            self._write_image(image_dir / "first.jpg", shade=120)
+            self._write_image(image_dir / "second.jpg", shade=180)
+
+            engine = build_dev_engine(data_dir)
+            engine.initialize()
+            checkpoints = 0
+
+            def cancel_after_first_face() -> bool:
+                nonlocal checkpoints
+                checkpoints += 1
+                return checkpoints >= 9
+
+            with self.assertRaises(QueueCancellationError):
+                engine.create_queue_session(
+                    image_dir,
+                    allow_bad_quality=True,
+                    cancel_check=cancel_after_first_face,
+                )
+
+            self.assertEqual(engine.list_init_sessions(), [])
+            self.assertFalse(image_dir.exists())
+            init_dir = data_dir / "faces" / "init"
+            self.assertFalse(init_dir.exists() and any(init_dir.rglob("*")))
+
+    def test_queue_failure_rolls_back_partial_session_and_managed_uploads(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            data_dir = temp_path / "data"
+            image_dir = data_dir / "uploads" / "failed-batch"
+            image_dir.mkdir(parents=True)
+            self._write_image(image_dir / "first.jpg", shade=120)
+            self._write_image(image_dir / "second.jpg", shade=180)
+
+            engine = build_dev_engine(data_dir)
+            engine.initialize()
+            detector = engine.detector
+            detections = 0
+
+            class FailingDetector:
+                def detect(self, image_path: Path):
+                    nonlocal detections
+                    detections += 1
+                    if detections == 2:
+                        raise RuntimeError("detector failed")
+                    return detector.detect(image_path)
+
+            engine.detector = FailingDetector()
+            with self.assertRaisesRegex(RuntimeError, "detector failed"):
+                engine.create_queue_session(image_dir, allow_bad_quality=True)
+
+            self.assertEqual(engine.list_init_sessions(), [])
+            self.assertFalse(image_dir.exists())
+            init_dir = data_dir / "faces" / "init"
+            self.assertFalse(init_dir.exists() and any(init_dir.rglob("*")))
     def test_init_reject_group(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)

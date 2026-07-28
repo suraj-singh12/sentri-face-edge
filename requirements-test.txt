@@ -1,0 +1,4 @@
+qhnswlib>=0.8.6,<0.9
+loguru>=0.7,<1
+numpy>=1.26,<2.0
+opencv-python-headless>=4.9,<5.0

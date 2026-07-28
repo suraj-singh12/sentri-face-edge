@@ -1,14 +1,15 @@
-import { ActionIcon, AppShell, Box, Button, Group, Loader, MantineProvider, Modal, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
+import { lazy, Suspense } from "react";
+import { ActionIcon, Alert, AppShell, Box, Button, Group, Loader, MantineProvider, Modal, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
 import { VIEWS } from "./constants.js";
 import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
 import { profileLine, tabLabel } from "./utils.js";
-import { DebugView } from "./views/DebugView.jsx";
-import { PeopleView } from "./views/PeopleView.jsx";
-import { QueueView } from "./views/QueueView.jsx";
-import { RecognizeView } from "./views/RecognizeView.jsx";
+const DebugView = lazy(() => import("./views/DebugView.jsx").then((module) => ({ default: module.DebugView })));
+const PeopleView = lazy(() => import("./views/PeopleView.jsx").then((module) => ({ default: module.PeopleView })));
+const QueueView = lazy(() => import("./views/QueueView.jsx").then((module) => ({ default: module.QueueView })));
+const RecognizeView = lazy(() => import("./views/RecognizeView.jsx").then((module) => ({ default: module.RecognizeView })));
 
 export default function SentriFaceApp() {
   return (
@@ -75,6 +76,21 @@ function SentriFaceShell() {
       </AppShell.Header>
 
       <AppShell.Main>
+        {state.connectionError ? (
+          <Alert color="red" title="SentriFace server is unavailable" mb="md">
+            {state.connectionError}. Check that the local server is running, then use Reload app data.
+          </Alert>
+        ) : null}
+        {state.profile?.runtime === "dev" ? (
+          <Alert color="yellow" title="Development inference is active" mb="md">
+            Results are synthetic and must not be trusted as real face recognition.
+          </Alert>
+        ) : null}
+        {state.profile?.index?.degraded_reason ? (
+          <Alert color="yellow" title="Search index is in safe fallback mode" mb="md">
+            Using {state.profile.index.actual} instead of {state.profile.index.requested}: {state.profile.index.degraded_reason}
+          </Alert>
+        ) : null}        <Suspense fallback={<Stack align="center" py="xl"><Loader /><Text c="dimmed">Loading view...</Text></Stack>}>
         <Tabs value={state.activeView} onChange={actions.setActiveView} keepMounted={false} className="sentriface-tabs">
           <Tabs.List mb="md">
             {VIEWS.map((view) => <Tabs.Tab key={view} value={view}>{tabLabel(view)}</Tabs.Tab>)}
@@ -187,6 +203,7 @@ function SentriFaceShell() {
             />
           </Tabs.Panel>
         </Tabs>
+        </Suspense>
         <Modal
           opened={state.backupModalOpen}
           onClose={actions.cancelBackup}

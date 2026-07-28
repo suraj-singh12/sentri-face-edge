@@ -4,6 +4,7 @@ import argparse
 import base64
 import binascii
 import hashlib
+import ipaddress
 import json
 import os
 import shutil
@@ -22,7 +23,7 @@ from sentriface.backup_service import BackupError, BackupRecord, BackupService
 from sentriface.cli import build_dev_engine, build_onnx_engine
 from sentriface.config import RuntimeConfig, config_for_hardware
 from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
-from sentriface.errors import InputImageError, InputValidationError
+from sentriface.errors import InputImageError, InputValidationError, QueueCancellationError
 from sentriface.hardware import assess_hardware
 from sentriface.models import (
     EmbeddingRecord,
@@ -46,12 +47,28 @@ from sentriface.storage.sqlite_store import SCHEMA_VERSION
 
 STATIC_DIR = Path(__file__).with_name("ui_static")
 UPLOAD_RESIZE_LIMIT_BYTES = 1_000_000
-UPLOAD_REQUEST_LIMIT_BYTES = 100_000_000
+UPLOAD_REQUEST_LIMIT_BYTES = 25_000_000
 UPLOAD_MAX_EDGE = 1600
 UPLOAD_MAX_PIXELS = 40_000_000
-JSON_REQUEST_LIMIT_BYTES = 135_000_000
+JSON_REQUEST_LIMIT_BYTES = 10_000_000
 BACKUP_IMPORT_LIMIT_BYTES = 20_000_000_000
 DUPLICATE_MATCH_SCORE = 0.9999
+INFERENCE_ENDPOINTS = {
+    "/api/recognize",
+    "/api/recognize-batch",
+    "/api/recognition-accept-existing",
+    "/api/recognition-new",
+    "/api/enroll",
+    "/api/queue-add",
+    "/api/queue-scan",
+}
+TERMINAL_QUEUE_STATES = {"done", "failed", "cancelled"}
+QUEUE_PROGRESS_RETENTION_SECONDS = 3600
+QUEUE_PROGRESS_LIMIT = 200
+
+
+class EngineBusyError(RuntimeError):
+    pass
 
 
 class OperationGate:
@@ -109,9 +126,14 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.runtime = runtime
         self.debug = debug
         self.events: list[dict[str, Any]] = []
+        self.events_lock = threading.Lock()
         self.queue_progress: dict[str, dict[str, Any]] = {}
         self.queue_progress_lock = threading.Lock()
+        self.queue_cancellations: dict[str, threading.Event] = {}
+        self.queue_cancellation_created: dict[str, float] = {}
+        self.active_queue_jobs: set[str] = set()
         self.operation_gate = OperationGate()
+        self.inference_semaphore = threading.BoundedSemaphore(max(1, config.max_workers))
         self.backups = BackupService(
             config.db_path,
             config.backup_dir,
@@ -120,6 +142,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             data_dir=config.data_dir,
             supported_database_version=SCHEMA_VERSION,
         )
+        self._scavenge_stale_files()
         self.maintenance_stop = threading.Event()
         self.maintenance_thread = threading.Thread(
             target=self._maintenance_loop,
@@ -128,6 +151,40 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         )
         self.maintenance_thread.start()
 
+    def _scavenge_stale_files(self) -> None:
+        """Retry journals and conservatively remove abandoned staging data."""
+        cutoff = time.time() - 24 * 60 * 60
+        try:
+            self.engine.cleanup.retry_all(self.engine.store.list_all_file_references)
+            stale_managed: list[Path] = []
+            for root in (
+                self.config.data_dir / "uploads",
+                self.config.face_dir / "pending",
+                self.config.face_dir / "init",
+                self.config.data_dir / "restored-media",
+            ):
+                if not root.exists():
+                    continue
+                stale_managed.extend(
+                    item for item in root.iterdir() if item.stat().st_mtime < cutoff
+                )
+            journal = self.engine.cleanup.schedule(stale_managed, "startup-orphan-scavenge")
+            self.engine.cleanup.run(journal, self.engine.store.list_all_file_references)
+            for root, pattern in (
+                (self.config.data_dir, ".restore-*"),
+                (self.config.backup_dir, ".import-*"),
+            ):
+                if not root.exists():
+                    continue
+                for item in root.glob(pattern):
+                    if item.stat().st_mtime >= cutoff:
+                        continue
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
+        except OSError as exc:
+            self.log_event("startup-scavenge-failed", error=str(exc))
     def log_event(self, event: str, **details: Any) -> None:
         safe_details = _sanitize_log_details(details)
         item = {
@@ -135,8 +192,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             "timestamp": datetime.now(timezone.utc).isoformat(),
             **safe_details,
         }
-        self.events.append(item)
-        self.events = self.events[-200:]
+        with getattr(self, "events_lock", threading.Lock()):
+            self.events.append(item)
+            self.events = self.events[-200:]
         if self.debug:
             print(
                 f"[sentriface-ui] {event} "
@@ -149,6 +207,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             current.update(updates)
             current["job_id"] = job_id
             self.queue_progress[job_id] = current
+            self._prune_queue_progress_locked()
 
     def queue_progress_snapshot(self, job_id: str) -> dict[str, Any]:
         with self.queue_progress_lock:
@@ -158,6 +217,88 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         progress["elapsed_seconds"] = max(0, int(ended_at - started_at)) if started_at else 0
         return progress
 
+    def _prune_queue_progress_locked(self) -> None:
+        now = time.time()
+        stale = [
+            job_id
+            for job_id, item in self.queue_progress.items()
+            if item.get("status") in TERMINAL_QUEUE_STATES
+            and float(item.get("finished_at") or now) < now - QUEUE_PROGRESS_RETENTION_SECONDS
+        ]
+        for job_id in stale:
+            self.queue_progress.pop(job_id, None)
+        overflow = len(self.queue_progress) - QUEUE_PROGRESS_LIMIT
+        if overflow > 0:
+            oldest = sorted(
+                self.queue_progress,
+                key=lambda job_id: float(self.queue_progress[job_id].get("started_at") or 0),
+            )
+            removed = 0
+            for job_id in oldest:
+                if job_id in self.active_queue_jobs:
+                    continue
+                self.queue_progress.pop(job_id, None)
+                removed += 1
+                if removed >= overflow:
+                    break
+    def register_queue_job(self, job_id: str) -> threading.Event:
+        with self.queue_progress_lock:
+            self._prune_queue_cancellations_locked()
+            if job_id in self.active_queue_jobs:
+                raise ValueError(f"Queue job is already running: {job_id}")
+            existing = self.queue_cancellations.get(job_id)
+            if existing is not None:
+                self.active_queue_jobs.add(job_id)
+                return existing
+            cancellation = threading.Event()
+            self.queue_cancellations[job_id] = cancellation
+            self.queue_cancellation_created[job_id] = time.time()
+            self.active_queue_jobs.add(job_id)
+            return cancellation
+
+    def request_queue_cancellation(self, job_id: str) -> bool:
+        with self.queue_progress_lock:
+            self._prune_queue_cancellations_locked()
+            progress = self.queue_progress.get(job_id)
+            if progress and progress.get("status") in {"done", "failed", "cancelled"}:
+                return False
+            cancellation = self.queue_cancellations.get(job_id)
+            if cancellation is None:
+                # Preserve cancellation if this request wins the race with queue-scan registration.
+                cancellation = threading.Event()
+                self.queue_cancellations[job_id] = cancellation
+                self.queue_cancellation_created[job_id] = time.time()
+            cancellation.set()
+            current = dict(progress or {"job_id": job_id, "started_at": time.time()})
+            current.update(status="cancelling", phase="cancelling", cancellation_requested_at=time.time())
+            self.queue_progress[job_id] = current
+            return True
+
+    def finish_queue_job(self, job_id: str) -> None:
+        with self.queue_progress_lock:
+            self.queue_cancellations.pop(job_id, None)
+            self.queue_cancellation_created.pop(job_id, None)
+            self.active_queue_jobs.discard(job_id)
+
+    def _prune_queue_cancellations_locked(self) -> None:
+        cutoff = time.time() - 60
+        stale = [
+            job_id
+            for job_id, created_at in self.queue_cancellation_created.items()
+            if created_at < cutoff and job_id not in self.active_queue_jobs
+        ]
+        for job_id in stale:
+            self.queue_cancellations.pop(job_id, None)
+            self.queue_cancellation_created.pop(job_id, None)
+
+    @contextmanager
+    def inference_slot(self):
+        if not self.inference_semaphore.acquire(timeout=0.25):
+            raise EngineBusyError("Face engine is busy; please retry in a moment")
+        try:
+            yield
+        finally:
+            self.inference_semaphore.release()
     def backed_up_people_deletion(
         self,
         operation_id: str,
@@ -206,6 +347,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
                 break
 
     def server_close(self) -> None:
+        with self.queue_progress_lock:
+            for cancellation in self.queue_cancellations.values():
+                cancellation.set()
         maintenance_stop = getattr(self, "maintenance_stop", None)
         maintenance_thread = getattr(self, "maintenance_thread", None)
         if maintenance_stop is not None:
@@ -222,29 +366,77 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(path)
         if parsed.path == "/":
             return str(STATIC_DIR / "index.html")
-        return str(STATIC_DIR / parsed.path.lstrip("/"))
+        root = STATIC_DIR.resolve()
+        candidate = (root / parsed.path.lstrip("/")).resolve()
+        if candidate != root and root not in candidate.parents:
+            return str(root / "__invalid_path__")
+        return str(candidate)
+
+    def _valid_host(self) -> bool:
+        raw = self.headers.get("Host", "")
+        if not raw:
+            return False
+        hostname = raw
+        if raw.startswith("["):
+            hostname = raw[1:].split("]", 1)[0]
+        elif ":" in raw:
+            hostname = raw.rsplit(":", 1)[0]
+        if hostname.casefold() == "localhost":
+            return True
+        try:
+            return ipaddress.ip_address(hostname).is_loopback
+        except ValueError:
+            return False
+
+    def _reject_invalid_host(self) -> bool:
+        if self._valid_host():
+            return False
+        self._json({"error": "SentriFace accepts localhost requests only"}, status=HTTPStatus.FORBIDDEN)
+        return True
 
     def do_GET(self) -> None:
+        if self._reject_invalid_host():
+            return
+        parsed = urlparse(self.path)
+        if parsed.path in {"/api/health", "/api/profile", "/api/queue-progress"}:
+            self._do_GET()
+            return
         with self.server.operation_gate.shared():
             self._do_GET()
 
     def do_POST(self) -> None:
+        if self._reject_invalid_host():
+            return
         parsed = urlparse(self.path)
+        if parsed.path == "/api/queue-cancel":
+            self._do_POST()
+            return
         gate = (
             self.server.operation_gate.exclusive()
             if parsed.path == "/api/backups/restore"
             else self.server.operation_gate.shared()
         )
         with gate:
-            self._do_POST()
+            if parsed.path in INFERENCE_ENDPOINTS:
+                try:
+                    with self.server.inference_slot():
+                        self._do_POST()
+                except EngineBusyError as exc:
+                    self._error(exc)
+            else:
+                self._do_POST()
 
     def do_DELETE(self) -> None:
+        if self._reject_invalid_host():
+            return
         with self.server.operation_gate.shared():
             self._do_DELETE()
-
     def _do_GET(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if parsed.path == "/api/health":
+                self._json({"status": "ok", "runtime": self.server.runtime})
+                return
             if parsed.path == "/api/profile":
                 self._json(self._profile())
                 return
@@ -320,7 +512,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"pending": [_pending(self.server.engine, item) for item in self.server.engine.list_pending_additions()]})
                 return
             if parsed.path == "/api/events":
-                self._json({"events": self.server.events[-80:]})
+                with self.server.events_lock:
+                    events = list(self.server.events[-80:])
+                self._json({"events": events})
                 return
             if parsed.path.startswith("/api/backups/") and parsed.path.endswith("/download"):
                 backup_id = parsed.path.removeprefix("/api/backups/").removesuffix("/download").strip("/")
@@ -405,7 +599,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     raise InputValidationError("Upload is empty", "empty_file")
                 if content_length > UPLOAD_REQUEST_LIMIT_BYTES:
                     raise InputValidationError(
-                        "Upload exceeds the 100 MB per-file limit",
+                        "Upload exceeds the 25 MB per-file limit",
                         "file_too_large",
                     )
                 saved_dir, saved_path = _save_upload_chunk(
@@ -487,6 +681,18 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     "files": count,
                     "rejected_files": rejected,
                 })
+                return
+            if parsed.path == "/api/upload-file-discard":
+                path = Path(_required(payload, "path"))
+                journal = self.server.engine.cleanup.schedule(
+                    (path,),
+                    f"ui-discard-upload-{uuid.uuid4()}",
+                )
+                removed = self.server.engine.cleanup.run(
+                    journal,
+                    self.server.engine.store.list_all_file_references,
+                )
+                self._json({"removed": removed and not path.exists()})
                 return
             if parsed.path == "/api/upload-batch-discard":
                 removed = _discard_upload_batch(
@@ -686,6 +892,13 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     raise KeyError(f"Face {face_index} does not meet the enrollment quality requirements")
                 duplicate = _duplicate_embedding(addition.vector, self.server.engine.list_person_embeddings(person_id))
                 if duplicate:
+                    journal = self.server.engine.cleanup.schedule(
+                        (addition.face.crop_path,),
+                        f"duplicate-prepared-crop-{addition.pending_id}",
+                    )
+                    self.server.engine.cleanup.run(
+                        journal, self.server.engine.store.list_all_file_references
+                    )
                     person = self.server.engine.get_person(person_id)
                     self.server.log_event("recognition-duplicate", path=str(image_path), person_id=person_id, face_index=face_index)
                     self._json(
@@ -698,7 +911,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         }
                     )
                     return
-                embedding_id = self.server.engine.confirm_existing_person(addition, person_id)
+                embedding_id = self.server.engine.confirm_existing_person(addition, person_id, operation_id=_optional_operation_id(payload))
                 self.server.log_event("recognition-accept-existing", path=str(image_path), person_id=person_id, face_index=face_index)
                 self._json({"embedding_id": embedding_id, "metrics": self.server.engine.metrics_snapshot()})
                 return
@@ -715,7 +928,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 if addition is None:
                     raise KeyError(f"Face {face_index} does not meet the enrollment quality requirements")
-                person_id = self.server.engine.confirm_new_person(addition, name)
+                person_id = self.server.engine.confirm_new_person(addition, name, operation_id=_optional_operation_id(payload))
                 embedding = self.server.engine.list_person_embeddings(person_id)[-1]
                 self.server.log_event("recognition-new", path=str(image_path), person_id=person_id, face_index=face_index)
                 self._json(
@@ -743,6 +956,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     country=payload.get("country"),
                     importance=payload.get("importance"),
                     added_by=payload.get("added_by"),
+                    operation_id=_optional_operation_id(payload),
                 )
                 self.server.log_event(
                     "recognition-followup",
@@ -794,6 +1008,22 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     }
                 )
                 return
+            if parsed.path == "/api/queue-cancel":
+                job_id = str(_required(payload, "job_id"))
+                cancel_requested = self.server.request_queue_cancellation(job_id)
+                self.server.log_event(
+                    "queue-cancel-requested",
+                    job_id=job_id,
+                    cancel_requested=cancel_requested,
+                )
+                self._json(
+                    {
+                        "job_id": job_id,
+                        "cancel_requested": cancel_requested,
+                        "status": self.server.queue_progress_snapshot(job_id).get("status"),
+                    }
+                )
+                return
             if parsed.path == "/api/queue-scan":
                 source = Path(_required(payload, "path"))
                 job_id = str(payload.get("job_id") or uuid.uuid4())
@@ -807,70 +1037,109 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     "uploaded_files",
                     allow_zero=True,
                 )
-                self.server.update_queue_progress(
-                    job_id,
-                    phase="scanning",
-                    status="running",
-                    total_files=total_files,
-                    uploaded_files=uploaded_files,
-                    total_images=0,
-                    images_scanned=0,
-                    faces_detected=0,
-                    embeddings_generated=0,
-                    groups=0,
-                    started_at=time.time(),
-                )
-                self.server.engine.reset_metrics()
-                queue_result = self.server.engine.create_queue_session(
-                    source,
-                    bool(payload.get("force_bad_quality", False)),
-                    progress_callback=lambda update: self.server.update_queue_progress(job_id, **update),
-                )
-                self.server.update_queue_progress(
-                    job_id,
-                    phase="done",
-                    status="done",
-                    session_id=queue_result.session.session_id,
-                    groups=len(queue_result.groups),
-                    finished_at=time.time(),
-                )
-                self.server.log_event(
-                    "queue-scan",
-                    path=str(source),
-                    job_id=job_id,
-                    session_id=queue_result.session.session_id,
-                    groups=len(queue_result.groups),
-                    rejected_files=len(queue_result.invalid_images),
-                )
-                if queue_result.invalid_images:
-                    self.server.log_event(
-                        "input-rejected",
-                        source="queue-scan",
-                        rejected_count=len(queue_result.invalid_images),
-                        accepted_count=max(
-                            0,
-                            uploaded_files - len(queue_result.invalid_images),
-                        ),
-                        reasons={"unreadable_image": len(queue_result.invalid_images)},
-                        client_side=False,
+                cancellation = self.server.register_queue_job(job_id)
+                try:
+                    self.server.update_queue_progress(
+                        job_id,
+                        phase="scanning",
+                        status="running",
+                        total_files=total_files,
+                        uploaded_files=uploaded_files,
+                        total_images=0,
+                        images_scanned=0,
+                        faces_detected=0,
+                        embeddings_generated=0,
+                        groups=0,
+                        started_at=time.time(),
                     )
-                session_id = queue_result.session.session_id
-                if not queue_result.groups:
-                    self.server.engine.discard_init_session(session_id)
-                    session_id = ""
-                self._json(
-                    {
-                        "session_id": session_id,
-                        "job_id": job_id,
-                        "rejected_files": len(queue_result.invalid_images),
-                        "groups": [
-                            _init_group(self.server.engine, group, queue_result.matches_by_face_id)
-                            for group in queue_result.groups
-                        ],
-                        "metrics": self.server.engine.metrics_snapshot(),
-                    }
-                )
-                return
+                    self.server.engine.reset_metrics()
+                    try:
+                        queue_result = self.server.engine.create_queue_session(
+                            source,
+                            bool(payload.get("force_bad_quality", False)),
+                            progress_callback=lambda update: self.server.update_queue_progress(job_id, **update),
+                            cancel_check=cancellation.is_set,
+                        )
+                    except QueueCancellationError as exc:
+                        self.server.update_queue_progress(
+                            job_id,
+                            phase="cancelled",
+                            status="cancelled",
+                            session_id="",
+                            cancellation_phase=exc.phase,
+                            finished_at=time.time(),
+                        )
+                        self.server.log_event(
+                            "queue-cancelled",
+                            path=str(source),
+                            job_id=job_id,
+                            cancellation_phase=exc.phase,
+                        )
+                        self._json(
+                            {
+                                "cancelled": True,
+                                "job_id": job_id,
+                                "session_id": "",
+                                "groups": [],
+                                "metrics": self.server.engine.metrics_snapshot(),
+                            }
+                        )
+                        return
+                    self.server.update_queue_progress(
+                        job_id,
+                        phase="done",
+                        status="done",
+                        session_id=queue_result.session.session_id,
+                        groups=len(queue_result.groups),
+                        finished_at=time.time(),
+                    )
+                    self.server.log_event(
+                        "queue-scan",
+                        path=str(source),
+                        job_id=job_id,
+                        session_id=queue_result.session.session_id,
+                        groups=len(queue_result.groups),
+                        rejected_files=len(queue_result.invalid_images),
+                    )
+                    if queue_result.invalid_images:
+                        self.server.log_event(
+                            "input-rejected",
+                            source="queue-scan",
+                            rejected_count=len(queue_result.invalid_images),
+                            accepted_count=max(
+                                0,
+                                uploaded_files - len(queue_result.invalid_images),
+                            ),
+                            reasons={"unreadable_image": len(queue_result.invalid_images)},
+                            client_side=False,
+                        )
+                    session_id = queue_result.session.session_id
+                    if not queue_result.groups:
+                        self.server.engine.discard_init_session(session_id)
+                        session_id = ""
+                    self._json(
+                        {
+                            "session_id": session_id,
+                            "job_id": job_id,
+                            "rejected_files": len(queue_result.invalid_images),
+                            "groups": [
+                                _init_group(self.server.engine, group, queue_result.matches_by_face_id)
+                                for group in queue_result.groups
+                            ],
+                            "metrics": self.server.engine.metrics_snapshot(),
+                        }
+                    )
+                    return
+                except Exception:
+                    self.server.update_queue_progress(
+                        job_id,
+                        phase="failed",
+                        status="failed",
+                        finished_at=time.time(),
+                    )
+                    raise
+                finally:
+                    self.server.finish_queue_job(job_id)
             if parsed.path == "/api/queue-confirm-new":
                 session_id = _required(payload, "session_id")
                 person_id, accepted = self.server.engine.confirm_init_faces(
@@ -878,9 +1147,16 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _required(payload, "group_id"),
                     _queue_face_ids(self.server.engine, payload),
                     _required(payload, "name"),
+                    _optional_operation_id(payload),
                 )
-                changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
-                groups = self.server.engine.list_init_groups(session_id)
+                try:
+                    changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
+                    groups = self.server.engine.list_init_groups(session_id)
+                except KeyError:
+                    # A retry can arrive after the successful request already
+                    # discarded its now-empty queue session.
+                    changed = []
+                    groups = []
                 session_closed = not groups
                 if session_closed:
                     self.server.engine.discard_init_session(session_id)
@@ -904,9 +1180,16 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _required(payload, "group_id"),
                     _queue_face_ids(self.server.engine, payload),
                     person_id,
+                    _optional_operation_id(payload),
                 )
-                changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
-                groups = self.server.engine.list_init_groups(session_id)
+                try:
+                    changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
+                    groups = self.server.engine.list_init_groups(session_id)
+                except KeyError:
+                    # A retry can arrive after the successful request already
+                    # discarded its now-empty queue session.
+                    changed = []
+                    groups = []
                 session_closed = not groups
                 if session_closed:
                     self.server.engine.discard_init_session(session_id)
@@ -1029,8 +1312,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             "max_workers": config.max_workers,
             "onnx_intra_threads": config.onnx_intra_threads,
             "max_image_edge": config.max_image_edge,
+            "index": self.server.engine.index_status,
             "high_confidence": config.high_confidence,
             "medium_confidence": config.medium_confidence,
+            "possible_confidence": config.possible_confidence,
             "min_quality_score": config.min_quality_score,
         }
 
@@ -1063,7 +1348,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            # The operation lifecycle is independent of a disconnected browser.
+            pass
 
     def _stream_request_to_file(self, destination: Path, maximum_bytes: int) -> None:
         try:
@@ -1146,14 +1435,30 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             status = HTTPStatus.NOT_FOUND
         if isinstance(exc, InputValidationError):
             status = HTTPStatus.UNPROCESSABLE_ENTITY
+        if isinstance(exc, EngineBusyError):
+            status = HTTPStatus.SERVICE_UNAVAILABLE
         payload = {"error": message}
+        if isinstance(exc, EngineBusyError):
+            payload["code"] = "engine_busy"
         if validation_error:
             payload["code"] = "invalid_input"
             payload["reason"] = getattr(exc, "reason", "invalid_request")
         self._json(payload, status=status)
 
     def _media(self, raw_path: str) -> None:
-        path = Path(raw_path)
+        path = Path(raw_path).resolve()
+        data_root = self.server.config.data_dir.resolve()
+        referenced = {
+            Path(item).resolve()
+            for item in self.server.engine.store.list_all_file_references()
+            if item
+        }
+        managed = path == data_root or data_root in path.parents
+        if not managed and path not in referenced:
+            self.send_response(HTTPStatus.FORBIDDEN)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if not path.exists() or not path.is_file():
             self.send_response(HTTPStatus.NOT_FOUND)
             self.send_header("Content-Length", "0")
@@ -1161,7 +1466,6 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             return
         if path.suffix.lower() not in IMAGE_EXTENSIONS:
             raise KeyError(f"Unsupported media file: {path}")
-        data = path.read_bytes()
         content_type = {
             ".jpg": "image/jpeg",
             ".jpeg": "image/jpeg",
@@ -1169,20 +1473,38 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             ".bmp": "image/bmp",
             ".webp": "image/webp",
         }.get(path.suffix.lower(), "application/octet-stream")
-        self.send_response(200)
+        self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Length", str(path.stat().st_size))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
-        self.wfile.write(data)
-
+        with path.open("rb") as source:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
 
 def create_server(
     host: str = "127.0.0.1",
     port: int = 8765,
     data_dir: Path = Path("data"),
-    runtime: str = "dev",
+    runtime: str = "onnx",
     debug: bool = True,
 ) -> SentriFaceApiServer:
+    normalized_host = host.strip().casefold()
+    if normalized_host == "localhost":
+        host = "127.0.0.1"
+    else:
+        try:
+            address = ipaddress.ip_address(normalized_host)
+        except ValueError as exc:
+            raise ValueError("Server host must be localhost or a loopback IP address") from exc
+        if not address.is_loopback or address.version != 4:
+            raise ValueError("Server may bind only to an IPv4 loopback address")
+    if runtime not in {"dev", "onnx"}:
+        raise ValueError("Runtime must be dev or onnx")
     profile = assess_hardware()
     config = config_for_hardware(profile, data_dir=data_dir)
     engine = build_dev_engine(data_dir, config) if runtime == "dev" else build_onnx_engine(config)
@@ -1197,7 +1519,7 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--data-dir", type=Path, default=Path("data"))
-    parser.add_argument("--runtime", choices=("dev", "onnx"), default="dev")
+    parser.add_argument("--runtime", choices=("dev", "onnx"), default="onnx")
     parser.add_argument("--quiet-debug", action="store_true", help="Disable verbose UI debug logs")
     args = parser.parse_args()
 
@@ -1255,6 +1577,11 @@ def _safe_rejection_reasons(value: Any) -> dict[str, int]:
         reasons[reason] = reasons.get(reason, 0) + _safe_count(raw_count, "reason count")
     return reasons or {"invalid_input": 1}
 
+
+def _optional_operation_id(payload: dict[str, Any]) -> str:
+    if not str(payload.get("operation_id") or "").strip():
+        return str(uuid.uuid4())
+    return _operation_id(payload)
 
 def _operation_id(payload: dict[str, Any]) -> str:
     value = _required(payload, "operation_id")
@@ -1346,7 +1673,7 @@ def _save_upload_bytes(data_dir: Path, filename: str, data: bytes, upload_subdir
         raise InputValidationError("Upload is empty", "empty_file")
     if len(data) > UPLOAD_REQUEST_LIMIT_BYTES:
         raise InputValidationError(
-            "Upload exceeds the 100 MB per-file limit",
+            "Upload exceeds the 25 MB per-file limit",
             "file_too_large",
         )
     detected_suffix = _detect_image_suffix(data)
@@ -1788,6 +2115,26 @@ def _match(engine: FaceEngine, match: PersonMatch, rank: int) -> dict[str, Any]:
         "embedding_ids": list(match.embedding_ids),
         "embeddings_matched": match.embeddings_matched,
         "representative_image": representative,
+        **_match_policy(engine, match.score),
+    }
+
+
+def _match_policy(engine: FaceEngine, score: float) -> dict[str, Any]:
+    config = engine.config
+    if score >= DUPLICATE_MATCH_SCORE:
+        classification = "duplicate"
+    elif score >= config.high_confidence:
+        classification = "strong"
+    elif score >= config.medium_confidence:
+        classification = "likely"
+    elif score >= config.possible_confidence:
+        classification = "possible"
+    else:
+        classification = "unknown"
+    return {
+        "classification": classification,
+        "is_known": classification != "unknown",
+        "is_duplicate": classification == "duplicate",
     }
 
 

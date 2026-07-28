@@ -165,6 +165,7 @@ export function useQueueController({
       throw error;
     } finally {
       if (pollId) window.clearInterval(pollId);
+      canceledQueueJobs.current.delete(jobId);
       window.setTimeout(() => {
         setQueueProgress((current) => current?.jobId === jobId && current.status === "done" ? null : current);
       }, 900);
@@ -233,6 +234,7 @@ export function useQueueController({
       throw error;
     } finally {
       queueAbortControllers.current.delete(jobId);
+      canceledQueueJobs.current.delete(jobId);
     }
   };
 
@@ -262,20 +264,83 @@ export function useQueueController({
     await scanQueueFiles(files, { jobId, startedAt, source: "queue-drop" });
   };
 
-  const cancelQueueProcessing = () => {
+  const cancelQueueProcessing = async () => {
     if (queueProgress?.status === "failed") {
       setQueueProgress(null);
       return;
     }
-    const wasUploading = queueProgress?.phase === "uploading";
-    setQueueProgress((current) => {
-      if (current?.jobId) {
-        canceledQueueJobs.current.add(current.jobId);
-        queueAbortControllers.current.get(current.jobId)?.abort();
+    const jobId = queueProgress?.jobId;
+    if (!jobId) return;
+    const previousPhase = queueProgress.phase;
+    const abortController = queueAbortControllers.current.get(jobId);
+    canceledQueueJobs.current.add(jobId);
+
+    if (previousPhase === "uploading") {
+      abortController?.abort();
+      setQueueProgress(null);
+      showToast("Queue upload canceled", "yellow");
+      return;
+    }
+
+    setQueueProgress((current) => current?.jobId === jobId
+      ? { ...current, status: "cancelling", phase: "cancelling" }
+      : current);
+    try {
+      const cancellation = await apiPost("/api/queue-cancel", { job_id: jobId }, { silent: true });
+      if (!cancellation.cancel_requested && cancellation.status === "done") {
+        canceledQueueJobs.current.delete(jobId);
+        abortController?.abort();
+        setQueueProgress(null);
+        await loadQueueSessions();
+        showToast("Queue processing had already finished", "yellow");
+        return;
       }
-      return null;
-    });
-    showToast(wasUploading ? "Queue upload canceled" : "Stopped tracking queue processing", "yellow");
+      // Abort the original HTTP request only after the independent cancellation
+      // request reached the server. Then wait for backend rollback/cleanup.
+      abortController?.abort();
+      const deadline = Date.now() + 30_000;
+      let terminal = null;
+      while (Date.now() < deadline) {
+        const snapshot = await apiGet(
+          `/api/queue-progress?job_id=${encodeURIComponent(jobId)}`,
+          { silent: true, timeoutMs: 5_000 },
+        );
+        setQueueProgress((current) => current?.jobId === jobId
+          ? normalizeQueueProgress({ ...current, ...snapshot, jobId })
+          : current);
+        if (["cancelled", "done", "failed"].includes(snapshot.status)) {
+          terminal = snapshot;
+          break;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
+      if (terminal?.status === "cancelled") {
+        setQueueProgress(null);
+        showToast("Queue processing canceled and temporary files cleaned up", "yellow");
+      } else if (terminal?.status === "done") {
+        canceledQueueJobs.current.delete(jobId);
+        setQueueProgress(null);
+        await loadQueueSessions();
+        showToast("Queue processing had already finished", "yellow");
+      } else if (terminal?.status === "failed") {
+        throw new Error(terminal.error || "Queue cleanup failed after cancellation");
+      } else {
+        showToast(
+          "Cancellation was accepted. Backend cleanup is still finishing; keep SentriFace open.",
+          "yellow",
+          { title: "Cleanup still in progress", autoClose: 8000 },
+        );
+      }    } catch (error) {
+      canceledQueueJobs.current.delete(jobId);
+      setQueueProgress((current) => current?.jobId === jobId
+        ? { ...current, status: "running", phase: previousPhase }
+        : current);
+      showToast(
+        error?.message || "The server could not cancel queue processing",
+        "red",
+        { title: "Cancellation failed" },
+      );
+    }
   };
 
   const openQueueGroup = (group) => {
@@ -441,6 +506,7 @@ export function useQueueController({
       individual_count: Number(queueFollowup.individualCount),
       event_occasion: queueFollowup.eventOccasion,
       added_by: queueFollowup.addedBy,
+      operation_id: queueFollowup.followupOperationIds?.[entry.face_id] || crypto.randomUUID(),
     })));
     setQueueFollowupDone(true);
     setQueueSelectedFaces([]);
@@ -565,6 +631,8 @@ export function useQueueController({
       decision,
       action,
       faceIds,
+      identityOperationId: crypto.randomUUID(),
+      followupOperationIds: Object.fromEntries(faceIds.map((faceId) => [faceId, crypto.randomUUID()])),
     });
     setQueueFollowupDone(false);
   }

@@ -1,5 +1,3 @@
-import { MATCH_TEXT_THRESHOLDS } from "./constants.js";
-
 export function mediaUrl(path) {
   return `/media?path=${encodeURIComponent(path)}`;
 }
@@ -24,77 +22,42 @@ export function currentDateTimeParts() {
 }
 
 export function recognitionText(match) {
-  if (!match) return "New Person !";
-  if (hasCertainMatch(match)) return `That's ${match.name}`;
-  if (match.score >= MATCH_TEXT_THRESHOLDS.likely) return `Likely ${match.name}`;
-  if (match.score >= MATCH_TEXT_THRESHOLDS.possible) return `Perhaps ${match.name}`;
-  if (match.score > MATCH_TEXT_THRESHOLDS.newPerson) return `Is it ${match.name}?`;
-  return "New Person !";
+  if (!match || !match.is_known) return "New Person !";
+  if (["strong", "duplicate"].includes(match.classification)) return `That's ${match.name}`;
+  if (match.classification === "likely") return `Likely ${match.name}`;
+  if (match.classification === "possible") return `Perhaps ${match.name}`;
+  return `Is it ${match.name}?`;
 }
 
 export function hasCertainMatch(match) {
-  return Boolean(match && match.score >= MATCH_TEXT_THRESHOLDS.certain);
+  return Boolean(match && ["strong", "duplicate"].includes(match.classification));
 }
 
 export function isNewPersonSuggestion(match) {
-  return !match || match.score <= MATCH_TEXT_THRESHOLDS.newPerson;
+  return !match || !match.is_known;
 }
 
-export function scoreColor(score) {
-  if (score >= MATCH_TEXT_THRESHOLDS.certain) return "green";
-  if (score >= MATCH_TEXT_THRESHOLDS.likely) return "blue";
-  if (score >= MATCH_TEXT_THRESHOLDS.possible) return "yellow";
-  return "red";
+export function scoreColor(match) {
+  return matchDisplay(match).color;
 }
 
-export function matchDisplay(score) {
-  if (score >= MATCH_TEXT_THRESHOLDS.certain) {
-    return {
-      badge: "Strong Match",
-      color: "green",
-      stars: "★★★★★",
-      confidence: "Very High Confidence",
-    };
+export function matchDisplay(match) {
+  switch (match?.classification) {
+    case "duplicate":
+    case "strong": return { badge: "Strong Match", color: "green", stars: "5/5", confidence: "Very High Confidence" };
+    case "likely": return { badge: "Good Match", color: "blue", stars: "4/5", confidence: "High Confidence" };
+    case "possible": return { badge: "Possible Match", color: "yellow", stars: "2/5", confidence: "Possible Match" };
+    case "weak": return { badge: "Weak Match", color: "orange", stars: "1/5", confidence: "Low Confidence" };
+    default: return { badge: "No Match", color: "red", stars: "0/5", confidence: "No Reliable Match" };
   }
-  if (score >= MATCH_TEXT_THRESHOLDS.likely) {
-    return {
-      badge: "Good Match",
-      color: "blue",
-      stars: "★★★★☆",
-      confidence: "High Confidence",
-    };
-  }
-  if (score >= MATCH_TEXT_THRESHOLDS.possible) {
-    return {
-      badge: "Possible Match",
-      color: "yellow",
-      stars: "★★☆☆☆",
-      confidence: "Possible Match",
-    };
-  }
-  if (score > MATCH_TEXT_THRESHOLDS.newPerson) {
-    return {
-      badge: "Weak Match",
-      color: "orange",
-      stars: "★☆☆☆☆",
-      confidence: "Low Confidence",
-    };
-  }
-  return {
-    badge: "No Match",
-    color: "red",
-    stars: "☆☆☆☆☆",
-    confidence: "No Reliable Match",
-  };
 }
-
 export function qualityColor(status) {
   return { good: "green", ambiguous: "yellow", unknown: "gray", bad: "red", warn: "yellow" }[status] || "gray";
 }
 
 export function profileLine(profile) {
   if (!profile) return "Starting local engine...";
-  return `${profile.runtime.toUpperCase()} Runtime • ${titleCase(profile.hardware_tier)} Profile • ${profile.onnx_intra_threads} Threads • DB: ${profile.db_path}`;
+  return `${profile.runtime.toUpperCase()} Runtime | ${titleCase(profile.hardware_tier)} Profile | ${profile.onnx_intra_threads} Threads | DB: ${profile.db_path}`;
 }
 
 export function tabLabel(view) {

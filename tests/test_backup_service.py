@@ -4,6 +4,7 @@ import json
 import hashlib
 import shutil
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 import uuid
@@ -268,7 +269,7 @@ class BackupServiceTest(unittest.TestCase):
                 str(uuid.uuid4()),
             )
             self.assertTrue(result["restored"])
-            with sqlite3.connect(target_db) as conn:
+            with closing(sqlite3.connect(target_db)) as conn, conn:
                 restored_paths = conn.execute(
                     "SELECT source_image, crop_path FROM embeddings"
                 ).fetchone()
@@ -288,7 +289,7 @@ class BackupServiceTest(unittest.TestCase):
             }
             service = self._service(db_path, root / "data" / "backups")
             backup = service.create_backup(reason="known-good")
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.execute("UPDATE persons SET name = 'Changed after backup'")
             source.unlink()
             crop.unlink()
@@ -305,7 +306,7 @@ class BackupServiceTest(unittest.TestCase):
             self.assertTrue(result["restored"])
             self.assertNotEqual(result["safety_backup_id"], backup.backup_id)
             self.assertTrue(service.verify_backup(result["safety_backup_id"]))
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 self.assertEqual(
                     conn.execute("SELECT name FROM persons").fetchone()[0],
                     "Backup Person",
@@ -341,7 +342,7 @@ class BackupServiceTest(unittest.TestCase):
             self._seed_database_with_media(db_path, root)
             service = self._service(db_path, root / "data" / "backups")
             target = service.create_backup(reason="old-state")
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.execute("UPDATE persons SET name = 'Current state'")
             callback_calls = {"count": 0}
 
@@ -358,7 +359,7 @@ class BackupServiceTest(unittest.TestCase):
                 )
 
             self.assertEqual(callback_calls["count"], 2)
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 self.assertEqual(
                     conn.execute("SELECT name FROM persons").fetchone()[0],
                     "Current state",
@@ -436,7 +437,7 @@ class BackupServiceTest(unittest.TestCase):
             metadata_path = service._backup_path(backup.backup_id) / "backup.json"
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             backup_db = service._database_path(backup.backup_id)
-            with sqlite3.connect(backup_db) as conn:
+            with closing(sqlite3.connect(backup_db)) as conn, conn:
                 conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
             metadata["database_version"] = SCHEMA_VERSION + 1
             metadata["database"]["sha256"] = hashlib.sha256(
@@ -457,7 +458,7 @@ class BackupServiceTest(unittest.TestCase):
             db_path.parent.mkdir(parents=True)
             shared_image = root / "shared.jpg"
             shared_image.write_bytes(b"shared-image")
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.executescript(
                     """
                     CREATE TABLE embeddings(source_image TEXT, crop_path TEXT);
@@ -510,7 +511,7 @@ class BackupServiceTest(unittest.TestCase):
                 },
             )
             service.restore_backup(backup.backup_id, str(uuid.uuid4()))
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 restored_values = {
                     conn.execute("SELECT source_image FROM embeddings").fetchone()[0],
                     conn.execute("SELECT crop_path FROM embeddings").fetchone()[0],

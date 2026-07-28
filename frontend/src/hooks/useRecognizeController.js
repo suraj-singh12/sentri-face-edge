@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 
-import { DUPLICATE_MATCH_SCORE, NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
+import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { clearFile, currentDateTimeParts, imageIdFromPath, isNewPersonSuggestion } from "../utils.js";
 import { usePersistentState } from "./usePersistentState.js";
 
@@ -22,9 +22,10 @@ export function useRecognizeController({
   const [recognitionFollowup, setRecognitionFollowup] = usePersistentState("sentriface.recognize.followup", null);
   const [recognitionFollowupDone, setRecognitionFollowupDone] = usePersistentState("sentriface.recognize.followupDone", false);
   const recognizeFileRef = useRef(null);
+  const recognitionRequestRef = useRef(null);
 
-  const runRecognition = useCallback(async (path) => {
-    const payload = await apiPost("/api/recognize", { path });
+  const runRecognition = useCallback(async (path, signal) => {
+    const payload = await apiPost("/api/recognize", { path }, { signal, timeoutMs: 10 * 60 * 1000 });
     setRecognition({ inputPath: path, faces: payload.faces || [], metrics: payload.metrics });
     setSelectedRecognitionFace(payload.faces?.[0]?.index || 1);
     setRecognitionGallery(null);
@@ -45,12 +46,16 @@ export function useRecognizeController({
       notifySkippedInputs(prepared.rejected.length, 0);
       return;
     }
-    const upload = await uploadFile(prepared.validFiles[0]);
+    recognitionRequestRef.current?.abort();
+    const controller = new AbortController();
+    recognitionRequestRef.current = controller;
+    const upload = await uploadFile(prepared.validFiles[0], { signal: controller.signal });
     const rejectedCount = prepared.rejected.length + upload.rejectedFiles;
     notifySkippedInputs(rejectedCount, upload.uploadedFiles);
     clearFile(recognizeFileRef);
     if (!upload.path) return;
-    await runRecognition(upload.path);
+    await runRecognition(upload.path, controller.signal);
+    recognitionRequestRef.current = null;
   }, [notifySkippedInputs, prepareImageFiles, runRecognition, uploadFile]);
 
   const recognitionAccept = async (requestedFaceIndex, forceBadQuality = false) => {
@@ -61,7 +66,7 @@ export function useRecognizeController({
     setSelectedRecognitionFace(faceIndex);
     setRecognitionGallery(null);
     setRecognitionGalleryImage(null);
-    if (best.score >= DUPLICATE_MATCH_SCORE) {
+    if (best.is_duplicate) {
       setRecognitionAcceptedFaces((current) => current.includes(faceIndex) ? current : [...current, faceIndex]);
       openRecognitionFollowup({ name: best.name, personId: best.person_id, embeddingId: best.embedding_ids[0], decision: "duplicate", faceIndex, faceBox: face.box, forceBadQuality });
       showToast(`Duplicate image of ${best.name}`);
@@ -91,7 +96,12 @@ export function useRecognizeController({
   };
 
   const recognitionClear = () => {
-    clearFile(recognizeFileRef);
+    recognitionRequestRef.current?.abort();
+    recognitionRequestRef.current = null;
+    if (recognition?.inputPath) {
+      void apiPost("/api/upload-file-discard", { path: recognition.inputPath }, { silent: true })
+        .catch(() => {});
+    }    clearFile(recognizeFileRef);
     setRecognition(null);
     setSelectedRecognitionFace(1);
     setRecognitionGallery(null);
@@ -136,6 +146,7 @@ export function useRecognizeController({
         face_index: recognitionFollowup.faceIndex,
         face_box: recognitionFollowup.faceBox,
         force_bad_quality: recognitionFollowup.forceBadQuality,
+        operation_id: recognitionFollowup.identityOperationId,
       });
       embeddingId = payload.embedding_id;
       detailName = payload.name || detailName;
@@ -147,6 +158,7 @@ export function useRecognizeController({
         face_index: recognitionFollowup.faceIndex,
         face_box: recognitionFollowup.faceBox,
         force_bad_quality: recognitionFollowup.forceBadQuality,
+        operation_id: recognitionFollowup.identityOperationId,
       });
       personId = payload.person_id;
       embeddingId = payload.embedding_id;
@@ -168,6 +180,7 @@ export function useRecognizeController({
       individual_count: Number(recognitionFollowup.individualCount),
       event_occasion: recognitionFollowup.eventOccasion,
       added_by: recognitionFollowup.addedBy,
+      operation_id: recognitionFollowup.followupOperationId,
     });
     setRecognitionFollowupDone(true);
     setRecognitionFollowup(null);
@@ -212,6 +225,8 @@ export function useRecognizeController({
       forceBadQuality,
       decision,
       action,
+      identityOperationId: crypto.randomUUID(),
+      followupOperationId: crypto.randomUUID(),
     });
     setRecognitionFollowupDone(false);
   }

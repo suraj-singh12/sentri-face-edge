@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDelete, showToast }) {
   const [profile, setProfile] = useState(null);
+  const [connectionError, setConnectionError] = useState("");
   const [people, setPeople] = useState([]);
   const [archivedPeople, setArchivedPeople] = useState([]);
   const [deletedFaces, setDeletedFaces] = useState([]);
@@ -26,11 +27,15 @@ export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDelete, 
     setDeletedFaces((await apiGet("/api/deleted-faces")).deleted_faces || []);
   }, [apiGet]);
   const loadBackups = useCallback(async () => setBackups((await apiGet("/api/backups")).backups), [apiGet]);
-  const refreshAll = useCallback(
-    async () => Promise.all([loadProfile(), loadPeople(), loadDeletedFaces(), loadEvents(), loadBackups()]),
-    [loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups],
-  );
-  const reloadAppData = useCallback(async () => {
+  const refreshAll = useCallback(async () => {
+    setConnectionError("");
+    try {
+      await Promise.all([loadProfile(), loadPeople(), loadDeletedFaces(), loadEvents(), loadBackups()]);
+    } catch (error) {
+      setConnectionError(error?.message || "SentriFace server is unavailable");
+      throw error;
+    }
+  }, [loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups]);  const reloadAppData = useCallback(async () => {
     await refreshAll();
     showToast("App data reloaded");
   }, [refreshAll, showToast]);

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import uuid
+import threading
+from contextvars import ContextVar
 from math import sqrt
 from pathlib import Path
 from typing import Callable
 
 from sentriface.components.image_ops import load_bgr_image, save_face_crop
+from sentriface.components.linear_index import LinearFaceIndex
+from sentriface.cleanup_service import CleanupService
 from sentriface.components.quality import FaceQualityEvaluator
 from sentriface.config import RuntimeConfig
 from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, IdentityStore
-from sentriface.errors import InputImageError
+from sentriface.errors import InputImageError, QueueCancellationError
 from sentriface.metrics import MetricsCollector
 from sentriface.models import (
     FaceBox,
@@ -31,7 +35,36 @@ from sentriface.models import (
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 DUPLICATE_MATCH_SCORE = 0.9999
 QUEUE_POSSIBLE_MATCH_THRESHOLD = 0.40
+MAX_QUEUE_IMAGES = 10_000
 
+
+class _SynchronizedFaceIndex:
+    """Serializes reads and atomically swaps complete index generations."""
+
+    def __init__(self, index: FaceIndex) -> None:
+        self._index = index
+        self._lock = threading.RLock()
+
+    @property
+    def backend_name(self) -> str:
+        with self._lock:
+            return str(getattr(self._index, "backend_name", type(self._index).__name__))
+
+    def replace(self, index: FaceIndex) -> None:
+        with self._lock:
+            self._index = index
+
+    def rebuild(self, embeddings):
+        with self._lock:
+            self._index.rebuild(embeddings)
+
+    def add(self, record):
+        with self._lock:
+            self._index.add(record)
+
+    def search(self, vector, top_k):
+        with self._lock:
+            return self._index.search(vector, top_k)
 
 class FaceEngine:
     def __init__(
@@ -45,11 +78,32 @@ class FaceEngine:
         self.config = config
         self.detector = detector
         self.embedder = embedder
-        self.index = index
+        self.index = _SynchronizedFaceIndex(index)
         self.store = store
+        self.index_degraded_reason: str | None = (
+            "requested backend unavailable"
+            if config.index_backend != self.index.backend_name
+            else None
+        )
         self.quality = FaceQualityEvaluator(config)
-        self.metrics = MetricsCollector()
+        self._metrics_context: ContextVar[MetricsCollector | None] = ContextVar("sentriface_metrics", default=None)
+        self.cleanup = CleanupService(
+            config.data_dir,
+            (
+                config.data_dir / "uploads",
+                config.face_dir / "pending",
+                config.face_dir / "init",
+                config.data_dir / "restored-media",
+            ),
+        )
 
+    @property
+    def metrics(self) -> MetricsCollector:
+        collector = self._metrics_context.get()
+        if collector is None:
+            collector = MetricsCollector()
+            self._metrics_context.set(collector)
+        return collector
     def initialize(self) -> None:
         with self.metrics.timer("storage_prepare_ms"):
             self.config.data_dir.mkdir(parents=True, exist_ok=True)
@@ -57,11 +111,9 @@ class FaceEngine:
             self.config.index_dir.mkdir(parents=True, exist_ok=True)
         with self.metrics.timer("db_initialize_ms"):
             self.store.initialize()
-        with self.metrics.timer("db_list_embeddings_ms"):
-            embeddings = self.store.list_embeddings()
-        self.metrics.increment("embeddings_loaded", len(embeddings))
-        with self.metrics.timer("index_rebuild_ms"):
-            self.index.rebuild(embeddings)
+        self.cleanup.retry_all(self.store.list_all_file_references)
+        self._rebuild_index()
+        self.metrics.increment("embeddings_loaded", len(self.store.list_embeddings()))
 
     def recognize(self, image_path: Path) -> list[RecognitionResult]:
         results: list[RecognitionResult] = []
@@ -94,8 +146,7 @@ class FaceEngine:
         return self.metrics.snapshot()
 
     def reset_metrics(self) -> None:
-        self.metrics = MetricsCollector()
-
+        self._metrics_context.set(MetricsCollector())
     def _process_additions(
         self,
         image_path: Path,
@@ -323,12 +374,21 @@ class FaceEngine:
         embedding_id: str,
         operation_id: str | None = None,
     ) -> dict:
+        lifecycle = self.store.get_embedding_lifecycle(embedding_id)
+        journal = self.cleanup.schedule(
+            (
+                lifecycle.get("source_image") if lifecycle else None,
+                lifecycle.get("crop_path") if lifecycle else None,
+            ),
+            f"purge-embedding-{embedding_id}",
+        )
         with self.metrics.timer("db_purge_deleted_embedding_ms"):
             result = self.store.permanently_delete_embedding(
                 embedding_id,
                 operation_id or str(uuid.uuid4()),
             )
         self._rebuild_index()
+        self.cleanup.run(journal, self.store.list_all_file_references)
         return result
 
     def list_expired_deleted_embedding_ids(self, now: str | None = None) -> list[str]:
@@ -340,6 +400,16 @@ class FaceEngine:
         operation_id: str,
         now: str | None = None,
     ) -> dict:
+        lifecycles = [self.store.get_embedding_lifecycle(item) for item in embedding_ids]
+        journal = self.cleanup.schedule(
+            (
+                path
+                for lifecycle in lifecycles
+                if lifecycle
+                for path in (lifecycle.get("source_image"), lifecycle.get("crop_path"))
+            ),
+            f"purge-expired-{operation_id}",
+        )
         with self.metrics.timer("db_purge_expired_embeddings_ms"):
             result = self.store.purge_expired_deleted_embeddings(
                 embedding_ids,
@@ -347,6 +417,7 @@ class FaceEngine:
                 now,
             )
         self._rebuild_index()
+        self.cleanup.run(journal, self.store.list_all_file_references)
         return result
 
     def move_embedding(
@@ -381,6 +452,7 @@ class FaceEngine:
         country: str | None = None,
         importance: str | None = None,
         added_by: str | None = None,
+        operation_id: str | None = None,
     ) -> str:
         with self.metrics.timer("db_add_recognition_detail_ms"):
             detail = self.store.add_recognition_detail(
@@ -399,6 +471,7 @@ class FaceEngine:
                 country=country,
                 importance=importance,
                 added_by=added_by,
+                operation_id=operation_id,
             )
         return detail.detail_id
 
@@ -439,38 +512,36 @@ class FaceEngine:
         pending: PendingAddition,
         name: str,
         metadata: dict | None = None,
+        operation_id: str | None = None,
     ) -> str:
-        with self.metrics.timer("db_create_person_ms"):
-            person = self.store.create_person(name=name, metadata=metadata)
-        with self.metrics.timer("db_add_embedding_ms"):
-            record = self.store.add_embedding(
-                person_id=person.person_id,
-                vector=pending.vector,
-                quality_score=pending.face.quality_score,
-                source_image=pending.source_image,
-                crop_path=pending.face.crop_path,
+        with self.metrics.timer("db_save_pending_ms"):
+            self.store.save_pending_addition(pending)
+        with self.metrics.timer("db_confirm_pending_ms"):
+            person, _record = self.store.confirm_pending_addition(
+                pending.pending_id,
+                operation_id or str(uuid.uuid4()),
+                name=name,
+                metadata=metadata,
             )
-        with self.metrics.timer("index_add_ms"):
-            self.index.add(record)
-        with self.metrics.timer("db_delete_pending_ms"):
-            self.store.delete_pending_addition(pending.pending_id)
+        self._rebuild_index()
         return person.person_id
 
-    def confirm_existing_person(self, pending: PendingAddition, person_id: str) -> str:
-        with self.metrics.timer("db_add_embedding_ms"):
-            record = self.store.add_embedding(
+    def confirm_existing_person(
+        self,
+        pending: PendingAddition,
+        person_id: str,
+        operation_id: str | None = None,
+    ) -> str:
+        with self.metrics.timer("db_save_pending_ms"):
+            self.store.save_pending_addition(pending)
+        with self.metrics.timer("db_confirm_pending_ms"):
+            _person, record = self.store.confirm_pending_addition(
+                pending.pending_id,
+                operation_id or str(uuid.uuid4()),
                 person_id=person_id,
-                vector=pending.vector,
-                quality_score=pending.face.quality_score,
-                source_image=pending.source_image,
-                crop_path=pending.face.crop_path,
             )
-        with self.metrics.timer("index_add_ms"):
-            self.index.add(record)
-        with self.metrics.timer("db_delete_pending_ms"):
-            self.store.delete_pending_addition(pending.pending_id)
+        self._rebuild_index()
         return record.embedding_id
-
     def confirm_pending_as_new_person(self, pending_id: str, name: str) -> str:
         with self.metrics.timer("db_get_pending_ms"):
             pending = self.store.get_pending_addition(pending_id)
@@ -488,9 +559,14 @@ class FaceEngine:
         return self.confirm_existing_person(pending, person_id)
 
     def reject_pending_addition(self, pending_id: str) -> None:
+        pending = self.store.get_pending_addition(pending_id)
+        journal = self.cleanup.schedule(
+            (pending.source_image, pending.face.crop_path) if pending else (),
+            f"reject-pending-{pending_id}",
+        )
         with self.metrics.timer("db_delete_pending_ms"):
             self.store.delete_pending_addition(pending_id)
-
+        self.cleanup.run(journal, self.store.list_all_file_references)
     def create_init_session(
         self,
         source_path: Path,
@@ -503,14 +579,21 @@ class FaceEngine:
         source_path: Path,
         allow_bad_quality: bool = False,
         progress_callback: Callable[[dict], None] | None = None,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> "QueueSessionResult":
-        return self._create_init_session(source_path, allow_bad_quality, progress_callback=progress_callback)
+        return self._create_init_session(
+            source_path,
+            allow_bad_quality,
+            progress_callback=progress_callback,
+            cancel_check=cancel_check,
+        )
 
     def _create_init_session(
         self,
         source_path: Path,
         allow_bad_quality: bool = False,
         progress_callback: Callable[[dict], None] | None = None,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> "QueueSessionResult":
         def report(**payload) -> None:
             if progress_callback:
@@ -519,138 +602,173 @@ class FaceEngine:
         with self.metrics.timer("total_init_scan_ms"):
             with self.metrics.timer("db_create_init_session_ms"):
                 session = self.store.create_init_session(str(source_path))
-            image_paths = _iter_images(source_path)
-            self.metrics.increment("images_scanned", len(image_paths))
-            report(
-                phase="detecting",
-                session_id=session.session_id,
-                total_images=len(image_paths),
-                images_scanned=0,
-                faces_detected=0,
-                embeddings_generated=0,
-                groups=0,
-            )
-            init_faces: list[InitFace] = []
-            embeddings_generated = 0
-            invalid_images: list[str] = []
-            for image_index, image_path in enumerate(image_paths, start=1):
-                try:
-                    with self.metrics.timer("image_load_ms"):
-                        image = load_bgr_image(image_path)
-                except InputImageError:
-                    invalid_images.append(str(image_path))
-                    self.metrics.increment("images_rejected")
+
+            def cancellation_checkpoint(phase: str) -> None:
+                if cancel_check is not None and cancel_check():
                     report(
-                        phase="detecting",
+                        phase="cancelling",
+                        status="cancelling",
+                        session_id=session.session_id,
+                        cancellation_phase=phase,
+                    )
+                    raise QueueCancellationError(session.session_id, phase)
+
+            try:
+                cancellation_checkpoint("discovering_images")
+                image_paths = _iter_images(source_path, cancellation_checkpoint)
+                self.metrics.increment("images_scanned", len(image_paths))
+                report(
+                    phase="detecting",
+                    session_id=session.session_id,
+                    total_images=len(image_paths),
+                    images_scanned=0,
+                    faces_detected=0,
+                    embeddings_generated=0,
+                    groups=0,
+                )
+                init_faces: list[InitFace] = []
+                embeddings_generated = 0
+                invalid_images: list[str] = []
+                for image_index, image_path in enumerate(image_paths, start=1):
+                    cancellation_checkpoint("before_image")
+                    try:
+                        with self.metrics.timer("image_load_ms"):
+                            image = load_bgr_image(image_path)
+                    except InputImageError:
+                        invalid_images.append(str(image_path))
+                        self.metrics.increment("images_rejected")
+                        report(
+                            phase="detecting",
+                            session_id=session.session_id,
+                            total_images=len(image_paths),
+                            images_scanned=image_index,
+                            invalid_images=len(invalid_images),
+                            faces_detected=len(init_faces),
+                            embeddings_generated=embeddings_generated,
+                            groups=0,
+                        )
+                        continue
+                    cancellation_checkpoint("before_detection")
+                    with self.metrics.timer("detect_ms"):
+                        faces = self.detector.detect(image_path)
+                    cancellation_checkpoint("after_detection")
+                    self.metrics.increment("faces_detected", len(faces))
+                    for face in faces:
+                        cancellation_checkpoint("before_face")
+                        with self.metrics.timer("quality_ms"):
+                            quality = self.quality.evaluate(image, face)
+                        self.metrics.increment(f"quality_{quality.status.value}")
+                        if quality.status == QualityStatus.BAD and not allow_bad_quality:
+                            self.metrics.increment("faces_rejected")
+                            continue
+                        cancellation_checkpoint("before_embedding")
+                        with self.metrics.timer("embed_ms"):
+                            vector = self.embedder.encode(image_path, face)
+                        cancellation_checkpoint("after_embedding")
+                        embeddings_generated += 1
+                        self.metrics.increment("faces_accepted")
+                        init_face_id = str(uuid.uuid4())
+                        with self.metrics.timer("crop_save_ms"):
+                            crop_path = save_face_crop(
+                                image,
+                                face,
+                                self.config.face_dir / "init" / session.session_id / f"{init_face_id}.jpg",
+                            )
+                        init_faces.append(
+                            InitFace(
+                                init_face_id=init_face_id,
+                                session_id=session.session_id,
+                                group_id="unassigned",
+                                source_image=str(image_path),
+                                face=_with_crop_path(face, crop_path),
+                                vector=vector,
+                                quality=quality,
+                            )
+                        )
+                        cancellation_checkpoint("after_face")
+                    report(
+                        phase="detecting" if image_index < len(image_paths) else "matching",
                         session_id=session.session_id,
                         total_images=len(image_paths),
                         images_scanned=image_index,
-                        invalid_images=len(invalid_images),
                         faces_detected=len(init_faces),
                         embeddings_generated=embeddings_generated,
                         groups=0,
                     )
-                    continue
-                with self.metrics.timer("detect_ms"):
-                    faces = self.detector.detect(image_path)
-                self.metrics.increment("faces_detected", len(faces))
-                for face in faces:
-                    with self.metrics.timer("quality_ms"):
-                        quality = self.quality.evaluate(image, face)
-                    self.metrics.increment(f"quality_{quality.status.value}")
-                    if quality.status == QualityStatus.BAD and not allow_bad_quality:
-                        self.metrics.increment("faces_rejected")
-                        continue
-                    with self.metrics.timer("embed_ms"):
-                        vector = self.embedder.encode(image_path, face)
-                    embeddings_generated += 1
-                    self.metrics.increment("faces_accepted")
-                    init_face_id = str(uuid.uuid4())
-                    with self.metrics.timer("crop_save_ms"):
-                        crop_path = save_face_crop(
-                            image,
-                            face,
-                            self.config.face_dir / "init" / session.session_id / f"{init_face_id}.jpg",
-                        )
-                    init_faces.append(
-                        InitFace(
-                            init_face_id=init_face_id,
-                            session_id=session.session_id,
-                            group_id="unassigned",
-                            source_image=str(image_path),
-                            face=_with_crop_path(face, crop_path),
-                            vector=vector,
-                            quality=quality,
-                        )
-                    )
+                cancellation_checkpoint("before_matching")
                 report(
-                    phase="detecting" if image_index < len(image_paths) else "matching",
+                    phase="matching",
                     session_id=session.session_id,
                     total_images=len(image_paths),
-                    images_scanned=image_index,
+                    images_scanned=len(image_paths),
                     faces_detected=len(init_faces),
                     embeddings_generated=embeddings_generated,
                     groups=0,
                 )
-            report(
-                phase="matching",
-                session_id=session.session_id,
-                total_images=len(image_paths),
-                images_scanned=len(image_paths),
-                faces_detected=len(init_faces),
-                embeddings_generated=embeddings_generated,
-                groups=0,
-            )
-            with self.metrics.timer("search_ms"):
-                matches_by_face_id = {
-                    face.init_face_id: self._search_unique_people(face.vector)
-                    for face in init_faces
-                }
-            report(
-                phase="clustering",
-                session_id=session.session_id,
-                total_images=len(image_paths),
-                images_scanned=len(image_paths),
-                faces_detected=len(init_faces),
-                embeddings_generated=embeddings_generated,
-                groups=0,
-            )
-            with self.metrics.timer("cluster_ms"):
-                grouped = _assign_groups(
-                    init_faces,
-                    threshold=self.config.high_confidence,
-                    medium_threshold=self.config.medium_confidence,
-                    matches_by_face_id=matches_by_face_id,
+                matches_by_face_id: dict[str, list[PersonMatch]] = {}
+                with self.metrics.timer("search_ms"):
+                    for face in init_faces:
+                        cancellation_checkpoint("matching_face")
+                        matches_by_face_id[face.init_face_id] = self._search_unique_people(face.vector)
+                cancellation_checkpoint("before_clustering")
+                report(
+                    phase="clustering",
+                    session_id=session.session_id,
+                    total_images=len(image_paths),
+                    images_scanned=len(image_paths),
+                    faces_detected=len(init_faces),
+                    embeddings_generated=embeddings_generated,
+                    groups=0,
                 )
-            group_count = len({face.group_id for face in grouped})
-            self.metrics.increment("init_groups", group_count)
-            report(
-                phase="preparing",
-                session_id=session.session_id,
-                total_images=len(image_paths),
-                images_scanned=len(image_paths),
-                faces_detected=len(init_faces),
-                embeddings_generated=embeddings_generated,
-                groups=group_count,
-            )
-            with self.metrics.timer("db_save_init_faces_ms"):
-                self.store.save_init_faces(grouped)
-            report(
-                phase="done",
-                session_id=session.session_id,
-                total_images=len(image_paths),
-                images_scanned=len(image_paths),
-                faces_detected=len(init_faces),
-                embeddings_generated=embeddings_generated,
-                groups=group_count,
-                invalid_images=len(invalid_images),
-            )
-            return QueueSessionResult(
-                session=session,
-                groups=_groups_from_faces(session.session_id, grouped),
-                matches_by_face_id=matches_by_face_id,
-                invalid_images=invalid_images,
-            )
+                with self.metrics.timer("cluster_ms"):
+                    grouped = _assign_groups(
+                        init_faces,
+                        threshold=self.config.high_confidence,
+                        medium_threshold=self.config.medium_confidence,
+                        matches_by_face_id=matches_by_face_id,
+                    )
+                cancellation_checkpoint("after_clustering")
+                group_count = len({face.group_id for face in grouped})
+                self.metrics.increment("init_groups", group_count)
+                report(
+                    phase="preparing",
+                    session_id=session.session_id,
+                    total_images=len(image_paths),
+                    images_scanned=len(image_paths),
+                    faces_detected=len(init_faces),
+                    embeddings_generated=embeddings_generated,
+                    groups=group_count,
+                )
+                cancellation_checkpoint("before_save")
+                with self.metrics.timer("db_save_init_faces_ms"):
+                    self.store.save_init_faces(grouped)
+                cancellation_checkpoint("after_save")
+                report(
+                    phase="done",
+                    session_id=session.session_id,
+                    total_images=len(image_paths),
+                    images_scanned=len(image_paths),
+                    faces_detected=len(init_faces),
+                    embeddings_generated=embeddings_generated,
+                    groups=group_count,
+                    invalid_images=len(invalid_images),
+                )
+                return QueueSessionResult(
+                    session=session,
+                    groups=_groups_from_faces(session.session_id, grouped),
+                    matches_by_face_id=matches_by_face_id,
+                    invalid_images=invalid_images,
+                )
+            except QueueCancellationError:
+                try:
+                    self.discard_init_session(session.session_id)
+                finally:
+                    raise
+            except Exception:
+                try:
+                    self.discard_init_session(session.session_id)
+                finally:
+                    raise
 
     def list_init_groups(self, session_id: str) -> list[InitGroup]:
         with self.metrics.timer("db_get_init_session_ms"):
@@ -668,27 +786,13 @@ class FaceEngine:
         session = self.store.get_init_session(session_id)
         if session is None:
             raise KeyError(f"Unknown init session: {session_id}")
-        other_sources = {
-            Path(item.source_path)
-            for item in self.store.list_init_sessions()
-            if item.session_id != session_id
-        }
+        journal = self.cleanup.schedule(
+            (session.source_path, self.config.face_dir / "init" / session_id),
+            f"discard-init-session-{session_id}",
+        ) if delete_files else None
         with self.metrics.timer("db_delete_init_session_ms"):
             self.store.delete_init_session(session_id)
-        if not delete_files:
-            return
-        protected_paths = {
-            Path(path).resolve()
-            for person in self.store.list_persons()
-            for record in self.store.list_embeddings_for_person(person.person.person_id)
-            for path in (record.source_image, record.crop_path)
-            if path
-        }
-        source = Path(session.source_path)
-        if source not in other_sources:
-            self._remove_managed_queue_path(source, protected_paths)
-        self._remove_managed_queue_path(self.config.face_dir / "init" / session_id, protected_paths)
-
+        self.cleanup.run(journal, self.store.list_all_file_references)
     def _remove_managed_queue_path(self, path: Path, protected_paths: set[Path]) -> None:
         resolved = path.resolve()
         managed_roots = [
@@ -763,24 +867,63 @@ class FaceEngine:
             self.store.mark_init_group_status(session_id, group_id, "confirmed")
         return len(group.faces)
 
-    def confirm_init_faces(self, session_id: str, group_id: str, init_face_ids: list[str], name: str) -> tuple[str, list[dict]]:
+    def confirm_init_faces(
+        self,
+        session_id: str,
+        group_id: str,
+        init_face_ids: list[str],
+        name: str,
+        operation_id: str | None = None,
+    ) -> tuple[str, list[dict]]:
+        operation_id = operation_id or str(uuid.uuid4())
+        existing = self.store.get_person_operation(operation_id, "confirm-init-new")
+        if existing:
+            return str(existing["person_id"]), list(existing["accepted"])
         faces = self._selected_init_faces(session_id, group_id, init_face_ids)
-        with self.metrics.timer("db_create_person_ms"):
-            person = self.store.create_person(name=name)
-        accepted = self._add_init_face_embeddings(person.person_id, faces)
-        self._remove_reviewed_init_faces(session_id, group_id, init_face_ids, accepted_person_id=person.person_id)
+        journal = self.cleanup.schedule(
+            (path for face in faces for path in (face.source_image, face.face.crop_path)),
+            f"confirm-init-{operation_id}",
+        )
+        result = self.store.confirm_init_faces_atomic(
+            session_id,
+            group_id,
+            init_face_ids,
+            operation_id,
+            name=name,
+        )
+        self._rebuild_index()
+        self.cleanup.run(journal, self.store.list_all_file_references)
         self._regroup_pending_init_session(session_id)
-        return person.person_id, accepted
+        return str(result["person_id"]), list(result["accepted"])
 
-    def confirm_init_faces_existing(self, session_id: str, group_id: str, init_face_ids: list[str], person_id: str) -> list[dict]:
-        if self.store.get_person(person_id) is None:
-            raise KeyError(f"Unknown person: {person_id}")
+    def confirm_init_faces_existing(
+        self,
+        session_id: str,
+        group_id: str,
+        init_face_ids: list[str],
+        person_id: str,
+        operation_id: str | None = None,
+    ) -> list[dict]:
+        operation_id = operation_id or str(uuid.uuid4())
+        existing = self.store.get_person_operation(operation_id, "confirm-init-existing")
+        if existing:
+            return list(existing["accepted"])
         faces = self._selected_init_faces(session_id, group_id, init_face_ids)
-        accepted = self._add_init_face_embeddings(person_id, faces)
-        self._remove_reviewed_init_faces(session_id, group_id, init_face_ids, accepted_person_id=person_id)
+        journal = self.cleanup.schedule(
+            (path for face in faces for path in (face.source_image, face.face.crop_path)),
+            f"confirm-init-{operation_id}",
+        )
+        result = self.store.confirm_init_faces_atomic(
+            session_id,
+            group_id,
+            init_face_ids,
+            operation_id,
+            person_id=person_id,
+        )
+        self._rebuild_index()
+        self.cleanup.run(journal, self.store.list_all_file_references)
         self._regroup_pending_init_session(session_id)
-        return accepted
-
+        return list(result["accepted"])
     def discard_init_faces(self, session_id: str, group_id: str, init_face_ids: list[str]) -> None:
         self._selected_init_faces(session_id, group_id, init_face_ids)
         self._remove_reviewed_init_faces(session_id, group_id, init_face_ids, empty_status="rejected")
@@ -867,6 +1010,15 @@ class FaceEngine:
         reviewed = {face_id for face_id in init_face_ids if face_id}
         group = self._get_init_group(session_id, group_id)
         remaining_faces = [face for face in group.faces if face.init_face_id not in reviewed]
+        reviewed_faces = [face for face in group.faces if face.init_face_id in reviewed]
+        journal = self.cleanup.schedule(
+            (
+                path
+                for face in reviewed_faces
+                for path in (face.source_image, face.face.crop_path)
+            ),
+            f"review-init-faces-{session_id}-{group_id}",
+        )
         with self.metrics.timer("db_delete_init_faces_ms"):
             self.store.delete_init_faces(init_face_ids)
         if remaining_faces:
@@ -881,6 +1033,7 @@ class FaceEngine:
         status = "pending" if remaining_faces else empty_status
         with self.metrics.timer("db_mark_init_group_ms"):
             self.store.mark_init_group_status(session_id, group_id, status)
+        self.cleanup.run(journal, self.store.list_all_file_references)
 
     def _regroup_init_faces(self, session_id: str, original_group_id: str, faces: list[InitFace]) -> None:
         regrouped = _assign_groups(faces, threshold=self.config.high_confidence)
@@ -941,9 +1094,26 @@ class FaceEngine:
     def _rebuild_index(self) -> None:
         with self.metrics.timer("db_list_embeddings_ms"):
             embeddings = self.store.list_embeddings()
-        with self.metrics.timer("index_rebuild_ms"):
-            self.index.rebuild(embeddings)
+        try:
+            with self.metrics.timer("index_rebuild_ms"):
+                self.index.rebuild(embeddings)
+            self.index_degraded_reason = None
+        except Exception as exc:
+            if self.index.backend_name == "linear":
+                raise
+            fallback = LinearFaceIndex()
+            fallback.rebuild(embeddings)
+            self.index.replace(fallback)
+            self.index_degraded_reason = f"{type(exc).__name__}: {exc}"
+            self.metrics.increment("index_fallbacks")
 
+    @property
+    def index_status(self) -> dict[str, str | None]:
+        return {
+            "requested": self.config.index_backend,
+            "actual": self.index.backend_name,
+            "degraded_reason": self.index_degraded_reason,
+        }
     def matches_for_vector(self, vector, excluded_person_ids: set[str] | None = None) -> list[PersonMatch]:
         with self.metrics.timer("search_ms"):
             return self._search_unique_people(vector, excluded_person_ids=excluded_person_ids)
@@ -1060,17 +1230,26 @@ class QueueSessionResult:
         self.invalid_images = invalid_images or []
 
 
-def _iter_images(source_path: Path) -> list[Path]:
+def _iter_images(
+    source_path: Path,
+    checkpoint: Callable[[str], None] | None = None,
+) -> list[Path]:
     if source_path.is_file():
         return [source_path] if source_path.suffix.lower() in IMAGE_EXTENSIONS else []
     if not source_path.exists():
         raise KeyError(f"Source path does not exist: {source_path}")
-    return sorted(
-        path
-        for path in source_path.rglob("*")
-        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
-    )
-
+    images: list[Path] = []
+    for path in source_path.rglob("*"):
+        if checkpoint:
+            checkpoint("discovering_images")
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
+            images.append(path)
+            if len(images) > MAX_QUEUE_IMAGES:
+                raise KeyError(
+                    f"Queue folders may contain at most {MAX_QUEUE_IMAGES} images"
+                )
+    images.sort()
+    return images
 
 def _assign_groups(
     faces: list[InitFace],

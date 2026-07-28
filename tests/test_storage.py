@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,7 +19,7 @@ class StorageMigrationTest(unittest.TestCase):
 
             store.initialize()
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
 
             self.assertEqual(version, SCHEMA_VERSION)
@@ -26,7 +27,7 @@ class StorageMigrationTest(unittest.TestCase):
     def test_newer_schema_version_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.execute("PRAGMA user_version = 999")
 
             store = SQLiteIdentityStore(db_path)
@@ -38,13 +39,13 @@ class StorageMigrationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             db_path = root / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.execute("PRAGMA user_version = 8")
 
             store = SQLiteIdentityStore(db_path)
             store.initialize()
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
                 table = conn.execute(
                     """
@@ -65,7 +66,7 @@ class StorageMigrationTest(unittest.TestCase):
             backup_path = (
                 root / "backups" / backups[0].backup_id / db_path.name
             )
-            with sqlite3.connect(backup_path) as conn:
+            with closing(sqlite3.connect(backup_path)) as conn, conn:
                 self.assertEqual(conn.execute("PRAGMA integrity_check").fetchone()[0], "ok")
                 self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 8)
 
@@ -78,7 +79,7 @@ class StorageMigrationTest(unittest.TestCase):
     def test_pre_migration_backup_failure_prevents_schema_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.execute("PRAGMA user_version = 9")
 
             with patch(
@@ -88,14 +89,14 @@ class StorageMigrationTest(unittest.TestCase):
                 with self.assertRaisesRegex(BackupError, "simulated backup failure"):
                     SQLiteIdentityStore(db_path).initialize()
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 9)
 
     def test_failed_migration_reuses_and_reverifies_pre_migration_backup(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             db_path = root / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.execute("PRAGMA user_version = 9")
             store = SQLiteIdentityStore(db_path)
 
@@ -108,7 +109,7 @@ class StorageMigrationTest(unittest.TestCase):
 
             backups = BackupService(db_path, root / "backups").list_backups()
             self.assertEqual(len(backups), 1)
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 9)
 
             with patch(
@@ -117,11 +118,11 @@ class StorageMigrationTest(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(BackupError, "failed verification"):
                     store.initialize()
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 9)
 
             store.initialize()
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
             self.assertEqual(
                 len(BackupService(db_path, root / "backups").list_backups()),
@@ -131,7 +132,7 @@ class StorageMigrationTest(unittest.TestCase):
     def test_v9_database_adds_deleted_face_retention_columns_without_deleting_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.executescript(
                     """
                     CREATE TABLE persons (
@@ -169,7 +170,7 @@ class StorageMigrationTest(unittest.TestCase):
             store = SQLiteIdentityStore(db_path, embedding_dim=1)
             store.initialize()
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 columns = {
                     row[1]
                     for row in conn.execute("PRAGMA table_info(embeddings)").fetchall()
@@ -196,7 +197,7 @@ class StorageMigrationTest(unittest.TestCase):
 
             store.backup_to(backup_path)
 
-            with sqlite3.connect(backup_path) as conn:
+            with closing(sqlite3.connect(backup_path)) as conn, conn:
                 persons = conn.execute("SELECT COUNT(*) FROM persons").fetchone()[0]
                 embeddings = conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
 
@@ -281,7 +282,7 @@ class StorageMigrationTest(unittest.TestCase):
     def test_v1_database_migrates_to_v2(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.executescript(
                     """
                     CREATE TABLE persons (
@@ -312,7 +313,7 @@ class StorageMigrationTest(unittest.TestCase):
 
             SQLiteIdentityStore(db_path).initialize()
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
                 columns = {
                     row[1]
@@ -327,7 +328,7 @@ class StorageMigrationTest(unittest.TestCase):
     def test_v3_database_migrates_to_v4(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.executescript(
                     """
                     CREATE TABLE persons (
@@ -342,7 +343,7 @@ class StorageMigrationTest(unittest.TestCase):
 
             SQLiteIdentityStore(db_path).initialize()
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
                 columns = {
                     row[1]
@@ -355,7 +356,7 @@ class StorageMigrationTest(unittest.TestCase):
     def test_v4_database_migrates_to_v5(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.executescript(
                     """
                     CREATE TABLE persons (
@@ -380,7 +381,7 @@ class StorageMigrationTest(unittest.TestCase):
 
             SQLiteIdentityStore(db_path).initialize()
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
                 tables = {
                     row[0]
@@ -395,7 +396,7 @@ class StorageMigrationTest(unittest.TestCase):
     def test_v5_database_migrates_to_v6(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.executescript(
                     """
                     CREATE TABLE persons (
@@ -435,7 +436,7 @@ class StorageMigrationTest(unittest.TestCase):
 
             SQLiteIdentityStore(db_path).initialize()
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
                 columns = {
                     row[1]
@@ -451,7 +452,7 @@ class StorageMigrationTest(unittest.TestCase):
     def test_v6_database_migrates_to_v7(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.executescript(
                     """
                     CREATE TABLE persons (
@@ -495,7 +496,7 @@ class StorageMigrationTest(unittest.TestCase):
 
             SQLiteIdentityStore(db_path).initialize()
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn, conn:
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
                 tables = {
                     row[0]

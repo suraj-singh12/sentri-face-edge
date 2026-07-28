@@ -1,6 +1,6 @@
 # SentriFace Edge
 
-SentriFace Edge is a CPU-first, fully offline face identification engine. It is designed for low-end Windows x86 machines first, including i3-class CPUs without a GPU.
+SentriFace Edge is a CPU-first, fully offline face identification engine. It is designed for low-end Windows, macOS, and Linux machines, including i3-class CPUs without a GPU.
 
 The project goal is simple: keep the face system modular and controllable without turning it into a pile of local web services.
 
@@ -18,7 +18,7 @@ UI
    -> Filesystem Image Store
 ```
 
-The first scaffold uses deterministic placeholder components so the storage, workflows, and contracts can run immediately. Real ONNX models will plug into the same interfaces.
+The normal runtime uses offline ONNX models. Deterministic placeholder components remain available only through explicit `--runtime dev` for tests and development; their results are synthetic.
 
 ## System Diagrams
 
@@ -67,7 +67,7 @@ flowchart LR
     Engine --> Detector["Face Detection\nSCRFD ONNX or dev detector"]
     Engine --> Quality["Quality Evaluator\nsize, blur, brightness, landmarks"]
     Engine --> Embedder["Face Embedding\nArcFace ONNX or dev hash embedder"]
-    Engine --> Index["Vector Index\nlinear cosine now, HNSW/FAISS later"]
+    Engine --> Index["Vector Index\nHNSW for larger galleries, linear fallback for small/degraded galleries"]
     Engine --> Store["SQLite Identity Store"]
     Engine --> Files["Filesystem Face Store"]
     Engine --> Metrics["Metrics Collector"]
@@ -91,7 +91,7 @@ Target runtime stack:
 Inference: ONNX Runtime CPU
 Detector:  det_500m.onnx
 Embedder:  w600k_r50.onnx
-Search:    hnswlib for larger galleries, linear cosine for tiny galleries
+Search:    HNSW (qhnswlib wheels) for larger galleries, linear cosine fallback
 DB:        SQLite
 Images:    filesystem paths, not DB blobs
 ```
@@ -116,15 +116,17 @@ high   -> 3 workers, batch size 4, larger preprocessing batches
 For i3-class systems, the goal is not to max out the CPU. The goal is to keep
 the UI responsive while recognition happens in the background.
 
-Run the local UI:
+Install and run the local UI (same commands on Windows, macOS, and Linux):
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.api_server --runtime dev --data-dir data
+python -m pip install -e ".[runtime,index]"
+python -m sentriface.api_server --data-dir data
 ```
 
-Then open `http://127.0.0.1:8765`. Use `--runtime onnx` after the offline ONNX
-models are present. The UI prints debug events to the terminal and keeps the
-latest events visible in the Debug tab.
+Then open `http://127.0.0.1:8765`. The server rejects non-loopback binds and
+foreign Host headers. ONNX is the default; use `--runtime dev` only for explicit
+testing. The UI prints debug events to the terminal and keeps the latest events
+visible in the Debug tab.
 Starting the app automatically creates the `data/` folder, SQLite DB, face crop
 folder, and index folder if they are missing. You do not need to run `init-db`
 before launching the UI.
@@ -154,25 +156,26 @@ Python UI server. After editing the frontend, rebuild the static bundle:
 
 ```bash
 cd frontend
+npm ci
 npm run build
 ```
 
 Check the selected profile:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli profile
+python -m sentriface.cli profile
 ```
 
 Use JSON output for future UI integration:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --json profile
+python -m sentriface.cli --json profile
 ```
 
 Use metrics output before optimizing:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --metrics --runtime onnx recognize path/to/image.jpg
+python -m sentriface.cli --metrics --runtime onnx recognize path/to/image.jpg
 ```
 
 Metrics include stage timings such as image load, detection, quality scoring,
@@ -182,42 +185,39 @@ accepted/rejected faces.
 Run a repeatable recognition benchmark over one image or a folder:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --metrics --runtime onnx benchmark path/to/images --repeat 3
+python -m sentriface.cli --metrics --runtime onnx benchmark path/to/images --repeat 3
 ```
 
 Compare ONNX Runtime thread counts on the target machine:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx benchmark path/to/images --repeat 3 --compare-threads 1,2,4
+python -m sentriface.cli --runtime onnx benchmark path/to/images --repeat 3 --compare-threads 1,2,4
 ```
 
 Override ONNX threads for a normal command:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx --onnx-threads 2 recognize path/to/image.jpg
+python -m sentriface.cli --runtime onnx --onnx-threads 2 recognize path/to/image.jpg
 ```
 
 Tune strictness and CPU load without editing code:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx --max-image-edge 720 --high-confidence 0.70 --medium-confidence 0.52 --min-quality-score 0.60 recognize path/to/image.jpg
+python -m sentriface.cli --runtime onnx --max-image-edge 720 --high-confidence 0.70 --medium-confidence 0.52 --min-quality-score 0.60 recognize path/to/image.jpg
 ```
 
-`high-confidence` controls strong matches, `medium-confidence` controls
-ambiguous candidates, `min-quality-score` controls whether a face may be added,
-and `max-image-edge` controls how aggressively images are downscaled before
-detection.
+The backend alone owns match labels: Strong is at least 0.60, Likely at least 0.50, Possible at least 0.40, and lower scores are Unknown/New Person. `min-quality-score` controls whether a face may be added, and `max-image-edge` controls how aggressively images are downscaled before detection.
 
 Run with development placeholders:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime dev recognize path/to/image.jpg
+python -m sentriface.cli --runtime dev recognize path/to/image.jpg
 ```
 
 Run recognition over a folder:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx recognize-batch path/to/images
+python -m sentriface.cli --runtime onnx recognize-batch path/to/images
 ```
 
 Run with real CPU ONNX components after placing models on disk:
@@ -226,7 +226,7 @@ Run with real CPU ONNX components after placing models on disk:
 python -m pip install -r requirements-runtime.txt
 python scripts/fetch_models.py
 
-PYTHONPATH=src python3 -m sentriface.cli \
+python -m sentriface.cli \
   --runtime onnx \
   --detector-model models/det_500m.onnx \
   --recognizer-model models/w600k_r50.onnx \
@@ -239,7 +239,7 @@ limit ONNX Runtime threads.
 Enroll a person from the first detected face:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli \
+python -m sentriface.cli \
   --runtime onnx \
   enroll "Person Name" path/to/image.jpg
 ```
@@ -247,11 +247,11 @@ PYTHONPATH=src python3 -m sentriface.cli \
 Queue a face for review instead of immediately updating the DB:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx queue-add path/to/image.jpg
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx pending
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx confirm-existing PENDING_ID PERSON_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx confirm-new PENDING_ID "Person Name"
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx reject-pending PENDING_ID
+python -m sentriface.cli --runtime onnx queue-add path/to/image.jpg
+python -m sentriface.cli --runtime onnx pending
+python -m sentriface.cli --runtime onnx confirm-existing PENDING_ID PERSON_ID
+python -m sentriface.cli --runtime onnx confirm-new PENDING_ID "Person Name"
+python -m sentriface.cli --runtime onnx reject-pending PENDING_ID
 ```
 
 Face additions are quality-gated before they enter the pending queue. The engine
@@ -269,7 +269,7 @@ bad  -> rejected by default
 Force a bad-quality face only when you intentionally want it:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx queue-add path/to/image.jpg --force-bad-quality
+python -m sentriface.cli --runtime onnx queue-add path/to/image.jpg --force-bad-quality
 ```
 
 ## Workflows
@@ -302,17 +302,17 @@ candidate with `embeddings_matched`.
 Person management:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx persons
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx person PERSON_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx rename-person PERSON_ID "New Name"
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx delete-person PERSON_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx restore-person PERSON_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx delete-embedding EMBEDDING_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx deleted-faces
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx restore-embedding EMBEDDING_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx purge-embedding EMBEDDING_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx move-embedding EMBEDDING_ID TARGET_PERSON_ID
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx merge-persons SOURCE_PERSON_ID TARGET_PERSON_ID
+python -m sentriface.cli --runtime onnx persons
+python -m sentriface.cli --runtime onnx person PERSON_ID
+python -m sentriface.cli --runtime onnx rename-person PERSON_ID "New Name"
+python -m sentriface.cli --runtime onnx delete-person PERSON_ID
+python -m sentriface.cli --runtime onnx restore-person PERSON_ID
+python -m sentriface.cli --runtime onnx delete-embedding EMBEDDING_ID
+python -m sentriface.cli --runtime onnx deleted-faces
+python -m sentriface.cli --runtime onnx restore-embedding EMBEDDING_ID
+python -m sentriface.cli --runtime onnx purge-embedding EMBEDDING_ID
+python -m sentriface.cli --runtime onnx move-embedding EMBEDDING_ID TARGET_PERSON_ID
+python -m sentriface.cli --runtime onnx merge-persons SOURCE_PERSON_ID TARGET_PERSON_ID
 ```
 
 `delete-person` archives a person; their active faces stay in the database but
@@ -377,7 +377,7 @@ The older `backup-db` CLI command remains available for scripts that need a raw
 SQLite-only copy:
 
 ```bash
-PYTHONPATH=src python3 -m sentriface.cli --runtime onnx backup-db backups/sentriface.db
+python -m sentriface.cli --runtime onnx backup-db backups/sentriface.db
 ```
 
 The SQLite database uses `PRAGMA user_version` for schema versioning. Newer
@@ -388,5 +388,5 @@ backup.
 ## Run Checks
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
+python -m unittest discover -s tests
 ```

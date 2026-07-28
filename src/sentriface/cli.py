@@ -17,6 +17,7 @@ from time import perf_counter
 from typing import Any
 
 from sentriface.components.dev_components import HashFaceEmbedder, WholeImageFaceDetector
+from sentriface.components.hnsw_index import HnswFaceIndex
 from sentriface.components.linear_index import LinearFaceIndex
 from sentriface.components.onnx_components import OnnxArcFaceEmbedder, OnnxScrfdDetector
 from sentriface.backup_service import BackupService
@@ -34,7 +35,7 @@ def build_dev_engine(data_dir: Path, config: RuntimeConfig | None = None) -> Fac
         config=config,
         detector=WholeImageFaceDetector(),
         embedder=HashFaceEmbedder(config.embedding_dim),
-        index=LinearFaceIndex(),
+        index=_face_index(config),
         store=_identity_store(config),
     )
 
@@ -52,11 +53,21 @@ def build_onnx_engine(config: RuntimeConfig) -> FaceEngine:
             model_path=config.recognizer_model,
             intra_op_threads=config.onnx_intra_threads,
         ),
-        index=LinearFaceIndex(),
+        index=_face_index(config),
         store=_identity_store(config),
     )
 
 
+
+def _face_index(config: RuntimeConfig):
+    if config.index_backend == "hnswlib":
+        try:
+            from sentriface.components.hnsw_index import _hnswlib
+            _hnswlib()
+        except RuntimeError:
+            return LinearFaceIndex()
+        return HnswFaceIndex(config.embedding_dim)
+    return LinearFaceIndex()
 def _identity_store(config: RuntimeConfig) -> SQLiteIdentityStore:
     return SQLiteIdentityStore(
         config.db_path,
@@ -242,6 +253,7 @@ def main() -> int:
                     "index_backend": config.index_backend,
                     "high_confidence": config.high_confidence,
                     "medium_confidence": config.medium_confidence,
+                    "possible_confidence": config.possible_confidence,
                     "min_quality_score": config.min_quality_score,
                     "runtime": args.runtime,
                     "detector_model": str(config.detector_model),

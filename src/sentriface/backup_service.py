@@ -9,6 +9,7 @@ import sqlite3
 import threading
 import uuid
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -97,6 +98,7 @@ class BackupService:
             if not self.db_path.exists():
                 raise BackupError(f"Database file not found: {self.db_path}")
             self.backup_dir.mkdir(parents=True, exist_ok=True)
+            self._require_free_space(self._estimated_live_backup_bytes())
             created_at = self._now()
             backup_id = self._unique_backup_id(created_at, reason)
             target_dir = self._backup_path(backup_id)
@@ -184,7 +186,7 @@ class BackupService:
         if metadata and str(metadata.get("backup_id")) != backup_id:
             raise BackupError("Backup manifest identity does not match its directory")
         try:
-            with sqlite3.connect(target_db) as conn:
+            with _sqlite_connection(target_db) as conn:
                 result = conn.execute("PRAGMA integrity_check").fetchone()[0]
                 foreign_key_errors = conn.execute("PRAGMA foreign_key_check").fetchall()
         except sqlite3.Error as exc:
@@ -321,7 +323,10 @@ class BackupService:
                 target = self._backup_path(backup_id)
                 os.replace(imported_root, target)
                 record = self._record_from_metadata(metadata)
-                self.enforce_retention(protected_ids={backup_id})
+                try:
+                    self.enforce_retention(protected_ids={backup_id})
+                except Exception as retention_exc:  # noqa: BLE001
+                    self._log("backup-retention-failed", error=str(retention_exc))
                 self._log(
                     "backup-imported",
                     backup_id=backup_id,
@@ -369,6 +374,7 @@ class BackupService:
                 raise BackupError(
                     "This backup is incomplete because referenced files were missing"
                 )
+            self._require_free_space(max(record.size_bytes * 2, 64 * 1024 * 1024))
             safety = self.create_backup(
                 reason=f"before-restore-{backup_id}",
                 operation_id=f"restore-safety-{operation_id}",
@@ -412,8 +418,13 @@ class BackupService:
                     "restored_at": self._now().isoformat(timespec="seconds"),
                 }
                 receipt_path.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    self.enforce_retention(protected_ids={backup_id, safety.backup_id})
+                except Exception as retention_exc:  # noqa: BLE001
+                    self._log("backup-retention-failed", error=str(retention_exc))
+                # The receipt is the restore commit marker. Write it only after
+                # every step that is allowed to trigger rollback has succeeded.
                 self._write_json_atomic(receipt_path, result)
-                self.enforce_retention(protected_ids={backup_id, safety.backup_id})
                 self._log("backup-restored", **result)
                 return result
             except Exception as exc:
@@ -444,9 +455,31 @@ class BackupService:
             finally:
                 shutil.rmtree(staging_root, ignore_errors=True)
 
+    def _estimated_live_backup_bytes(self) -> int:
+        estimate = self.db_path.stat().st_size
+        try:
+            references = self._database_path_references(self.db_path)
+        except (BackupError, sqlite3.Error):
+            references = {}
+        for raw_path in references:
+            path = Path(raw_path)
+            try:
+                if path.is_file():
+                    estimate += path.stat().st_size
+            except OSError:
+                continue
+        return max(int(estimate * 1.15), estimate + 64 * 1024 * 1024)
+
+    def _require_free_space(self, required_bytes: int) -> None:
+        available = shutil.disk_usage(self.backup_dir).free
+        if available < required_bytes:
+            raise BackupError(
+                f"Not enough free space for a safe backup operation: "
+                f"need about {required_bytes} bytes, have {available} bytes"
+            )
     def _backup_sqlite(self, target_db: Path) -> None:
-        with sqlite3.connect(self.db_path) as source:
-            with sqlite3.connect(target_db) as destination:
+        with _sqlite_connection(self.db_path) as source:
+            with _sqlite_connection(target_db) as destination:
                 source.backup(destination)
 
     def _capture_referenced_files(
@@ -522,7 +555,7 @@ class BackupService:
         database_path: Path,
     ) -> dict[str, list[dict[str, str]]]:
         references: dict[str, list[dict[str, str]]] = {}
-        with sqlite3.connect(database_path) as conn:
+        with _sqlite_connection(database_path) as conn:
             for table, column in PATH_REFERENCE_COLUMNS:
                 if not _table_has_column(conn, table, column):
                     continue
@@ -605,7 +638,7 @@ class BackupService:
             "reference_count": 0,
             "asset_size_bytes": 0,
         }
-        with sqlite3.connect(target_db) as conn:
+        with _sqlite_connection(target_db) as conn:
             database_version = conn.execute("PRAGMA user_version").fetchone()[0]
             # Pre-migration snapshots can predate either table. Missing tables
             # represent zero records; they do not make an otherwise valid backup unsafe.
@@ -703,7 +736,7 @@ class BackupService:
         database_path = database_path or target_dir / self.db_path.name
         self._verify_file_entry(database_path, database)
         self._verify_sqlite_file(database_path)
-        with sqlite3.connect(database_path) as conn:
+        with _sqlite_connection(database_path) as conn:
             actual_database_version = int(
                 conn.execute("PRAGMA user_version").fetchone()[0]
             )
@@ -807,7 +840,7 @@ class BackupService:
 
     def _verify_sqlite_file(self, database_path: Path) -> None:
         try:
-            with sqlite3.connect(database_path) as conn:
+            with _sqlite_connection(database_path) as conn:
                 integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
                 foreign_key_errors = conn.execute("PRAGMA foreign_key_check").fetchall()
         except sqlite3.Error as exc:
@@ -920,7 +953,7 @@ class BackupService:
         metadata: dict[str, object],
         restored_paths: dict[str, str],
     ) -> None:
-        with sqlite3.connect(database_path) as conn:
+        with _sqlite_connection(database_path) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
             for reference in metadata.get("path_references", []):
                 original_path = str(reference["original_path"])
@@ -964,7 +997,7 @@ class BackupService:
     def _replace_live_database(self, replacement: Path) -> None:
         if self.db_path.exists():
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with _sqlite_connection(self.db_path) as conn:
                     checkpoint = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
                     if checkpoint and int(checkpoint[0]) != 0:
                         raise BackupError("Current database is busy and cannot be restored safely")
@@ -1025,8 +1058,25 @@ class BackupService:
 
     def _log(self, event: str, **details: object) -> None:
         if self._logger:
-            self._logger(event, **details)
+            try:
+                self._logger(event, **details)
+            except Exception:
+                # Observability must never invalidate a verified data operation.
+                pass
 
+
+@contextmanager
+def _sqlite_connection(path: Path):
+    """Commit/roll back and always close SQLite handles before file operations."""
+    conn = sqlite3.connect(path, timeout=30)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 def _table_row_count(conn: sqlite3.Connection, table: str) -> int:
     exists = conn.execute(

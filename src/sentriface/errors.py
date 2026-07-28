@@ -19,3 +19,12 @@ class InputValidationError(SentriFaceError):
 
 class ModelSetupError(SentriFaceError):
     """The configured model/runtime is missing or invalid."""
+
+
+class QueueCancellationError(SentriFaceError):
+    """Raised when an active queue scan reaches a cancellation checkpoint."""
+
+    def __init__(self, session_id: str, phase: str) -> None:
+        super().__init__("Queue processing was cancelled")
+        self.session_id = session_id
+        self.phase = phase

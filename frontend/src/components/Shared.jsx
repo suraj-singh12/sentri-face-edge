@@ -126,7 +126,7 @@ export function BestMatchPanel({ best, face, onGallery, selectedImage }) {
 
   const noMatchFound = isNewPersonSuggestion(best);
   const matchImage = selectedImage || best.source_image || best.image_path || best.representative_source_image || best.representative_image;
-  const display = matchDisplay(best.score);
+  const display = matchDisplay(best);
   return (
     <Stack className="best-match-panel">
       <Group gap="md" align="center">
@@ -293,8 +293,8 @@ export function GalleryPanel({ payload, selectedImage, onImage, onBack }) {
         </Box>
       </ScrollArea>
       <Group justify="space-between" c="dimmed">
-        <Text size="sm">{visibleRecords.length ? `1–${visibleRecords.length}` : "0"} of {records.length} photos{selectedRecord ? ` • Selected ${selectedRecord.label}` : ""}</Text>
-        <Group gap="sm"><Text>‹</Text><Badge variant="light">1</Badge><Text>›</Text></Group>
+        <Text size="sm">{visibleRecords.length ? `1-${visibleRecords.length}` : "0"} of {records.length} photos{selectedRecord ? ` | Selected ${selectedRecord.label}` : ""}</Text>
+        <Group gap="sm"><Text>&lt;</Text><Badge variant="light">1</Badge><Text>&gt;</Text></Group>
       </Group>
     </Stack>
   );
@@ -398,7 +398,7 @@ export function EmptyCard({ text }) {
 
 function MatchIdentitySummary({ match }) {
   const [copied, setCopied] = useState(false);
-  const display = matchDisplay(match.score);
+  const display = matchDisplay(match);
   const copyGroupId = async () => {
     await navigator.clipboard?.writeText(match.person_id);
     setCopied(true);

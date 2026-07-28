@@ -21,8 +21,10 @@ class RuntimeConfig:
     db_name: str = "sentriface.db"
     embedding_dim: int = 512
     top_k: int = 3
-    high_confidence: float = 0.62
-    medium_confidence: float = 0.48
+    # Matching policy is authoritative in the backend and returned to clients.
+    high_confidence: float = 0.60
+    medium_confidence: float = 0.50
+    possible_confidence: float = 0.40
     min_detector_confidence: float = 0.55
     min_face_size: int = 48
     min_quality_score: float = 0.55

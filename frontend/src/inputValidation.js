@@ -1,4 +1,4 @@
-export const MAX_IMAGE_FILE_BYTES = 100_000_000;
+export const MAX_IMAGE_FILE_BYTES = 25_000_000;
 
 const EXTENSION_FORMATS = new Map([
   [".jpg", "jpeg"],

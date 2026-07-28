@@ -1,18 +1,24 @@
 [project]
 name = "sentriface-edge"
 version = "0.1.0"
-description = "CPU-first, fully offline face identification engine for Windows x86 systems."
+description = "CPU-first, fully offline face identification engine for Windows, macOS, and Linux."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+  "loguru>=0.7,<1",
+]
 
 [project.optional-dependencies]
 runtime = [
-  "numpy>=1.26",
-  "onnxruntime>=1.18",
-  "opencv-python-headless>=4.9",
+  "numpy>=1.26,<2.0",
+  "onnxruntime>=1.18,<2.0",
+  "opencv-python-headless>=4.9,<5.0",
 ]
 index = [
-  "hnswlib>=0.8",
+  "qhnswlib>=0.8.6,<0.9",
+]
+test = [
+  "numpy>=1.26,<2.0",
+  "opencv-python-headless>=4.9,<5.0",
 ]
 
 [project.scripts]

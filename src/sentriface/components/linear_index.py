@@ -4,6 +4,7 @@ from sentriface.models import Embedding, EmbeddingRecord, Match
 
 
 class LinearFaceIndex:
+    backend_name = "linear"
     """Tiny-gallery cosine index.
 
     This is dependency-free and good enough while the gallery is small. Swap it
