@@ -15,11 +15,24 @@ By default these files live in the current user's SentriFace application-data
 directory. The exact path is shown in the Debug/Profile view and can be changed
 with `--data-dir` or `SENTRIFACE_DATA_DIR`.
 
-Application data and managed backups are not encrypted at rest by SentriFace. Use operating-system disk encryption and account controls.
-The UI exports new portable copies as password-encrypted `.sfbackup.enc` files.
-Their authenticated encryption protects the exported file during transfer and
-storage, but does not encrypt the live library or managed safety backups. A lost
-passphrase cannot be recovered by SentriFace.
+SentriFace encrypts the live SQLite database with SQLCipher and encrypts managed
+images, face crops, backup assets, and persistent log records with authenticated
+AES-256-GCM. A random per-installation master key is stored in the current
+operating-system user's credential vault. Existing managed plaintext data is
+migrated before the recognition engine opens it. Files created afterward are encrypted,
+but migration cannot guarantee forensic erasure of old plaintext blocks previously
+written to an SSD or filesystem snapshot.
+
+This protects copied or stolen application files. It does not protect against
+malware or a person already operating as the same unlocked OS user, because that
+user can ask the operating-system vault to release the key. Full-disk encryption
+and a locked, dedicated OS account remain recommended.
+
+The UI exports portable copies as password-encrypted `.sfbackup.enc` files. A
+configured disaster-recovery destination receives automatic encrypted exports
+and a recovery kit containing only a passphrase-wrapped master key. The one-time
+recovery code is not written to application files and cannot be recovered by
+SentriFace if both the operator's copy and OS vault are lost.
 
 "Erase from live library" removes the active face and linked sightings only
 after creating a verified safety backup. That new backup, older managed backups,

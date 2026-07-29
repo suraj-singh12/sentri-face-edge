@@ -22,6 +22,8 @@ from sentriface.backup_crypto import (
     decrypt_file,
     encrypt_file,
 )
+from sentriface.secure_storage import connect_database
+from sentriface.secure_files import copy_into_protected_storage
 
 
 BACKUP_ID_PATTERN = re.compile(
@@ -81,6 +83,7 @@ class BackupService:
         logger: Callable[[str, object], None] | None = None,
         data_dir: Path | None = None,
         supported_database_version: int | None = None,
+        database_key: bytes | None = None,
     ) -> None:
         self.db_path = db_path
         self.backup_dir = backup_dir
@@ -88,6 +91,7 @@ class BackupService:
         self.retention_limit = retention_limit
         self.app_version = app_version
         self.supported_database_version = supported_database_version
+        self.database_key = database_key
         self._now = now or (lambda: datetime.now().astimezone())
         self._logger = logger
         self._create_lock = threading.RLock()
@@ -194,10 +198,10 @@ class BackupService:
         if metadata and str(metadata.get("backup_id")) != backup_id:
             raise BackupError("Backup manifest identity does not match its directory")
         try:
-            with _sqlite_connection(target_db) as conn:
+            with _sqlite_connection(target_db, self.database_key) as conn:
                 result = conn.execute("PRAGMA integrity_check").fetchone()[0]
                 foreign_key_errors = conn.execute("PRAGMA foreign_key_check").fetchall()
-        except sqlite3.Error as exc:
+        except Exception as exc:
             raise BackupError(f"Backup verification failed: {exc}") from exc
         verified = result == "ok" and not foreign_key_errors
         if verified and metadata and int(metadata.get("format_version", 1)) >= 2:
@@ -565,8 +569,8 @@ class BackupService:
                 f"need about {required_bytes} bytes, have {available} bytes"
             )
     def _backup_sqlite(self, target_db: Path) -> None:
-        with _sqlite_connection(self.db_path) as source:
-            with _sqlite_connection(target_db) as destination:
+        with _sqlite_connection(self.db_path, self.database_key) as source:
+            with _sqlite_connection(target_db, self.database_key) as destination:
                 source.backup(destination)
 
     def _capture_referenced_files(
@@ -642,7 +646,7 @@ class BackupService:
         database_path: Path,
     ) -> dict[str, list[dict[str, str]]]:
         references: dict[str, list[dict[str, str]]] = {}
-        with _sqlite_connection(database_path) as conn:
+        with _sqlite_connection(database_path, self.database_key) as conn:
             for table, column in PATH_REFERENCE_COLUMNS:
                 if not _table_has_column(conn, table, column):
                     continue
@@ -684,31 +688,18 @@ class BackupService:
         files_root.mkdir(parents=True, exist_ok=True)
         source_before = source.stat()
         temporary = files_root / f".asset-{uuid.uuid4().hex}.tmp"
-        digest = hashlib.sha256()
-        size_bytes = 0
         try:
-            with source.open("rb") as input_file, temporary.open("xb") as output_file:
-                while True:
-                    chunk = input_file.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    output_file.write(chunk)
-                    digest.update(chunk)
-                    size_bytes += len(chunk)
-                output_file.flush()
-                os.fsync(output_file.fileno())
+            copy_into_protected_storage(source, temporary, self.database_key)
             source_after = source.stat()
             if (
                 source_before.st_size != source_after.st_size
                 or source_before.st_mtime_ns != source_after.st_mtime_ns
-                or size_bytes != source_after.st_size
             ):
                 raise BackupError(f"Referenced file changed during backup: {source}")
-            return digest.hexdigest(), size_bytes, temporary
+            return _sha256_file(temporary), temporary.stat().st_size, temporary
         except Exception:
             temporary.unlink(missing_ok=True)
             raise
-
     def _metadata(
         self,
         backup_id: str,
@@ -725,7 +716,7 @@ class BackupService:
             "reference_count": 0,
             "asset_size_bytes": 0,
         }
-        with _sqlite_connection(target_db) as conn:
+        with _sqlite_connection(target_db, self.database_key) as conn:
             database_version = conn.execute("PRAGMA user_version").fetchone()[0]
             # Pre-migration snapshots can predate either table. Missing tables
             # represent zero records; they do not make an otherwise valid backup unsafe.
@@ -823,7 +814,7 @@ class BackupService:
         database_path = database_path or target_dir / self.db_path.name
         self._verify_file_entry(database_path, database)
         self._verify_sqlite_file(database_path)
-        with _sqlite_connection(database_path) as conn:
+        with _sqlite_connection(database_path, self.database_key) as conn:
             actual_database_version = int(
                 conn.execute("PRAGMA user_version").fetchone()[0]
             )
@@ -927,10 +918,10 @@ class BackupService:
 
     def _verify_sqlite_file(self, database_path: Path) -> None:
         try:
-            with _sqlite_connection(database_path) as conn:
+            with _sqlite_connection(database_path, self.database_key) as conn:
                 integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
                 foreign_key_errors = conn.execute("PRAGMA foreign_key_check").fetchall()
-        except sqlite3.Error as exc:
+        except Exception as exc:
             raise BackupError(f"Backup database verification failed: {exc}") from exc
         if integrity != "ok" or foreign_key_errors:
             raise BackupError("Backup database failed integrity verification")
@@ -1047,7 +1038,7 @@ class BackupService:
         metadata: dict[str, object],
         restored_paths: dict[str, str],
     ) -> None:
-        with _sqlite_connection(database_path) as conn:
+        with _sqlite_connection(database_path, self.database_key) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
             for reference in metadata.get("path_references", []):
                 original_path = str(reference["original_path"])
@@ -1091,11 +1082,11 @@ class BackupService:
     def _replace_live_database(self, replacement: Path) -> None:
         if self.db_path.exists():
             try:
-                with _sqlite_connection(self.db_path) as conn:
+                with _sqlite_connection(self.db_path, self.database_key) as conn:
                     checkpoint = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
                     if checkpoint and int(checkpoint[0]) != 0:
                         raise BackupError("Current database is busy and cannot be restored safely")
-            except sqlite3.Error as exc:
+            except Exception as exc:
                 raise BackupError(
                     f"Current database could not be checkpointed safely: {exc}"
                 ) from exc
@@ -1160,9 +1151,9 @@ class BackupService:
 
 
 @contextmanager
-def _sqlite_connection(path: Path):
+def _sqlite_connection(path: Path, database_key: bytes | None = None):
     """Commit/roll back and always close SQLite handles before file operations."""
-    conn = sqlite3.connect(path, timeout=30)
+    conn = connect_database(path, database_key, timeout=30)
     try:
         yield conn
         conn.commit()

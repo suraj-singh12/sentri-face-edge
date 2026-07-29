@@ -44,6 +44,8 @@ class RuntimeConfig:
     recognizer_model: Path = field(default_factory=lambda: default_model_dir() / "recognizer.onnx")
     collect_metrics: bool = False
     backup_retention_limit: int = 10
+    automatic_backup_interval_hours: int = 24
+    storage_key: bytes | None = field(default=None, repr=False, compare=False)
 
     @property
     def db_path(self) -> Path:

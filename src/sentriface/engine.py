@@ -119,7 +119,7 @@ class FaceEngine:
         results: list[RecognitionResult] = []
         with self.metrics.timer("total_recognize_ms"):
             with self.metrics.timer("image_load_ms"):
-                image = load_bgr_image(image_path)
+                image = load_bgr_image(image_path, self.config.storage_key)
             with self.metrics.timer("detect_ms"):
                 faces = self.detector.detect(image_path)
             self.metrics.increment("faces_detected", len(faces))
@@ -157,7 +157,7 @@ class FaceEngine:
         additions: list[PendingAddition] = []
         rejected: list[RejectedFace] = []
         with self.metrics.timer("image_load_ms"):
-            image = load_bgr_image(image_path)
+            image = load_bgr_image(image_path, self.config.storage_key)
         with self.metrics.timer("detect_ms"):
             faces = self.detector.detect(image_path)
         self.metrics.increment("faces_detected", len(faces))
@@ -197,6 +197,7 @@ class FaceEngine:
                     image,
                     face,
                     self.config.face_dir / "pending" / f"{pending_id}.jpg",
+                    storage_key=self.config.storage_key,
                 )
             additions.append(
                 PendingAddition(
@@ -633,7 +634,7 @@ class FaceEngine:
                     cancellation_checkpoint("before_image")
                     try:
                         with self.metrics.timer("image_load_ms"):
-                            image = load_bgr_image(image_path)
+                            image = load_bgr_image(image_path, self.config.storage_key)
                     except InputImageError:
                         invalid_images.append(str(image_path))
                         self.metrics.increment("images_rejected")
@@ -673,6 +674,7 @@ class FaceEngine:
                                 image,
                                 face,
                                 self.config.face_dir / "init" / session.session_id / f"{init_face_id}.jpg",
+                                storage_key=self.config.storage_key,
                             )
                         init_faces.append(
                             InitFace(

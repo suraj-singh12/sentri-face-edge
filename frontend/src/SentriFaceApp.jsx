@@ -195,6 +195,8 @@ function SentriFaceShell() {
 
           <Tabs.Panel value="debug">
             <DebugView
+              profile={state.profile}
+              onConfigureRecovery={guarded(actions.configureRecovery)}
               events={state.events}
               backups={state.backups}
               backupCreating={state.backupCreating}

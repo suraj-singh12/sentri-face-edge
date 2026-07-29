@@ -6,19 +6,30 @@ proxy, port-forwarding rule, or non-loopback bind.
 
 Security controls include:
 
-- loopback-only binding and Host-header validation;
+- IPv4 loopback-only binding, Host-header validation, a process-wide outbound socket guard, and rejection of UNC or mapped-network filesystem paths at runtime entry points;
 - rejection of state-changing requests from non-local browser origins;
 - restrictive browser security headers;
 - request, upload, image-dimension, and backup-import limits;
 - managed-path validation for media and cleanup operations;
 - checksummed portable backups and local operator-supplied model installations;
 - password-based authenticated encryption for exported `.sfbackup.enc` files;
-- database migration backups and rollback-oriented restore handling.
+- database migration backups and rollback-oriented restore handling;
+- SQLCipher encryption for the live database and authenticated encryption for managed media, backups, and persistent logs;
+- OS-vault protection for the per-installation master key and recovery-code-wrapped external recovery kits.
 
-The live database, images, embeddings, logs, and managed safety backups are not
-encrypted by the application. Exported `.sfbackup.enc` files are encrypted, but
-operating-system disk encryption and account access controls are still required
-when the threat model includes another user or physical access.
+SentriFace refuses non-loopback binds and blocks Python socket name resolution,
+connects, and datagrams to non-loopback destinations. The packaged runtime has no
+intentional telemetry, updater, model downloader, remote asset, or cloud-recognition
+path. OS-level tunnels, proxies, remote desktop, malware, and independently loaded
+native code remain outside an application's absolute control. A remote filesystem already
+mounted by the operating system can also be indistinguishable from local storage on
+Unix-like systems. Do not mount network storage into SentriFace paths, and validate
+installers with outbound firewall rules enabled.
+
+Encrypted storage makes copied database and biometric files unusable without the
+per-installation key. It does not defend against code already running as the same
+unlocked OS user. Operating-system disk encryption and account access controls
+remain defense-in-depth requirements.
 
 Report suspected vulnerabilities privately to the repository maintainers.
 Include the SentriFace version, operating system, reproduction steps, and

@@ -46,15 +46,17 @@ class OnnxScrfdDetector:
         input_size: int = 640,
         confidence_threshold: float = 0.55,
         intra_op_threads: int = 1,
+        storage_key: bytes | None = None,
     ) -> None:
         self.model_path = model_path
         self.max_image_edge = max_image_edge
         self.confidence_threshold = confidence_threshold
+        self.storage_key = storage_key
         self.runtime = OnnxRuntimeSession(model_path, intra_op_threads)
         self.input_size = _input_size(self.runtime.input_shape, fallback=input_size)
 
     def detect(self, image_path: Path) -> list[DetectedFace]:
-        image = load_bgr_image(image_path)
+        image = load_bgr_image(image_path, self.storage_key)
         prepared, scale, pad = _scrfd_letterbox(image, self.input_size)
         tensor = _detector_tensor(prepared)
         outputs = self.runtime.run(tensor)
@@ -69,9 +71,11 @@ class OnnxArcFaceEmbedder:
         model_path: Path,
         intra_op_threads: int = 1,
         output_size: int = 112,
+        storage_key: bytes | None = None,
     ) -> None:
         self.model_path = model_path
         self.output_size = output_size
+        self.storage_key = storage_key
         self.runtime = OnnxRuntimeSession(model_path, intra_op_threads)
         logger.debug(
             "ArcFace embedder initialized: model={} threads={} output_size={}",
@@ -81,7 +85,7 @@ class OnnxArcFaceEmbedder:
         )
 
     def encode(self, image_path: Path, face: DetectedFace) -> Embedding:
-        image = load_bgr_image(image_path)
+        image = load_bgr_image(image_path, self.storage_key)
         crop = crop_face(image, face, output_size=self.output_size)
         tensor = _arcface_tensor(crop)
         outputs = self.runtime.run(tensor)

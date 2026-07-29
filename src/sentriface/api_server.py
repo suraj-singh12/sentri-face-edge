@@ -7,6 +7,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import platform
 import secrets
 import shutil
 import threading
@@ -23,11 +24,15 @@ from urllib.parse import parse_qs, urlparse
 
 from sentriface.backup_service import BackupError, BackupRecord, BackupService
 from sentriface.cli import build_dev_engine, build_onnx_engine
-from sentriface.config import RuntimeConfig, config_for_hardware
+from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
 from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import InputImageError, InputValidationError, ModelSetupError, QueueCancellationError, SentriFaceError
 from sentriface.hardware import assess_hardware
 from sentriface.paths import default_data_dir, default_log_dir
+from sentriface.recovery import RecoveryError, RecoveryService, recover_master_key
+from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key
+from sentriface.secure_files import read_protected_bytes, write_protected_bytes
+from sentriface.offline_guard import install_offline_guard, offline_guard_installed, require_local_path
 from sentriface.models import (
     EmbeddingRecord,
     FaceBox,
@@ -117,12 +122,14 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         server_address: tuple[str, int],
         engine: FaceEngine,
         config: RuntimeConfig,
+        hardware_profile: HardwareProfile,
         runtime: str,
         debug: bool = True,
     ) -> None:
         super().__init__(server_address, SentriFaceApiHandler)
         self.engine = engine
         self.config = config
+        self.hardware_profile = hardware_profile
         self.runtime = runtime
         declaration = getattr(engine, "model_usage", None)
         self.model_usage = declaration if isinstance(declaration, dict) else {
@@ -149,7 +156,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             logger=self.log_event,
             data_dir=config.data_dir,
             supported_database_version=SCHEMA_VERSION,
+            database_key=config.storage_key,
         )
+        self.recovery = RecoveryService(config.data_dir, config.storage_key, self.backups)
         self._scavenge_stale_files()
         self.maintenance_stop = threading.Event()
         self.maintenance_thread = threading.Thread(
@@ -370,6 +379,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             try:
                 with self.operation_gate.shared():
                     self.purge_expired_deleted_faces()
+                    automatic = self.recovery.automatic_backup_if_due(self.config.automatic_backup_interval_hours)
+                    if automatic is not None:
+                        self.log_event("automatic-recovery-backup", backup_id=automatic.backup_id)
             except Exception as exc:  # noqa: BLE001 - maintenance must not terminate the UI server.
                 self.log_event("deleted-face-retention-failed", error=str(exc).strip("'"))
             if self.maintenance_stop.wait(3600):
@@ -538,6 +550,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/profile":
                 self._json(self._profile())
                 return
+            if parsed.path == "/api/recovery":
+                self._json(self.server.recovery.status())
+                return
             if parsed.path == "/api/persons":
                 self._json(
                     {
@@ -696,6 +711,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _query_value(parsed.query, "filename"),
                     _query_value(parsed.query, "relative_path"),
                     self.rfile.read(content_length),
+                    self.server.config.storage_key,
                 )
                 self._json({
                     "path": str(saved_dir),
@@ -744,6 +760,19 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 self._json({"logged": True})
                 return
+            if parsed.path == "/api/recovery/configure":
+                result = self.server.recovery.configure(Path(_required(payload, "destination")))
+                try:
+                    initial_backup = self.server.recovery.automatic_backup_if_due(self.server.config.automatic_backup_interval_hours)
+                    if initial_backup is not None:
+                        result["initial_backup_id"] = initial_backup.backup_id
+                        result.update(self.server.recovery.status())
+                except Exception as exc:  # Keep the one-time recovery code visible even if the first export fails.
+                    result["initial_backup_error"] = str(exc)
+                    self.server.log_event("automatic-recovery-backup-failed", error=str(exc))
+                self.server.log_event("disaster-recovery-configured", destination=result["destination"])
+                self._json(result)
+                return
             if parsed.path == "/api/backups":
                 record = self.server.backups.create_backup()
                 self._json({"backup": _backup(record)})
@@ -765,6 +794,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     self.server.config.data_dir,
                     _required(payload, "filename"),
                     _required(payload, "data"),
+                    storage_key=self.server.config.storage_key,
                 )
                 self.server.log_event(
                     "upload",
@@ -778,6 +808,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 saved_dir, count, rejected = _save_upload_batch(
                     self.server.config.data_dir,
                     payload.get("files", []),
+                    self.server.config.storage_key,
                 )
                 self.server.log_event(
                     "upload-batch",
@@ -792,7 +823,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             if parsed.path == "/api/upload-file-discard":
-                path = Path(_required(payload, "path"))
+                path = require_local_path(Path(_required(payload, "path")))
                 journal = self.server.engine.cleanup.schedule(
                     (path,),
                     f"ui-discard-upload-{uuid.uuid4()}",
@@ -811,7 +842,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"removed": removed})
                 return
             if parsed.path == "/api/recognize":
-                image_path = Path(_required(payload, "path"))
+                image_path = require_local_path(Path(_required(payload, "path")))
                 self.server.engine.reset_metrics()
                 results = self.server.engine.recognize(image_path)
                 self.server.log_event("recognize", path=str(image_path), faces=len(results))
@@ -823,7 +854,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 return
             if parsed.path == "/api/recognize-batch":
-                source = Path(_required(payload, "path"))
+                source = require_local_path(Path(_required(payload, "path")))
                 images = _image_paths(source)
                 if not images:
                     raise KeyError(f"No supported images found: {source}")
@@ -985,7 +1016,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json(result)
                 return
             if parsed.path == "/api/recognition-accept-existing":
-                image_path = Path(_required(payload, "path"))
+                image_path = require_local_path(Path(_required(payload, "path")))
                 person_id = _required(payload, "person_id")
                 face_index = _face_index(payload)
                 if self.server.engine.get_person(person_id) is None:
@@ -1025,7 +1056,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"embedding_id": embedding_id, "metrics": self.server.engine.metrics_snapshot()})
                 return
             if parsed.path == "/api/recognition-new":
-                image_path = Path(_required(payload, "path"))
+                image_path = require_local_path(Path(_required(payload, "path")))
                 name = _required(payload, "name")
                 face_index = _face_index(payload)
                 self.server.engine.reset_metrics()
@@ -1089,7 +1120,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"confirmed": True, "detail_id": detail_id})
                 return
             if parsed.path == "/api/enroll":
-                image_path = Path(_required(payload, "path"))
+                image_path = require_local_path(Path(_required(payload, "path")))
                 name = _required(payload, "name")
                 self.server.engine.reset_metrics()
                 additions = self.server.engine.prepare_additions(image_path, bool(payload.get("force_bad_quality", False)))
@@ -1100,7 +1131,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"person_id": person_id, "metrics": self.server.engine.metrics_snapshot()})
                 return
             if parsed.path == "/api/queue-add":
-                image_path = Path(_required(payload, "path"))
+                image_path = require_local_path(Path(_required(payload, "path")))
                 self.server.engine.reset_metrics()
                 prepared = self.server.engine.queue_additions(image_path, bool(payload.get("force_bad_quality", False)))
                 self.server.log_event(
@@ -1134,7 +1165,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 return
             if parsed.path == "/api/queue-scan":
-                source = Path(_required(payload, "path"))
+                source = require_local_path(Path(_required(payload, "path")))
                 job_id = str(payload.get("job_id") or uuid.uuid4())
                 total_files = _safe_count(
                     payload.get("total_files", 0),
@@ -1421,11 +1452,37 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         return {
             "runtime": self.server.runtime,
             "hardware_tier": config.hardware_tier,
+            "hardware": {
+                "cpu_count": self.server.hardware_profile.cpu_count,
+                "memory_gb": self.server.hardware_profile.memory_gb,
+                "reason": self.server.hardware_profile.reason,
+                "operating_system": platform.system(),
+                "architecture": platform.machine(),
+            },
             "data_dir": str(config.data_dir),
             "db_path": str(config.db_path),
             "max_workers": config.max_workers,
             "onnx_intra_threads": config.onnx_intra_threads,
             "max_image_edge": config.max_image_edge,
+            "detector_input_size": config.detector_input_size,
+            "batch_size": config.batch_size,
+            "prefer_small_models": config.prefer_small_models,
+            "models": {
+                "detector": str(config.detector_model),
+                "recognizer": str(config.recognizer_model),
+            },
+            "offline_enforcement": {
+                "loopback_only": True,
+                "outbound_socket_guard": offline_guard_installed(),
+            },
+            "storage_security": {
+                "database_encrypted": database_is_encrypted(config.db_path),
+                "managed_files_encrypted": bool(config.storage_key),
+                "managed_backups_encrypted": bool(config.storage_key),
+                "persistent_logs_encrypted": bool(config.storage_key),
+                "key_protection": "operating-system-vault" if config.storage_key else "none",
+            },
+            "recovery": self.server.recovery.status(),
             "index": self.server.engine.index_status,
             "high_confidence": config.high_confidence,
             "medium_confidence": config.medium_confidence,
@@ -1609,18 +1666,14 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             ".bmp": "image/bmp",
             ".webp": "image/webp",
         }.get(path.suffix.lower(), "application/octet-stream")
+        data = read_protected_bytes(path, self.server.config.storage_key)
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(path.stat().st_size))
+        self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
-        with path.open("rb") as source:
-            while True:
-                chunk = source.read(1024 * 1024)
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
+        self.wfile.write(data)
 
 def create_server(
     host: str = "127.0.0.1",
@@ -1631,6 +1684,7 @@ def create_server(
     recognizer_model: Path | None = None,
     debug: bool = True,
 ) -> SentriFaceApiServer:
+    install_offline_guard()
     normalized_host = host.strip().casefold()
     if normalized_host == "localhost":
         host = "127.0.0.1"
@@ -1643,19 +1697,30 @@ def create_server(
             raise ValueError("Server may bind only to an IPv4 loopback address")
     if runtime not in {"dev", "onnx"}:
         raise ValueError("Runtime must be dev or onnx")
-    data_dir = data_dir or default_data_dir()
+    data_dir = require_local_path(data_dir or default_data_dir())
     profile = assess_hardware()
     config = config_for_hardware(profile, data_dir=data_dir)
+    config = replace(config, storage_key=load_or_create_master_key(data_dir))
+    protect_existing_managed_data(data_dir, config.storage_key)
     if detector_model is not None or recognizer_model is not None:
         config = replace(
             config,
             detector_model=detector_model or config.detector_model,
             recognizer_model=recognizer_model or config.recognizer_model,
         )
+    require_local_path(config.detector_model)
+    require_local_path(config.recognizer_model)
     engine = build_dev_engine(data_dir, config) if runtime == "dev" else build_onnx_engine(config)
     config = engine.config
     engine.initialize()
-    server = SentriFaceApiServer((host, port), engine=engine, config=config, runtime=runtime, debug=debug)
+    server = SentriFaceApiServer(
+        (host, port),
+        engine=engine,
+        config=config,
+        hardware_profile=profile,
+        runtime=runtime,
+        debug=debug,
+    )
     server.log_event("startup", runtime=runtime, data_dir=str(data_dir), address=f"http://{host}:{server.server_port}")
     return server
 
@@ -1669,12 +1734,24 @@ def main() -> int:
     parser.add_argument("--recognizer-model", type=Path)
     parser.add_argument("--runtime", choices=("dev", "onnx"), default="onnx")
     parser.add_argument("--quiet-debug", action="store_true", help="Disable verbose UI debug logs")
+    parser.add_argument("--recover-kit", type=Path, help="Install a disaster-recovery key before startup")
     args = parser.parse_args()
 
     from sentriface.logging_config import setup_logging
 
-    setup_logging(debug=not args.quiet_debug, log_dir=default_log_dir(args.data_dir))
     try:
+        require_local_path(args.data_dir)
+        if args.recover_kit:
+            require_local_path(args.recover_kit)
+            from getpass import getpass
+            recovered_key = recover_master_key(args.recover_kit, getpass("SentriFace recovery code: "))
+            store_master_key(args.data_dir, recovered_key)
+        storage_key = load_or_create_master_key(args.data_dir)
+        setup_logging(
+            debug=not args.quiet_debug,
+            log_dir=default_log_dir(args.data_dir),
+            storage_key=storage_key,
+        )
         server = create_server(
             host=args.host,
             port=args.port,
@@ -1688,7 +1765,7 @@ def main() -> int:
         print(f"SentriFace could not start: {exc}")
         print("Install verified models with: sentriface-models")
         return 2
-    except (SentriFaceError, OSError, ValueError) as exc:
+    except (SentriFaceError, StorageSecurityError, RecoveryError, OSError, ValueError) as exc:
         print(f"SentriFace could not start safely: {exc}")
         return 2
     print(f"SentriFace UI running at http://{args.host}:{server.server_port}")
@@ -1822,7 +1899,7 @@ def _image_paths(source: Path) -> list[Path]:
     return sorted(path for path in source.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
 
 
-def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Path = Path("uploads")) -> Path:
+def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Path = Path("uploads"), storage_key: bytes | None = None) -> Path:
     suffix = Path(filename).suffix.lower()
     if suffix not in IMAGE_EXTENSIONS:
         raise InputValidationError(
@@ -1837,10 +1914,10 @@ def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Pa
         data = base64.b64decode(encoded, validate=True)
     except binascii.Error as exc:
         raise InputValidationError("Invalid upload data", "invalid_base64") from exc
-    return _save_upload_bytes(data_dir, filename, data, upload_subdir)
+    return _save_upload_bytes(data_dir, filename, data, upload_subdir, storage_key)
 
 
-def _save_upload_bytes(data_dir: Path, filename: str, data: bytes, upload_subdir: Path = Path("uploads")) -> Path:
+def _save_upload_bytes(data_dir: Path, filename: str, data: bytes, upload_subdir: Path = Path("uploads"), storage_key: bytes | None = None) -> Path:
     declared_suffix = _normalize_image_suffix(Path(filename).suffix.lower())
     if declared_suffix not in {".jpg", ".png", ".bmp", ".webp"}:
         raise InputValidationError(
@@ -1878,7 +1955,7 @@ def _save_upload_bytes(data_dir: Path, filename: str, data: bytes, upload_subdir
     upload_dir = data_dir / upload_subdir
     upload_dir.mkdir(parents=True, exist_ok=True)
     target = upload_dir / f"{uuid.uuid4().hex}{suffix}"
-    target.write_bytes(data)
+    write_protected_bytes(target, data, storage_key)
     return target
 
 
@@ -1896,10 +1973,11 @@ def _save_upload_chunk(
     filename: str,
     relative_path: str,
     data: bytes,
+    storage_key: bytes | None = None,
 ) -> tuple[Path, Path]:
     batch_subdir = _upload_batch_subdir(upload_id)
     safe_path = _safe_relative_upload_path(relative_path or filename)
-    saved = _save_upload_bytes(data_dir, filename, data, batch_subdir / safe_path.parent)
+    saved = _save_upload_bytes(data_dir, filename, data, batch_subdir / safe_path.parent, storage_key)
     return data_dir / batch_subdir, saved
 
 
@@ -1911,7 +1989,7 @@ def _discard_upload_batch(data_dir: Path, upload_id: str) -> bool:
     return True
 
 
-def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]]) -> tuple[Path, int, int]:
+def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]], storage_key: bytes | None = None) -> tuple[Path, int, int]:
     if not isinstance(files, list) or not files:
         raise InputValidationError("No files selected", "empty_selection")
     batch_subdir = Path("uploads") / "batches" / uuid.uuid4().hex
@@ -1932,6 +2010,7 @@ def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]]) -> tuple[Pat
                 safe_path.name,
                 data_url,
                 batch_subdir / safe_path.parent,
+                storage_key,
             )
             count += int(saved.exists())
         except (InputValidationError, KeyError, TypeError, ValueError):

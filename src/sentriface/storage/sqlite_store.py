@@ -29,6 +29,8 @@ from sentriface.models import (
     utc_now,
 )
 
+from sentriface.secure_storage import connect_database, ensure_encrypted_database
+
 SCHEMA_VERSION = 10
 DELETED_FACE_RETENTION_DAYS = 30
 
@@ -40,14 +42,18 @@ class SQLiteIdentityStore:
         embedding_dim: int = 512,
         backup_dir: Path | None = None,
         backup_retention_limit: int = 10,
+        database_key: bytes | None = None,
     ) -> None:
         self.db_path = db_path
         self.embedding_dim = embedding_dim
         self.backup_dir = backup_dir or db_path.parent / "backups"
         self.backup_retention_limit = backup_retention_limit
+        self.database_key = database_key
 
     def initialize(self) -> None:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.database_key is not None:
+            ensure_encrypted_database(self.db_path, self.database_key)
         version = self._schema_version()
         if version > SCHEMA_VERSION:
             raise RuntimeError(
@@ -100,7 +106,7 @@ class SQLiteIdentityStore:
     def _schema_version(self) -> int:
         if not self.db_path.exists():
             return 0
-        with closing(sqlite3.connect(self.db_path)) as conn:
+        with closing(connect_database(self.db_path, self.database_key)) as conn:
             return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
     def _create_pre_migration_backup(self, version: int) -> None:
@@ -110,6 +116,7 @@ class SQLiteIdentityStore:
             self.db_path,
             self.backup_dir,
             retention_limit=self.backup_retention_limit,
+            database_key=self.database_key,
         )
         existing = service.find_by_operation(operation_id)
         if existing is not None:
@@ -1073,7 +1080,7 @@ class SQLiteIdentityStore:
     def backup_to(self, target_path: Path) -> None:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as source:
-            with closing(sqlite3.connect(target_path)) as target:
+            with closing(connect_database(target_path, self.database_key)) as target:
                 source.backup(target)
 
     def add_embedding(
@@ -1664,8 +1671,7 @@ class SQLiteIdentityStore:
 
     @contextmanager
     def _connect(self):
-        conn = sqlite3.connect(self.db_path, timeout=30)
-        conn.row_factory = sqlite3.Row
+        conn = connect_database(self.db_path, self.database_key, timeout=30, row_factory=True)
         conn.execute("PRAGMA foreign_keys=ON")
         try:
             yield conn

@@ -14,10 +14,11 @@ dependencies = [
   "cryptography>=42,<51",
   "loguru>=0.7,<1",
   "numpy>=1.26,<2.0",
+  "keyring>=25,<26",
   "onnxruntime>=1.18,<2.0",
   "opencv-python-headless>=4.9,<5.0",
+  "sqlcipher3==0.6.2",
 ]
-
 [project.optional-dependencies]
 index = [
   "qhnswlib>=0.8.6,<0.9",

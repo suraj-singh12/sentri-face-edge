@@ -126,7 +126,7 @@ export function useApiClient() {
 
   const guarded = useCallback((fn) => async (...args) => {
     try {
-      await fn(...args);
+      return await fn(...args);
     } catch (error) {
       console.error(error);
       if (error?.name !== "AbortError" && !error?.notified) {

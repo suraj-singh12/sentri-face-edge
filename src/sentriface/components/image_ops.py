@@ -6,6 +6,7 @@ from typing import Any
 
 from sentriface.errors import InputImageError
 from sentriface.models import DetectedFace
+from sentriface.secure_files import is_protected_file, read_protected_bytes, write_protected_bytes
 # Todo: crop_face() & crop_face_without_alignment() are similar!
 
 '''
@@ -23,20 +24,25 @@ ARCFACE_TEMPLATE = (
 )
 
 
-def load_bgr_image(image_path: Path) -> Any:
+def load_bgr_image(image_path: Path, storage_key: bytes | None = None) -> Any:
     path = image_path.resolve()
     try:
         stat = path.stat()
-        image = _cached_imread(str(path), stat.st_mtime_ns, stat.st_size)
+        image = _cached_imread(str(path), stat.st_mtime_ns, stat.st_size, storage_key)
     except OSError:
-        image = _cached_imread(str(path), 0, 0)
+        image = _cached_imread(str(path), 0, 0, storage_key)
     if image is None:
         raise InputImageError(f"Could not read image: {image_path}")
     return image
 
 
 @lru_cache(maxsize=8)
-def _cached_imread(path: str, mtime_ns: int, size: int) -> Any:
+def _cached_imread(path: str, mtime_ns: int, size: int, storage_key: bytes | None) -> Any:
+    image_path = Path(path)
+    if is_protected_file(image_path):
+        encoded = read_protected_bytes(image_path, storage_key)
+        values = _numpy().frombuffer(encoded, dtype=_numpy().uint8)
+        return _cv2().imdecode(values, _cv2().IMREAD_COLOR)
     return _cv2().imread(path)
 
 
@@ -87,16 +93,21 @@ def crop_face(image: Any, face: DetectedFace, output_size: int = 112) -> Any:
     return cv2.resize(crop, (output_size, output_size), interpolation=cv2.INTER_AREA)
 
 
-def save_face_crop(image: Any, face: DetectedFace, output_path: Path, output_size: int = 112) -> str:
-    """
-    Image -> Crop / Align face -> Save face image to disk -> Return saved path
-    This is what helps keeping the People library with images. 
-    """
+def save_face_crop(
+    image: Any,
+    face: DetectedFace,
+    output_path: Path,
+    output_size: int = 112,
+    storage_key: bytes | None = None,
+) -> str:
+    """Save a face crop, encrypted when managed storage has a key."""
     cv2 = _cv2()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     crop = crop_face(image, face, output_size=output_size)
-    if not cv2.imwrite(str(output_path), crop):
+    success, encoded = cv2.imencode(output_path.suffix or ".jpg", crop)
+    if not success:
         raise InputImageError(f"Could not save face crop: {output_path}")
+    write_protected_bytes(output_path, encoded.tobytes(), storage_key)
     return str(output_path)
 
 

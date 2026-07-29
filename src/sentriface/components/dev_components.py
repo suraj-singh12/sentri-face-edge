@@ -5,6 +5,7 @@ import random
 from pathlib import Path
 
 from sentriface.models import DetectedFace, Embedding, FaceBox
+from sentriface.components.image_ops import load_bgr_image
 
 
 class WholeImageFaceDetector:
@@ -13,10 +14,13 @@ class WholeImageFaceDetector:
     It lets workflow/storage code run before ONNX models are added.
     """
 
+    def __init__(self, storage_key: bytes | None = None) -> None:
+        self.storage_key = storage_key
+
     def detect(self, image_path: Path) -> list[DetectedFace]:
         if not image_path.exists():
             raise FileNotFoundError(image_path)
-        width, height = _image_size(image_path)
+        width, height = _image_size(image_path, self.storage_key)
         return [
             DetectedFace(
                 box=FaceBox(x=0, y=0, width=width, height=height, confidence=1.0),
@@ -29,8 +33,9 @@ class WholeImageFaceDetector:
 class HashFaceEmbedder:
     """Deterministic placeholder embedder for tests and early UI work."""
 
-    def __init__(self, dimensions: int = 512) -> None:
+    def __init__(self, dimensions: int = 512, storage_key: bytes | None = None) -> None:
         self.dimensions = dimensions
+        self.storage_key = storage_key
 
     """
         encoder(): generate (random/fake) embedding for input image.
@@ -38,7 +43,7 @@ class HashFaceEmbedder:
     """
     def encode(self, image_path: Path, face: DetectedFace) -> Embedding:
         # face in, 
-        seed_material = image_path.read_bytes() + repr(face.box).encode("utf-8")
+        seed_material = read_image_bytes(image_path, self.storage_key) + repr(face.box).encode("utf-8")
         # create hash, take initial 8 bytes, and create a seed number (always comes out same for the same face)
         seed = int.from_bytes(hashlib.sha256(seed_material).digest()[:8], "little")
         # rng: deterministic machine
@@ -50,14 +55,16 @@ class HashFaceEmbedder:
         return tuple(value / norm for value in values)
 
 
-def _image_size(image_path: Path) -> tuple[int, int]:
+def _image_size(image_path: Path, storage_key: bytes | None = None) -> tuple[int, int]:
     try:
-        import cv2
+        image = load_bgr_image(image_path, storage_key)
+        height, width = image.shape[:2]
+        return width, height
+    except Exception:
+        return 112, 112
 
-        image = cv2.imread(str(image_path))
-        if image is not None:
-            height, width = image.shape[:2]
-            return width, height
-    except ImportError:
-        pass
-    return 112, 112
+
+def read_image_bytes(image_path: Path, storage_key: bytes | None = None) -> bytes:
+    from sentriface.secure_files import read_protected_bytes
+
+    return read_protected_bytes(image_path, storage_key)

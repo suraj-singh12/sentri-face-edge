@@ -10,5 +10,11 @@
   indexes, atomic index publication, and linear fallback.
 - Added durable file cleanup, SQLite lock handling, migration backups, restore
   rollback, request limits, localhost validation, and browser-origin hardening.
+- Added machine-profile diagnostics, SQLCipher live-database encryption, authenticated
+  managed-file and persistent-log encryption, and OS-vault key custody.
+- Added user-configured disaster recovery kits, automatic encrypted external backups,
+  recovery-key restoration, and rejection of network-backed recovery destinations.
+- Added process-wide non-loopback socket blocking and runtime reporting for the
+  fully offline, loopback-only security posture.
 - Added reproducible wheel packaging with the compiled UI, verified model setup,
   platform-specific data paths, and Windows/macOS/Linux CI.

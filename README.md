@@ -389,7 +389,20 @@ creation or verification fails, startup stops before changing the schema.
 Restarting a failed upgrade reuses and re-verifies the same pre-migration
 backup instead of creating duplicates.
 
-Use **Debug → Database → Portable Backups** to:
+SentriFace encrypts its live database, managed biometric files, managed backups,
+and persistent logs at rest. The per-installation master key is held by the
+operating-system credential vault. Configure the Disaster recovery card under
+Advanced and Machine Profile with a destination on another drive; SentriFace
+writes an initial encrypted backup, refreshes it automatically every 24 hours,
+and displays a one-time recovery code. After machine loss, install the recovered
+key before startup with:
+
+```bash
+sentriface-ui --recover-kit /path/to/sentriface-recovery-kit.json
+```
+
+The command prompts for the recovery code without placing it on the command line.
+Use **Debug > Database > Portable Backups** to:
 
 - create and verify a complete managed backup;
 - export a password-encrypted `.sfbackup.enc` archive;
@@ -408,8 +421,8 @@ Backups explicitly report missing historical files. Such backups still protect
 the database and all files that were available, but the UI labels them
 **Incomplete** and will not restore them as portable backups.
 
-The older `backup-db` CLI command remains available for scripts that need a raw
-SQLite-only copy:
+The older `backup-db` CLI command remains available for scripts that need a
+machine-key-encrypted SQLCipher-only copy:
 
 ```bash
 python -m sentriface.cli --runtime onnx backup-db backups/sentriface.db

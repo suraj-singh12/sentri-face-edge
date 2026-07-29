@@ -19,15 +19,17 @@ from sentriface.model_setup import require_model_usage_declaration
 from sentriface.hardware import assess_hardware
 from sentriface.models import PersonMatch
 from sentriface.paths import default_data_dir, default_model_dir
+from sentriface.offline_guard import install_offline_guard, require_local_path
 from sentriface.storage.sqlite_store import SQLiteIdentityStore
+from sentriface.secure_storage import StorageSecurityError, load_or_create_master_key, protect_existing_managed_data
 
 
 def build_dev_engine(data_dir: Path, config: RuntimeConfig | None = None) -> FaceEngine:
     config = config or config_for_hardware(assess_hardware(), data_dir=data_dir)
     return FaceEngine(
         config=config,
-        detector=WholeImageFaceDetector(),
-        embedder=HashFaceEmbedder(config.embedding_dim),
+        detector=WholeImageFaceDetector(config.storage_key),
+        embedder=HashFaceEmbedder(config.embedding_dim, config.storage_key),
         index=_face_index(config),
         store=_identity_store(config),
     )
@@ -48,10 +50,12 @@ def build_onnx_engine(config: RuntimeConfig) -> FaceEngine:
             max_image_edge=config.max_image_edge,
             input_size=config.detector_input_size,
             intra_op_threads=config.onnx_intra_threads,
+            storage_key=config.storage_key,
         ),
         embedder=OnnxArcFaceEmbedder(
             model_path=config.recognizer_model,
             intra_op_threads=config.onnx_intra_threads,
+            storage_key=config.storage_key,
         ),
         index=_face_index(config),
         store=_identity_store(config),
@@ -105,6 +109,7 @@ def _identity_store(config: RuntimeConfig) -> SQLiteIdentityStore:
         config.embedding_dim,
         backup_dir=config.backup_dir,
         backup_retention_limit=config.backup_retention_limit,
+        database_key=config.storage_key,
     )
 
 
@@ -117,6 +122,7 @@ def _pre_deletion_backup(
         config.db_path,
         config.backup_dir,
         retention_limit=config.backup_retention_limit,
+        database_key=config.storage_key,
     ).create_backup(reason=reason, operation_id=operation_id)
 
 
@@ -262,10 +268,16 @@ def main() -> int:
     )
 
     args = parser.parse_args()
-    profile = _select_profile(args.profile)
-    config = config_for_hardware(profile, data_dir=args.data_dir)
+    install_offline_guard()
 
     try:
+        for value in vars(args).values():
+            if isinstance(value, Path):
+                require_local_path(value)
+        profile = _select_profile(args.profile)
+        config = config_for_hardware(profile, data_dir=args.data_dir)
+        config = replace(config, storage_key=load_or_create_master_key(args.data_dir))
+        protect_existing_managed_data(args.data_dir, config.storage_key)
         config = _apply_runtime_overrides(config, args)
         if args.command == "profile":
             return _emit(
@@ -619,7 +631,7 @@ def main() -> int:
             )
 
         return 1
-    except SentriFaceError as exc:
+    except (SentriFaceError, StorageSecurityError, OSError, ValueError) as exc:
         return _emit_error(args, str(exc))
     except KeyError as exc:
         return _emit_error(args, str(exc).strip("'"))

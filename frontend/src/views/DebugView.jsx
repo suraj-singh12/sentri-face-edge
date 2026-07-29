@@ -26,6 +26,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconCircleCheck,
+  IconCpu,
   IconDatabase,
   IconDatabaseExport,
   IconDownload,
@@ -37,8 +38,11 @@ import {
   IconTrash,
   IconUpload,
 } from "@tabler/icons-react";
+import { MachineProfilePanel } from "./MachineProfilePanel.jsx";
 
 export function DebugView({
+  profile,
+  onConfigureRecovery,
   events,
   backups = [],
   backupCreating = false,
@@ -144,6 +148,8 @@ export function DebugView({
               onExport={exportEvents}
               onRefresh={refreshEvents}
             />
+          ) : section === "profile" ? (
+            <MachineProfilePanel profile={profile} onConfigureRecovery={onConfigureRecovery} />
           ) : (
             <DatabaseBackupsPanel
               backups={backups}
@@ -166,6 +172,7 @@ function DebugSidebar({ section, onSection, summary, onRefresh }) {
   const navItems = [
     { key: "events", label: "Events Log", icon: IconInfoCircle },
     { key: "database", label: "Database", icon: IconDatabase },
+    { key: "profile", label: "Machine Profile", icon: IconCpu },
   ];
   return (
     <Stack className="debug-sidebar">

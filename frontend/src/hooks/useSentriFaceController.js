@@ -44,6 +44,7 @@ export function useSentriFaceController() {
       setActiveView,
       refreshAll: appData.refreshAll,
       reloadAppData: appData.reloadAppData,
+      configureRecovery: appData.configureRecovery,
       loadPeople: appData.loadPeople,
       loadEvents: appData.loadEvents,
       loadDeletedFaces: appData.loadDeletedFaces,
