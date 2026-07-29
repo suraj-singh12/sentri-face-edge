@@ -35,6 +35,7 @@ from sentriface.recovery import RecoveryError, RecoveryService, recover_master_k
 from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key
 from sentriface.secure_files import read_protected_bytes, write_protected_bytes
 from sentriface.offline_guard import install_offline_guard, offline_guard_installed, require_local_path
+from sentriface.model_setup import MODEL_COMBINATIONS, install_local_model_bundle
 from sentriface.models import (
     EmbeddingRecord,
     FaceBox,
@@ -74,6 +75,13 @@ QUEUE_PROGRESS_LIMIT = 200
 MAX_HTTP_HANDLERS = 8
 
 
+MODEL_SETUP_ALLOWED_ENDPOINTS = {
+    "/api/health",
+    "/api/models/status",
+    "/api/models/install",
+}
+
+
 PUBLIC_AUTH_ENDPOINTS = {
     ("GET", "/api/health"),
     ("GET", "/api/auth/status"),
@@ -88,6 +96,8 @@ def _required_capability(method: str, path: str) -> str | None:
     if path in {"/api/auth/logout", "/api/auth/change-password"}:
         return "view"
     if path.startswith("/api/users"):
+        return "administer"
+    if path == "/api/models/install":
         return "administer"
     if method == "GET":
         if path == "/api/events":
@@ -189,18 +199,25 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         hardware_profile: HardwareProfile,
         runtime: str,
         debug: bool = True,
+        model_ready: bool = True,
+        model_error: str = "",
     ) -> None:
         super().__init__(server_address, SentriFaceApiHandler)
         self.engine = engine
         self.config = config
         self.hardware_profile = hardware_profile
         self.runtime = runtime
+        self.model_ready = model_ready
+        self.model_error = model_error
+        self.model_fingerprints: dict[str, tuple[int, int]] = {}
         declaration = getattr(engine, "model_usage", None)
         self.model_usage = declaration if isinstance(declaration, dict) else {
             "usage_basis": "development",
             "terms_version": "development",
             "accepted_at": "",
         }
+        if self.model_ready and self.runtime != "dev":
+            self._capture_model_fingerprints()
         self.debug = debug
         self.session_token = secrets.token_urlsafe(32)
         self.events: list[dict[str, Any]] = []
@@ -233,6 +250,81 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         )
         self.maintenance_thread.start()
 
+    def _model_files(self) -> tuple[Path, ...]:
+        model_dir = self.config.detector_model.parent
+        return (
+            self.config.detector_model,
+            self.config.recognizer_model,
+            model_dir / "calibration.json",
+            model_dir / "model-usage.json",
+        )
+
+    def _capture_model_fingerprints(self) -> None:
+        fingerprints: dict[str, tuple[int, int]] = {}
+        for path in self._model_files():
+            stat = path.stat()
+            fingerprints[str(path.resolve())] = (stat.st_size, stat.st_mtime_ns)
+        self.model_fingerprints = fingerprints
+
+    def models_available(self) -> bool:
+        if self.runtime == "dev":
+            return True
+        if not self.model_ready:
+            return False
+        try:
+            for path in self._model_files():
+                stat = path.stat()
+                if self.model_fingerprints.get(str(path.resolve())) != (stat.st_size, stat.st_mtime_ns):
+                    raise OSError(f"Model setup file changed or was replaced: {path.name}")
+        except OSError as exc:
+            self.model_ready = False
+            self.model_error = str(exc)
+            self.log_event("model-setup-required", error=self.model_error)
+            return False
+        return True
+
+    def model_status(self, user: AuthUser | None) -> dict[str, Any]:
+        ready = self.models_available()
+        model_dir = self.config.detector_model.parent
+        return {
+            "ready": ready,
+            "runtime": self.runtime,
+            "error": "" if ready else self.model_error or "Recognition models are required",
+            "can_configure": bool(user and user.has("administer")),
+            "models_dir": str(model_dir) if user and user.has("administer") else None,
+            "detector_target": str(model_dir / "detector.onnx") if user and user.has("administer") else None,
+            "recognizer_target": str(model_dir / "recognizer.onnx") if user and user.has("administer") else None,
+            "combinations": MODEL_COMBINATIONS,
+            "requirements": {
+                "detector": "SCRFD-compatible ONNX detector",
+                "recognizer": "ArcFace-compatible ONNX recognizer with 512-dimensional embeddings",
+                "calibration": "Hash-bound calibration.json from a representative validation dataset",
+                "checksums": "SHA-256 is required for every supplied file",
+            },
+            "usage": self.model_usage if ready else None,
+        }
+
+    def activate_installed_models(self, model_dir: Path) -> None:
+        config = replace(
+            self.config,
+            detector_model=model_dir / "detector.onnx",
+            recognizer_model=model_dir / "recognizer.onnx",
+        )
+        candidate = build_onnx_engine(config)
+        candidate.initialize()
+        self.engine = candidate
+        self.config = candidate.config
+        declaration = getattr(candidate, "model_usage", None)
+        self.model_usage = declaration if isinstance(declaration, dict) else {}
+        self.model_error = ""
+        self.model_ready = True
+        self._capture_model_fingerprints()
+        self.log_event(
+            "models-activated",
+            usage_basis=self.model_usage.get("usage_basis", "unknown"),
+            detector=str(self.config.detector_model),
+            recognizer=str(self.config.recognizer_model),
+        )
     def process_request(self, request: Any, client_address: Any) -> None:
         if not self.request_semaphore.acquire(timeout=0.25):
             try:
@@ -582,6 +674,23 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             return True
         return False
 
+    def _reject_model_readiness(self, path: str) -> bool:
+        if (
+            self.server.runtime == "dev"
+            or path in MODEL_SETUP_ALLOWED_ENDPOINTS
+            or path.startswith("/api/auth/")
+        ):
+            return False
+        if self.server.models_available():
+            return False
+        self._json(
+            {
+                "error": self.server.model_error or "Recognition models must be configured before SentriFace can continue",
+                "code": "models_required",
+            },
+            status=HTTPStatus.PRECONDITION_REQUIRED,
+        )
+        return True
     def _set_auth_cookie(self, token: str) -> None:
         self.pending_auth_cookie = f"{AUTH_COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={8 * 60 * 60}"
 
@@ -608,6 +717,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._reject_invalid_origin()
                 or self._reject_invalid_session()
                 or self._reject_user_authorization("GET", parsed.path)
+                or self._reject_model_readiness(parsed.path)
             ):
                 return
         if parsed.path in {"/api/health", "/api/profile", "/api/queue-progress"}:
@@ -626,12 +736,14 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if self._reject_user_authorization("POST", parsed.path):
             return
+        if self._reject_model_readiness(parsed.path):
+            return
         if parsed.path == "/api/queue-cancel":
             self._do_POST()
             return
         gate = (
             self.server.operation_gate.exclusive()
-            if parsed.path == "/api/backups/restore"
+            if parsed.path in {"/api/backups/restore", "/api/models/install"}
             else self.server.operation_gate.shared()
         )
         with gate:
@@ -654,6 +766,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if self._reject_user_authorization("DELETE", parsed.path):
             return
+        if self._reject_model_readiness(parsed.path):
+            return
         with self.server.operation_gate.shared():
             self._do_DELETE()
     def _do_GET(self) -> None:
@@ -667,6 +781,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/auth/status":
                 self._json(auth_status_payload(self.server.auth, self.auth_user))
+                return
+            if parsed.path == "/api/models/status":
+                self._json(self.server.model_status(self.auth_user))
                 return
             if parsed.path == "/api/users":
                 self._json({"users": self.server.auth.list_users(), "roles": self.server.auth.role_catalog()})
@@ -884,6 +1001,54 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self.server.auth.reset_password(self.auth_user, target_id, _required(payload, "password"))
                 self.server.log_event("account-password-reset", actor=self.auth_user.username, target_user_id=target_id)
                 self._json({"password_reset": True})
+                return
+            if parsed.path == "/api/models/install":
+                if payload.get("accept_responsibility") is not True:
+                    raise InputValidationError(
+                        "Accept responsibility for model licensing and biometric use before continuing",
+                        "model_responsibility_required",
+                    )
+                choice_id = _required(payload, "combination_id")
+                choices = [
+                    item
+                    for group in MODEL_COMBINATIONS.values()
+                    for item in group
+                ]
+                choice = next((item for item in choices if item["id"] == choice_id), None)
+                if choice is None:
+                    raise InputValidationError("Choose a supported model combination", "unsupported_model_combination")
+                detector_source = require_local_path(Path(_required(payload, "detector_path")))
+                recognizer_source = require_local_path(Path(_required(payload, "recognizer_path")))
+                calibration_source = require_local_path(Path(_required(payload, "calibration_path")))
+                model_dir = require_local_path(self.server.config.detector_model.parent)
+                declaration = install_local_model_bundle(
+                    model_dir,
+                    detector_source=detector_source,
+                    detector_sha256=_required(payload, "detector_sha256"),
+                    recognizer_source=recognizer_source,
+                    recognizer_sha256=_required(payload, "recognizer_sha256"),
+                    calibration_source=calibration_source,
+                    calibration_sha256=_required(payload, "calibration_sha256"),
+                    usage_basis=choice["usage_basis"],
+                    authorized_by=self.auth_user.display_name or self.auth_user.username,
+                    organization=str(payload.get("organization") or ""),
+                    licensor=str(payload.get("licensor") or ""),
+                    license_reference=str(payload.get("license_reference") or ""),
+                    license_name=str(payload.get("license_name") or ""),
+                )
+                try:
+                    self.server.activate_installed_models(model_dir)
+                except Exception as exc:
+                    self.server.model_ready = False
+                    self.server.model_error = f"The supplied model bundle could not be activated: {exc}"
+                    raise ModelSetupError(self.server.model_error) from exc
+                self.server.log_event(
+                    "model-bundle-installed",
+                    actor=self.auth_user.username,
+                    combination_id=choice_id,
+                    usage_basis=declaration["usage_basis"],
+                )
+                self._json(self.server.model_status(self.auth_user), status=HTTPStatus.CREATED)
                 return
             if parsed.path.startswith("/api/backups/") and parsed.path.endswith("/encrypted-download"):
                 backup_id = parsed.path.removeprefix("/api/backups/").removesuffix("/encrypted-download").strip("/")
@@ -1799,6 +1964,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             status = HTTPStatus.NOT_FOUND
         if isinstance(exc, InputValidationError):
             status = HTTPStatus.UNPROCESSABLE_ENTITY
+        if isinstance(exc, ModelSetupError):
+            status = HTTPStatus.UNPROCESSABLE_ENTITY
         if isinstance(exc, EngineBusyError):
             status = HTTPStatus.SERVICE_UNAVAILABLE
         if isinstance(exc, AuthError):
@@ -1808,6 +1975,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             payload["code"] = "engine_busy"
         if isinstance(exc, AuthError):
             payload["code"] = exc.code
+        if isinstance(exc, ModelSetupError):
+            payload["code"] = "model_setup_failed"
         if validation_error:
             payload["code"] = "invalid_input"
             payload["reason"] = getattr(exc, "reason", "invalid_request")
@@ -1885,7 +2054,17 @@ def create_server(
         )
     require_local_path(config.detector_model)
     require_local_path(config.recognizer_model)
-    engine = build_dev_engine(data_dir, config) if runtime == "dev" else build_onnx_engine(config)
+    model_ready = True
+    model_error = ""
+    if runtime == "dev":
+        engine = build_dev_engine(data_dir, config)
+    else:
+        try:
+            engine = build_onnx_engine(config)
+        except Exception as exc:
+            model_ready = False
+            model_error = str(exc).strip("'") or "Recognition models are missing or invalid"
+            engine = build_dev_engine(data_dir, config)
     config = engine.config
     engine.initialize()
     server = SentriFaceApiServer(
@@ -1895,8 +2074,12 @@ def create_server(
         hardware_profile=profile,
         runtime=runtime,
         debug=debug,
+        model_ready=model_ready,
+        model_error=model_error,
     )
     server.log_event("startup", runtime=runtime, data_dir=str(data_dir), address=f"http://{host}:{server.server_port}")
+    if not model_ready:
+        server.log_event("model-setup-required", error=model_error)
     return server
 
 

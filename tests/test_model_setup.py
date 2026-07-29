@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 import unittest
 import zipfile
@@ -9,7 +10,9 @@ from pathlib import Path
 from sentriface.errors import ModelSetupError
 from sentriface.model_setup import (
     _extract_verified,
+    install_local_model_bundle,
     install_local_models,
+    load_similarity_calibration,
     install_models,
     require_model_usage_declaration,
     verify_file,
@@ -145,6 +148,69 @@ class ModelSetupTest(unittest.TestCase):
                     authorized_by="Customer Administrator",
                 )
 
+    def test_complete_bundle_installs_hash_bound_calibration(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            detector = root / "source-detector.onnx"
+            recognizer = root / "source-recognizer.onnx"
+            calibration = root / "source-calibration.json"
+            detector.write_bytes(b"detector")
+            recognizer.write_bytes(b"recognizer")
+            recognizer_digest = hashlib.sha256(b"recognizer").hexdigest()
+            calibration.write_text(json.dumps({
+                "recognizer_sha256": recognizer_digest,
+                "representative_dataset": "local validation cohort",
+                "target_false_match_rate": 0.0001,
+                "thresholds": {"possible": 0.4, "likely": 0.5, "strong": 0.6},
+            }), encoding="utf-8")
+
+            declaration = install_local_model_bundle(
+                root / "models",
+                detector_source=detector,
+                detector_sha256=hashlib.sha256(b"detector").hexdigest(),
+                recognizer_source=recognizer,
+                recognizer_sha256=recognizer_digest,
+                calibration_source=calibration,
+                calibration_sha256=hashlib.sha256(calibration.read_bytes()).hexdigest(),
+                usage_basis="noncommercial-research",
+                authorized_by="Research Operator",
+            )
+
+            installed = load_similarity_calibration(
+                root / "models" / "calibration.json",
+                root / "models" / "recognizer.onnx",
+            )
+            self.assertEqual(declaration["usage_basis"], "noncommercial-research")
+            self.assertEqual(installed["thresholds"]["strong"], 0.6)
+
+    def test_bundle_rejects_calibration_for_another_recognizer(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            detector = root / "detector.onnx"
+            recognizer = root / "recognizer.onnx"
+            calibration = root / "calibration.json"
+            detector.write_bytes(b"detector")
+            recognizer.write_bytes(b"recognizer")
+            calibration.write_text(json.dumps({
+                "recognizer_sha256": "0" * 64,
+                "representative_dataset": "cohort",
+                "target_false_match_rate": 0.001,
+                "thresholds": {"possible": 0.4, "likely": 0.5, "strong": 0.6},
+            }), encoding="utf-8")
+
+            with self.assertRaisesRegex(ModelSetupError, "does not match"):
+                install_local_model_bundle(
+                    root / "models",
+                    detector_source=detector,
+                    detector_sha256=hashlib.sha256(detector.read_bytes()).hexdigest(),
+                    recognizer_source=recognizer,
+                    recognizer_sha256=hashlib.sha256(recognizer.read_bytes()).hexdigest(),
+                    calibration_source=calibration,
+                    calibration_sha256=hashlib.sha256(calibration.read_bytes()).hexdigest(),
+                    usage_basis="noncommercial-research",
+                    authorized_by="Research Operator",
+                )
+            self.assertFalse((root / "models").exists())
 
 if __name__ == "__main__":
     unittest.main()

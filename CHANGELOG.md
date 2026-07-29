@@ -10,6 +10,9 @@
   indexes, atomic index publication, and linear fallback.
 - Added durable file cleanup, SQLite lock handling, migration backups, restore
   rollback, request limits, localhost validation, and browser-origin hardening.
+- Added post-login research/commercial model onboarding, local path and checksum
+  validation, in-process ONNX activation, and automatic return to setup when model
+  files are missing or changed.
 - Added per-machine local signup/login, Argon2id password hashing, viewer/operator/
   custodian/technician/administrator roles, backend and CLI authorization, account
   lockout/auditing, and OS-custodian administrator recovery.

@@ -31,6 +31,9 @@ export function useApiClient() {
       if (["authentication_required", "setup_required"].includes(error.code)) {
         window.dispatchEvent(new CustomEvent("sentriface-auth-required"));
       }
+      if (error.code === "models_required") {
+        window.dispatchEvent(new CustomEvent("sentriface-models-required"));
+      }
       if (!options.silent) {
         showToast(error.message, "red", {
           title: error.code === "engine_busy" ? "Face engine is busy" : "Request failed",

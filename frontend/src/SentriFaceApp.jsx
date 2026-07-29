@@ -4,6 +4,7 @@ import { Notifications } from "@mantine/notifications";
 import { IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
 import { AuthGate } from "./components/AuthGate.jsx";
+import { ModelGate } from "./components/ModelGate.jsx";
 import { VIEWS } from "./constants.js";
 import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
 import { profileLine, tabLabel } from "./utils.js";
@@ -24,7 +25,7 @@ export default function SentriFaceApp() {
       }}
     >
       <Notifications position="bottom-right" />
-      <AuthGate>{(auth) => <SentriFaceShell {...auth} />}</AuthGate>
+      <AuthGate>{(auth) => <ModelGate user={auth.user} logout={auth.logout}><SentriFaceShell {...auth} /></ModelGate>}</AuthGate>
     </MantineProvider>
   );
 }

@@ -15,6 +15,7 @@ from sentriface.errors import ModelSetupError
 from sentriface.paths import default_model_dir
 
 MODEL_FILENAMES = ("detector.onnx", "recognizer.onnx")
+CALIBRATION_FILENAME = "calibration.json"
 MODEL_USAGE_FILENAME = "model-usage.json"
 MODEL_USAGE_SCHEMA_VERSION = 1
 MODEL_TERMS_VERSION = "2026-07-29"
@@ -24,6 +25,66 @@ MODEL_USAGE_BASES = (
     "permissive-license",
 )
 
+MODEL_COMBINATIONS = {
+    "research": [
+        {
+            "id": "buffalo-s-research",
+            "name": "InsightFace buffalo_s",
+            "detector": "SCRFD-500MF",
+            "recognizer": "MobileFaceNet / WebFace600K",
+            "detector_file": "det_500m.onnx",
+            "recognizer_file": "w600k_mbf.onnx",
+            "usage_basis": "noncommercial-research",
+            "note": "Smallest supported InsightFace pair for lower-end CPUs.",
+        },
+        {
+            "id": "buffalo-l-research",
+            "name": "InsightFace buffalo_l",
+            "detector": "SCRFD-10GF",
+            "recognizer": "ResNet50 / WebFace600K",
+            "detector_file": "det_10g.onnx",
+            "recognizer_file": "w600k_r50.onnx",
+            "usage_basis": "noncommercial-research",
+            "note": "Higher-accuracy supported InsightFace pair with greater CPU cost.",
+        },
+        {
+            "id": "buffalo-m-research",
+            "name": "InsightFace buffalo_m",
+            "detector": "SCRFD-2.5GF",
+            "recognizer": "ResNet50 / WebFace600K",
+            "detector_file": "det_2.5g.onnx",
+            "recognizer_file": "w600k_r50.onnx",
+            "usage_basis": "noncommercial-research",
+            "note": "Middle detector size with the buffalo_l recognition model.",
+        },
+    ],
+    "commercial": [
+        {
+            "id": "insightface-commercial",
+            "name": "Commercially licensed InsightFace",
+            "detector": "Licensed SCRFD ONNX",
+            "recognizer": "Licensed buffalo/antelope ArcFace ONNX",
+            "usage_basis": "commercial-license",
+            "note": "Requires a commercial model entitlement from InsightFace or its authorized licensor.",
+        },
+        {
+            "id": "compatible-commercial",
+            "name": "Other commercially licensed pair",
+            "detector": "SCRFD-compatible ONNX",
+            "recognizer": "512-dimensional ArcFace-compatible ONNX",
+            "usage_basis": "commercial-license",
+            "note": "For a supplier-licensed compatible detector and recognizer pair.",
+        },
+        {
+            "id": "compatible-permissive",
+            "name": "Permissively licensed compatible pair",
+            "detector": "SCRFD-compatible ONNX",
+            "recognizer": "512-dimensional ArcFace-compatible ONNX",
+            "usage_basis": "permissive-license",
+            "note": "Commercial use is allowed only when the supplied model licenses permit it.",
+        },
+    ],
+}
 
 
 def main() -> int:
@@ -35,6 +96,8 @@ def main() -> int:
     parser.add_argument("--detector-sha256", required=True)
     parser.add_argument("--recognizer-source", type=Path, required=True)
     parser.add_argument("--recognizer-sha256", required=True)
+    parser.add_argument("--calibration-source", type=Path, required=True)
+    parser.add_argument("--calibration-sha256", required=True)
     parser.add_argument(
         "--accept-model-responsibility",
         action="store_true",
@@ -75,12 +138,14 @@ def main() -> int:
             "provide, verify, or grant rights to third-party model weights"
         )
     try:
-        install_local_models(
+        install_local_model_bundle(
             args.models_dir,
             detector_source=args.detector_source,
             detector_sha256=args.detector_sha256,
             recognizer_source=args.recognizer_source,
             recognizer_sha256=args.recognizer_sha256,
+            calibration_source=args.calibration_source,
+            calibration_sha256=args.calibration_sha256,
             usage_basis=args.usage_basis,
             authorized_by=args.authorized_by,
             organization=args.organization,
@@ -89,7 +154,7 @@ def main() -> int:
             license_name=args.license_name,
             force=args.force,
         )
-    except (OSError, ValueError) as exc:
+    except (ModelSetupError, OSError, ValueError) as exc:
         print(f"SentriFace model setup failed: {exc}")
         print("Model setup was not activated; ONNX startup remains blocked.")
         return 2
@@ -134,6 +199,104 @@ def install_local_models(
     }
     _write_usage_declaration(models_dir / MODEL_USAGE_FILENAME, declaration)
     return declaration
+
+
+def install_local_model_bundle(
+    models_dir: Path,
+    *,
+    detector_source: Path,
+    detector_sha256: str,
+    recognizer_source: Path,
+    recognizer_sha256: str,
+    calibration_source: Path,
+    calibration_sha256: str,
+    usage_basis: str,
+    authorized_by: str,
+    organization: str = "",
+    licensor: str = "",
+    license_reference: str = "",
+    license_name: str = "",
+    force: bool = False,
+) -> dict[str, object]:
+    """Install a complete local model pair plus its hash-bound calibration."""
+    detector_digest = _validated_digest(detector_sha256)
+    recognizer_digest = _validated_digest(recognizer_sha256)
+    calibration_digest = _validated_digest(calibration_sha256)
+    for label, source, digest in (
+        ("Detector", detector_source, detector_digest),
+        ("Recognizer", recognizer_source, recognizer_digest),
+        ("Calibration", calibration_source, calibration_digest),
+    ):
+        if not source.is_file():
+            raise ValueError(f"{label} source was not found: {source}")
+        if not verify_file(source, digest, source.stat().st_size):
+            raise ValueError(f"{label} checksum verification failed: {source.name}")
+    load_similarity_calibration(calibration_source, recognizer_source, recognizer_digest)
+    declaration = install_local_models(
+        models_dir,
+        detector_source=detector_source,
+        detector_sha256=detector_digest,
+        recognizer_source=recognizer_source,
+        recognizer_sha256=recognizer_digest,
+        usage_basis=usage_basis,
+        authorized_by=authorized_by,
+        organization=organization,
+        licensor=licensor,
+        license_reference=license_reference,
+        license_name=license_name,
+        force=force,
+    )
+    _copy_verified(
+        calibration_source,
+        models_dir / CALIBRATION_FILENAME,
+        calibration_digest,
+        calibration_source.stat().st_size,
+    )
+    return declaration
+
+
+def load_similarity_calibration(
+    calibration_path: Path,
+    recognizer_path: Path,
+    recognizer_sha256: str | None = None,
+) -> dict[str, object]:
+    """Load calibration provenance and thresholds for one exact recognizer."""
+    try:
+        payload = json.loads(calibration_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ModelSetupError("A valid calibration.json is required beside the recognizer model") from exc
+    if not isinstance(payload, dict):
+        raise ModelSetupError("Similarity calibration must be a JSON object")
+    expected_digest = str(payload.get("recognizer_sha256") or "").casefold()
+    try:
+        actual_digest = recognizer_sha256 or _sha256(recognizer_path)
+        expected_digest = _validated_digest(expected_digest)
+    except (ModelSetupError, OSError, ValueError) as exc:
+        raise ModelSetupError("Similarity calibration has an invalid recognizer digest") from exc
+    if expected_digest != actual_digest.casefold():
+        raise ModelSetupError("Similarity calibration does not match the recognizer model")
+    dataset = str(payload.get("representative_dataset") or "").strip()
+    try:
+        target_fmr = float(payload.get("target_false_match_rate", 0))
+    except (TypeError, ValueError) as exc:
+        raise ModelSetupError("Similarity calibration target false-match rate is invalid") from exc
+    thresholds = payload.get("thresholds")
+    if not dataset or not 0 < target_fmr <= 1 or not isinstance(thresholds, dict):
+        raise ModelSetupError("Similarity calibration provenance is incomplete")
+    try:
+        possible = float(thresholds.get("possible", -1))
+        likely = float(thresholds.get("likely", -1))
+        strong = float(thresholds.get("strong", -1))
+    except (TypeError, ValueError) as exc:
+        raise ModelSetupError("Similarity calibration thresholds are invalid") from exc
+    if not 0 <= possible <= likely <= strong <= 1:
+        raise ModelSetupError("Similarity calibration thresholds are invalid")
+    return {
+        **payload,
+        "representative_dataset": dataset,
+        "target_false_match_rate": target_fmr,
+        "thresholds": {"possible": possible, "likely": likely, "strong": strong},
+    }
 
 
 def _validated_declaration_fields(
@@ -242,7 +405,7 @@ def require_model_usage_declaration(
         try:
             expected = _validated_digest(str(record.get("sha256") or ""))
             actual = _sha256(path)
-        except (OSError, ValueError) as exc:
+        except (ModelSetupError, OSError, ValueError) as exc:
             raise ModelSetupError(f"Could not verify declared model: {filename}") from exc
         if actual != expected:
             raise ModelSetupError(

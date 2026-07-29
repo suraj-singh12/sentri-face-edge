@@ -14,6 +14,7 @@ Security controls include:
 - request, upload, image-dimension, and backup-import limits;
 - managed-path validation for media and cleanup operations;
 - checksummed portable backups and local operator-supplied model installations;
+- post-login, administrator-only local model onboarding with SHA-256 verification, hash-bound calibration, and fail-closed recognition when setup files are missing or changed;
 - password-based authenticated encryption for exported `.sfbackup.enc` files;
 - database migration backups and rollback-oriented restore handling;
 - SQLCipher encryption for the live database and authenticated encryption for managed media, backups, and persistent logs;

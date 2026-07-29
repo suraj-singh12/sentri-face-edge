@@ -126,6 +126,7 @@ python -m pip install -e .
 sentriface-models \
   --detector-source path/to/operator-detector.onnx --detector-sha256 <sha256> \
   --recognizer-source path/to/operator-recognizer.onnx --recognizer-sha256 <sha256> \
+  --calibration-source path/to/calibration.json --calibration-sha256 <sha256> \
   --usage-basis commercial-license \
   --authorized-by "Customer Administrator" \
   --organization "Customer Organization" \
@@ -150,7 +151,12 @@ foreign Host headers. ONNX is the default; use `--runtime dev` only for explicit
 testing. `sentriface-models` never downloads weights. It copies only local,
 operator-supplied files after SHA-256 verification and writes a hash-bound usage
 declaration. ONNX startup fails closed if that declaration is missing or stale;
-research-only declarations produce a persistent UI warning. The UI
+research-only declarations produce a persistent UI warning. When ONNX files are missing,
+invalid, replaced, or deleted, the server remains available only for signed-in model
+setup and fails closed for recognition/data operations. After login, administrators
+choose a supported Research-only or Commercial combination, provide absolute local
+paths and SHA-256 values for the detector, recognizer, and calibration, and activate
+the verified bundle without any network access. The UI
 prints debug events to the terminal and keeps the latest events visible in the
 Debug tab.
 

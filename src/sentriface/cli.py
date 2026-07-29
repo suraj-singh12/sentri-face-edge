@@ -1,7 +1,6 @@
 from __future__ import annotations
 import argparse
 import getpass
-import hashlib
 import json
 import uuid
 from dataclasses import replace
@@ -18,7 +17,7 @@ from sentriface.backup_service import BackupService
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
 from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import ModelSetupError, SentriFaceError
-from sentriface.model_setup import require_model_usage_declaration
+from sentriface.model_setup import load_similarity_calibration, require_model_usage_declaration
 from sentriface.hardware import assess_hardware
 from sentriface.models import PersonMatch
 from sentriface.paths import default_data_dir, default_model_dir
@@ -69,32 +68,16 @@ def build_onnx_engine(config: RuntimeConfig) -> FaceEngine:
 
 
 def _apply_similarity_calibration(config: RuntimeConfig) -> RuntimeConfig:
-    calibration_path = config.recognizer_model.parent / "calibration.json"
-    try:
-        payload = json.loads(calibration_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ModelSetupError(
-            "A valid calibration.json is required beside the licensed recognizer model"
-        ) from exc
-    expected_digest = str(payload.get("recognizer_sha256") or "").lower()
-    actual_digest = hashlib.sha256(config.recognizer_model.read_bytes()).hexdigest()
-    if expected_digest != actual_digest:
-        raise ModelSetupError("Similarity calibration does not match the recognizer model")
-    dataset = str(payload.get("representative_dataset") or "").strip()
-    target_fmr = float(payload.get("target_false_match_rate", 0))
-    thresholds = payload.get("thresholds")
-    if not dataset or not 0 < target_fmr <= 1 or not isinstance(thresholds, dict):
-        raise ModelSetupError("Similarity calibration provenance is incomplete")
-    possible = float(thresholds.get("possible", -1))
-    likely = float(thresholds.get("likely", -1))
-    strong = float(thresholds.get("strong", -1))
-    if not 0 <= possible <= likely <= strong <= 1:
-        raise ModelSetupError("Similarity calibration thresholds are invalid")
+    payload = load_similarity_calibration(
+        config.recognizer_model.parent / "calibration.json",
+        config.recognizer_model,
+    )
+    thresholds = payload["thresholds"]
     return replace(
         config,
-        high_confidence=strong,
-        medium_confidence=likely,
-        possible_confidence=possible,
+        high_confidence=thresholds["strong"],
+        medium_confidence=thresholds["likely"],
+        possible_confidence=thresholds["possible"],
     )
 
 def _face_index(config: RuntimeConfig):
