@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse
 import json
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -13,7 +14,8 @@ from sentriface.components.onnx_components import OnnxArcFaceEmbedder, OnnxScrfd
 from sentriface.backup_service import BackupService
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
 from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
-from sentriface.errors import SentriFaceError
+from sentriface.errors import ModelSetupError, SentriFaceError
+from sentriface.model_setup import require_model_usage_declaration
 from sentriface.hardware import assess_hardware
 from sentriface.models import PersonMatch
 from sentriface.paths import default_data_dir, default_model_dir
@@ -32,7 +34,14 @@ def build_dev_engine(data_dir: Path, config: RuntimeConfig | None = None) -> Fac
 
 
 def build_onnx_engine(config: RuntimeConfig) -> FaceEngine:
-    return FaceEngine(
+    for model_path in (config.detector_model, config.recognizer_model):
+        if not model_path.exists():
+            raise ModelSetupError(f"Model file not found: {model_path}")
+    config = _apply_similarity_calibration(config)
+    declaration = require_model_usage_declaration(
+        config.detector_model, config.recognizer_model
+    )
+    engine = FaceEngine(
         config=config,
         detector=OnnxScrfdDetector(
             model_path=config.detector_model,
@@ -47,8 +56,39 @@ def build_onnx_engine(config: RuntimeConfig) -> FaceEngine:
         index=_face_index(config),
         store=_identity_store(config),
     )
+    engine.model_usage = declaration
+    return engine
 
 
+
+def _apply_similarity_calibration(config: RuntimeConfig) -> RuntimeConfig:
+    calibration_path = config.recognizer_model.parent / "calibration.json"
+    try:
+        payload = json.loads(calibration_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ModelSetupError(
+            "A valid calibration.json is required beside the licensed recognizer model"
+        ) from exc
+    expected_digest = str(payload.get("recognizer_sha256") or "").lower()
+    actual_digest = hashlib.sha256(config.recognizer_model.read_bytes()).hexdigest()
+    if expected_digest != actual_digest:
+        raise ModelSetupError("Similarity calibration does not match the recognizer model")
+    dataset = str(payload.get("representative_dataset") or "").strip()
+    target_fmr = float(payload.get("target_false_match_rate", 0))
+    thresholds = payload.get("thresholds")
+    if not dataset or not 0 < target_fmr <= 1 or not isinstance(thresholds, dict):
+        raise ModelSetupError("Similarity calibration provenance is incomplete")
+    possible = float(thresholds.get("possible", -1))
+    likely = float(thresholds.get("likely", -1))
+    strong = float(thresholds.get("strong", -1))
+    if not 0 <= possible <= likely <= strong <= 1:
+        raise ModelSetupError("Similarity calibration thresholds are invalid")
+    return replace(
+        config,
+        high_confidence=strong,
+        medium_confidence=likely,
+        possible_confidence=possible,
+    )
 
 def _face_index(config: RuntimeConfig):
     if config.index_backend == "hnswlib":
@@ -95,8 +135,8 @@ def main() -> int:
         default="dev",
         help="Use dev placeholders or real ONNX CPU components.",
     )
-    parser.add_argument("--detector-model", type=Path, default=default_model_dir() / "det_500m.onnx")
-    parser.add_argument("--recognizer-model", type=Path, default=default_model_dir() / "w600k_r50.onnx")
+    parser.add_argument("--detector-model", type=Path, default=default_model_dir() / "detector.onnx")
+    parser.add_argument("--recognizer-model", type=Path, default=default_model_dir() / "recognizer.onnx")
     parser.add_argument("--onnx-threads", type=int, help="Override ONNX Runtime intra-op threads")
     parser.add_argument("--max-image-edge", type=int, help="Override image downscale edge before detection")
     parser.add_argument("--high-confidence", type=float, help="Similarity needed for a strong match")
@@ -201,7 +241,7 @@ def main() -> int:
 
     purge_embedding = subcommands.add_parser(
         "purge-embedding",
-        help="Permanently delete a face from Deleted Faces",
+        help="Erase a face from the live library after creating a safety backup",
     )
     purge_embedding.add_argument("embedding_id")
 

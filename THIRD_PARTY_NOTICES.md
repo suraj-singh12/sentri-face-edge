@@ -3,12 +3,12 @@
 SentriFace Edge uses third-party Python and JavaScript packages. Their license
 terms remain those of their respective projects and distributions.
 
-The default detector and recognizer are obtained from InsightFace release
-archives by the explicit `sentriface-models` command. Model weights are not
-included in the SentriFace Python wheel. Pretrained model weights can have
-terms that differ from the InsightFace source-code license; review the current
-InsightFace model terms before commercial or redistributed use.
-
-The downloader pins the expected filename, byte size, and SHA-256 digest. This
-protects installation integrity but does not grant additional rights to use or
-redistribute the model.
+Face detector and recognizer weights are not included and are never downloaded
+by SentriFace. Operators must supply compatible ONNX weights, retain model
+provenance and license records, and confirm that their commercial and
+redistribution rights cover the intended release. Checksum verification protects
+installation integrity; it does not grant model rights.
+For non-commercial research use, the operator must instead declare and comply
+with the applicable model terms. SentriFace records but does not authenticate
+any commercial or non-commercial research assertion. A declaration
+and checksum verification do not create or grant model rights.

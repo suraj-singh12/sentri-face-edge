@@ -40,8 +40,8 @@ class RuntimeConfig:
     prefer_small_models: bool = True
     index_backend: str = "linear"
     hardware_tier: str = "low"
-    detector_model: Path = field(default_factory=lambda: default_model_dir() / "det_500m.onnx")
-    recognizer_model: Path = field(default_factory=lambda: default_model_dir() / "w600k_r50.onnx")
+    detector_model: Path = field(default_factory=lambda: default_model_dir() / "detector.onnx")
+    recognizer_model: Path = field(default_factory=lambda: default_model_dir() / "recognizer.onnx")
     collect_metrics: bool = False
     backup_retention_limit: int = 10
 

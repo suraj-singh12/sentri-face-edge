@@ -86,6 +86,11 @@ function SentriFaceShell() {
             Results are synthetic and must not be trusted as real face recognition.
           </Alert>
         ) : null}
+        {state.profile?.model_usage?.research_only ? (
+          <Alert color="orange" title="Non-commercial research-only models are active" mb="md">
+            The operator declared these third-party weights for non-commercial research only. SentriFace supplies no model license.
+          </Alert>
+        ) : null}
         {state.profile?.index?.degraded_reason ? (
           <Alert color="yellow" title="Search index is in safe fallback mode" mb="md">
             Using {state.profile.index.actual} instead of {state.profile.index.requested}: {state.profile.index.degraded_reason}

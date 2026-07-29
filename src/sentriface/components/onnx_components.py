@@ -37,7 +37,7 @@ class OnnxRuntimeSession:
 class OnnxScrfdDetector:
     """CPU SCRFD detector wrapper.
     Sample and Computation Redistribution for Efficient Face Detection 
-    This targets InsightFace SCRFD models such as det_500m.onnx.
+    This targets compatible SCRFD-style ONNX detector models.
     """
     def __init__(
         self,

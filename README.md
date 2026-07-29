@@ -82,7 +82,7 @@ flowchart LR
     Files --> Crops["data/faces/person_id, pending, init"]
 
     Config["Hardware Assessment\nlow/medium/high profile"] --> Controller
-    Models["Offline ONNX Models\nmodels/det_500m.onnx\nmodels/w600k_r50.onnx"] --> Detector
+    Models["Offline ONNX Models\nmodels/detector.onnx\nmodels/recognizer.onnx"] --> Detector
     Models --> Embedder
 ```
 
@@ -92,8 +92,8 @@ Target runtime stack:
 
 ```text
 Inference: ONNX Runtime CPU
-Detector:  det_500m.onnx
-Embedder:  w600k_r50.onnx
+Detector:  detector.onnx
+Embedder:  recognizer.onnx
 Search:    HNSW (qhnswlib wheels) for larger galleries, linear cosine fallback
 DB:        SQLite
 Images:    filesystem paths, not DB blobs
@@ -123,7 +123,15 @@ Install from a source checkout (same commands on Windows, macOS, and Linux):
 
 ```bash
 python -m pip install -e .
-sentriface-models
+sentriface-models \
+  --detector-source path/to/operator-detector.onnx --detector-sha256 <sha256> \
+  --recognizer-source path/to/operator-recognizer.onnx --recognizer-sha256 <sha256> \
+  --usage-basis commercial-license \
+  --authorized-by "Customer Administrator" \
+  --organization "Customer Organization" \
+  --licensor "Model Supplier" \
+  --license-reference "Agreement or invoice reference" \
+  --accept-model-responsibility
 sentriface-ui
 ```
 
@@ -139,8 +147,10 @@ terminal happens to be in. Override it with `--data-dir` or
 
 Then open `http://127.0.0.1:8765`. The server rejects non-loopback binds and
 foreign Host headers. ONNX is the default; use `--runtime dev` only for explicit
-testing. `sentriface-models` downloads into a temporary location, verifies the
-pinned model size and SHA-256 digest, and atomically installs each model. The UI
+testing. `sentriface-models` never downloads weights. It copies only local,
+operator-supplied files after SHA-256 verification and writes a hash-bound usage
+declaration. ONNX startup fails closed if that declaration is missing or stale;
+research-only declarations produce a persistent UI warning. The UI
 prints debug events to the terminal and keeps the latest events visible in the
 Debug tab.
 
@@ -240,12 +250,12 @@ Run with real CPU ONNX components after placing models on disk:
 
 ```bash
 python -m pip install -r requirements-runtime.txt
-sentriface-models
+# Install local models using one of the declarations documented in models/MODELS.md
 
 python -m sentriface.cli \
   --runtime onnx \
-  --detector-model models/det_500m.onnx \
-  --recognizer-model models/w600k_r50.onnx \
+  --detector-model models/detector.onnx \
+  --recognizer-model models/recognizer.onnx \
   recognize path/to/image.jpg
 ```
 
@@ -369,8 +379,8 @@ SentriFace/
   backups/
   logs/
   models/
-    det_500m.onnx
-    w600k_r50.onnx
+    detector.onnx
+    recognizer.onnx
 ```
 
 Before applying an existing database schema upgrade, SentriFace automatically
@@ -382,7 +392,8 @@ backup instead of creating duplicates.
 Use **Debug → Database → Portable Backups** to:
 
 - create and verify a complete managed backup;
-- download one `.sfbackup` archive;
+- export a password-encrypted `.sfbackup.enc` archive;
+- import only password-encrypted `.sfbackup.enc` exports;
 - import and verify an archive without changing current data;
 - restore a complete backup after an automatic pre-restore safety backup;
 - delete backups that are no longer required.
@@ -414,3 +425,8 @@ backup.
 ```bash
 python -m unittest discover -s tests
 ```
+
+## License
+
+SentriFace Edge is proprietary software. See [LICENSE](LICENSE). Third-party
+components remain governed by their own license terms.

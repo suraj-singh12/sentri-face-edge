@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import http.client
+import base64
 import json
 import tempfile
 import threading
@@ -11,94 +12,79 @@ from io import BytesIO
 from pathlib import Path
 
 from sentriface.api_server import create_server
+from sentriface.backup_crypto import MAGIC
 
 
 class PortableBackupApiTest(unittest.TestCase):
-    def test_create_download_import_and_restore_round_trip(self) -> None:
+    def test_encrypted_download_import_and_wrong_password_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            data_dir = Path(temp) / "data"
-            server = create_server(port=0, data_dir=data_dir, runtime="dev", debug=False)
+            server = create_server(port=0, data_dir=Path(temp) / "data", runtime="dev", debug=False)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
-                source = data_dir / "uploads" / "original.jpg"
-                crop = data_dir / "faces" / "crop.jpg"
-                source.parent.mkdir(parents=True, exist_ok=True)
-                crop.parent.mkdir(parents=True, exist_ok=True)
-                source.write_bytes(b"original")
-                crop.write_bytes(b"crop")
-                person = server.engine.store.create_person("Portable Person")
-                server.engine.store.add_embedding(
-                    person.person_id,
-                    [0.0] * server.engine.config.embedding_dim,
-                    quality_score=1.0,
-                    source_image=str(source),
-                    crop_path=str(crop),
-                )
-
                 status, created = self._json_request(server, "POST", "/api/backups", {})
                 self.assertEqual(status, 200)
-                backup = created["backup"]
-                self.assertTrue(backup["portable"])
-                self.assertTrue(backup["complete"])
-                self.assertEqual(backup["file_count"], 2)
-
-                status, headers, archive_bytes = self._raw_request(
-                    server,
-                    "GET",
-                    f"/api/backups/{backup['backup_id']}/download",
-                )
-                self.assertEqual(status, 200)
-                self.assertIn(".sfbackup", headers["content-disposition"])
-                with zipfile.ZipFile(BytesIO(archive_bytes)) as archive:
-                    self.assertEqual(
-                        set(archive.namelist()),
-                        {
-                            "backup.json",
-                            "database/sentriface.db",
-                            *[
-                                item["archive_path"]
-                                for item in json.loads(
-                                    archive.read("backup.json").decode("utf-8")
-                                )["assets"]
-                            ],
-                        },
-                    )
-
-                status, imported = self._upload_backup(
-                    server,
-                    "round-trip.sfbackup",
-                    archive_bytes,
-                )
-                self.assertEqual(status, 200)
-                imported_backup = imported["backup"]
-                self.assertTrue(imported_backup["complete"])
-                self.assertNotEqual(imported_backup["backup_id"], backup["backup_id"])
-
-                server.engine.store.rename_person(person.person_id, "Changed")
-                status, restored = self._json_request(
+                backup_id = created["backup"]["backup_id"]
+                status, headers, encrypted = self._raw_request(
                     server,
                     "POST",
-                    "/api/backups/restore",
-                    {
-                        "backup_id": imported_backup["backup_id"],
-                        "operation_id": str(uuid.uuid4()),
-                    },
+                    f"/api/backups/{backup_id}/encrypted-download",
+                    json.dumps({"passphrase": "correct horse battery staple"}).encode("utf-8"),
+                    {"Content-Type": "application/json"},
                 )
                 self.assertEqual(status, 200)
-                self.assertTrue(restored["restore"]["restored"])
-                self.assertEqual(
-                    server.engine.get_person(person.person_id).name,
-                    "Portable Person",
+                self.assertIn(".sfbackup.enc", headers["content-disposition"])
+                self.assertTrue(encrypted.startswith(MAGIC))
+                self.assertFalse(encrypted.startswith(b"PK"))
+
+                status, _, response = self._raw_request(
+                    server,
+                    "POST",
+                    "/api/backups/import?filename=protected.sfbackup.enc",
+                    encrypted,
+                    self._passphrase_header("entirely wrong password"),
                 )
-                restored_embedding = server.engine.list_person_embeddings(person.person_id)[0]
-                self.assertTrue(Path(restored_embedding.source_image).is_file())
-                self.assertTrue(Path(restored_embedding.crop_path).is_file())
+                self.assertEqual(status, 400)
+                self.assertIn("passphrase", json.loads(response)["error"].lower())
+
+                status, _, response = self._raw_request(
+                    server,
+                    "POST",
+                    "/api/backups/import?filename=protected.sfbackup.enc",
+                    encrypted,
+                    self._passphrase_header("correct horse battery staple"),
+                )
+                self.assertEqual(status, 200)
+                imported = json.loads(response)["backup"]
+                self.assertNotEqual(imported["backup_id"], backup_id)
+                self.assertTrue(imported["verified"])
+                self.assertEqual(list(server.config.backup_dir.glob(".decrypt-*.sfbackup")), [])
             finally:
                 server.shutdown()
                 server.server_close()
                 thread.join(timeout=5)
-
+    def test_plaintext_download_and_import_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            server = create_server(port=0, data_dir=Path(temp) / "data", runtime="dev", debug=False)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                status, created = self._json_request(server, "POST", "/api/backups", {})
+                self.assertEqual(status, 200)
+                backup_id = created["backup"]["backup_id"]
+                status, _, _ = self._raw_request(
+                    server, "GET", f"/api/backups/{backup_id}/download"
+                )
+                self.assertEqual(status, 404)
+                status, payload = self._upload_backup(
+                    server, "legacy.sfbackup", b"plaintext archive"
+                )
+                self.assertEqual(status, 422)
+                self.assertEqual(payload["reason"], "unsupported_backup_type")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
     def test_bad_import_is_rejected_and_server_remains_usable(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             server = create_server(
@@ -115,8 +101,8 @@ class PortableBackupApiTest(unittest.TestCase):
                     "broken.sfbackup",
                     b"not a zip archive",
                 )
-                self.assertEqual(status, 400)
-                self.assertIn("invalid", payload["error"].lower())
+                self.assertEqual(status, 422)
+                self.assertEqual(payload["reason"], "unsupported_backup_type")
 
                 status, profile = self._json_request(server, "GET", "/api/profile")
                 self.assertEqual(status, 200)
@@ -163,6 +149,12 @@ class PortableBackupApiTest(unittest.TestCase):
         )
         return status, json.loads(response.decode("utf-8"))
 
+    def _passphrase_header(self, passphrase: str) -> dict[str, str]:
+        encoded = base64.urlsafe_b64encode(passphrase.encode("utf-8")).decode("ascii").rstrip("=")
+        return {
+            "Content-Type": "application/octet-stream",
+            "X-SentriFace-Backup-Passphrase": encoded,
+        }
     def _raw_request(
         self,
         server,
@@ -177,7 +169,8 @@ class PortableBackupApiTest(unittest.TestCase):
             timeout=20,
         )
         try:
-            connection.request(method, path, body=body, headers=headers or {})
+            authorized = {**(headers or {}), "X-SentriFace-Session": server.session_token}
+            connection.request(method, path, body=body, headers=authorized)
             response = connection.getresponse()
             return (
                 response.status,

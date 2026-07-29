@@ -11,12 +11,14 @@ Security controls include:
 - restrictive browser security headers;
 - request, upload, image-dimension, and backup-import limits;
 - managed-path validation for media and cleanup operations;
-- checksummed portable backups and model downloads;
+- checksummed portable backups and local operator-supplied model installations;
+- password-based authenticated encryption for exported `.sfbackup.enc` files;
 - database migration backups and rollback-oriented restore handling.
 
-The local database, images, embeddings, logs, and backup exports are not
-encrypted by the application. Use operating-system disk encryption and account
-access controls when the threat model includes another user or physical access.
+The live database, images, embeddings, logs, and managed safety backups are not
+encrypted by the application. Exported `.sfbackup.enc` files are encrypted, but
+operating-system disk encryption and account access controls are still required
+when the threat model includes another user or physical access.
 
 Report suspected vulnerabilities privately to the repository maintainers.
 Include the SentriFace version, operating system, reproduction steps, and

@@ -137,7 +137,7 @@ export function BestMatchPanel({ best, face, onGallery, selectedImage }) {
             <Group gap="xs" mt={2}>
               <Badge color={display.color} variant="light">{display.badge}</Badge>
               <Text size="sm" c={`${display.color}.4`}>{display.stars}</Text>
-              <Text size="xs" c="dimmed">({(best.score * 100).toFixed(1)}% confidence)</Text>
+              <Text size="xs" c="dimmed">(similarity score: {best.score.toFixed(3)})</Text>
             </Group>
           )}
         </Box>
@@ -409,8 +409,8 @@ function MatchIdentitySummary({ match }) {
     <Paper withBorder radius="md" p="sm" className="match-identity-summary" data-match-color={display.color}>
       <Group grow>
         <Box>
-          <Text size="sm" c="dimmed">Confidence Score</Text>
-          <Text fw={900} size="xl" c={`${display.color}.4`} className="match-identity-score">{(match.score * 100).toFixed(1)}%</Text>
+          <Text size="sm" c="dimmed">Cosine similarity</Text>
+          <Text fw={900} size="xl" c={`${display.color}.4`} className="match-identity-score">{match.score.toFixed(3)}</Text>
           <Text size="xs" c="dimmed">{display.confidence}</Text>
         </Box>
         <Box>
@@ -441,7 +441,7 @@ function MatchIdentityPlaceholder() {
     <Paper withBorder radius="md" p="sm" className="match-identity-placeholder">
       <Group grow>
         <Box>
-          <Text size="sm">Confidence Score</Text>
+          <Text size="sm">Cosine similarity</Text>
           <Text fw={800} c="teal.8">-</Text>
           <Text size="xs" c="dimmed">N/A</Text>
         </Box>

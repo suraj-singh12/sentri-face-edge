@@ -16,6 +16,12 @@ from pathlib import Path, PurePosixPath
 from typing import Callable, Iterable
 
 from sentriface import __version__
+from sentriface.backup_crypto import (
+    BackupEncryptionError,
+    ENCRYPTED_BACKUP_EXTENSION,
+    decrypt_file,
+    encrypt_file,
+)
 
 
 BACKUP_ID_PATTERN = re.compile(
@@ -27,6 +33,8 @@ PORTABLE_BACKUP_EXTENSION = ".sfbackup"
 MAX_ARCHIVE_ENTRIES = 100_000
 MAX_ARCHIVE_UNCOMPRESSED_BYTES = 50_000_000_000
 MAX_MANIFEST_BYTES = 10_000_000
+IMPORT_SAFETY_MARGIN_BYTES = 2_000_000_000
+MAX_ARCHIVE_EXPANSION_RATIO = 100
 PATH_REFERENCE_COLUMNS = (
     ("embeddings", "source_image"),
     ("embeddings", "crop_path"),
@@ -208,19 +216,30 @@ class BackupService:
     def enforce_retention(self, protected_ids: set[str] | None = None) -> list[str]:
         if self.retention_limit <= 0:
             return []
-        protected_ids = protected_ids or set()
+        protected_ids = set(protected_ids or set())
         backups = self.list_backups()
+        last_verified = next(
+            (record for record in backups if record.verified and record.complete),
+            None,
+        )
+        if last_verified is not None:
+            protected_ids.add(last_verified.backup_id)
+        protected_ids.update(
+            record.backup_id
+            for record in backups
+            if record.reason
+            and (record.reason.startswith("before-") or "safety" in record.reason)
+        )
         removed = []
-        kept = 0
-        for record in backups:
+        remaining = len(backups)
+        for record in reversed(backups):
+            if remaining <= self.retention_limit:
+                break
             if record.backup_id in protected_ids:
-                kept += 1
-                continue
-            if kept < self.retention_limit:
-                kept += 1
                 continue
             self.delete_backup(record.backup_id)
             removed.append(record.backup_id)
+            remaining -= 1
             self._log("backup-retention-cleanup", backup_id=record.backup_id)
         return removed
 
@@ -275,6 +294,14 @@ class BackupService:
             try:
                 with zipfile.ZipFile(archive_path, "r", allowZip64=True) as archive:
                     infos = self._validate_archive_entries(archive)
+                    expanded_bytes = sum(info.file_size for info in infos.values())
+                    expansion_limit = min(
+                        MAX_ARCHIVE_UNCOMPRESSED_BYTES,
+                        archive_path.stat().st_size * MAX_ARCHIVE_EXPANSION_RATIO,
+                    )
+                    if expanded_bytes > expansion_limit:
+                        raise BackupError("Portable backup compression ratio exceeds the safe limit")
+                    self._require_free_space(expanded_bytes + IMPORT_SAFETY_MARGIN_BYTES)
                     manifest_info = infos.get("backup.json")
                     if manifest_info is None:
                         raise BackupError("Portable backup has no manifest")
@@ -342,6 +369,53 @@ class BackupService:
                 if isinstance(exc, (zipfile.BadZipFile, json.JSONDecodeError, UnicodeDecodeError)):
                     raise BackupError(f"Portable backup is invalid: {exc}") from exc
                 raise BackupError(f"Portable backup import failed: {exc}") from exc
+
+    def export_encrypted_backup(
+        self,
+        backup_id: str,
+        destination: Path,
+        passphrase: str,
+    ) -> Path:
+        """Export a portable backup protected by authenticated encryption."""
+        with self._create_lock:
+            if not destination.name.lower().endswith(ENCRYPTED_BACKUP_EXTENSION):
+                destination = Path(f"{destination}{ENCRYPTED_BACKUP_EXTENSION}")
+            plain = destination.parent / f".{uuid.uuid4().hex}.sfbackup"
+            try:
+                exported = self.export_backup(backup_id, plain)
+                encrypt_file(exported, destination, passphrase)
+            except Exception as exc:
+                destination.unlink(missing_ok=True)
+                if isinstance(exc, BackupError):
+                    raise
+                if isinstance(exc, BackupEncryptionError):
+                    raise BackupError(str(exc)) from exc
+                raise BackupError(f"Encrypted backup export failed: {exc}") from exc
+            finally:
+                plain.unlink(missing_ok=True)
+            self._log(
+                "backup-encrypted-exported",
+                backup_id=backup_id,
+                size_bytes=destination.stat().st_size,
+            )
+            return destination
+
+    def import_encrypted_backup(
+        self,
+        archive_path: Path,
+        passphrase: str,
+    ) -> BackupRecord:
+        """Authenticate, decrypt, validate, and install an encrypted export."""
+        with self._create_lock:
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
+            plain = self.backup_dir / f".decrypt-{uuid.uuid4().hex}.sfbackup"
+            try:
+                decrypt_file(archive_path, plain, passphrase)
+                return self.import_backup(plain)
+            except BackupEncryptionError as exc:
+                raise BackupError(str(exc)) from exc
+            finally:
+                plain.unlink(missing_ok=True)
 
     def restore_backup(
         self,
@@ -470,7 +544,20 @@ class BackupService:
                 continue
         return max(int(estimate * 1.15), estimate + 64 * 1024 * 1024)
 
+    def require_import_upload_space(self, upload_bytes: int) -> None:
+        """Reject before upload unless encrypted, decrypted, and expanded copies fit."""
+        if upload_bytes <= 0:
+            raise BackupError("Backup upload size must be positive")
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        required = (
+            upload_bytes * 2
+            + min(MAX_ARCHIVE_UNCOMPRESSED_BYTES, upload_bytes * MAX_ARCHIVE_EXPANSION_RATIO)
+            + IMPORT_SAFETY_MARGIN_BYTES
+        )
+        self._require_free_space(required)
+
     def _require_free_space(self, required_bytes: int) -> None:
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
         available = shutil.disk_usage(self.backup_dir).free
         if available < required_bytes:
             raise BackupError(
@@ -905,6 +992,10 @@ class BackupService:
         digest = hashlib.sha256()
         size_bytes = 0
         try:
+            declared_size = int(manifest_entry.get("size_bytes", -1))
+            if declared_size < 0:
+                raise BackupError("Portable backup file has an invalid declared size")
+            self._require_free_space(declared_size + IMPORT_SAFETY_MARGIN_BYTES)
             with archive.open(info, "r") as source, temporary.open("xb") as output:
                 while True:
                     chunk = source.read(1024 * 1024)
@@ -913,11 +1004,14 @@ class BackupService:
                     output.write(chunk)
                     digest.update(chunk)
                     size_bytes += len(chunk)
-                    if size_bytes > int(manifest_entry.get("size_bytes", -1)):
+                    if size_bytes > declared_size:
                         raise BackupError("Portable backup file exceeds its declared size")
+                    self._require_free_space(
+                        declared_size - size_bytes + IMPORT_SAFETY_MARGIN_BYTES
+                    )
                 output.flush()
                 os.fsync(output.fileno())
-            if size_bytes != int(manifest_entry.get("size_bytes", -1)):
+            if size_bytes != declared_size:
                 raise BackupError("Portable backup file size does not match its manifest")
             if digest.hexdigest() != str(manifest_entry.get("sha256", "")).lower():
                 raise BackupError("Portable backup file checksum does not match its manifest")

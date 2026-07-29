@@ -116,7 +116,7 @@ class IdentityStore(Protocol):
         """Restore one soft-deleted face."""
 
     def permanently_delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
-        """Permanently delete a soft-deleted face and linked details."""
+        """Erase a soft-deleted face and linked details from the live library."""
 
     def list_expired_deleted_embedding_ids(self, now: str | None = None) -> list[str]:
         """List soft-deleted faces whose retention period has elapsed."""

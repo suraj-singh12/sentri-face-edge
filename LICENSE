@@ -1,0 +1,19 @@
+SentriFace Edge Proprietary License
+
+Copyright (c) 2026 SentriFace Edge. All rights reserved.
+
+This software, source code, documentation, and associated materials are
+proprietary and confidential. No part may be used, copied, modified,
+published, distributed, sublicensed, sold, or reverse engineered except
+under a separate written agreement with the copyright holder.
+
+Third-party software included with or used by this product remains subject
+to its own license terms. Those licenses do not grant rights to SentriFace
+Edge itself.
+
+Third-party face detector and recognizer weights are not part of the software
+licensed by SentriFace Edge. The licensee supplies those files and is solely
+responsible for obtaining and maintaining all model, dataset, biometric-data,
+and deployment rights required for the licensee's intended use. Technical
+compatibility does not imply affiliation, endorsement, sublicensing, or a grant
+of rights by SentriFace Edge.

@@ -1,3 +1,4 @@
+cryptography>=42,<51
 qhnswlib>=0.8.6,<0.9
 loguru>=0.7,<1
 numpy>=1.26,<2.0

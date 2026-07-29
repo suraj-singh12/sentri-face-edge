@@ -7,8 +7,11 @@ name = "sentriface-edge"
 dynamic = ["version"]
 description = "CPU-first, fully offline face identification engine for Windows, macOS, and Linux."
 readme = "README.md"
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.13"
 dependencies = [
+  "cryptography>=42,<51",
   "loguru>=0.7,<1",
   "numpy>=1.26,<2.0",
   "onnxruntime>=1.18,<2.0",

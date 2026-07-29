@@ -1,46 +1,47 @@
-# SentriFace model choice
+# Recognition model policy
 
-Default CPU/i3 model pair:
+SentriFace does not bundle or download face-recognition weights.
 
-```text
-Detector:   det_500m.onnx
-Recognizer: w600k_r50.onnx
-```
+SentriFace sells model-independent recognition software, not model weights or model
+rights. Operators supply their own detector and recognizer, choose the legal basis
+for their intended use, and remain responsible for model licensing and biometric
+processing. SentriFace records that assertion but does not authenticate it or grant
+third-party rights.
 
-Install and verify them with:
-
-```bash
-sentriface-models
-```
-
-By default they are stored in the platform-specific SentriFace data directory.
-Use `SENTRIFACE_MODEL_DIR` or `--models-dir` to choose another location.
-
-## Why this pair
-
-`det_500m.onnx` is the lightweight SCRFD detector. It keeps detection cheap on
-i3-class CPUs.
-
-`w600k_r50.onnx` is the stronger ArcFace-style recognizer. Recognition quality
-matters more than detector size once a face is found, and this model gives a
-better accuracy balance than a tiny recognizer.
-
-This is a deliberate hybrid:
+Install local files with SHA-256 verification:
 
 ```text
-small detector + strong recognizer
+sentriface-models \
+  --detector-source path/to/licensed-detector.onnx \
+  --detector-sha256 <64-hex-digest> \
+  --recognizer-source path/to/licensed-recognizer.onnx \
+  --recognizer-sha256 <64-hex-digest> \
+  --usage-basis commercial-license \
+  --authorized-by "Customer Administrator" \
+  --organization "Customer Organization" \
+  --licensor "Model Supplier" \
+  --license-reference "Agreement or invoice reference" \
+  --accept-model-responsibility
 ```
 
-## Source and terms
+For non-commercial research only, use `--usage-basis
+noncommercial-research`, `--authorized-by`, and
+`--accept-model-responsibility`. The UI then displays a persistent research-only
+warning. A permissively licensed model instead uses `--usage-basis
+permissive-license --license-name <license>`.
 
-The files come from official InsightFace release/model-zoo archives:
+The command writes `model-usage.json` beside the installed models. That local
+record binds the operator's assertion to both SHA-256 hashes. SentriFace refuses
+to start the ONNX runtime if the declaration is missing, incomplete, based on
+older terms, or no longer matches either model.
 
-- `buffalo_s` contains `det_500m.onnx`.
-- `buffalo_l` contains `w600k_r50.onnx`.
+SentriFace does not upload or authenticate license documents. False declarations
+do not create model rights and may violate the SentriFace terms. Compatibility
+does not imply affiliation, endorsement, or sublicensing. Replacing either model
+requires a new declaration; replacing the recognizer also requires re-embedding
+enrolled faces and recalibration.
 
-The `sentriface-models` command verifies the exact expected byte size and
-SHA-256 digest before atomically installing either file. SentriFace does not
-bundle these weights in its Python wheel.
-
-Review the current InsightFace model terms before commercial or redistributed
-use. Pretrained model weights can have terms separate from the source code.
+The command installs `detector.onnx` and `recognizer.onnx`. Keep the supplier's
+license, invoice, model card, provenance, and redistribution terms with release
+records. Calibrate similarity thresholds on a representative validation dataset
+for the exact installed recognizer and target false-match rate.

@@ -1,5 +1,6 @@
 export function mediaUrl(path) {
-  return `/media?path=${encodeURIComponent(path)}`;
+  const session = document.querySelector('meta[name="sentriface-session-token"]')?.content || "";
+  return `/media?path=${encodeURIComponent(path)}&session=${encodeURIComponent(session)}`;
 }
 
 export function imageIdFromPath(path) {
@@ -44,11 +45,11 @@ export function scoreColor(match) {
 export function matchDisplay(match) {
   switch (match?.classification) {
     case "duplicate":
-    case "strong": return { badge: "Strong Match", color: "green", stars: "5/5", confidence: "Very High Confidence" };
-    case "likely": return { badge: "Good Match", color: "blue", stars: "4/5", confidence: "High Confidence" };
-    case "possible": return { badge: "Maybe Match", color: "yellow", stars: "2/5", confidence: "Maybe Match" };
-    case "weak": return { badge: "Weak Match", color: "orange", stars: "1/5", confidence: "Low Confidence" };
-    default: return { badge: "No Match", color: "red", stars: "0/5", confidence: "No Reliable Match" };
+    case "strong": return { badge: "Strong Similarity", color: "green", stars: "5/5", confidence: "Above strong-match threshold" };
+    case "likely": return { badge: "Moderate Similarity", color: "blue", stars: "4/5", confidence: "Review recommended" };
+    case "possible": return { badge: "Possible Similarity", color: "yellow", stars: "2/5", confidence: "Manual review required" };
+    case "weak": return { badge: "Weak Similarity", color: "orange", stars: "1/5", confidence: "Below match threshold" };
+    default: return { badge: "No Match", color: "red", stars: "0/5", confidence: "No reliable similarity" };
   }
 }
 export function qualityColor(status) {

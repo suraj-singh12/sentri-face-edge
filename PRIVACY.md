@@ -15,15 +15,23 @@ By default these files live in the current user's SentriFace application-data
 directory. The exact path is shown in the Debug/Profile view and can be changed
 with `--data-dir` or `SENTRIFACE_DATA_DIR`.
 
-Application data and `.sfbackup` exports are not encrypted by SentriFace.
-Protect the operating-system account and disk, and handle exported backups as
-sensitive files. A soft-deleted person or face can remain in the database and
-backups until it is permanently purged and older backups are removed.
+Application data and managed backups are not encrypted at rest by SentriFace. Use operating-system disk encryption and account controls.
+The UI exports new portable copies as password-encrypted `.sfbackup.enc` files.
+Their authenticated encryption protects the exported file during transfer and
+storage, but does not encrypt the live library or managed safety backups. A lost
+passphrase cannot be recovered by SentriFace.
 
-The only built-in network operation other than the localhost UI is the explicit
-`sentriface-models` command, which downloads pinned model files from the
-InsightFace GitHub release location. Recognition and library data are not sent
-with that request.
+"Erase from live library" removes the active face and linked sightings only
+after creating a verified safety backup. That new backup, older managed backups,
+and exported files can retain recovery copies. Complete erasure therefore also
+requires deliberately deleting every relevant managed and exported backup.
+
+SentriFace has no built-in model-download operation. The `sentriface-models`
+command accepts only local, checksum-verified, operator-supplied weights. It records
+the operator's declared commercial, research, or permissive usage basis against the
+exact model hashes. SentriFace does not upload or authenticate license documents,
+grant third-party model rights, or remove the operator's responsibility for model
+licensing and lawful biometric processing.
 
 Only enroll people and process images when you have the necessary permission
 and a lawful basis for biometric processing in your jurisdiction.

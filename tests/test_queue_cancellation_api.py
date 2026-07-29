@@ -25,12 +25,12 @@ class QueueCancellationApiTest(unittest.TestCase):
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
-                status, cancelled = self._post(server.server_port, "/api/queue-cancel", {"job_id": "job-1"})
+                status, cancelled = self._post(server, "/api/queue-cancel", {"job_id": "job-1"})
                 self.assertEqual(status, 200)
                 self.assertTrue(cancelled["cancel_requested"])
 
                 status, result = self._post(
-                    server.server_port,
+                    server,
                     "/api/queue-scan",
                     {
                         "job_id": "job-1",
@@ -53,15 +53,19 @@ class QueueCancellationApiTest(unittest.TestCase):
                 thread.join(timeout=2)
 
     @staticmethod
-    def _post(port: int, path: str, payload: dict) -> tuple[int, dict]:
+    def _post(server, path: str, payload: dict) -> tuple[int, dict]:
         body = json.dumps(payload).encode("utf-8")
-        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=10)
         try:
             connection.request(
                 "POST",
                 path,
                 body=body,
-                headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+                headers={
+                    "Content-Type": "application/json",
+                    "Content-Length": str(len(body)),
+                    "X-SentriFace-Session": server.session_token,
+                },
             )
             response = connection.getresponse()
             return response.status, json.loads(response.read().decode("utf-8"))

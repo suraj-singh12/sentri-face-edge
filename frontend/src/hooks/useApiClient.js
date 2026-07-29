@@ -2,6 +2,11 @@ import { useCallback } from "react";
 import { notifications } from "@mantine/notifications";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+const SESSION_TOKEN = document.querySelector('meta[name="sentriface-session-token"]')?.content || "";
+
+function authorizedHeaders(headers = {}) {
+  return { ...headers, "X-SentriFace-Session": SESSION_TOKEN };
+}
 
 export function useApiClient() {
   const showToast = useCallback((message, color = "teal", options = {}) => {
@@ -44,7 +49,11 @@ export function useApiClient() {
       controller.abort();
     }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     try {
-      return await readResponse(await fetch(path, { ...init, signal: controller.signal }), options);
+      return await readResponse(await fetch(path, {
+        ...init,
+        headers: authorizedHeaders(init.headers),
+        signal: controller.signal,
+      }), options);
     } catch (error) {
       if (timedOut) {
         const timeoutError = new Error("The server took too long to respond. It is safe to retry.");
@@ -68,7 +77,7 @@ export function useApiClient() {
 
   const apiUpload = useCallback((path, file, options = {}) => request(path, {
     method: "POST",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
+    headers: { "Content-Type": file.type || "application/octet-stream", ...(options.headers || {}) },
     body: file,
   }, { ...options, timeoutMs: options.timeoutMs ?? 120_000 }).catch((error) => {
     if (error.code === "request_timeout") {
@@ -77,6 +86,38 @@ export function useApiClient() {
     throw error;
   }), [request]);
 
+  const apiDownload = useCallback(async (path, body, options = {}) => {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, options.timeoutMs ?? 30 * 60 * 1000);
+    try {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: authorizedHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        await readResponse(response, options);
+      }
+      return {
+        blob: await response.blob(),
+        contentDisposition: response.headers.get("Content-Disposition") || "",
+      };
+    } catch (error) {
+      if (timedOut) {
+        const timeoutError = new Error("The encrypted export took too long. It is safe to retry.");
+        timeoutError.code = "request_timeout";
+        throw timeoutError;
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }, [readResponse]);
   const apiDelete = useCallback((path, options = {}) => request(
     path,
     { method: "DELETE" },
@@ -97,5 +138,5 @@ export function useApiClient() {
     }
   }, [showToast]);
 
-  return { apiGet, apiPost, apiUpload, apiDelete, guarded, showToast };
+  return { apiGet, apiPost, apiUpload, apiDownload, apiDelete, guarded, showToast };
 }

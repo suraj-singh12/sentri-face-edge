@@ -14,7 +14,7 @@ class LocalApiSecurityTest(unittest.TestCase):
     def test_non_local_browser_origin_is_rejected(self) -> None:
         with self._running_server() as server:
             status, payload, headers = self._request(
-                server.server_port,
+                server,
                 "POST",
                 "/api/queue-cancel",
                 {"job_id": "foreign-origin"},
@@ -22,7 +22,7 @@ class LocalApiSecurityTest(unittest.TestCase):
             )
 
             self.assertEqual(status, 403)
-            self.assertIn("non-local browser origins", payload["error"])
+            self.assertIn("only from its own origin", payload["error"])
             self.assertEqual(headers["x-frame-options"], "DENY")
             self.assertIn("default-src 'self'", headers["content-security-policy"])
             self.assertEqual(headers["referrer-policy"], "no-referrer")
@@ -30,11 +30,11 @@ class LocalApiSecurityTest(unittest.TestCase):
     def test_loopback_browser_origin_is_accepted(self) -> None:
         with self._running_server() as server:
             status, payload, _ = self._request(
-                server.server_port,
+                server,
                 "POST",
                 "/api/queue-cancel",
                 {"job_id": "local-origin"},
-                origin="http://127.0.0.1:5173",
+                origin=f"http://127.0.0.1:{server.server_port}",
             )
 
             self.assertEqual(status, 200)
@@ -68,7 +68,7 @@ class LocalApiSecurityTest(unittest.TestCase):
 
     @staticmethod
     def _request(
-        port: int,
+        server,
         method: str,
         path: str,
         payload: dict,
@@ -76,7 +76,7 @@ class LocalApiSecurityTest(unittest.TestCase):
         origin: str,
     ) -> tuple[int, dict, dict[str, str]]:
         body = json.dumps(payload).encode("utf-8")
-        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=10)
         try:
             connection.request(
                 method,
@@ -86,6 +86,7 @@ class LocalApiSecurityTest(unittest.TestCase):
                     "Content-Type": "application/json",
                     "Content-Length": str(len(body)),
                     "Origin": origin,
+                    "X-SentriFace-Session": server.session_token,
                 },
             )
             response = connection.getresponse()

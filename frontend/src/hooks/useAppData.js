@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDelete, showToast }) {
+export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDownload, apiDelete, showToast }) {
   const [profile, setProfile] = useState(null);
   const [connectionError, setConnectionError] = useState("");
   const [people, setPeople] = useState([]);
@@ -102,18 +102,31 @@ export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDelete, 
 
   const deleteBackup = async (backupId) => {
     if (!backupId) return;
-    const confirmed = window.confirm("Delete this portable backup? This cannot be undone.");
-    if (!confirmed) return;
-    await apiDelete(`/api/backups/${encodeURIComponent(backupId)}`);
+    const anotherVerified = backups.some((backup) => (
+      backup.backup_id !== backupId && backup.verified && backup.complete
+    ));
+    const recoveryStatus = anotherVerified
+      ? "Another verified complete backup will remain."
+      : "No other verified complete backup will remain.";
+    const typed = window.prompt(
+      `${recoveryStatus}\n\nType the backup ID to delete it:\n${backupId}`,
+      "",
+    );
+    if (typed !== backupId) {
+      if (typed !== null) showToast("Backup ID did not match; nothing was deleted.", "yellow");
+      return;
+    }
+    const query = new URLSearchParams({ confirm: backupId });
+    await apiDelete(`/api/backups/${encodeURIComponent(backupId)}?${query}`);
     setBackups((current) => current.filter((item) => item.backup_id !== backupId));
     showToast("Portable backup deleted", "yellow");
     await loadEvents();
   };
 
-  const importBackup = async (file) => {
+  const importBackup = async (file, passphrase = "") => {
     if (!file || backupImporting) return;
-    if (!String(file.name || "").toLowerCase().endsWith(".sfbackup")) {
-      showToast("Choose a SentriFace .sfbackup file.", "yellow", {
+    if (!/\.sfbackup\.enc$/i.test(String(file.name || ""))) {
+      showToast("Choose a password-encrypted SentriFace .sfbackup.enc file.", "yellow", {
         title: "Invalid backup skipped",
       });
       return;
@@ -130,7 +143,13 @@ export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDelete, 
       const payload = await apiUpload(
         `/api/backups/import?${query}`,
         file,
-        { silent: true, timeoutMs: 30 * 60 * 1000 },
+        {
+          silent: true,
+          timeoutMs: 30 * 60 * 1000,
+          headers: file.name.toLowerCase().endsWith(".enc")
+            ? { "X-SentriFace-Backup-Passphrase": encodePassphrase(passphrase) }
+            : {},
+        },
       );
       await Promise.all([loadBackups(), loadEvents()]);
       showToast(
@@ -154,14 +173,28 @@ export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDelete, 
     }
   };
 
-  const downloadBackup = (backupId) => {
+  const downloadBackup = async (backupId, passphrase) => {
     if (!backupId) return;
-    const link = document.createElement("a");
-    link.href = `/api/backups/${encodeURIComponent(backupId)}/download`;
-    link.download = `${backupId}.sfbackup`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    const { blob } = await apiDownload(
+      `/api/backups/${encodeURIComponent(backupId)}/encrypted-download`,
+      { passphrase },
+      { silent: true },
+    );
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${backupId}.sfbackup.enc`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      showToast("Encrypted backup exported", "teal", {
+        title: "Keep the passphrase safe",
+        autoClose: 6000,
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   };
 
   const requestRestoreBackup = (backup) => {
@@ -261,4 +294,11 @@ function formatBackupDateTime(value) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function encodePassphrase(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

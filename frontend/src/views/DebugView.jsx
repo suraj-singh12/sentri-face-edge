@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
+  Alert,
   Badge,
   Box,
   Button,
@@ -8,7 +9,9 @@ import {
   Divider,
   Group,
   Menu,
+  Modal,
   Paper,
+  PasswordInput,
   Select,
   Stack,
   Text,
@@ -350,6 +353,35 @@ function DatabaseBackupsPanel({
   const latest = backups[0] || null;
   const previous = backups.slice(1);
   const importInputRef = useRef(null);
+  const [exportBackup, setExportBackup] = useState(null);
+  const [encryptedImport, setEncryptedImport] = useState(null);
+  const [passphrase, setPassphrase] = useState("");
+  const [passphraseConfirmation, setPassphraseConfirmation] = useState("");
+  const [securityBusy, setSecurityBusy] = useState(false);
+  const isExport = Boolean(exportBackup);
+  const closeSecurityDialog = () => {
+    if (securityBusy) return;
+    setExportBackup(null);
+    setEncryptedImport(null);
+    setPassphrase("");
+    setPassphraseConfirmation("");
+  };
+  const confirmSecureBackup = async () => {
+    if (passphrase.length < 12 || (isExport && passphrase !== passphraseConfirmation)) return;
+    setSecurityBusy(true);
+    try {
+      if (isExport) await onDownload(exportBackup.backup_id, passphrase);
+      else await onImport(encryptedImport, passphrase);
+      setExportBackup(null);
+      setEncryptedImport(null);
+      setPassphrase("");
+      setPassphraseConfirmation("");
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
   return (
     <Stack h="100%" gap="md">
       <Group justify="space-between" align="flex-start" wrap="nowrap" className="debug-main-header">
@@ -361,12 +393,15 @@ function DatabaseBackupsPanel({
           <input
             ref={importInputRef}
             type="file"
-            accept=".sfbackup,application/zip"
+            accept=".sfbackup.enc,application/octet-stream"
             hidden
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
               event.currentTarget.value = "";
-              if (file) onImport(file);
+              if (file?.name.toLowerCase().endsWith(".sfbackup.enc")) {
+                setEncryptedImport(file);
+                setPassphrase("");
+              } else if (file) onImport(file);
             }}
           />
           <Button
@@ -446,12 +481,16 @@ function DatabaseBackupsPanel({
                   </td>
                   <td>
                     <Group gap={4} wrap="nowrap">
-                    <Tooltip label={backup.portable ? "Download portable .sfbackup archive" : "Legacy database-only backups cannot be exported"}>
+                    <Tooltip label={backup.portable ? "Export password-encrypted .sfbackup.enc archive" : "Legacy database-only backups cannot be exported"}>
                       <span>
                         <ActionIcon
                           variant="subtle"
                           disabled={!backup.portable}
-                          onClick={() => onDownload(backup.backup_id)}
+                          onClick={() => {
+                            setExportBackup(backup);
+                            setPassphrase("");
+                            setPassphraseConfirmation("");
+                          }}
                           aria-label={`Download backup ${formatDateTime(backup.created_at)}`}
                         >
                           <IconDownload size={16} />
@@ -499,6 +538,49 @@ function DatabaseBackupsPanel({
           Previous backups: {previous.slice(0, 3).map((backup) => `${formatDateTime(backup.created_at)} ${formatBytes(backup.size_bytes)}`).join(" · ")}
         </Text>
       )}
+      <Modal
+        opened={Boolean(exportBackup || encryptedImport)}
+        onClose={closeSecurityDialog}
+        title={isExport ? "Export encrypted backup" : "Unlock encrypted backup"}
+        centered
+        closeOnClickOutside={!securityBusy}
+        closeOnEscape={!securityBusy}
+      >
+        <Stack gap="md">
+          <Alert color="blue" title={isExport ? "The export will be encrypted" : "The file is encrypted"}>
+            {isExport
+              ? "Choose a passphrase you can store safely. SentriFace cannot recover the export if you lose it."
+              : "Enter the passphrase used when this backup was exported. It is used only for this import."}
+          </Alert>
+          <PasswordInput
+            label="Passphrase"
+            description="At least 12 characters"
+            value={passphrase}
+            onChange={(event) => setPassphrase(event.currentTarget.value)}
+            disabled={securityBusy}
+            autoFocus
+          />
+          {isExport && (
+            <PasswordInput
+              label="Confirm passphrase"
+              value={passphraseConfirmation}
+              onChange={(event) => setPassphraseConfirmation(event.currentTarget.value)}
+              error={passphraseConfirmation && passphrase !== passphraseConfirmation ? "Passphrases do not match" : undefined}
+              disabled={securityBusy}
+            />
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeSecurityDialog} disabled={securityBusy}>Cancel</Button>
+            <Button
+              onClick={confirmSecureBackup}
+              loading={securityBusy}
+              disabled={passphrase.length < 12 || (isExport && passphrase !== passphraseConfirmation)}
+            >
+              {isExport ? "Download encrypted backup" : "Unlock and import"}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }

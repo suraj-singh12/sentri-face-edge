@@ -7,6 +7,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import secrets
 import shutil
 import threading
 import time
@@ -63,6 +64,7 @@ INFERENCE_ENDPOINTS = {
 TERMINAL_QUEUE_STATES = {"done", "failed", "cancelled"}
 QUEUE_PROGRESS_RETENTION_SECONDS = 3600
 QUEUE_PROGRESS_LIMIT = 200
+MAX_HTTP_HANDLERS = 8
 
 
 class EngineBusyError(RuntimeError):
@@ -122,7 +124,14 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.engine = engine
         self.config = config
         self.runtime = runtime
+        declaration = getattr(engine, "model_usage", None)
+        self.model_usage = declaration if isinstance(declaration, dict) else {
+            "usage_basis": "development",
+            "terms_version": "development",
+            "accepted_at": "",
+        }
         self.debug = debug
+        self.session_token = secrets.token_urlsafe(32)
         self.events: list[dict[str, Any]] = []
         self.events_lock = threading.Lock()
         self.queue_progress: dict[str, dict[str, Any]] = {}
@@ -132,6 +141,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.active_queue_jobs: set[str] = set()
         self.operation_gate = OperationGate()
         self.inference_semaphore = threading.BoundedSemaphore(max(1, config.max_workers))
+        self.request_semaphore = threading.BoundedSemaphore(MAX_HTTP_HANDLERS)
         self.backups = BackupService(
             config.db_path,
             config.backup_dir,
@@ -149,6 +159,27 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         )
         self.maintenance_thread.start()
 
+    def process_request(self, request: Any, client_address: Any) -> None:
+        if not self.request_semaphore.acquire(timeout=0.25):
+            try:
+                request.sendall(
+                    b"HTTP/1.1 503 Service Unavailable\r\n"
+                    b"Connection: close\r\nContent-Length: 0\r\n\r\n"
+                )
+            finally:
+                self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self.request_semaphore.release()
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.request_semaphore.release()
     def _scavenge_stale_files(self) -> None:
         """Retry journals and conservatively remove abandoned staging data."""
         cutoff = time.time() - 24 * 60 * 60
@@ -360,6 +391,10 @@ class SentriFaceApiServer(ThreadingHTTPServer):
 class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     server: SentriFaceApiServer
 
+    def log_message(self, format: str, *args: object) -> None:
+        """Never put session-bearing query strings into operational logs."""
+        if self.server.debug:
+            print(f"[sentriface-http] {self.command} {urlparse(self.path).path}")
     def translate_path(self, path: str) -> str:
         parsed = urlparse(path)
         if parsed.path == "/":
@@ -397,21 +432,38 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if not raw:
             return True
         parsed = urlparse(raw)
-        if parsed.scheme != "http" or not parsed.hostname:
-            return False
-        if parsed.hostname.casefold() == "localhost":
-            return True
-        try:
-            return ipaddress.ip_address(parsed.hostname).is_loopback
-        except ValueError:
-            return False
+        return (
+            parsed.scheme == "http"
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.path in {"", "/"}
+            and not parsed.params
+            and not parsed.query
+            and not parsed.fragment
+            and parsed.netloc.casefold() == self.headers.get("Host", "").casefold()
+        )
 
     def _reject_invalid_origin(self) -> bool:
         if self._valid_origin():
             return False
         self._json(
-            {"error": "SentriFace rejects requests from non-local browser origins"},
+            {"error": "SentriFace accepts browser requests only from its own origin"},
             status=HTTPStatus.FORBIDDEN,
+        )
+        return True
+
+    def _valid_session(self) -> bool:
+        supplied = self.headers.get("X-SentriFace-Session", "")
+        if not supplied and urlparse(self.path).path == "/media":
+            supplied = parse_qs(urlparse(self.path).query).get("session", [""])[0]
+        return bool(supplied) and secrets.compare_digest(supplied, self.server.session_token)
+
+    def _reject_invalid_session(self) -> bool:
+        if self._valid_session():
+            return False
+        self._json(
+            {"error": "SentriFace session authorization is required"},
+            status=HTTPStatus.UNAUTHORIZED,
         )
         return True
 
@@ -430,6 +482,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if self._reject_invalid_host():
             return
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/") or parsed.path == "/media":
+            if self._reject_invalid_origin() or self._reject_invalid_session():
+                return
         if parsed.path in {"/api/health", "/api/profile", "/api/queue-progress"}:
             self._do_GET()
             return
@@ -437,7 +492,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             self._do_GET()
 
     def do_POST(self) -> None:
-        if self._reject_invalid_host() or self._reject_invalid_origin():
+        if (
+            self._reject_invalid_host()
+            or self._reject_invalid_origin()
+            or self._reject_invalid_session()
+        ):
             return
         parsed = urlparse(self.path)
         if parsed.path == "/api/queue-cancel":
@@ -459,13 +518,20 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._do_POST()
 
     def do_DELETE(self) -> None:
-        if self._reject_invalid_host() or self._reject_invalid_origin():
+        if (
+            self._reject_invalid_host()
+            or self._reject_invalid_origin()
+            or self._reject_invalid_session()
+        ):
             return
         with self.server.operation_gate.shared():
             self._do_DELETE()
     def _do_GET(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if parsed.path == "/":
+                self._serve_index()
+                return
             if parsed.path == "/api/health":
                 self._json({"status": "ok", "runtime": self.server.runtime})
                 return
@@ -548,24 +614,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     events = list(self.server.events[-80:])
                 self._json({"events": events})
                 return
-            if parsed.path.startswith("/api/backups/") and parsed.path.endswith("/download"):
-                backup_id = parsed.path.removeprefix("/api/backups/").removesuffix("/download").strip("/")
-                export_dir = self.server.config.backup_dir / ".exports"
-                export_path = export_dir / f"{backup_id}-{uuid.uuid4().hex}.sfbackup"
-                try:
-                    exported = self.server.backups.export_backup(backup_id, export_path)
-                    self._download_file(
-                        exported,
-                        download_name=f"{backup_id}.sfbackup",
-                        content_type="application/zip",
-                    )
-                finally:
-                    export_path.unlink(missing_ok=True)
-                    try:
-                        export_dir.rmdir()
-                    except OSError:
-                        pass
-                return
+
             if parsed.path == "/api/backups":
                 self._json({"backups": [_backup(record) for record in self.server.backups.list_backups()]})
                 return
@@ -598,19 +647,26 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         try:
             if parsed.path == "/api/backups/import":
                 filename = _query_value(parsed.query, "filename")
-                if Path(filename).suffix.lower() != ".sfbackup":
+                encrypted = filename.lower().endswith(".sfbackup.enc")
+                if not encrypted:
                     raise InputValidationError(
-                        "Choose a SentriFace .sfbackup file",
+                        "Choose a password-encrypted SentriFace .sfbackup.enc file",
                         "unsupported_backup_type",
                     )
+                passphrase = _decode_backup_passphrase(
+                    self.headers.get("X-SentriFace-Backup-Passphrase", "")
+                )
                 import_dir = self.server.config.backup_dir / ".imports"
-                import_path = import_dir / f"{uuid.uuid4().hex}.sfbackup"
+                suffix = ".sfbackup.enc"
+                import_path = import_dir / f"{uuid.uuid4().hex}{suffix}"
                 try:
                     self._stream_request_to_file(
                         import_path,
                         maximum_bytes=BACKUP_IMPORT_LIMIT_BYTES,
                     )
-                    record = self.server.backups.import_backup(import_path)
+                    record = self.server.backups.import_encrypted_backup(
+                        import_path, passphrase
+                    )
                 finally:
                     import_path.unlink(missing_ok=True)
                     try:
@@ -648,6 +704,27 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             payload = self._read_json()
+            if parsed.path.startswith("/api/backups/") and parsed.path.endswith("/encrypted-download"):
+                backup_id = parsed.path.removeprefix("/api/backups/").removesuffix("/encrypted-download").strip("/")
+                passphrase = _required(payload, "passphrase")
+                export_dir = self.server.config.backup_dir / ".exports"
+                export_path = export_dir / f"{backup_id}-{uuid.uuid4().hex}"
+                exported = None
+                try:
+                    exported = self.server.backups.export_encrypted_backup(backup_id, export_path, passphrase)
+                    self._download_file(
+                        exported,
+                        download_name=f"{backup_id}.sfbackup.enc",
+                        content_type="application/octet-stream",
+                    )
+                finally:
+                    if exported is not None:
+                        exported.unlink(missing_ok=True)
+                    try:
+                        export_dir.rmdir()
+                    except OSError:
+                        pass
+                return
             if parsed.path == "/api/input-rejections":
                 source = str(payload.get("source") or "unknown").strip().lower()[:40]
                 rejected_count = _safe_count(payload.get("rejected_count"), "rejected_count")
@@ -891,7 +968,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 if lifecycle is None:
                     raise KeyError(f"Unknown deleted face: {embedding_id}")
                 if not lifecycle["deleted_at"]:
-                    raise KeyError("Move the face to Deleted Faces before deleting it permanently")
+                    raise KeyError("Move the face to Deleted Faces before erasing it from the live library")
                 result = self.server.backed_up_people_deletion(
                     operation_id,
                     "purge-deleted-embedding",
@@ -1317,6 +1394,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         try:
             if parsed.path.startswith("/api/backups/"):
                 backup_id = parsed.path.removeprefix("/api/backups/")
+                if _query_value(parsed.query, "confirm") != backup_id:
+                    raise InputValidationError(
+                        "Type the exact backup ID to confirm deletion",
+                        "backup_confirmation_mismatch",
+                    )
                 self.server.backups.delete_backup(backup_id)
                 self._json({"deleted": True, "backup_id": backup_id})
                 return
@@ -1349,6 +1431,14 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             "medium_confidence": config.medium_confidence,
             "possible_confidence": config.possible_confidence,
             "min_quality_score": config.min_quality_score,
+            "model_usage": {
+                "usage_basis": self.server.model_usage.get("usage_basis", "unknown"),
+                "terms_version": self.server.model_usage.get("terms_version", ""),
+                "accepted_at": self.server.model_usage.get("accepted_at", ""),
+                "licensor": self.server.model_usage.get("licensor", ""),
+                "license_name": self.server.model_usage.get("license_name", ""),
+                "research_only": self.server.model_usage.get("usage_basis") == "noncommercial-research",
+            },
         }
 
     def _read_json(self) -> dict[str, Any]:
@@ -1373,6 +1463,19 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if not isinstance(payload, dict):
             raise InputValidationError("JSON request must be an object", "invalid_json_shape")
         return payload
+
+    def _serve_index(self) -> None:
+        template = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        marker = "__SENTRIFACE_SESSION_TOKEN__"
+        if marker not in template:
+            raise RuntimeError("UI index is missing the session-token injection point")
+        body = template.replace(marker, self.server.session_token).encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def _json(self, payload: dict[str, Any], status: int = 200) -> None:
         body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
@@ -1401,6 +1504,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 "Portable backup exceeds the 20 GB import limit",
                 "file_too_large",
             )
+        self.server.backups.require_import_upload_space(content_length)
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
         remaining = content_length
@@ -1549,6 +1653,7 @@ def create_server(
             recognizer_model=recognizer_model or config.recognizer_model,
         )
     engine = build_dev_engine(data_dir, config) if runtime == "dev" else build_onnx_engine(config)
+    config = engine.config
     engine.initialize()
     server = SentriFaceApiServer((host, port), engine=engine, config=config, runtime=runtime, debug=debug)
     server.log_event("startup", runtime=runtime, data_dir=str(data_dir), address=f"http://{host}:{server.server_port}")
@@ -1595,6 +1700,26 @@ def main() -> int:
         server.server_close()
     return 0
 
+
+
+def _decode_backup_passphrase(value: str) -> str:
+    if not value:
+        raise InputValidationError(
+            "Encrypted backup passphrase is required",
+            "backup_passphrase_required",
+        )
+    try:
+        raw = base64.b64decode(
+            value + ("=" * (-len(value) % 4)),
+            altchars=b"-_",
+            validate=True,
+        )
+        return raw.decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError) as exc:
+        raise InputValidationError(
+            "Encrypted backup passphrase header is invalid",
+            "invalid_backup_passphrase",
+        ) from exc
 
 def _required(payload: dict[str, Any], key: str) -> str:
     value = payload.get(key)

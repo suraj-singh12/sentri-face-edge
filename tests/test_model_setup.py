@@ -6,7 +6,14 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from sentriface.model_setup import _extract_verified, install_models, verify_file
+from sentriface.errors import ModelSetupError
+from sentriface.model_setup import (
+    _extract_verified,
+    install_local_models,
+    install_models,
+    require_model_usage_declaration,
+    verify_file,
+)
 
 
 class ModelSetupTest(unittest.TestCase):
@@ -65,6 +72,78 @@ class ModelSetupTest(unittest.TestCase):
             self.assertTrue(verify_file(path, digest, 5))
             self.assertFalse(verify_file(path, digest, 4))
             self.assertFalse(verify_file(path, "0" * 64, 5))
+
+    def test_research_declaration_is_bound_to_exact_model_hashes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            models = root / "models"
+            detector = root / "detector-source.onnx"
+            recognizer = root / "recognizer-source.onnx"
+            detector.write_bytes(b"detector")
+            recognizer.write_bytes(b"recognizer")
+
+            installed = install_local_models(
+                models,
+                detector_source=detector,
+                detector_sha256=hashlib.sha256(b"detector").hexdigest(),
+                recognizer_source=recognizer,
+                recognizer_sha256=hashlib.sha256(b"recognizer").hexdigest(),
+                usage_basis="noncommercial-research",
+                authorized_by="Research Operator",
+            )
+
+            loaded = require_model_usage_declaration(
+                models / "detector.onnx",
+                models / "recognizer.onnx",
+            )
+            self.assertEqual(installed["usage_basis"], "noncommercial-research")
+            self.assertEqual(loaded["authorized_by"], "Research Operator")
+
+            (models / "recognizer.onnx").write_bytes(b"changed")
+            with self.assertRaisesRegex(ModelSetupError, "changed after model rights"):
+                require_model_usage_declaration(
+                    models / "detector.onnx",
+                    models / "recognizer.onnx",
+                )
+
+    def test_commercial_declaration_requires_license_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            detector = root / "detector.onnx"
+            recognizer = root / "recognizer.onnx"
+            detector.write_bytes(b"detector")
+            recognizer.write_bytes(b"recognizer")
+
+            with self.assertRaisesRegex(ValueError, "requires both"):
+                install_local_models(
+                    root / "models",
+                    detector_source=detector,
+                    detector_sha256=hashlib.sha256(b"detector").hexdigest(),
+                    recognizer_source=recognizer,
+                    recognizer_sha256=hashlib.sha256(b"recognizer").hexdigest(),
+                    usage_basis="commercial-license",
+                    authorized_by="Customer Administrator",
+                    licensor="InsightFace",
+                )
+
+    def test_permissive_declaration_requires_license_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            detector = root / "detector.onnx"
+            recognizer = root / "recognizer.onnx"
+            detector.write_bytes(b"detector")
+            recognizer.write_bytes(b"recognizer")
+
+            with self.assertRaisesRegex(ValueError, "requires --license-name"):
+                install_local_models(
+                    root / "models",
+                    detector_source=detector,
+                    detector_sha256=hashlib.sha256(b"detector").hexdigest(),
+                    recognizer_source=recognizer,
+                    recognizer_sha256=hashlib.sha256(b"recognizer").hexdigest(),
+                    usage_basis="permissive-license",
+                    authorized_by="Customer Administrator",
+                )
 
 
 if __name__ == "__main__":

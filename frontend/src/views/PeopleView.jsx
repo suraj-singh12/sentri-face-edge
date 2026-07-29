@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
+  Alert,
   Badge,
   Box,
   Button,
@@ -390,11 +391,13 @@ function PeopleLibrarySidebar({
 function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
   const [pendingPurge, setPendingPurge] = useState(null);
   const [busyId, setBusyId] = useState("");
+  const [purgeConfirmation, setPurgeConfirmation] = useState("");
   const run = async (face, action) => {
     setBusyId(face.embedding_id);
     try {
       await action();
       setPendingPurge(null);
+      setPurgeConfirmation("");
     } catch (error) {
       console.error(error);
     } finally {
@@ -409,7 +412,7 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
           <Box>
             <Text fw={800} size="sm">30-day recovery window</Text>
             <Text size="xs" c="dimmed">
-              Deleted faces are excluded from recognition immediately. Their linked sightings remain intact until permanent deletion.
+              Deleted faces are excluded from recognition immediately. Their linked sightings remain intact until live-library erasure. Safety backups may retain recovery copies.
             </Text>
           </Box>
         </Group>
@@ -440,7 +443,7 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
                       </Group>
                       <Text size="xs" c="dimmed" mt={4}>Deleted {compactChangeDate(face.deleted_at)}</Text>
                       <Text size="xs" c="dimmed">
-                        Auto-deletes {compactChangeDate(face.purge_after)}
+                        Scheduled live erasure {compactChangeDate(face.purge_after)}
                       </Text>
                       <Text size="xs" c="dimmed">
                         {face.sighting_count} linked sighting{face.sighting_count === 1 ? "" : "s"} retained
@@ -479,9 +482,9 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
                     size="xs"
                     leftSection={<IconTrash size={15} />}
                     disabled={Boolean(busyId)}
-                    onClick={() => setPendingPurge(face)}
+                    onClick={() => { setPendingPurge(face); setPurgeConfirmation(""); }}
                   >
-                    Delete permanently
+                    Erase from live library
                   </Button>
                 </Card>
               );
@@ -493,32 +496,39 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
       </Box>
       <Modal
         opened={Boolean(pendingPurge)}
-        onClose={() => !busyId && setPendingPurge(null)}
-        title="Permanently delete this face?"
+        onClose={() => { if (!busyId) { setPendingPurge(null); setPurgeConfirmation(""); } }}
+        title="Erase this face from the live library?"
         centered
         closeOnClickOutside={!busyId}
         closeOnEscape={!busyId}
       >
         <Stack>
           <Text size="sm">
-            This permanently removes the face and {pendingPurge?.sighting_count || 0} linked sighting{pendingPurge?.sighting_count === 1 ? "" : "s"}.
-            This cannot be undone.
+            This removes the active face record and {pendingPurge?.sighting_count || 0} linked sighting{pendingPurge?.sighting_count === 1 ? "" : "s"} from the live library.
           </Text>
-          <Text size="xs" c="dimmed">
-            A named database backup is created and verified before deletion begins.
-          </Text>
+          <Alert color="yellow" title="A recovery copy will still exist">
+            SentriFace creates and verifies a safety backup before erasing the live data. That backup, older managed backups, and any exported backup files may still contain this face. Delete those copies separately if complete erasure is required.
+          </Alert>
+          <TextInput
+            label='Type ERASE to confirm'
+            value={purgeConfirmation}
+            onChange={(event) => setPurgeConfirmation(event.currentTarget.value)}
+            disabled={Boolean(busyId)}
+            autoComplete="off"
+          />
           <Group justify="flex-end">
-            <Button variant="default" disabled={Boolean(busyId)} onClick={() => setPendingPurge(null)}>Cancel</Button>
+            <Button variant="default" disabled={Boolean(busyId)} onClick={() => { setPendingPurge(null); setPurgeConfirmation(""); }}>Cancel</Button>
             <Button
               color="red"
               loading={Boolean(busyId)}
+              disabled={purgeConfirmation !== "ERASE"}
               leftSection={<IconTrash size={16} />}
               onClick={() => pendingPurge && run(
                 pendingPurge,
                 () => onPurge(pendingPurge.embedding_id),
               )}
             >
-              Delete permanently
+              Erase from live library
             </Button>
           </Group>
         </Stack>

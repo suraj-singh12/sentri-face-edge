@@ -162,9 +162,9 @@ export function usePeopleController({
     });
     await Promise.all([loadPeople(), loadDeletedFaces(), loadEvents()]);
     showToast(
-      `${result.deleted_sightings || 0} linked sighting${result.deleted_sightings === 1 ? "" : "s"} permanently removed. A database backup was created first.`,
+      `${result.deleted_sightings || 0} linked sighting${result.deleted_sightings === 1 ? "" : "s"} removed from the live library. Safety backup ${result.backup?.backup_id || "created"} retains a recovery copy.`,
       "red",
-      { title: "Face permanently deleted" },
+      { title: "Live-library erasure complete", autoClose: 8000 },
     );
     return result;
   };

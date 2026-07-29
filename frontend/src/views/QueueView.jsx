@@ -376,7 +376,7 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
         <>
           <Group justify="space-between" className="queue-filter-bar">
             <Group gap={6}>
-              {[["all", "All"], ["high", "High confidence"], ["review", "Needs review"]].map(([value, label]) => (
+              {[["all", "All"], ["high", "Strong similarity"], ["review", "Needs review"]].map(([value, label]) => (
                 <Button key={value} size="xs" variant={filter === value ? "filled" : "subtle"} color={filter === value ? "teal" : "gray"} onClick={() => setFilter(value)}>{label}</Button>
               ))}
             </Group>
@@ -385,7 +385,7 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
               value={sort}
               onChange={(value) => setSort(value || "confidence")}
               data={[
-                { value: "confidence", label: "Highest confidence" },
+                { value: "confidence", label: "Highest similarity" },
                 { value: "faces", label: "Most photos" },
                 { value: "oldest", label: "Oldest first" },
               ]}
@@ -412,7 +412,7 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
                           <Group gap="sm" mt="sm">
                             <Text size="xs" c="dimmed">Suggested identity</Text>
                             <Text size="sm" fw={700}>{best && !isNewPersonSuggestion(best) ? best.name : "Unknown person"}</Text>
-                            {best && <Badge color={display.color} variant="outline">{Math.round(score * 100)}% match</Badge>}
+                            {best && <Badge color={display.color} variant="outline">similarity {score.toFixed(3)}</Badge>}
                           </Group>
                         </Box>
                       </Group>
@@ -847,9 +847,9 @@ function QueueSuggestedMatch({ best, face, onCompare }) {
           <Box>
             <Group justify="space-between" align="flex-start" wrap="nowrap">
               <Text size="xl" fw={900}>{known ? best.name : "Unknown person"}</Text>
-              {best && <Badge color={display.color} size="lg">{Math.round(best.score * 100)}%</Badge>}
+              {best && <Badge color={display.color} size="lg">{best.score.toFixed(3)}</Badge>}
             </Group>
-            <Text size="xs" c="dimmed" mt={4}>{known ? `ID ${best.person_id}` : "No confident match found"}</Text>
+            <Text size="xs" c="dimmed" mt={4}>{known ? `ID ${best.person_id}` : "No similarity above the match threshold"}</Text>
           </Box>
           {known && <Button variant="default" fullWidth leftSection={<IconArrowsHorizontal size={17} />} onClick={onCompare}>View reference photos</Button>}
         </Stack>
@@ -867,7 +867,7 @@ function QueueCompareOverview({ best, faces, references, onFocusIncoming, onFocu
             <ThemeIcon size={42} radius="xl" color="teal"><IconUsers size={21} /></ThemeIcon>
             <Box><Text fw={900}>{best?.name}</Text><Text size="xs" c="dimmed">{references.length} saved reference photo{references.length === 1 ? "" : "s"}</Text></Box>
           </Group>
-          <Badge color={matchDisplay(best).color} size="lg">{Math.round((best?.score || 0) * 100)}% match</Badge>
+          <Badge color={matchDisplay(best).color} size="lg">similarity {(best?.score || 0).toFixed(3)}</Badge>
         </Group>
       </Card>
       <Grid gutter="xl" align="center">
