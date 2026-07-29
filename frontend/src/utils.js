@@ -24,10 +24,10 @@ export function currentDateTimeParts() {
 
 export function recognitionText(match) {
   if (!match || !match.is_known) return "New Person";
-  if (["strong", "duplicate"].includes(match.classification)) return `That's ${match.name}`;
-  if (match.classification === "likely") return `Likely ${match.name}`;
-  if (match.classification === "possible") return `Maybe ${match.name}`;
-  return `Is it ${match.name}?`;
+  if (["strong", "duplicate"].includes(match.classification)) return `${match.name} - strong similarity`;
+  if (match.classification === "likely") return `${match.name} - moderate similarity`;
+  if (match.classification === "possible") return `${match.name} - possible similarity`;
+  return `${match.name} - weak similarity`;
 }
 
 export function hasCertainMatch(match) {
@@ -45,11 +45,11 @@ export function scoreColor(match) {
 export function matchDisplay(match) {
   switch (match?.classification) {
     case "duplicate":
-    case "strong": return { badge: "Strong Similarity", color: "green", stars: "5/5", confidence: "Above strong-match threshold" };
-    case "likely": return { badge: "Moderate Similarity", color: "blue", stars: "4/5", confidence: "Review recommended" };
-    case "possible": return { badge: "Possible Similarity", color: "yellow", stars: "2/5", confidence: "Manual review required" };
-    case "weak": return { badge: "Weak Similarity", color: "orange", stars: "1/5", confidence: "Below match threshold" };
-    default: return { badge: "No Match", color: "red", stars: "0/5", confidence: "No reliable similarity" };
+    case "strong": return { badge: "Strong Similarity", color: "green", guidance: "Above the calibrated strong-match threshold" };
+    case "likely": return { badge: "Moderate Similarity", color: "blue", guidance: "Review recommended" };
+    case "possible": return { badge: "Possible Similarity", color: "yellow", guidance: "Manual review required" };
+    case "weak": return { badge: "Weak Similarity", color: "orange", guidance: "Below the calibrated match threshold" };
+    default: return { badge: "No Match", color: "red", guidance: "No similarity above the calibrated match threshold" };
   }
 }
 export function qualityColor(status) {

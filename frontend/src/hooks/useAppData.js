@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDownload, apiDelete, showToast }) {
+export function useAppData({ activeView, capabilities = [], apiGet, apiPost, apiUpload, apiDownload, apiDelete, showToast }) {
+  const canTechnical = capabilities.includes("technical");
+  const canDestroy = capabilities.includes("destroy");
+  const canBackups = capabilities.includes("backups");
+  const canRecovery = capabilities.includes("recovery");
   const [profile, setProfile] = useState(null);
   const [connectionError, setConnectionError] = useState("");
   const [people, setPeople] = useState([]);
@@ -22,11 +26,24 @@ export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDownload
     setPeople(payload.persons || []);
     setArchivedPeople(payload.archived_persons || []);
   }, [apiGet]);
-  const loadEvents = useCallback(async () => setEvents((await apiGet("/api/events")).events), [apiGet]);
+  const loadEvents = useCallback(async () => {
+    if (!canTechnical) { setEvents([]); return { events: [] }; }
+    const payload = await apiGet("/api/events");
+    setEvents(payload.events || []);
+    return payload;
+  }, [apiGet, canTechnical]);
   const loadDeletedFaces = useCallback(async () => {
-    setDeletedFaces((await apiGet("/api/deleted-faces")).deleted_faces || []);
-  }, [apiGet]);
-  const loadBackups = useCallback(async () => setBackups((await apiGet("/api/backups")).backups), [apiGet]);
+    if (!canDestroy) { setDeletedFaces([]); return { deleted_faces: [] }; }
+    const payload = await apiGet("/api/deleted-faces");
+    setDeletedFaces(payload.deleted_faces || []);
+    return payload;
+  }, [apiGet, canDestroy]);
+  const loadBackups = useCallback(async () => {
+    if (!canBackups) { setBackups([]); return { backups: [] }; }
+    const payload = await apiGet("/api/backups");
+    setBackups(payload.backups || []);
+    return payload;
+  }, [apiGet, canBackups]);
   const refreshAll = useCallback(async () => {
     setConnectionError("");
     try {
@@ -62,6 +79,7 @@ export function useAppData({ activeView, apiGet, apiPost, apiUpload, apiDownload
   }, [activeView, loadEvents]);
 
   const configureRecovery = async (destination) => {
+    if (!canRecovery) return null;
     const result = await apiPost("/api/recovery/configure", { destination });
     setProfile((current) => ({ ...current, recovery: {
       configured: result.configured,

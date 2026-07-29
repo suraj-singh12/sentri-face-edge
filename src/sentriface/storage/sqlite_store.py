@@ -31,7 +31,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 DELETED_FACE_RETENTION_DAYS = 30
 
 
@@ -100,6 +100,9 @@ class SQLiteIdentityStore:
             if version == 9:
                 _migrate_9_to_10(conn)
                 version = 10
+            if version == 10:
+                _migrate_10_to_11(conn)
+                version = 11
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -1958,6 +1961,44 @@ def _migrate_9_to_10(conn: sqlite3.Connection) -> None:
         ON embeddings(deleted_at, purge_after);
 
         PRAGMA user_version = 10;
+        """
+    )
+
+
+def _migrate_10_to_11(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS app_users (
+            user_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            username_norm TEXT NOT NULL UNIQUE,
+            display_name TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            roles TEXT NOT NULL,
+            disabled INTEGER NOT NULL DEFAULT 0,
+            failed_attempts INTEGER NOT NULL DEFAULT 0,
+            locked_until TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_login_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_app_users_enabled
+        ON app_users(disabled, username_norm);
+
+        CREATE TABLE IF NOT EXISTS auth_audit (
+            audit_id TEXT PRIMARY KEY,
+            actor_user_id TEXT,
+            target_user_id TEXT,
+            action TEXT NOT NULL,
+            details TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_auth_audit_created
+        ON auth_audit(created_at);
+
+        PRAGMA user_version = 11;
         """
     )
 

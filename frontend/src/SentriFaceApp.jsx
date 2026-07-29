@@ -1,8 +1,9 @@
-import { lazy, Suspense } from "react";
-import { ActionIcon, Alert, AppShell, Box, Button, Group, Loader, MantineProvider, Modal, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
+import { lazy, Suspense, useState } from "react";
+import { ActionIcon, Alert, AppShell, Box, Button, Group, Loader, MantineProvider, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
+import { AuthGate } from "./components/AuthGate.jsx";
 import { VIEWS } from "./constants.js";
 import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
 import { profileLine, tabLabel } from "./utils.js";
@@ -23,17 +24,32 @@ export default function SentriFaceApp() {
       }}
     >
       <Notifications position="bottom-right" />
-      <SentriFaceShell />
+      <AuthGate>{(auth) => <SentriFaceShell {...auth} />}</AuthGate>
     </MantineProvider>
   );
 }
 
-function SentriFaceShell() {
-  const { state, refs, actions } = useSentriFaceController();
+function SentriFaceShell({ user, logout, changePassword }) {
+  const { state, refs, actions } = useSentriFaceController({ capabilities: user?.capabilities || [] });
   const { guarded } = actions;
   const { setColorScheme } = useMantineColorScheme();
   const computedColorScheme = useComputedColorScheme("light", { getInitialValueInEffect: true });
   const nextColorScheme = computedColorScheme === "dark" ? "light" : "dark";
+  const capabilities = new Set(user?.capabilities || []);
+  const can = (capability) => capabilities.has(capability);
+  const visibleViews = VIEWS.filter((view) => view !== "queue" || can("add")).filter((view) => view !== "debug" || can("technical") || can("backups") || can("administer"));
+  const selectedView = visibleViews.includes(state.activeView) ? state.activeView : "recognize";
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const submitPassword = guarded(async () => {
+    await changePassword(currentPassword, newPassword);
+    setPasswordOpen(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  });
 
   return (
     <AppShell header={{ height: 72 }} padding="sm" className="sentriface-shell">
@@ -59,18 +75,23 @@ function SentriFaceShell() {
                 <IconRefresh size={18} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label={state.backupCreating ? "Creating portable backup..." : "Create portable backup"}>
-              <ActionIcon
-                variant="light"
-                color="blue"
-                size="lg"
-                onClick={actions.requestBackup}
-                disabled={state.backupCreating}
-                aria-label={state.backupCreating ? "Creating portable backup..." : "Create portable backup"}
-              >
-                {state.backupCreating ? <Loader size={18} /> : <IconDatabaseExport size={18} />}
-              </ActionIcon>
-            </Tooltip>
+            {can("backups") ? (
+              <Tooltip label={state.backupCreating ? "Creating portable backup..." : "Create portable backup"}>
+                <ActionIcon
+                  variant="light"
+                  color="blue"
+                  size="lg"
+                  onClick={actions.requestBackup}
+                  disabled={state.backupCreating}
+                  aria-label={state.backupCreating ? "Creating portable backup..." : "Create portable backup"}
+                >
+                  {state.backupCreating ? <Loader size={18} /> : <IconDatabaseExport size={18} />}
+                </ActionIcon>
+              </Tooltip>
+            ) : null}
+            <Box visibleFrom="sm" ta="right"><Text size="sm" fw={700}>{user.display_name}</Text><Text size="xs" c="dimmed">{(user.roles || []).join(", ")}</Text></Box>
+            <Button size="xs" variant="default" onClick={() => setPasswordOpen(true)}>Password</Button>
+            <Button size="xs" variant="light" color="gray" onClick={logout}>Sign out</Button>
           </Group>
         </Group>
       </AppShell.Header>
@@ -96,13 +117,14 @@ function SentriFaceShell() {
             Using {state.profile.index.actual} instead of {state.profile.index.requested}: {state.profile.index.degraded_reason}
           </Alert>
         ) : null}        <Suspense fallback={<Stack align="center" py="xl"><Loader /><Text c="dimmed">Loading view...</Text></Stack>}>
-        <Tabs value={state.activeView} onChange={actions.setActiveView} keepMounted={false} className="sentriface-tabs">
+        <Tabs value={selectedView} onChange={actions.setActiveView} keepMounted={false} className="sentriface-tabs">
           <Tabs.List mb="md">
-            {VIEWS.map((view) => <Tabs.Tab key={view} value={view}>{tabLabel(view)}</Tabs.Tab>)}
+            {visibleViews.map((view) => <Tabs.Tab key={view} value={view}>{tabLabel(view)}</Tabs.Tab>)}
           </Tabs.List>
 
           <Tabs.Panel value="recognize">
             <RecognizeView
+              canAdd={can("add")}
               recognizeFileRef={refs.recognizeFileRef}
               recognition={state.recognition}
               selectedFaceIndex={state.selectedRecognitionFace}
@@ -171,6 +193,8 @@ function SentriFaceShell() {
 
           <Tabs.Panel value="people">
             <PeopleView
+              canEdit={can("add")}
+              canDestroy={can("destroy")}
               people={state.people}
               archivedPeople={state.archivedPeople}
               deletedFaces={state.deletedFaces}
@@ -195,6 +219,8 @@ function SentriFaceShell() {
 
           <Tabs.Panel value="debug">
             <DebugView
+              capabilities={user.capabilities || []}
+              currentUser={user}
               profile={state.profile}
               onConfigureRecovery={guarded(actions.configureRecovery)}
               events={state.events}
@@ -257,7 +283,15 @@ function SentriFaceShell() {
             </Group>
           </Stack>
         </Modal>
-      </AppShell.Main>
-    </AppShell>
+        <Modal opened={passwordOpen} onClose={() => setPasswordOpen(false)} title="Change password" centered>
+          <Stack>
+            <PasswordInput label="Current password" value={currentPassword} onChange={(event) => setCurrentPassword(event.currentTarget.value)} autoComplete="current-password" />
+            <PasswordInput label="New password" description="At least 12 characters" value={newPassword} onChange={(event) => setNewPassword(event.currentTarget.value)} autoComplete="new-password" />
+            <PasswordInput label="Confirm new password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.currentTarget.value)} autoComplete="new-password" />
+            {confirmPassword && newPassword !== confirmPassword ? <Text c="red" size="sm">Passwords do not match</Text> : null}
+            <Group justify="flex-end"><Button variant="default" onClick={() => setPasswordOpen(false)}>Cancel</Button><Button disabled={newPassword.length < 12 || newPassword !== confirmPassword || !currentPassword} onClick={submitPassword}>Change password</Button></Group>
+          </Stack>
+        </Modal>
+      </AppShell.Main>    </AppShell>
   );
 }

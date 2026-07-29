@@ -12,6 +12,7 @@ from io import BytesIO
 from pathlib import Path
 
 from sentriface.api_server import create_server
+from tests.api_auth_helpers import bootstrap_admin_cookie
 from sentriface.backup_crypto import MAGIC
 
 
@@ -19,6 +20,7 @@ class PortableBackupApiTest(unittest.TestCase):
     def test_encrypted_download_import_and_wrong_password_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             server = create_server(port=0, data_dir=Path(temp) / "data", runtime="dev", debug=False)
+            server._test_admin_cookie = bootstrap_admin_cookie(server)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
@@ -66,6 +68,7 @@ class PortableBackupApiTest(unittest.TestCase):
     def test_plaintext_download_and_import_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             server = create_server(port=0, data_dir=Path(temp) / "data", runtime="dev", debug=False)
+            server._test_admin_cookie = bootstrap_admin_cookie(server)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
@@ -93,6 +96,7 @@ class PortableBackupApiTest(unittest.TestCase):
                 runtime="dev",
                 debug=False,
             )
+            server._test_admin_cookie = bootstrap_admin_cookie(server)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
@@ -169,7 +173,7 @@ class PortableBackupApiTest(unittest.TestCase):
             timeout=20,
         )
         try:
-            authorized = {**(headers or {}), "X-SentriFace-Session": server.session_token}
+            authorized = {**(headers or {}), "X-SentriFace-Session": server.session_token, "Cookie": server._test_admin_cookie}
             connection.request(method, path, body=body, headers=authorized)
             response = connection.getresponse()
             return (

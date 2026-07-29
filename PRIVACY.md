@@ -9,6 +9,7 @@ The application stores sensitive biometric-related information, including:
 - numerical face embeddings used for matching;
 - names and optional person/event metadata;
 - recognition history, deletion history, and operation receipts;
+- local account names, Argon2id password hashes, roles, login state, and authentication audit records;
 - portable backups containing the database and referenced image files.
 
 By default these files live in the current user's SentriFace application-data
@@ -22,6 +23,10 @@ operating-system user's credential vault. Existing managed plaintext data is
 migrated before the recognition engine opens it. Files created afterward are encrypted,
 but migration cannot guarantee forensic erasure of old plaintext blocks previously
 written to an SSD or filesystem snapshot.
+
+Local account passwords are never stored or logged in plaintext. Account records and
+authentication audit entries reside inside the encrypted SQLCipher database. Browser
+authentication uses an HttpOnly cookie; SentriFace does not persist the session secret inbrowser JavaScript storage.
 
 This protects copied or stolen application files. It does not protect against
 malware or a person already operating as the same unlocked OS user, because that

@@ -37,10 +37,14 @@ import {
   IconSearch,
   IconTrash,
   IconUpload,
+  IconUsers,
 } from "@tabler/icons-react";
+import { AccountsPanel } from "./AccountsPanel.jsx";
 import { MachineProfilePanel } from "./MachineProfilePanel.jsx";
 
 export function DebugView({
+  capabilities = [],
+  currentUser,
   profile,
   onConfigureRecovery,
   events,
@@ -54,7 +58,14 @@ export function DebugView({
   onDownloadBackup,
   onRestoreBackup,
 }) {
-  const [section, setSection] = useState("events");
+  const capabilitySet = useMemo(() => new Set(capabilities), [capabilities]);
+  const navItems = useMemo(() => [
+    capabilitySet.has("technical") ? { key: "events", label: "Events Log", icon: IconInfoCircle } : null,
+    capabilitySet.has("backups") ? { key: "database", label: "Database", icon: IconDatabase } : null,
+    capabilitySet.has("technical") ? { key: "profile", label: "Machine Profile", icon: IconCpu } : null,
+    capabilitySet.has("administer") ? { key: "accounts", label: "Accounts & Roles", icon: IconUsers } : null,
+  ].filter(Boolean), [capabilitySet]);
+  const [section, setSection] = useState(navItems[0]?.key || "database");
   const [paused, setPaused] = useState(false);
   const [cleared, setCleared] = useState(false);
   const [snapshot, setSnapshot] = useState(events);
@@ -64,6 +75,10 @@ export function DebugView({
   const [timeFilter, setTimeFilter] = useState("all");
   const [pageSize, setPageSize] = useState("25");
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (!navItems.some((item) => item.key === section)) setSection(navItems[0]?.key || "database");
+  }, [navItems, section]);
 
   useEffect(() => {
     if (!paused && !cleared) setSnapshot(events);
@@ -121,7 +136,7 @@ export function DebugView({
   return (
     <Paper withBorder radius="md" p="md" className="debug-workspace">
       <Box className="debug-shell">
-        <DebugSidebar section={section} onSection={setSection} summary={summary} onRefresh={refreshEvents} />
+        <DebugSidebar section={section} onSection={setSection} summary={summary} onRefresh={refreshEvents} navItems={navItems} showSummary={capabilitySet.has("technical")} />
         <Box className="debug-main">
           {section === "events" ? (
             <EventsLogPanel
@@ -149,7 +164,9 @@ export function DebugView({
               onRefresh={refreshEvents}
             />
           ) : section === "profile" ? (
-            <MachineProfilePanel profile={profile} onConfigureRecovery={onConfigureRecovery} />
+            <MachineProfilePanel profile={profile} onConfigureRecovery={onConfigureRecovery} canConfigureRecovery={capabilitySet.has("recovery")} />
+          ) : section === "accounts" ? (
+            <AccountsPanel currentUser={currentUser} />
           ) : (
             <DatabaseBackupsPanel
               backups={backups}
@@ -160,6 +177,9 @@ export function DebugView({
               onImport={onImportBackup}
               onDownload={onDownloadBackup}
               onRestore={onRestoreBackup}
+              canImport={capabilitySet.has("database_restore")}
+              canRestore={capabilitySet.has("database_restore")}
+              canDelete={capabilitySet.has("backup_delete")}
             />
           )}
         </Box>
@@ -168,12 +188,7 @@ export function DebugView({
   );
 }
 
-function DebugSidebar({ section, onSection, summary, onRefresh }) {
-  const navItems = [
-    { key: "events", label: "Events Log", icon: IconInfoCircle },
-    { key: "database", label: "Database", icon: IconDatabase },
-    { key: "profile", label: "Machine Profile", icon: IconCpu },
-  ];
+function DebugSidebar({ section, onSection, summary, onRefresh, navItems, showSummary }) {
   return (
     <Stack className="debug-sidebar">
       <Card withBorder radius="md" className="debug-side-card">
@@ -197,7 +212,7 @@ function DebugSidebar({ section, onSection, summary, onRefresh }) {
           })}
         </Stack>
       </Card>
-      <Card withBorder radius="md" className="debug-side-card debug-summary-card">
+      {showSummary ? <Card withBorder radius="md" className="debug-side-card debug-summary-card">
         <Text fw={800} mb="md">Log Summary</Text>
         <DebugMetric label="Total Events" value={summary.total.toLocaleString()} />
         <DebugMetric label="Errors" value={summary.error} tone="red" />
@@ -213,7 +228,7 @@ function DebugSidebar({ section, onSection, summary, onRefresh }) {
             <ActionIcon variant="subtle" onClick={onRefresh} aria-label="Refresh events"><IconRefresh size={18} /></ActionIcon>
           </Tooltip>
         </Group>
-      </Card>
+      </Card> : null}
     </Stack>
   );
 }
@@ -356,6 +371,9 @@ function DatabaseBackupsPanel({
   onImport,
   onDownload,
   onRestore,
+  canImport = false,
+  canRestore = false,
+  canDelete = false,
 }) {
   const latest = backups[0] || null;
   const previous = backups.slice(1);
@@ -415,7 +433,7 @@ function DatabaseBackupsPanel({
             variant="default"
             leftSection={<IconUpload size={16} />}
             loading={importing}
-            disabled={creating}
+            disabled={creating || !canImport}
             onClick={() => importInputRef.current?.click()}
           >
             {importing ? "Verifying..." : "Import"}
@@ -509,7 +527,7 @@ function DatabaseBackupsPanel({
                         <ActionIcon
                           variant="subtle"
                           color="teal"
-                          disabled={!backup.complete || !backup.portable || !backup.verified}
+                          disabled={!canRestore || !backup.complete || !backup.portable || !backup.verified}
                           onClick={() => onRestore(backup)}
                           aria-label={`Restore backup ${formatDateTime(backup.created_at)}`}
                         >
@@ -521,6 +539,7 @@ function DatabaseBackupsPanel({
                       <ActionIcon
                         variant="subtle"
                         color="red"
+                        disabled={!canDelete}
                         onClick={() => onDelete(backup.backup_id)}
                         aria-label={`Delete backup ${formatDateTime(backup.created_at)}`}
                       >

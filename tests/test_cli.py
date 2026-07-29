@@ -16,6 +16,13 @@ from sentriface.cli import build_dev_engine
 
 
 class CliTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.authorization_patch = patch("sentriface.cli._authorize_cli")
+        self.authorization_patch.start()
+
+    def tearDown(self) -> None:
+        self.authorization_patch.stop()
+
     def test_profile_command_prints_runtime_settings(self) -> None:
         output = io.StringIO()
 

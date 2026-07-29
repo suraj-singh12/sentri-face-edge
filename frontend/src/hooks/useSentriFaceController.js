@@ -6,13 +6,14 @@ import { usePeopleController } from "./usePeopleController.js";
 import { useQueueController } from "./useQueueController.js";
 import { useRecognizeController } from "./useRecognizeController.js";
 
-export function useSentriFaceController() {
+export function useSentriFaceController({ capabilities = [] } = {}) {
   const [activeView, setActiveView] = usePersistentState("sentriface.activeView", "recognize");
   const api = useApiClient();
+  const canAdd = capabilities.includes("add");
   const uploads = useFileUploads(api);
-  const appData = useAppData({ activeView, ...api });
+  const appData = useAppData({ activeView, capabilities, ...api });
   const recognize = useRecognizeController({ ...api, ...uploads, loadEvents: appData.loadEvents, loadPeople: appData.loadPeople });
-  const queue = useQueueController({ ...api, ...uploads, loadEvents: appData.loadEvents, loadPeople: appData.loadPeople });
+  const queue = useQueueController({ enabled: canAdd, ...api, ...uploads, loadEvents: appData.loadEvents, loadPeople: appData.loadPeople });
   const people = usePeopleController({
     ...api,
     loadDeletedFaces: appData.loadDeletedFaces,

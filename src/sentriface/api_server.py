@@ -17,11 +17,13 @@ from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
+from sentriface.auth import AUTH_COOKIE_NAME, AuthError, AuthService, AuthUser, auth_status_payload
 from sentriface.backup_service import BackupError, BackupRecord, BackupService
 from sentriface.cli import build_dev_engine, build_onnx_engine
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
@@ -70,6 +72,68 @@ TERMINAL_QUEUE_STATES = {"done", "failed", "cancelled"}
 QUEUE_PROGRESS_RETENTION_SECONDS = 3600
 QUEUE_PROGRESS_LIMIT = 200
 MAX_HTTP_HANDLERS = 8
+
+
+PUBLIC_AUTH_ENDPOINTS = {
+    ("GET", "/api/health"),
+    ("GET", "/api/auth/status"),
+    ("POST", "/api/auth/signup"),
+    ("POST", "/api/auth/login"),
+}
+
+
+def _required_capability(method: str, path: str) -> str | None:
+    if (method, path) in PUBLIC_AUTH_ENDPOINTS:
+        return None
+    if path in {"/api/auth/logout", "/api/auth/change-password"}:
+        return "view"
+    if path.startswith("/api/users"):
+        return "administer"
+    if method == "GET":
+        if path == "/api/events":
+            return "technical"
+        if path == "/api/recovery":
+            return "recovery"
+        if path == "/api/backups":
+            return "backups"
+        if path in {"/api/deleted-faces"}:
+            return "destroy"
+        if path in {"/api/pending", "/api/queue-progress", "/api/queue-sessions", "/api/queue-groups"}:
+            return "add"
+        return "view"
+    if method == "DELETE":
+        return "backup_delete" if path.startswith("/api/backups/") else "add"
+    if path in {"/api/backups/restore", "/api/backups/import"}:
+        return "database_restore"
+    if path == "/api/recovery/configure":
+        return "recovery"
+    if path.startswith("/api/backups/") and path.endswith("/encrypted-download"):
+        return "backups"
+    if path in {"/api/backups", "/api/backup-db"}:
+        return "backups"
+    if path in {
+        "/api/person-archive", "/api/person-restore", "/api/person-merge",
+        "/api/person-photo-move", "/api/person-photo-delete",
+        "/api/person-photo-restore", "/api/person-photo-purge",
+    }:
+        return "destroy"
+    if path in {
+        "/api/upload", "/api/upload-batch", "/api/upload-chunk",
+        "/api/upload-file-discard", "/api/upload-batch-discard",
+        "/api/recognize", "/api/recognize-batch", "/api/input-rejections",
+    }:
+        return "recognize"
+    if path in {
+        "/api/enroll", "/api/person-update", "/api/person-preferences",
+        "/api/recognition-accept-existing", "/api/recognition-new",
+        "/api/recognition-followup", "/api/queue-add", "/api/queue-cancel",
+        "/api/queue-scan", "/api/queue-confirm-new", "/api/queue-confirm-existing",
+        "/api/queue-refresh-suggestions", "/api/queue-discard", "/api/queue-skip",
+        "/api/queue-resume-skipped", "/api/queue-reject-match",
+        "/api/confirm-new", "/api/confirm-existing", "/api/reject-pending",
+    }:
+        return "add"
+    return "view"
 
 
 class EngineBusyError(RuntimeError):
@@ -159,6 +223,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             database_key=config.storage_key,
         )
         self.recovery = RecoveryService(config.data_dir, config.storage_key, self.backups)
+        self.auth = AuthService(config.db_path, config.storage_key)
         self._scavenge_stale_files()
         self.maintenance_stop = threading.Event()
         self.maintenance_thread = threading.Thread(
@@ -402,6 +467,8 @@ class SentriFaceApiServer(ThreadingHTTPServer):
 
 class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     server: SentriFaceApiServer
+    auth_user: AuthUser | None = None
+    pending_auth_cookie: str | None = None
 
     def log_message(self, format: str, *args: object) -> None:
         """Never put session-bearing query strings into operational logs."""
@@ -479,6 +546,48 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         )
         return True
 
+    def _auth_token(self) -> str:
+        raw = self.headers.get("Cookie", "")
+        if not raw:
+            return ""
+        cookies = SimpleCookie()
+        try:
+            cookies.load(raw)
+        except Exception:
+            return ""
+        morsel = cookies.get(AUTH_COOKIE_NAME)
+        return morsel.value if morsel else ""
+
+    def _reject_user_authorization(self, method: str, path: str) -> bool:
+        required = _required_capability(method, path)
+        user = self.server.auth.authenticate(self._auth_token())
+        self.auth_user = user
+        if required is None:
+            return False
+        if self.server.auth.setup_required():
+            self._json(
+                {"error": "Create the first administrator account before using SentriFace", "code": "setup_required"},
+                status=HTTPStatus.PRECONDITION_REQUIRED,
+            )
+            return True
+        if user is None:
+            self._json({"error": "Sign in to continue", "code": "authentication_required"}, status=HTTPStatus.UNAUTHORIZED)
+            return True
+        if not user.has(required):
+            self.server.log_event("authorization-denied", username=user.username, capability=required, endpoint=path)
+            self._json(
+                {"error": "Your account is not allowed to perform this operation", "code": "permission_denied", "required_capability": required},
+                status=HTTPStatus.FORBIDDEN,
+            )
+            return True
+        return False
+
+    def _set_auth_cookie(self, token: str) -> None:
+        self.pending_auth_cookie = f"{AUTH_COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={8 * 60 * 60}"
+
+    def _clear_auth_cookie(self) -> None:
+        self.pending_auth_cookie = f"{AUTH_COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"
+
     def end_headers(self) -> None:
         self.send_header(
             "Content-Security-Policy",
@@ -495,7 +604,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             return
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/") or parsed.path == "/media":
-            if self._reject_invalid_origin() or self._reject_invalid_session():
+            if (
+                self._reject_invalid_origin()
+                or self._reject_invalid_session()
+                or self._reject_user_authorization("GET", parsed.path)
+            ):
                 return
         if parsed.path in {"/api/health", "/api/profile", "/api/queue-progress"}:
             self._do_GET()
@@ -511,6 +624,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         ):
             return
         parsed = urlparse(self.path)
+        if self._reject_user_authorization("POST", parsed.path):
+            return
         if parsed.path == "/api/queue-cancel":
             self._do_POST()
             return
@@ -536,6 +651,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             or self._reject_invalid_session()
         ):
             return
+        parsed = urlparse(self.path)
+        if self._reject_user_authorization("DELETE", parsed.path):
+            return
         with self.server.operation_gate.shared():
             self._do_DELETE()
     def _do_GET(self) -> None:
@@ -546,6 +664,12 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/health":
                 self._json({"status": "ok", "runtime": self.server.runtime})
+                return
+            if parsed.path == "/api/auth/status":
+                self._json(auth_status_payload(self.server.auth, self.auth_user))
+                return
+            if parsed.path == "/api/users":
+                self._json({"users": self.server.auth.list_users(), "roles": self.server.auth.role_catalog()})
                 return
             if parsed.path == "/api/profile":
                 self._json(self._profile())
@@ -720,6 +844,47 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             payload = self._read_json()
+            if parsed.path == "/api/auth/signup":
+                user, token = self.server.auth.signup_initial(_required(payload, "username"), str(payload.get("display_name") or ""), _required(payload, "password"))
+                self._set_auth_cookie(token)
+                self.server.log_event("initial-admin-created", username=user.username)
+                self._json(auth_status_payload(self.server.auth, user), status=HTTPStatus.CREATED)
+                return
+            if parsed.path == "/api/auth/login":
+                user, token = self.server.auth.login(_required(payload, "username"), _required(payload, "password"))
+                self._set_auth_cookie(token)
+                self.server.log_event("login", username=user.username)
+                self._json(auth_status_payload(self.server.auth, user))
+                return
+            if parsed.path == "/api/auth/logout":
+                username = self.auth_user.username if self.auth_user else "unknown"
+                self.server.auth.logout(self._auth_token())
+                self._clear_auth_cookie()
+                self.server.log_event("logout", username=username)
+                self._json({"logged_out": True})
+                return
+            if parsed.path == "/api/auth/change-password":
+                self.server.auth.change_password(self.auth_user, _required(payload, "current_password"), _required(payload, "new_password"))
+                self._clear_auth_cookie()
+                self.server.log_event("password-changed", username=self.auth_user.username)
+                self._json({"password_changed": True, "reauthentication_required": True})
+                return
+            if parsed.path == "/api/users":
+                user = self.server.auth.create_user(self.auth_user, _required(payload, "username"), str(payload.get("display_name") or ""), _required(payload, "password"), list(payload.get("roles") or []))
+                self.server.log_event("account-created", actor=self.auth_user.username, username=user["username"])
+                self._json({"user": user}, status=HTTPStatus.CREATED)
+                return
+            if parsed.path == "/api/users/update":
+                user = self.server.auth.update_user(self.auth_user, _required(payload, "user_id"), str(payload.get("display_name") or ""), list(payload.get("roles") or []), bool(payload.get("disabled")))
+                self.server.log_event("account-updated", actor=self.auth_user.username, username=user["username"])
+                self._json({"user": user})
+                return
+            if parsed.path == "/api/users/reset-password":
+                target_id = _required(payload, "user_id")
+                self.server.auth.reset_password(self.auth_user, target_id, _required(payload, "password"))
+                self.server.log_event("account-password-reset", actor=self.auth_user.username, target_user_id=target_id)
+                self._json({"password_reset": True})
+                return
             if parsed.path.startswith("/api/backups/") and parsed.path.endswith("/encrypted-download"):
                 backup_id = parsed.path.removeprefix("/api/backups/").removesuffix("/encrypted-download").strip("/")
                 passphrase = _required(payload, "passphrase")
@@ -1449,7 +1614,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
 
     def _profile(self) -> dict[str, Any]:
         config = self.server.config
-        return {
+        profile = {
             "runtime": self.server.runtime,
             "hardware_tier": config.hardware_tier,
             "hardware": {
@@ -1497,6 +1662,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 "research_only": self.server.model_usage.get("usage_basis") == "noncommercial-research",
             },
         }
+        if not self.auth_user or not self.auth_user.has("technical"):
+            for sensitive in ("data_dir", "db_path", "models", "storage_security", "recovery"):
+                profile.pop(sensitive, None)
+        return profile
 
     def _read_json(self) -> dict[str, Any]:
         try:
@@ -1537,6 +1706,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     def _json(self, payload: dict[str, Any], status: int = 200) -> None:
         body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
         self.send_response(status)
+        if self.pending_auth_cookie:
+            self.send_header("Set-Cookie", self.pending_auth_cookie)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -1630,9 +1801,13 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             status = HTTPStatus.UNPROCESSABLE_ENTITY
         if isinstance(exc, EngineBusyError):
             status = HTTPStatus.SERVICE_UNAVAILABLE
+        if isinstance(exc, AuthError):
+            status = exc.status
         payload = {"error": message}
         if isinstance(exc, EngineBusyError):
             payload["code"] = "engine_busy"
+        if isinstance(exc, AuthError):
+            payload["code"] = exc.code
         if validation_error:
             payload["code"] = "invalid_input"
             payload["reason"] = getattr(exc, "reason", "invalid_request")

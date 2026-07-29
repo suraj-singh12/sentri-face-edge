@@ -1,5 +1,7 @@
 from __future__ import annotations
 import argparse
+import getpass
+import hashlib
 import json
 import uuid
 from dataclasses import replace
@@ -7,6 +9,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
+from sentriface.auth import AuthError, AuthService
 from sentriface.components.dev_components import HashFaceEmbedder, WholeImageFaceDetector
 from sentriface.components.hnsw_index import HnswFaceIndex
 from sentriface.components.linear_index import LinearFaceIndex
@@ -126,6 +129,66 @@ def _pre_deletion_backup(
     ).create_backup(reason=reason, operation_id=operation_id)
 
 
+_CLI_CAPABILITIES = {
+    "backup-db": "backups",
+    "profile": "technical",
+    "recognize": "recognize",
+    "recognize-batch": "recognize",
+    "enroll": "add",
+    "queue-add": "add",
+    "pending": "add",
+    "confirm-new": "add",
+    "confirm-existing": "add",
+    "reject-pending": "add",
+    "init-scan": "add",
+    "init-groups": "add",
+    "init-confirm": "add",
+    "init-confirm-existing": "add",
+    "init-reject": "add",
+    "init-reset": "add",
+    "persons": "view",
+    "person": "view",
+    "rename-person": "add",
+    "delete-person": "destroy",
+    "restore-person": "destroy",
+    "delete-embedding": "destroy",
+    "deleted-faces": "destroy",
+    "restore-embedding": "destroy",
+    "purge-embedding": "destroy",
+    "move-embedding": "destroy",
+    "merge-persons": "destroy",
+    "benchmark": "technical",
+}
+
+
+def _authorize_cli(auth: AuthService, command: str, username: str | None) -> None:
+    if command == "init-db" and auth.setup_required():
+        return
+    if auth.setup_required():
+        raise AuthError(
+            "Complete first-run administrator signup in the SentriFace UI",
+            "setup_required",
+            428,
+        )
+    if not username:
+        raise AuthError(
+            "This command requires --username; the password is requested securely",
+            "authentication_required",
+            401,
+        )
+    password = getpass.getpass("SentriFace password: ")
+    user, token = auth.login(username, password)
+    try:
+        capability = "technical" if command == "init-db" else _CLI_CAPABILITIES[command]
+        if not user.has(capability):
+            raise AuthError(
+                f"Account '{user.username}' is not permitted to run {command}",
+                "permission_denied",
+                403,
+            )
+    finally:
+        auth.logout(token)
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="SentriFace Edge")
     parser.add_argument("--data-dir", type=Path, default=default_data_dir())
@@ -150,6 +213,10 @@ def main() -> int:
     parser.add_argument("--min-quality-score", type=float, help="Minimum face quality allowed for adding")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON output")
     parser.add_argument("--metrics", action="store_true", help="Include timing and count metrics")
+    parser.add_argument(
+        "--username",
+        help="Local SentriFace account. The password is prompted and never accepted as an argument.",
+    )
     subcommands = parser.add_subparsers(dest="command", required=True)
 
     subcommands.add_parser("init-db", help="Create or migrate the local database")
@@ -279,6 +346,11 @@ def main() -> int:
         config = replace(config, storage_key=load_or_create_master_key(args.data_dir))
         protect_existing_managed_data(args.data_dir, config.storage_key)
         config = _apply_runtime_overrides(config, args)
+        if args.command == "benchmark" and args.compare_threads and args.runtime != "onnx":
+            return _emit_error(args, "--compare-threads requires --runtime onnx")
+        identity_store = _identity_store(config)
+        identity_store.initialize()
+        _authorize_cli(AuthService(config.db_path, config.storage_key), args.command, args.username)
         if args.command == "profile":
             return _emit(
                 args,
@@ -631,7 +703,7 @@ def main() -> int:
             )
 
         return 1
-    except (SentriFaceError, StorageSecurityError, OSError, ValueError) as exc:
+    except (AuthError, SentriFaceError, StorageSecurityError, OSError, ValueError) as exc:
         return _emit_error(args, str(exc))
     except KeyError as exc:
         return _emit_error(args, str(exc).strip("'"))

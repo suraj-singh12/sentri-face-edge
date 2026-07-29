@@ -14,7 +14,7 @@ from sentriface.offline_guard import OfflineViolationError, install_offline_guar
 from sentriface.recovery import RECOVERY_KIT_NAME, RecoveryError, RecoveryService, recover_master_key
 from sentriface.secure_files import ProtectedFileError, read_protected_bytes, write_protected_bytes
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
-from sentriface.storage.sqlite_store import SQLiteIdentityStore
+from sentriface.storage.sqlite_store import SCHEMA_VERSION, SQLiteIdentityStore
 
 
 class V1SecurityTest(unittest.TestCase):
@@ -38,7 +38,7 @@ class V1SecurityTest(unittest.TestCase):
             key = secrets.token_bytes(32)
             store = SQLiteIdentityStore(path, database_key=key)
             store.initialize()
-            self.assertEqual(store._schema_version(), 10)
+            self.assertEqual(store._schema_version(), SCHEMA_VERSION)
             with closing(sqlite3.connect(path)) as connection:
                 with self.assertRaises(sqlite3.DatabaseError):
                     connection.execute("SELECT * FROM persons").fetchone()

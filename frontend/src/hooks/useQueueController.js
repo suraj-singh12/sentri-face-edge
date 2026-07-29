@@ -5,6 +5,7 @@ import { currentDateTimeParts, droppedImageFiles, isNewPersonSuggestion } from "
 import { usePersistentState } from "./usePersistentState.js";
 
 export function useQueueController({
+  enabled = true,
   apiDelete,
   apiGet,
   apiPost,
@@ -90,10 +91,10 @@ export function useQueueController({
   }, [apiGet, loadQueueGroups, queueSessionId, setQueueSelectedGroupId, setQueueSessionId]);
 
   useEffect(() => {
-    if (restoredQueueRef.current) return;
+    if (!enabled || restoredQueueRef.current) return;
     restoredQueueRef.current = true;
     loadQueueSessions().catch((error) => console.error("[sentriface-ui] unable to restore queue", error));
-  }, [loadQueueSessions]);
+  }, [enabled, loadQueueSessions]);
 
   const scanQueuePath = useCallback(async (path, options = {}) => {
     const jobId = options.jobId || crypto.randomUUID();

@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from sentriface.api_server import create_server
+from tests.api_auth_helpers import bootstrap_admin_cookie
 
 
 class QueueCancellationApiTest(unittest.TestCase):
@@ -22,6 +23,7 @@ class QueueCancellationApiTest(unittest.TestCase):
             cv2.imwrite(str(upload_dir / "face.jpg"), np.full((160, 160, 3), 120, dtype=np.uint8))
 
             server = create_server(port=0, data_dir=data_dir, runtime="dev", debug=False)
+            server._test_admin_cookie = bootstrap_admin_cookie(server)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
@@ -65,6 +67,7 @@ class QueueCancellationApiTest(unittest.TestCase):
                     "Content-Type": "application/json",
                     "Content-Length": str(len(body)),
                     "X-SentriFace-Session": server.session_token,
+                    "Cookie": server._test_admin_cookie,
                 },
             )
             response = connection.getresponse()

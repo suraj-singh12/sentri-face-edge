@@ -18,6 +18,7 @@ Storage security dependencies include:
 - SQLCipher Community Edition, distributed under its open-source BSD-style license;
 - `sqlcipher3`, distributed under the MIT License;
 - Python `keyring`, distributed under the MIT License;
+- Python `argon2-cffi` and its bindings, used for Argon2id password hashing under their applicable upstream licenses;
 - Python `cryptography`, used for authenticated file, log, backup, and recovery-key encryption under its applicable upstream licenses.
 
 SentriFace's proprietary license does not replace or restrict those upstream

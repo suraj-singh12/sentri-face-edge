@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Alert, Badge, Box, Button, Card, Group, Modal, SimpleGrid, Stack, Text, TextInput, Title } from "@mantine/core";
 
-export function MachineProfilePanel({ profile, onConfigureRecovery }) {
+export function MachineProfilePanel({ profile, onConfigureRecovery, canConfigureRecovery = false }) {
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [destination, setDestination] = useState(profile?.recovery?.destination || "");
   const [recoveryCode, setRecoveryCode] = useState("");
@@ -96,7 +96,7 @@ export function MachineProfilePanel({ profile, onConfigureRecovery }) {
           <ProfileLine label="Last external backup" value={profile.recovery?.last_external_backup ? new Date(profile.recovery.last_external_backup).toLocaleString() : "None"} />
           <ProfileLine label="Retained external backups" value={`${profile.recovery?.external_backup_count || 0} / ${profile.recovery?.external_retention_limit || 10}`} />
         </Stack>
-        <Button mt="md" variant="light" onClick={() => setRecoveryOpen(true)}>Configure recovery destination</Button>
+        {canConfigureRecovery ? <Button mt="md" variant="light" onClick={() => setRecoveryOpen(true)}>Configure recovery destination</Button> : <Text size="xs" c="dimmed" mt="md">Administrator permission is required to change disaster recovery.</Text>}
       </Card>
 
       <Modal opened={recoveryOpen} onClose={() => setRecoveryOpen(false)} title="Configure disaster recovery" centered>

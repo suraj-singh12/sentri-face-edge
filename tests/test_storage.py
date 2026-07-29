@@ -61,8 +61,8 @@ class StorageMigrationTest(unittest.TestCase):
             self.assertEqual(len(backups), 1)
             self.assertTrue(backups[0].verified)
             self.assertEqual(backups[0].database_version, 8)
-            self.assertEqual(backups[0].reason, "before-schema-migration-v8-to-v10")
-            self.assertEqual(backups[0].operation_id, "schema-migration-v8-to-v10")
+            self.assertEqual(backups[0].reason, f"before-schema-migration-v8-to-v{SCHEMA_VERSION}")
+            self.assertEqual(backups[0].operation_id, f"schema-migration-v8-to-v{SCHEMA_VERSION}")
             backup_path = (
                 root / "backups" / backups[0].backup_id / db_path.name
             )

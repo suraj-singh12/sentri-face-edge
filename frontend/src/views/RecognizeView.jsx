@@ -35,6 +35,7 @@ import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor } from "../
 const FACE_COLORS = ["#35d6d0", "#bd83ff", "#f5a623", "#59a7ff", "#f472b6", "#a3e635"];
 
 export function RecognizeView({
+  canAdd = false,
   recognizeFileRef,
   recognition,
   selectedFaceIndex,
@@ -74,6 +75,7 @@ export function RecognizeView({
   useEffect(() => setQualityOverride(null), [recognition?.inputPath]);
 
   const requestFaceAction = (action, faceIndex) => {
+    if (!canAdd) return;
     const face = faces.find((item) => item.index === faceIndex);
     if (!face) return;
     onSelectFace(faceIndex);
@@ -176,6 +178,7 @@ export function RecognizeView({
                       imageSize={imageSize}
                       selectedFaceIndex={selectedFace?.index}
                       acceptedFaces={recognitionAcceptedFaces}
+                      canAdd={canAdd}
                       onSelectFace={onSelectFace}
                       onAccept={(faceIndex) => requestFaceAction("accept", faceIndex)}
                       onGallery={onGallery}
@@ -189,7 +192,7 @@ export function RecognizeView({
               className="recognize-action recognize-action--accept"
               leftSection={<IconUserCheck size={20} />}
               onClick={() => requestFaceAction("accept", selectedFace?.index)}
-              disabled={!selectedFace || !selectedMatch || !selectedIsKnown || selectedAccepted}
+              disabled={!canAdd || !selectedFace || !selectedMatch || !selectedIsKnown || selectedAccepted}
             >
               {selectedMatch && selectedIsKnown ? `Accept Face ${faceNumber(selectedFace.index)}${selectedIsBad ? " Anyway" : ""}` : "Accept"}
               <Text component="span" size="xs" fw={400}>{selectedMatch && selectedIsKnown ? (selectedIsBad ? "Review the quality warning first" : `Add this photo to ${selectedMatch.name}`) : "Select a confident match"}</Text>
@@ -199,7 +202,7 @@ export function RecognizeView({
               variant="light"
               leftSection={<IconUserPlus size={20} />}
               onClick={() => requestFaceAction("new", selectedFace?.index)}
-              disabled={!selectedFace || selectedAccepted}
+              disabled={!canAdd || !selectedFace || selectedAccepted}
             >
               {selectedIsBad ? "New Person Anyway" : "New Person"}
               <Text component="span" size="xs" fw={400}>{selectedFace ? (selectedIsBad ? "Review the quality warning first" : `Create a person from Face ${faceNumber(selectedFace.index)}`) : "Select a face first"}</Text>
@@ -330,7 +333,7 @@ function QualityMeter({ label, value, color }) {
   );
 }
 
-function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acceptedFaces, onSelectFace, onAccept, onGallery }) {
+function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acceptedFaces, canAdd, onSelectFace, onAccept, onGallery }) {
   if (!faces.length) {
     return (
       <Paper withBorder className="recognition-results-empty">
@@ -351,6 +354,7 @@ function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acc
               imageSize={imageSize}
               selected={face.index === selectedFaceIndex}
               accepted={acceptedFaces.includes(face.index)}
+              canAdd={canAdd}
               onSelect={() => onSelectFace(face.index)}
               onAccept={() => onAccept(face.index)}
               onGallery={onGallery}
@@ -363,7 +367,7 @@ function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acc
   );
 }
 
-function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, onSelect, onAccept, onGallery }) {
+function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, canAdd, onSelect, onAccept, onGallery }) {
   const best = face.matches?.[0] || null;
   const unknown = isNewPersonSuggestion(best);
   const display = matchDisplay(best);
@@ -393,7 +397,7 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, on
           <Text size="xs" c="dimmed">{unknown ? "No confident match" : `ID ${best.person_id}`}</Text>
           <Group grow mt="xs">
             <Button size="xs" variant="default" disabled={unknown} onClick={() => best && onGallery(best.person_id)}>View profile</Button>
-            <Button size="xs" color={face.quality?.status === "bad" ? "orange" : "green"} leftSection={<IconCheck size={14} />} disabled={unknown || accepted} onClick={onAccept}>
+            <Button size="xs" color={face.quality?.status === "bad" ? "orange" : "green"} leftSection={<IconCheck size={14} />} disabled={!canAdd || unknown || accepted} onClick={onAccept}>
               {unknown ? "No Match" : accepted ? "Accepted" : face.quality?.status === "bad" ? "Accept Anyway" : "Accept"}
             </Button>
           </Group>

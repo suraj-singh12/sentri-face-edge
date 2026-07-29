@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from sentriface.api_server import create_server
+from tests.api_auth_helpers import bootstrap_admin_cookie
 
 
 class LocalApiSecurityTest(unittest.TestCase):
@@ -51,6 +52,7 @@ class LocalApiSecurityTest(unittest.TestCase):
                     runtime="dev",
                     debug=False,
                 )
+                self.server._test_admin_cookie = bootstrap_admin_cookie(self.server)
                 self.thread = threading.Thread(
                     target=self.server.serve_forever,
                     daemon=True,
@@ -87,6 +89,7 @@ class LocalApiSecurityTest(unittest.TestCase):
                     "Content-Length": str(len(body)),
                     "Origin": origin,
                     "X-SentriFace-Session": server.session_token,
+                    "Cookie": server._test_admin_cookie,
                 },
             )
             response = connection.getresponse()

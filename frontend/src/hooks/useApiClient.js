@@ -28,6 +28,9 @@ export function useApiClient() {
       error.status = response.status;
       error.code = payload.code;
       error.reason = payload.reason;
+      if (["authentication_required", "setup_required"].includes(error.code)) {
+        window.dispatchEvent(new CustomEvent("sentriface-auth-required"));
+      }
       if (!options.silent) {
         showToast(error.message, "red", {
           title: error.code === "engine_busy" ? "Face engine is busy" : "Request failed",

@@ -157,6 +157,38 @@ Debug tab.
 Starting the app automatically creates its SQLite DB, face crop folder, index,
 backups, and logs if they are missing. You do not need to run `init-db` before
 launching the UI.
+
+On first launch, create the machine's first account in the browser. That account
+becomes the administrator. Later, administrators manage local accounts in
+**Advanced > Accounts**. Passwords are hashed with Argon2id and never stored or
+logged in plaintext. Sessions are held in an HttpOnly, SameSite cookie, expire
+after 30 minutes of inactivity or eight hours total, and are revoked after
+password or role changes. Five failed logins lock an account for 15 minutes.
+
+Roles are enforced by the backend, including CLI commands:
+
+| Role | Access |
+| --- | --- |
+| Viewer | View people and run recognition. |
+| Operator | Viewer access plus enrollment and queue/review changes. |
+| Custodian | Operator access plus archive/delete/restore operations and backup deletion. |
+| Technician | Viewer access plus logs, machine diagnostics, and backup creation/export. |
+| Administrator | All capabilities, including accounts, recovery configuration, and database restore/import. |
+
+Roles can be combined. Database restore is deliberately administrator-only
+because a restored database also replaces account and role records. CLI commands
+require `--username USERNAME` after first-run setup and prompt for the password
+without accepting it in command arguments. If every administrator password is
+lost, the signed-in operating-system custodian can run
+`sentriface-admin-reset --username USERNAME`; it prompts twice for a new password,
+clears lockout/disable state, revokes sessions, and writes an authentication audit
+record.
+
+The selected low/medium/high performance profile is recalculated for each machine
+at startup. Technicians and administrators can inspect the hardware inputs,
+selected limits, active index, and offline/storage status in **Advanced > Machine
+Profile**.
+
 Browser flow:
 
 ```text
@@ -189,19 +221,19 @@ npm run build
 Check the selected profile:
 
 ```bash
-python -m sentriface.cli profile
+python -m sentriface.cli --username USERNAME profile
 ```
 
 Use JSON output for future UI integration:
 
 ```bash
-python -m sentriface.cli --json profile
+python -m sentriface.cli --username USERNAME --json profile
 ```
 
 Use metrics output before optimizing:
 
 ```bash
-python -m sentriface.cli --metrics --runtime onnx recognize path/to/image.jpg
+python -m sentriface.cli --username USERNAME --metrics --runtime onnx recognize path/to/image.jpg
 ```
 
 Metrics include stage timings such as image load, detection, quality scoring,
@@ -211,39 +243,39 @@ accepted/rejected faces.
 Run a repeatable recognition benchmark over one image or a folder:
 
 ```bash
-python -m sentriface.cli --metrics --runtime onnx benchmark path/to/images --repeat 3
+python -m sentriface.cli --username USERNAME --metrics --runtime onnx benchmark path/to/images --repeat 3
 ```
 
 Compare ONNX Runtime thread counts on the target machine:
 
 ```bash
-python -m sentriface.cli --runtime onnx benchmark path/to/images --repeat 3 --compare-threads 1,2,4
+python -m sentriface.cli --username USERNAME --runtime onnx benchmark path/to/images --repeat 3 --compare-threads 1,2,4
 ```
 
 Override ONNX threads for a normal command:
 
 ```bash
-python -m sentriface.cli --runtime onnx --onnx-threads 2 recognize path/to/image.jpg
+python -m sentriface.cli --username USERNAME --runtime onnx --onnx-threads 2 recognize path/to/image.jpg
 ```
 
 Tune strictness and CPU load without editing code:
 
 ```bash
-python -m sentriface.cli --runtime onnx --max-image-edge 720 --high-confidence 0.70 --medium-confidence 0.52 --min-quality-score 0.60 recognize path/to/image.jpg
+python -m sentriface.cli --username USERNAME --runtime onnx --max-image-edge 720 --min-quality-score 0.60 recognize path/to/image.jpg
 ```
 
-The backend alone owns match labels: Strong is at least 0.60, Likely at least 0.50, Maybe at least 0.40, and lower scores are Unknown/New Person. `min-quality-score` controls whether a face may be added, and `max-image-edge` controls how aggressively images are downscaled before detection.
+The backend treats cosine similarity as a score, never as an identity probability. ONNX startup requires a hash-bound `calibration.json` beside the recognizer, with thresholds derived from a representative validation dataset and declared target false-match rate. Labels use those model-specific thresholds. `min-quality-score` controls whether a face may be added, and `max-image-edge` controls how aggressively images are downscaled before detection.
 
 Run with development placeholders:
 
 ```bash
-python -m sentriface.cli --runtime dev recognize path/to/image.jpg
+python -m sentriface.cli --username USERNAME --runtime dev recognize path/to/image.jpg
 ```
 
 Run recognition over a folder:
 
 ```bash
-python -m sentriface.cli --runtime onnx recognize-batch path/to/images
+python -m sentriface.cli --username USERNAME --runtime onnx recognize-batch path/to/images
 ```
 
 Run with real CPU ONNX components after placing models on disk:
@@ -252,7 +284,7 @@ Run with real CPU ONNX components after placing models on disk:
 python -m pip install -r requirements-runtime.txt
 # Install local models using one of the declarations documented in models/MODELS.md
 
-python -m sentriface.cli \
+python -m sentriface.cli --username USERNAME \
   --runtime onnx \
   --detector-model models/detector.onnx \
   --recognizer-model models/recognizer.onnx \
@@ -265,7 +297,7 @@ limit ONNX Runtime threads.
 Enroll a person from the first detected face:
 
 ```bash
-python -m sentriface.cli \
+python -m sentriface.cli --username USERNAME \
   --runtime onnx \
   enroll "Person Name" path/to/image.jpg
 ```
@@ -273,11 +305,11 @@ python -m sentriface.cli \
 Queue a face for review instead of immediately updating the DB:
 
 ```bash
-python -m sentriface.cli --runtime onnx queue-add path/to/image.jpg
-python -m sentriface.cli --runtime onnx pending
-python -m sentriface.cli --runtime onnx confirm-existing PENDING_ID PERSON_ID
-python -m sentriface.cli --runtime onnx confirm-new PENDING_ID "Person Name"
-python -m sentriface.cli --runtime onnx reject-pending PENDING_ID
+python -m sentriface.cli --username USERNAME --runtime onnx queue-add path/to/image.jpg
+python -m sentriface.cli --username USERNAME --runtime onnx pending
+python -m sentriface.cli --username USERNAME --runtime onnx confirm-existing PENDING_ID PERSON_ID
+python -m sentriface.cli --username USERNAME --runtime onnx confirm-new PENDING_ID "Person Name"
+python -m sentriface.cli --username USERNAME --runtime onnx reject-pending PENDING_ID
 ```
 
 Face additions are quality-gated before they enter the pending queue. The engine
@@ -295,7 +327,7 @@ bad  -> rejected by default
 Force a bad-quality face only when you intentionally want it:
 
 ```bash
-python -m sentriface.cli --runtime onnx queue-add path/to/image.jpg --force-bad-quality
+python -m sentriface.cli --username USERNAME --runtime onnx queue-add path/to/image.jpg --force-bad-quality
 ```
 
 ## Workflows
@@ -328,17 +360,17 @@ candidate with `embeddings_matched`.
 Person management:
 
 ```bash
-python -m sentriface.cli --runtime onnx persons
-python -m sentriface.cli --runtime onnx person PERSON_ID
-python -m sentriface.cli --runtime onnx rename-person PERSON_ID "New Name"
-python -m sentriface.cli --runtime onnx delete-person PERSON_ID
-python -m sentriface.cli --runtime onnx restore-person PERSON_ID
-python -m sentriface.cli --runtime onnx delete-embedding EMBEDDING_ID
-python -m sentriface.cli --runtime onnx deleted-faces
-python -m sentriface.cli --runtime onnx restore-embedding EMBEDDING_ID
-python -m sentriface.cli --runtime onnx purge-embedding EMBEDDING_ID
-python -m sentriface.cli --runtime onnx move-embedding EMBEDDING_ID TARGET_PERSON_ID
-python -m sentriface.cli --runtime onnx merge-persons SOURCE_PERSON_ID TARGET_PERSON_ID
+python -m sentriface.cli --username USERNAME --runtime onnx persons
+python -m sentriface.cli --username USERNAME --runtime onnx person PERSON_ID
+python -m sentriface.cli --username USERNAME --runtime onnx rename-person PERSON_ID "New Name"
+python -m sentriface.cli --username USERNAME --runtime onnx delete-person PERSON_ID
+python -m sentriface.cli --username USERNAME --runtime onnx restore-person PERSON_ID
+python -m sentriface.cli --username USERNAME --runtime onnx delete-embedding EMBEDDING_ID
+python -m sentriface.cli --username USERNAME --runtime onnx deleted-faces
+python -m sentriface.cli --username USERNAME --runtime onnx restore-embedding EMBEDDING_ID
+python -m sentriface.cli --username USERNAME --runtime onnx purge-embedding EMBEDDING_ID
+python -m sentriface.cli --username USERNAME --runtime onnx move-embedding EMBEDDING_ID TARGET_PERSON_ID
+python -m sentriface.cli --username USERNAME --runtime onnx merge-persons SOURCE_PERSON_ID TARGET_PERSON_ID
 ```
 
 `delete-person` archives a person; their active faces stay in the database but
@@ -402,7 +434,7 @@ sentriface-ui --recover-kit /path/to/sentriface-recovery-kit.json
 ```
 
 The command prompts for the recovery code without placing it on the command line.
-Use **Debug > Database > Portable Backups** to:
+Use **Advanced > Database > Portable Backups** to:
 
 - create and verify a complete managed backup;
 - export a password-encrypted `.sfbackup.enc` archive;
@@ -425,7 +457,7 @@ The older `backup-db` CLI command remains available for scripts that need a
 machine-key-encrypted SQLCipher-only copy:
 
 ```bash
-python -m sentriface.cli --runtime onnx backup-db backups/sentriface.db
+python -m sentriface.cli --username USERNAME --runtime onnx backup-db backups/sentriface.db
 ```
 
 The SQLite database uses `PRAGMA user_version` for schema versioning. Newer

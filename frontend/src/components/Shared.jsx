@@ -136,7 +136,6 @@ export function BestMatchPanel({ best, face, onGallery, selectedImage }) {
           {!noMatchFound && (
             <Group gap="xs" mt={2}>
               <Badge color={display.color} variant="light">{display.badge}</Badge>
-              <Text size="sm" c={`${display.color}.4`}>{display.stars}</Text>
               <Text size="xs" c="dimmed">(similarity score: {best.score.toFixed(3)})</Text>
             </Group>
           )}
@@ -411,7 +410,7 @@ function MatchIdentitySummary({ match }) {
         <Box>
           <Text size="sm" c="dimmed">Cosine similarity</Text>
           <Text fw={900} size="xl" c={`${display.color}.4`} className="match-identity-score">{match.score.toFixed(3)}</Text>
-          <Text size="xs" c="dimmed">{display.confidence}</Text>
+          <Text size="xs" c="dimmed">{display.guidance}</Text>
         </Box>
         <Box>
           <Text size="sm" c="dimmed">Group ID</Text>

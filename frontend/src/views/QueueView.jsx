@@ -326,9 +326,9 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
   const visibleGroups = useMemo(() => {
     const filtered = pendingGroups.filter((group) => {
       const classification = group.matches?.[0]?.classification || "unknown";
-      const highConfidence = ["strong", "duplicate"].includes(classification);
-      if (filter === "high") return highConfidence;
-      if (filter === "review") return !highConfidence;
+      const strongSimilarity = ["strong", "duplicate"].includes(classification);
+      if (filter === "high") return strongSimilarity;
+      if (filter === "review") return !strongSimilarity;
       return true;
     });
     return [...filtered].sort((left, right) => {

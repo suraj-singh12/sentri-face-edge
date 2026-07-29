@@ -10,6 +10,9 @@
   indexes, atomic index publication, and linear fallback.
 - Added durable file cleanup, SQLite lock handling, migration backups, restore
   rollback, request limits, localhost validation, and browser-origin hardening.
+- Added per-machine local signup/login, Argon2id password hashing, viewer/operator/
+  custodian/technician/administrator roles, backend and CLI authorization, account
+  lockout/auditing, and OS-custodian administrator recovery.
 - Added machine-profile diagnostics, SQLCipher live-database encryption, authenticated
   managed-file and persistent-log encryption, and OS-vault key custody.
 - Added user-configured disaster recovery kits, automatic encrypted external backups,

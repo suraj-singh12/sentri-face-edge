@@ -1,13 +1,15 @@
 # Security
 
-SentriFace Edge is designed as a single-user, localhost-only application. It is
-not a multi-user network service and must not be exposed through a reverse
-proxy, port-forwarding rule, or non-loopback bind.
+SentriFace Edge is designed as a single-machine, localhost-only application with
+local accounts and roles. It is not a network service and must not be exposed
+through a reverse proxy, port-forwarding rule, or non-loopback bind.
 
 Security controls include:
 
 - IPv4 loopback-only binding, Host-header validation, a process-wide outbound socket guard, and rejection of UNC or mapped-network filesystem paths at runtime entry points;
 - rejection of state-changing requests from non-local browser origins;
+- a per-launch browser secret on every API/media request, strict matching of the actual SentriFace origin, and HttpOnly SameSite account sessions;
+- Argon2id password hashing, persistent login lockout, backend-enforced roles, session revocation, and authentication audit records;
 - restrictive browser security headers;
 - request, upload, image-dimension, and backup-import limits;
 - managed-path validation for media and cleanup operations;
@@ -26,8 +28,13 @@ mounted by the operating system can also be indistinguishable from local storage
 Unix-like systems. Do not mount network storage into SentriFace paths, and validate
 installers with outbound firewall rules enabled.
 
-Encrypted storage makes copied database and biometric files unusable without the
-per-installation key. It does not defend against code already running as the same
+Encrypted storage makes copied database, account records, password hashes, and biometric
+files unusable without the per-installation key. The application never stores plaintext
+passwords. An operating-system custodian who can unlock the installation key can use the
+explicit `sentriface-admin-reset` recovery command; this boundary is audited and is why
+SentriFace roles do not replace OS account security.
+
+It does not defend against code already running as the same
 unlocked OS user. Operating-system disk encryption and account access controls
 remain defense-in-depth requirements.
 

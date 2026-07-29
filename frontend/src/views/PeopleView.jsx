@@ -65,6 +65,8 @@ import {
 } from "../utils.js";
 
 export function PeopleView({
+  canEdit = false,
+  canDestroy = false,
   people,
   archivedPeople,
   deletedFaces = [],
@@ -150,7 +152,7 @@ export function PeopleView({
   useEffect(() => {
     resultsRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [safePage]);
-  const toggleFavorite = (person) => onFavorite(person.person_id, !person.favorite);
+  const toggleFavorite = (person) => { if (canEdit) onFavorite(person.person_id, !person.favorite); };
 
   return (
     <Paper withBorder radius="md" p="md" className="people-workspace">
@@ -162,6 +164,8 @@ export function PeopleView({
           onImage={onImage}
           onOpen={onOpen}
           onBack={onBack}
+          canEdit={canEdit}
+          canDestroy={canDestroy}
           onSave={onSave}
           onFavorite={onFavorite}
           onSetRepresentative={onSetRepresentative}
@@ -179,6 +183,7 @@ export function PeopleView({
               archivedPeople={archivedPeople}
               deletedFaces={deletedFaces}
               activeFilter={filter}
+              canDestroy={canDestroy}
               onFilter={setFilter}
               onRefresh={onRefresh}
             />
@@ -335,6 +340,7 @@ function PeopleToolbar({ query, filter, sort, viewMode, onQuery, onFilter, onSor
 }
 
 function PeopleLibrarySidebar({
+  canDestroy,
   people,
   archivedPeople,
   deletedFaces,
@@ -348,7 +354,7 @@ function PeopleLibrarySidebar({
     { key: "withPhotos", label: "With Photos", icon: IconPhoto, count: people.filter((person) => Number(person.embedding_count || 0)).length },
     { key: "withoutPhotos", label: "No Photos", icon: IconUser, count: people.filter((person) => !Number(person.embedding_count || 0)).length },
     { key: "archived", label: "Archived", icon: IconArchive, count: archivedPeople.length },
-    { key: "deleted", label: "Deleted Faces", icon: IconTrash, count: deletedFaces.length },
+    ...(canDestroy ? [{ key: "deleted", label: "Deleted Faces", icon: IconTrash, count: deletedFaces.length }] : []),
   ];
   return (
     <Stack className="people-library-sidebar">
@@ -687,6 +693,8 @@ function isTodayLike(value) {
 }
 
 function PeopleGalleryView({
+  canEdit,
+  canDestroy,
   payload,
   people,
   selectedImage,
@@ -805,15 +813,16 @@ function PeopleGalleryView({
         <Group gap="xs">
           {!archived && (
             <>
-              <Button size="xs" variant="default" leftSection={<IconPhoto size={14} />} onClick={() => changeTab("photos")}>
+              <Button size="xs" variant="default" leftSection={<IconPhoto size={14} />} disabled={!canEdit && !canDestroy} onClick={() => changeTab("photos")}>
                 Manage faces
               </Button>
-              <Button size="xs" onClick={() => setEditOpen(true)}>Edit profile</Button>
+              <Button size="xs" disabled={!canEdit} onClick={() => setEditOpen(true)}>Edit profile</Button>
               <Button
                 size="xs"
                 variant="light"
                 color="orange"
                 leftSection={<IconArchive size={14} />}
+                disabled={!canDestroy}
                 onClick={() => setManagementDialog("archive")}
               >
                 Archive
@@ -821,7 +830,7 @@ function PeopleGalleryView({
             </>
           )}
           {archived && !mergedInto && (
-            <Button size="xs" leftSection={<IconRestore size={14} />} onClick={() => setManagementDialog("restore")}>
+            <Button size="xs" leftSection={<IconRestore size={14} />} disabled={!canDestroy} onClick={() => setManagementDialog("restore")}>
               Restore
             </Button>
           )}
@@ -842,14 +851,14 @@ function PeopleGalleryView({
               <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => navigator.clipboard?.writeText(payload.person.person_id)}>Copy ID</Menu.Item>
               {!archived && (
                 <>
-                  <Menu.Item leftSection={<IconStar size={14} />} onClick={() => onFavorite(payload.person.person_id, !favorite)}>
+                  <Menu.Item leftSection={<IconStar size={14} />} disabled={!canEdit} onClick={() => onFavorite(payload.person.person_id, !favorite)}>
                     {favorite ? "Remove favorite" : "Add favorite"}
                   </Menu.Item>
-                  <Menu.Item leftSection={<IconSwitchHorizontal size={14} />} onClick={() => setManagementDialog("merge")}>
+                  <Menu.Item leftSection={<IconSwitchHorizontal size={14} />} disabled={!canDestroy} onClick={() => setManagementDialog("merge")}>
                     Merge into another person
                   </Menu.Item>
                   <Menu.Divider />
-                  <Menu.Item color="red" leftSection={<IconArchive size={14} />} onClick={() => setManagementDialog("archive")}>
+                  <Menu.Item color="red" leftSection={<IconArchive size={14} />} disabled={!canDestroy} onClick={() => setManagementDialog("archive")}>
                     Archive person
                   </Menu.Item>
                 </>
@@ -921,6 +930,8 @@ function PeopleGalleryView({
         <Tabs.Panel value="photos">
           <PeopleProfilePhotos
             payload={payload}
+            canEdit={canEdit}
+            canDestroy={canDestroy}
             records={imageRecords}
             selectedRecord={selectedRecord}
             selectedPath={selectedPath}
@@ -1140,6 +1151,8 @@ function PeopleProfileOverview({ profile, selectedPath, imageRecords, latestSigh
 }
 
 function PeopleProfilePhotos({
+  canEdit,
+  canDestroy,
   payload,
   records,
   selectedRecord,
@@ -1203,15 +1216,15 @@ function PeopleProfilePhotos({
               <Button
                 variant="light"
                 leftSection={<IconPhotoStar size={16} />}
-                disabled={selectedRecord.embeddingId === representativeEmbeddingId}
+                disabled={!canEdit || selectedRecord.embeddingId === representativeEmbeddingId}
                 onClick={onSetRepresentative}
               >
                 {selectedRecord.embeddingId === representativeEmbeddingId ? "Current profile photo" : "Set as profile photo"}
               </Button>
-              <Button variant="default" leftSection={<IconSwitchHorizontal size={16} />} onClick={onMove}>
+              <Button variant="default" leftSection={<IconSwitchHorizontal size={16} />} disabled={!canDestroy} onClick={onMove}>
                 Move to another person
               </Button>
-              <Button color="red" variant="light" leftSection={<IconTrash size={16} />} onClick={onDelete}>
+              <Button color="red" variant="light" leftSection={<IconTrash size={16} />} disabled={!canDestroy} onClick={onDelete}>
                 Move face to Deleted Faces
               </Button>
             </Stack>
