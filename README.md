@@ -164,19 +164,39 @@ master key. Stop the server with `Control-C`.
 roles, encrypted storage, backups, restore, and other workflows, but its face
 results are not real recognition results and require no model weights.
 
-To run real ONNX inference from this Git checkout and provide your research
-weights through Model Setup, use:
+To run the real ONNX engine with the existing repository-local
+`models/detector.onnx` and `models/recognizer.onnx`, activate the files once if
+`models/model-usage.json` or `models/calibration.json` is missing:
 
 ```bash
-sentriface-ui --runtime onnx --allow-unpackaged-source-onnx
+DETECTOR="$PWD/models/detector.onnx"
+RECOGNIZER="$PWD/models/recognizer.onnx"
+
+sentriface-models \
+  --models-dir "$PWD/models" \
+  --detector-source "$DETECTOR" \
+  --detector-sha256 "$(shasum -a 256 "$DETECTOR" | awk '{print $1}')" \
+  --recognizer-source "$RECOGNIZER" \
+  --recognizer-sha256 "$(shasum -a 256 "$RECOGNIZER" | awk '{print $1}')" \
+  --usage-basis noncommercial-research \
+  --authorized-by "$USER" \
+  --accept-model-responsibility
 ```
 
-Open `http://127.0.0.1:8765`, sign in, choose the matching Research-only model
-combination, and provide the absolute paths and SHA-256 values for your detector
-and recognizer. Calibration is optional for the supported InsightFace research
-profiles. If an activated model bundle already exists in the default SentriFace
-model directory, recognition starts without asking for the paths again.
+Then launch SentriFace directly against those files:
 
+```bash
+sentriface-ui \
+  --runtime onnx \
+  --allow-unpackaged-source-onnx \
+  --detector-model "$PWD/models/detector.onnx" \
+  --recognizer-model "$PWD/models/recognizer.onnx" \
+  --data-dir "$PWD/data"
+```
+Open `http://127.0.0.1:8765` and sign in. If the one-time activation
+completed successfully, SentriFace loads the real repository-local models
+immediately. If Model Setup appears, verify the two filenames and rerun the
+activation command; calibration is optional.
 This explicit source-only mode keeps the IPv4 loopback listener and application
 outbound-socket guard, but a source-run Python interpreter does not provide the
 production macOS App Sandbox boundary. The flag works only on macOS from a Git
