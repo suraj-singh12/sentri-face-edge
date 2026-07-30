@@ -126,21 +126,61 @@ high   -> 3 workers, batch size 4, larger preprocessing batches
 For i3-class systems, the goal is not to max out the CPU. The goal is to keep
 the UI responsive while recognition happens in the background.
 
-Install from a source checkout (same commands on Windows, macOS, and Linux):
+For a source-development run:
 
 ```bash
-python -m pip install -e .
-sentriface-models \
-  --detector-source path/to/operator-detector.onnx --detector-sha256 <sha256> \
-  --recognizer-source path/to/operator-recognizer.onnx --recognizer-sha256 <sha256> \
-  --calibration-source path/to/calibration.json --calibration-sha256 <sha256> \
-  --usage-basis commercial-license \
-  --authorized-by "Customer Administrator" \
-  --organization "Customer Organization" \
-  --licensor "Model Supplier" \
-  --license-reference "Agreement or invoice reference" \
-  --accept-model-responsibility
-sentriface-ui
+python -m pip install -e ".[test]"
+sentriface-ui --runtime dev
+```
+
+### Run the `pre-packaging` branch on macOS
+
+The source checkout supports Python 3.11 or 3.12. Install Git and a matching
+Python from python.org first; Node.js is needed only to rebuild the frontend.
+The commands below create an isolated environment and use a separate
+development data directory:
+
+```bash
+git clone git@github.com:suraj-singh12/sentri-face-edge.git
+cd sentri-face-edge
+git switch pre-packaging
+
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[test]"
+
+sentriface-ui \
+  --runtime dev \
+  --data-dir "$HOME/Library/Application Support/SentriFace-Dev"
+```
+
+Open `http://127.0.0.1:8765`, create the first local administrator account, and
+complete or explicitly defer disaster-recovery setup. macOS may ask for
+permission to use Keychain; SentriFace uses it to protect the installation
+master key. Stop the server with `Control-C`.
+
+`--runtime dev` is deliberately synthetic: it exercises the UI, accounts,
+roles, encrypted storage, backups, restore, and other workflows, but its face
+results are not real recognition results and require no model weights.
+
+Real ONNX research-model startup is fail-closed on macOS unless SentriFace is a
+dedicated signed application carrying
+`packaging/macos/SentriFace.entitlements`. Those entitlements enable App
+Sandbox and loopback server access while omitting network-client access. A
+source-run Python interpreter does not satisfy that boundary. The
+`pre-packaging` branch does not yet contain a signed macOS `.app` builder, so do
+not weaken or bypass this check to run research weights from source.
+
+To run the available automated checks:
+
+```bash
+python -m pytest -q
+
+# Only needed when rebuilding or testing the frontend:
+npm --prefix frontend ci
+npm --prefix frontend test
+npm --prefix frontend run build
 ```
 
 HNSW acceleration is optional: `pip install -e ".[index]"` when a native
@@ -148,9 +188,9 @@ wheel is available. SentriFace otherwise uses the synchronized linear index with
 the same recognition behavior; the Profile view reports the active backend.
 
 For an explicit project-local development database, run
-`python -m sentriface.api_server --data-dir data`. A normal installed launch
-uses a stable per-user application directory instead of whichever directory the
-terminal happens to be in. Override it with `--data-dir` or
+`python -m sentriface.api_server --runtime dev --data-dir data`. A normal
+installed launch uses a stable per-user application directory instead of
+whichever directory the terminal happens to be in. Override it with `--data-dir` or
 `SENTRIFACE_DATA_DIR`; override model storage with `SENTRIFACE_MODEL_DIR`.
 
 Then open `http://127.0.0.1:8765`. The server rejects non-loopback binds and
@@ -158,12 +198,13 @@ foreign Host headers. ONNX is the default; use `--runtime dev` only for explicit
 testing. `sentriface-models` never downloads weights. It copies only local,
 operator-supplied files after SHA-256 verification and writes a hash-bound usage
 declaration. ONNX startup fails closed if that declaration is missing or stale;
-research-only declarations produce a persistent UI warning. When ONNX files are missing,
-invalid, replaced, or deleted, the server remains available only for signed-in model
-setup and fails closed for recognition/data operations. After login, administrators
-choose a supported Research-only or Commercial combination, provide absolute local
-paths and SHA-256 values for the detector, recognizer, and calibration, and activate
-the verified bundle without any network access. The UI
+research-only declarations produce a persistent UI warning. When ONNX files are
+missing, invalid, replaced, or deleted, the server remains available only for
+signed-in model setup and fails closed for recognition/data operations. After
+login, administrators choose a supported Research-only or Commercial
+combination, provide absolute local paths and SHA-256 values for the detector
+and recognizer, optionally provide a custom calibration file, and activate the
+verified bundle without any network access. The UI
 prints debug events to the terminal and keeps the latest events visible in the
 Debug tab.
 
@@ -277,7 +318,15 @@ Tune strictness and CPU load without editing code:
 python -m sentriface.cli --username USERNAME --runtime onnx --max-image-edge 720 --min-quality-score 0.60 recognize path/to/image.jpg
 ```
 
-The backend treats cosine similarity as a score, never as an identity probability. ONNX startup requires a hash-bound `calibration.json` beside the recognizer, with thresholds derived from a representative validation dataset and declared target false-match rate. Labels use those model-specific thresholds. `min-quality-score` controls whether a face may be added, and `max-image-edge` controls how aggressively images are downscaled before detection.
+The backend treats cosine similarity as a score, never as an identity
+probability. ONNX startup requires a hash-bound `calibration.json` beside the
+recognizer. Model setup generates this file from built-in thresholds when a
+custom calibration is omitted; supported InsightFace research profiles selected
+in the UI use the accepted provider baseline. A custom file can instead record
+thresholds derived from a representative validation dataset and target false-match
+rate. Labels use the active model-specific thresholds. `min-quality-score` controls
+whether a face may be added, and `max-image-edge` controls how aggressively
+images are downscaled before detection.
 
 Run with development placeholders:
 

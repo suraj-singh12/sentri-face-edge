@@ -22,8 +22,10 @@ supported combinations in two columns:
 
 Compatibility means only that SentriFace can execute the detector/recognizer
 interfaces. It is not an endorsement or a grant of model rights. Every selection
-requires absolute local paths and SHA-256 values for `detector.onnx`,
-`recognizer.onnx`, and `calibration.json`. Commercial declarations additionally
+requires absolute local paths and SHA-256 values for `detector.onnx` and
+`recognizer.onnx`. A custom `calibration.json` and its SHA-256 are optional;
+SentriFace writes hash-bound built-in thresholds when they are omitted. Commercial
+declarations additionally
 require the model licensor and entitlement reference; permissive declarations
 require the model license name.
 
@@ -48,6 +50,9 @@ sentriface-models \
   --license-reference "Agreement or invoice reference" \
   --accept-model-responsibility
 ```
+
+Omit both calibration options to use the generated hash-bound defaults. Supply
+them together when using a custom validation calibration.
 
 For non-commercial research only, use `--usage-basis
 noncommercial-research`, `--authorized-by`, and
