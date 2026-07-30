@@ -2,6 +2,13 @@
 
 SentriFace Edge is a CPU-first, fully offline face identification engine. It is designed for low-end Windows, macOS, and Linux machines, including i3-class CPUs without a GPU.
 
+Production ONNX startup is fail-closed unless an active OS policy prevents the
+SentriFace process from initiating non-loopback network connections. Windows
+uses an executable-bound outbound firewall rule, macOS uses signed App Sandbox
+entitlements without the network-client capability, and Linux uses a systemd
+IP firewall allowing only localhost. See `packaging/README.md`. The in-process
+socket guard remains enabled as defense in depth.
+
 The project goal is simple: keep the face system modular and controllable without turning it into a pile of local web services.
 
 Release and trust documentation: [Privacy](PRIVACY.md), [Security](SECURITY.md),

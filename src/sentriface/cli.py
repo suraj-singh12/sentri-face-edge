@@ -22,6 +22,7 @@ from sentriface.hardware import assess_hardware
 from sentriface.models import PersonMatch
 from sentriface.paths import default_data_dir, default_model_dir
 from sentriface.offline_guard import install_offline_guard, require_local_path
+from sentriface.os_network_policy import OsNetworkPolicyError, require_os_network_policy
 from sentriface.storage.sqlite_store import SQLiteIdentityStore
 from sentriface.secure_storage import StorageSecurityError, load_or_create_master_key, protect_existing_managed_data
 
@@ -318,6 +319,11 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    if args.runtime == "onnx":
+        try:
+            require_os_network_policy()
+        except OsNetworkPolicyError as exc:
+            return _emit_error(args, str(exc))
     install_offline_guard()
 
     try:

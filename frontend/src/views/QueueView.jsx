@@ -412,7 +412,7 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
                           <Group gap="sm" mt="sm">
                             <Text size="xs" c="dimmed">Suggested identity</Text>
                             <Text size="sm" fw={700}>{best && !isNewPersonSuggestion(best) ? best.name : "Unknown person"}</Text>
-                            {best && <Badge color={display.color} variant="outline">similarity {score.toFixed(3)}</Badge>}
+                            {best && <Badge color={display.color} variant="outline">{display.badge}</Badge>}
                           </Group>
                         </Box>
                       </Group>
@@ -847,9 +847,9 @@ function QueueSuggestedMatch({ best, face, onCompare }) {
           <Box>
             <Group justify="space-between" align="flex-start" wrap="nowrap">
               <Text size="xl" fw={900}>{known ? best.name : "Unknown person"}</Text>
-              {best && <Badge color={display.color} size="lg">{best.score.toFixed(3)}</Badge>}
+              {best && <Badge color={display.color} size="lg">{display.badge}</Badge>}
             </Group>
-            <Text size="xs" c="dimmed" mt={4}>{known ? `ID ${best.person_id}` : "No similarity above the match threshold"}</Text>
+            <Text size="xs" c="dimmed" mt={4}>{known ? `ID ${best.person_id}` : "No match found"}</Text>
           </Box>
           {known && <Button variant="default" fullWidth leftSection={<IconArrowsHorizontal size={17} />} onClick={onCompare}>View reference photos</Button>}
         </Stack>
@@ -867,7 +867,7 @@ function QueueCompareOverview({ best, faces, references, onFocusIncoming, onFocu
             <ThemeIcon size={42} radius="xl" color="teal"><IconUsers size={21} /></ThemeIcon>
             <Box><Text fw={900}>{best?.name}</Text><Text size="xs" c="dimmed">{references.length} saved reference photo{references.length === 1 ? "" : "s"}</Text></Box>
           </Group>
-          <Badge color={matchDisplay(best).color} size="lg">similarity {(best?.score || 0).toFixed(3)}</Badge>
+          <Badge color={matchDisplay(best).color} size="lg">{matchDisplay(best).badge}</Badge>
         </Group>
       </Card>
       <Grid gutter="xl" align="center">

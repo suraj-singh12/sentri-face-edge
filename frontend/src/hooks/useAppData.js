@@ -81,16 +81,20 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const configureRecovery = async (destination) => {
     if (!canRecovery) return null;
     const result = await apiPost("/api/recovery/configure", { destination });
-    setProfile((current) => ({ ...current, recovery: {
-      configured: result.configured,
-      destination: result.destination,
-      destination_available: result.destination_available,
-      recovery_kit_present: result.recovery_kit_present,
-      last_external_backup: result.last_external_backup,
-      last_external_backup_path: result.last_external_backup_path,
-      external_backup_count: result.external_backup_count,
-      external_retention_limit: result.external_retention_limit,
-    } }));
+    setProfile((current) => ({
+      ...current,
+      recovery: {
+        configured: result.configured,
+        destination: result.destination,
+        destination_available: result.destination_available,
+        recovery_kit_present: result.recovery_kit_present,
+        last_external_backup: result.last_external_backup,
+        last_external_backup_path: result.last_external_backup_path,
+        external_backup_count: result.external_backup_count,
+        external_retention_limit: result.external_retention_limit,
+      },
+      recovery_readiness: result.readiness || current?.recovery_readiness,
+    }));
     showToast(
       result.initial_backup_error ? `Recovery kit saved, but the first backup failed: ${result.initial_backup_error}` : "Automatic encrypted disaster recovery is configured",
       result.initial_backup_error ? "yellow" : "teal",

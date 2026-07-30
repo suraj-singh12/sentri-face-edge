@@ -31,7 +31,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 DELETED_FACE_RETENTION_DAYS = 30
 
 
@@ -103,6 +103,9 @@ class SQLiteIdentityStore:
             if version == 10:
                 _migrate_10_to_11(conn)
                 version = 11
+            if version == 11:
+                _migrate_11_to_12(conn)
+                version = 12
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -2002,6 +2005,21 @@ def _migrate_10_to_11(conn: sqlite3.Connection) -> None:
         """
     )
 
+
+def _migrate_11_to_12(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            updated_by_user_id TEXT,
+            FOREIGN KEY(updated_by_user_id) REFERENCES app_users(user_id)
+        );
+
+        PRAGMA user_version = 12;
+        """
+    )
 
 def _existing_person_operation(
     conn: sqlite3.Connection,

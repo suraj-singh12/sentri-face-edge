@@ -5,6 +5,7 @@ import { IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icon
 
 import { AuthGate } from "./components/AuthGate.jsx";
 import { ModelGate } from "./components/ModelGate.jsx";
+import { RecoveryGate } from "./components/RecoveryGate.jsx";
 import { VIEWS } from "./constants.js";
 import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
 import { profileLine, tabLabel } from "./utils.js";
@@ -25,7 +26,13 @@ export default function SentriFaceApp() {
       }}
     >
       <Notifications position="bottom-right" />
-      <AuthGate>{(auth) => <ModelGate user={auth.user} logout={auth.logout}><SentriFaceShell {...auth} /></ModelGate>}</AuthGate>
+      <AuthGate>{(auth) => (
+        <ModelGate user={auth.user} logout={auth.logout}>
+          <RecoveryGate user={auth.user} logout={auth.logout}>
+            <SentriFaceShell {...auth} />
+          </RecoveryGate>
+        </ModelGate>
+      )}</AuthGate>
     </MantineProvider>
   );
 }
@@ -103,7 +110,12 @@ function SentriFaceShell({ user, logout, changePassword }) {
             {state.connectionError}. Check that the local server is running, then use Reload app data.
           </Alert>
         ) : null}
-        {state.profile?.runtime === "dev" ? (
+        {state.profile && !state.profile.recovery_readiness?.ready ? (
+          <Alert color="red" title="Disaster recovery is not ready" mb="md">
+            This machine has no currently usable external recovery copy. Data may be unrecoverable after disk failure,
+            theft, ransomware, or loss of the machine. An administrator can configure recovery from Advanced.
+          </Alert>
+        ) : null}        {state.profile?.runtime === "dev" ? (
           <Alert color="yellow" title="Development inference is active" mb="md">
             Results are synthetic and must not be trusted as real face recognition.
           </Alert>

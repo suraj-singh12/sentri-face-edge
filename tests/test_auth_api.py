@@ -69,6 +69,54 @@ class AuthenticationApiTest(unittest.TestCase):
             backup_id = created["backup"]["backup_id"]
             self.assertEqual(self._request(server, "DELETE", f"/api/backups/{backup_id}?confirm={backup_id}", cookie=technician_cookie)[0], 403)
 
+    def test_disaster_recovery_requires_explicit_administrator_acknowledgement(self) -> None:
+        with self._running_server() as server:
+            admin, _ = server.auth.signup_initial("owner", "Machine Owner", PASSWORD)
+            server.auth.create_user(admin, "viewer", "Viewer", "viewer password long enough", ["viewer"])
+            admin_cookie = self._login_cookie(server, "owner", PASSWORD)
+            viewer_cookie = self._login_cookie(server, "viewer", "viewer password long enough")
+
+            status, readiness, _ = self._request(server, "GET", "/api/recovery/readiness", cookie=viewer_cookie)
+            self.assertEqual(status, 200)
+            self.assertFalse(readiness["ready"])
+            self.assertFalse(readiness["acknowledged"])
+            self.assertNotIn("destination", readiness)
+
+            status, _, _ = self._request(
+                server,
+                "POST",
+                "/api/recovery/acknowledge",
+                {"acknowledge_risk": True, "acknowledgement_version": readiness["acknowledgement_version"]},
+                cookie=viewer_cookie,
+            )
+            self.assertEqual(status, 403)
+
+            status, payload, _ = self._request(
+                server,
+                "POST",
+                "/api/recovery/acknowledge",
+                {"acknowledge_risk": False, "acknowledgement_version": readiness["acknowledgement_version"]},
+                cookie=admin_cookie,
+            )
+            self.assertEqual(status, 422)
+            self.assertEqual(payload["reason"], "acknowledgement_required")
+
+            status, payload, _ = self._request(
+                server,
+                "POST",
+                "/api/recovery/acknowledge",
+                {"acknowledge_risk": True, "acknowledgement_version": readiness["acknowledgement_version"]},
+                cookie=admin_cookie,
+            )
+            self.assertEqual(status, 200)
+            self.assertTrue(payload["readiness"]["acknowledged"])
+            self.assertFalse(payload["readiness"]["ready"])
+            self.assertEqual(payload["readiness"]["acknowledged_by"], "Machine Owner")
+
+            status, profile, _ = self._request(server, "GET", "/api/profile", cookie=viewer_cookie)
+            self.assertEqual(status, 200)
+            self.assertTrue(profile["recovery_readiness"]["acknowledged"])
+            self.assertNotIn("recovery", profile)
     def test_lockout_and_last_administrator_protection(self) -> None:
         with self._running_server() as server:
             admin, _ = server.auth.signup_initial("owner", "Owner", PASSWORD)

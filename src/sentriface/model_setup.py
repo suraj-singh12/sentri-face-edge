@@ -25,6 +25,12 @@ MODEL_USAGE_BASES = (
     "permissive-license",
 )
 
+INSIGHTFACE_RESEARCH_PROFILES = frozenset({
+    "buffalo-s-research",
+    "buffalo-l-research",
+    "buffalo-m-research",
+})
+
 MODEL_COMBINATIONS = {
     "research": [
         {
@@ -221,6 +227,7 @@ def install_local_model_bundle(
     recognizer_sha256: str,
     calibration_source: Path | None = None,
     calibration_sha256: str | None = None,
+    calibration_profile: str | None = None,
     usage_basis: str,
     authorized_by: str,
     organization: str = "",
@@ -288,21 +295,43 @@ def install_local_model_bundle(
             calibration_source.stat().st_size,
         )
     else:
-        _write_default_similarity_thresholds(calibration_target, recognizer_digest)
+        _write_default_similarity_thresholds(
+            calibration_target,
+            recognizer_digest,
+            calibration_profile=calibration_profile,
+        )
     return declaration
 
 
 def _write_default_similarity_thresholds(
     calibration_path: Path,
     recognizer_sha256: str,
+    *,
+    calibration_profile: str | None = None,
 ) -> None:
-    """Write hash-bound legacy thresholds without claiming dataset calibration."""
+    """Write hash-bound defaults without inventing dataset or FMR provenance."""
+    accepted_provider_baseline = calibration_profile in INSIGHTFACE_RESEARCH_PROFILES
     payload = {
         "schema_version": 1,
         "recognizer_sha256": recognizer_sha256,
-        "calibration_method": "sentriface-default",
-        "calibration_status": "not-validation-calibrated",
+        "calibration_method": (
+            "insightface-provider-baseline"
+            if accepted_provider_baseline
+            else "sentriface-default"
+        ),
+        "calibration_status": (
+            "accepted-provider-baseline"
+            if accepted_provider_baseline
+            else "not-validation-calibrated"
+        ),
+        "calibration_profile": calibration_profile,
+        "provider": "InsightFace" if accepted_provider_baseline else None,
         "note": (
+            "Operationally accepted baseline for this known InsightFace research "
+            "model. These similarity tiers are not probabilities and make no "
+            "target false-match-rate claim."
+            if accepted_provider_baseline
+            else
             "Built-in similarity thresholds. Validate and replace these thresholds "
             "for the deployment population and target false-match rate."
         ),
@@ -346,9 +375,13 @@ def load_similarity_calibration(
     if expected_digest != actual_digest.casefold():
         raise ModelSetupError("Similarity calibration does not match the recognizer model")
     method = str(payload.get("calibration_method") or "validation").strip()
+    baseline_without_fmr = method in {
+        "sentriface-default",
+        "insightface-provider-baseline",
+    }
     dataset = str(payload.get("representative_dataset") or "").strip()
     target_fmr: float | None = None
-    if method != "sentriface-default":
+    if not baseline_without_fmr:
         try:
             target_fmr = float(payload.get("target_false_match_rate", 0))
         except (TypeError, ValueError) as exc:
@@ -357,7 +390,7 @@ def load_similarity_calibration(
             ) from exc
     thresholds = payload.get("thresholds")
     if (
-        method != "sentriface-default"
+        not baseline_without_fmr
         and (not dataset or target_fmr is None or not 0 < target_fmr <= 1)
     ):
         raise ModelSetupError("Similarity calibration provenance is incomplete")

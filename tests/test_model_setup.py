@@ -215,6 +215,35 @@ class ModelSetupTest(unittest.TestCase):
                 installed["thresholds"],
                 {"possible": 0.4, "likely": 0.5, "strong": 0.6},
             )
+    def test_known_insightface_research_profile_accepts_provider_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            detector = root / "detector.onnx"
+            recognizer = root / "recognizer.onnx"
+            detector.write_bytes(b"detector")
+            recognizer.write_bytes(b"recognizer")
+
+            install_local_model_bundle(
+                root / "models",
+                detector_source=detector,
+                detector_sha256=hashlib.sha256(detector.read_bytes()).hexdigest(),
+                recognizer_source=recognizer,
+                recognizer_sha256=hashlib.sha256(recognizer.read_bytes()).hexdigest(),
+                calibration_profile="buffalo-l-research",
+                usage_basis="noncommercial-research",
+                authorized_by="Research Operator",
+            )
+
+            installed = load_similarity_calibration(
+                root / "models" / "calibration.json",
+                root / "models" / "recognizer.onnx",
+            )
+            self.assertEqual(installed["provider"], "InsightFace")
+            self.assertEqual(
+                installed["calibration_status"],
+                "accepted-provider-baseline",
+            )
+            self.assertIsNone(installed["target_false_match_rate"])
     def test_bundle_rejects_calibration_for_another_recognizer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

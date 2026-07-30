@@ -1,0 +1,22 @@
+[Unit]
+Description=SentriFace Edge offline service
+After=local-fs.target
+
+[Service]
+Type=simple
+User=sentriface
+Group=sentriface
+ExecStart=/opt/sentriface/bin/sentriface-ui --host 127.0.0.1 --port 8765 --data-dir /var/lib/sentriface --detector-model /opt/sentriface/models/detector.onnx --recognizer-model /opt/sentriface/models/recognizer.onnx
+Restart=on-failure
+RestartSec=3
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/sentriface
+
+[Install]
+WantedBy=multi-user.target

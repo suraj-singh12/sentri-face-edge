@@ -121,7 +121,10 @@ export function MachineProfilePanel({ profile, onConfigureRecovery, canConfigure
         ["Persistent logs", profile.storage_security?.persistent_logs_encrypted ? "Encrypted records" : "Not encrypted"],
         ["Master key", profile.storage_security?.key_protection || "Unknown"],
         ["Server listener", profile.offline_enforcement?.loopback_only ? "IPv4 loopback only" : "Unknown"],
-        ["Outbound sockets", profile.offline_enforcement?.outbound_socket_guard ? "Blocked except loopback" : "Guard unavailable"],
+        ["OS network boundary", profile.offline_enforcement?.os_network_enforced
+          ? `Enforced (${profile.offline_enforcement.os_network_mechanism})`
+          : "Not verified — real-model startup is blocked"],
+        ["Application socket guard", profile.offline_enforcement?.outbound_socket_guard ? "Blocked except loopback" : "Guard unavailable"],
       ]} />
       <Card withBorder radius="md">
         <Text fw={800} mb="md">Local storage</Text>

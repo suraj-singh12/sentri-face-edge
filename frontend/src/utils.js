@@ -24,10 +24,10 @@ export function currentDateTimeParts() {
 
 export function recognitionText(match) {
   if (!match || !match.is_known) return "New Person";
-  if (["strong", "duplicate"].includes(match.classification)) return `${match.name} - strong similarity`;
-  if (match.classification === "likely") return `${match.name} - moderate similarity`;
-  if (match.classification === "possible") return `${match.name} - possible similarity`;
-  return `${match.name} - weak similarity`;
+  if (["strong", "duplicate"].includes(match.classification)) return `${match.name} - Strong Match`;
+  if (match.classification === "likely") return `${match.name} - Likely Match`;
+  if (match.classification === "possible") return `${match.name} - Maybe Match`;
+  return `${match.name} - No Match`;
 }
 
 export function hasCertainMatch(match) {
@@ -45,11 +45,11 @@ export function scoreColor(match) {
 export function matchDisplay(match) {
   switch (match?.classification) {
     case "duplicate":
-    case "strong": return { badge: "Strong Similarity", color: "green", guidance: "Above the calibrated strong-match threshold" };
-    case "likely": return { badge: "Moderate Similarity", color: "blue", guidance: "Review recommended" };
-    case "possible": return { badge: "Possible Similarity", color: "yellow", guidance: "Manual review required" };
-    case "weak": return { badge: "Weak Similarity", color: "orange", guidance: "Below the calibrated match threshold" };
-    default: return { badge: "No Match", color: "red", guidance: "No similarity above the calibrated match threshold" };
+    case "strong": return { badge: "Strong Match", color: "green", guidance: "Strong match based on the calibrated model setting" };
+    case "likely": return { badge: "Likely Match", color: "blue", guidance: "Review recommended" };
+    case "possible": return { badge: "Maybe Match", color: "yellow", guidance: "Manual review required" };
+    case "weak": return { badge: "No Match", color: "orange", guidance: "Treat as a new or unknown person" };
+    default: return { badge: "No Match", color: "red", guidance: "Treat as a new or unknown person" };
   }
 }
 export function qualityColor(status) {

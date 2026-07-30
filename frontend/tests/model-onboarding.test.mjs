@@ -12,6 +12,7 @@ test("signed-in model onboarding presents research and commercial local-only pat
   assert.match(gate, /SHA-256/);
   assert.match(gate, /Calibration threshold file \(optional\)/);
   assert.match(gate, /built-in thresholds/);
+  assert.match(gate, /accepted InsightFace provider baseline/);
   assert.match(gate, /Example values for this selection/);
   assert.match(gate, /Download setup example/);
   assert.match(gate, /Download calibration example/);

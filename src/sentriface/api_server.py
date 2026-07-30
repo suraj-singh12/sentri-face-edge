@@ -23,7 +23,14 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
-from sentriface.auth import AUTH_COOKIE_NAME, AuthError, AuthService, AuthUser, auth_status_payload
+from sentriface.auth import (
+    AUTH_COOKIE_NAME,
+    RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION,
+    AuthError,
+    AuthService,
+    AuthUser,
+    auth_status_payload,
+)
 from sentriface.backup_service import BackupError, BackupRecord, BackupService
 from sentriface.cli import build_dev_engine, build_onnx_engine
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
@@ -35,6 +42,12 @@ from sentriface.recovery import RecoveryError, RecoveryService, recover_master_k
 from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key
 from sentriface.secure_files import read_protected_bytes, write_protected_bytes
 from sentriface.offline_guard import install_offline_guard, offline_guard_installed, require_local_path
+from sentriface.os_network_policy import (
+    OsNetworkPolicyError,
+    OsNetworkPolicyStatus,
+    inspect_os_network_policy,
+    require_os_network_policy,
+)
 from sentriface.model_setup import MODEL_COMBINATIONS, install_local_model_bundle
 from sentriface.models import (
     EmbeddingRecord,
@@ -115,7 +128,7 @@ def _required_capability(method: str, path: str) -> str | None:
         return "backup_delete" if path.startswith("/api/backups/") else "add"
     if path in {"/api/backups/restore", "/api/backups/import"}:
         return "database_restore"
-    if path == "/api/recovery/configure":
+    if path in {"/api/recovery/configure", "/api/recovery/acknowledge"}:
         return "recovery"
     if path.startswith("/api/backups/") and path.endswith("/encrypted-download"):
         return "backups"
@@ -201,6 +214,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         debug: bool = True,
         model_ready: bool = True,
         model_error: str = "",
+        os_network_policy: OsNetworkPolicyStatus | None = None,
     ) -> None:
         super().__init__(server_address, SentriFaceApiHandler)
         self.engine = engine
@@ -209,6 +223,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.runtime = runtime
         self.model_ready = model_ready
         self.model_error = model_error
+        self.os_network_policy = os_network_policy
         self.model_fingerprints: dict[str, tuple[int, int]] = {}
         declaration = getattr(engine, "model_usage", None)
         self.model_usage = declaration if isinstance(declaration, dict) else {
@@ -249,6 +264,16 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             daemon=True,
         )
         self.maintenance_thread.start()
+        self.network_policy_violation = False
+        self.network_policy_stop = threading.Event()
+        self.network_policy_thread = None
+        if self.os_network_policy is not None:
+            self.network_policy_thread = threading.Thread(
+                target=self._network_policy_loop,
+                name="sentriface-os-network-policy",
+                daemon=True,
+            )
+            self.network_policy_thread.start()
 
     def _model_files(self) -> tuple[Path, ...]:
         model_dir = self.config.detector_model.parent
@@ -304,6 +329,27 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             "usage": self.model_usage if ready else None,
         }
 
+    def recovery_readiness(self) -> dict[str, Any]:
+        status = self.recovery.status()
+        acknowledgement = self.auth.recovery_risk_acknowledgement() or {}
+        ready = bool(
+            status.get("configured")
+            and status.get("destination_available")
+            and status.get("recovery_kit_present")
+            and int(status.get("external_backup_count") or 0) > 0
+        )
+        acknowledged = acknowledgement.get("version") == RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION
+        return {
+            "ready": ready,
+            "configured": bool(status.get("configured")),
+            "destination_available": bool(status.get("destination_available")),
+            "recovery_kit_present": bool(status.get("recovery_kit_present")),
+            "external_backup_present": int(status.get("external_backup_count") or 0) > 0,
+            "acknowledged": acknowledged,
+            "acknowledged_at": acknowledgement.get("acknowledged_at", ""),
+            "acknowledged_by": acknowledgement.get("acknowledged_by", ""),
+            "acknowledgement_version": RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION,
+        }
     def activate_installed_models(self, model_dir: Path) -> None:
         config = replace(
             self.config,
@@ -326,6 +372,15 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             recognizer=str(self.config.recognizer_model),
         )
     def process_request(self, request: Any, client_address: Any) -> None:
+        if self.network_policy_violation:
+            try:
+                request.sendall(
+                    b"HTTP/1.1 503 Service Unavailable\r\n"
+                    b"Connection: close\r\nContent-Length: 0\r\n\r\n"
+                )
+            finally:
+                self.shutdown_request(request)
+            return
         if not self.request_semaphore.acquire(timeout=0.25):
             try:
                 request.sendall(
@@ -544,6 +599,28 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             if self.maintenance_stop.wait(3600):
                 break
 
+    def _network_policy_loop(self) -> None:
+        while not self.network_policy_stop.wait(30):
+            try:
+                status = inspect_os_network_policy()
+            except Exception as exc:  # Fail closed if OS inspection itself breaks.
+                status = OsNetworkPolicyStatus(
+                    False,
+                    "inspection-failed",
+                    str(exc).strip("'") or "OS network policy inspection failed",
+                )
+            self.os_network_policy = status
+            if status.enforced:
+                continue
+            self.network_policy_violation = True
+            self.log_event(
+                "os-network-policy-lost",
+                mechanism=status.mechanism,
+                error=status.detail,
+            )
+            self.shutdown()
+            break
+
     def server_close(self) -> None:
         with self.queue_progress_lock:
             for cancellation in self.queue_cancellations.values():
@@ -554,6 +631,12 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             maintenance_stop.set()
         if maintenance_thread is not None and maintenance_thread.is_alive():
             maintenance_thread.join(timeout=2)
+        network_policy_stop = getattr(self, "network_policy_stop", None)
+        network_policy_thread = getattr(self, "network_policy_thread", None)
+        if network_policy_stop is not None:
+            network_policy_stop.set()
+        if network_policy_thread is not None and network_policy_thread.is_alive():
+            network_policy_thread.join(timeout=2)
         super().server_close()
 
 
@@ -791,6 +874,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/profile":
                 self._json(self._profile())
                 return
+            if parsed.path == "/api/recovery/readiness":
+                self._json(self.server.recovery_readiness())
+                return
             if parsed.path == "/api/recovery":
                 self._json(self.server.recovery.status())
                 return
@@ -870,7 +956,6 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     events = list(self.server.events[-80:])
                 self._json({"events": events})
                 return
-
             if parsed.path == "/api/backups":
                 self._json({"backups": [_backup(record) for record in self.server.backups.list_backups()]})
                 return
@@ -1038,6 +1123,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     recognizer_sha256=_required(payload, "recognizer_sha256"),
                     calibration_source=calibration_source,
                     calibration_sha256=calibration_sha256 or None,
+                    calibration_profile=choice_id,
                     usage_basis=choice["usage_basis"],
                     authorized_by=self.auth_user.display_name or self.auth_user.username,
                     organization=str(payload.get("organization") or ""),
@@ -1109,8 +1195,25 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 except Exception as exc:  # Keep the one-time recovery code visible even if the first export fails.
                     result["initial_backup_error"] = str(exc)
                     self.server.log_event("automatic-recovery-backup-failed", error=str(exc))
+                result["readiness"] = self.server.recovery_readiness()
                 self.server.log_event("disaster-recovery-configured", destination=result["destination"])
                 self._json(result)
+                return
+            if parsed.path == "/api/recovery/acknowledge":
+                if payload.get("acknowledge_risk") is not True:
+                    raise InputValidationError(
+                        "Explicit disaster-recovery risk acknowledgement is required",
+                        "acknowledgement_required",
+                    )
+                self.server.auth.acknowledge_recovery_risk(
+                    self.auth_user,
+                    str(payload.get("acknowledgement_version") or ""),
+                )
+                self.server.log_event(
+                    "disaster-recovery-risk-acknowledged",
+                    actor=self.auth_user.username,
+                )
+                self._json({"readiness": self.server.recovery_readiness()})
                 return
             if parsed.path == "/api/backups":
                 record = self.server.backups.create_backup()
@@ -1813,6 +1916,15 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             "offline_enforcement": {
                 "loopback_only": True,
                 "outbound_socket_guard": offline_guard_installed(),
+                "os_network_enforced": bool(
+                    self.server.os_network_policy
+                    and self.server.os_network_policy.enforced
+                ),
+                "os_network_mechanism": (
+                    self.server.os_network_policy.mechanism
+                    if self.server.os_network_policy
+                    else "not-verified"
+                ),
             },
             "storage_security": {
                 "database_encrypted": database_is_encrypted(config.db_path),
@@ -1822,6 +1934,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 "key_protection": "operating-system-vault" if config.storage_key else "none",
             },
             "recovery": self.server.recovery.status(),
+            "recovery_readiness": self.server.recovery_readiness(),
             "index": self.server.engine.index_status,
             "high_confidence": config.high_confidence,
             "medium_confidence": config.medium_confidence,
@@ -2036,6 +2149,7 @@ def create_server(
     detector_model: Path | None = None,
     recognizer_model: Path | None = None,
     debug: bool = True,
+    os_network_policy: OsNetworkPolicyStatus | None = None,
 ) -> SentriFaceApiServer:
     install_offline_guard()
     normalized_host = host.strip().casefold()
@@ -2085,6 +2199,7 @@ def create_server(
         debug=debug,
         model_ready=model_ready,
         model_error=model_error,
+        os_network_policy=os_network_policy,
     )
     server.log_event("startup", runtime=runtime, data_dir=str(data_dir), address=f"http://{host}:{server.server_port}")
     if not model_ready:
@@ -2107,6 +2222,11 @@ def main() -> int:
     from sentriface.logging_config import setup_logging
 
     try:
+        os_network_policy = (
+            require_os_network_policy()
+            if args.runtime == "onnx"
+            else None
+        )
         require_local_path(args.data_dir)
         if args.recover_kit:
             require_local_path(args.recover_kit)
@@ -2116,6 +2236,7 @@ def main() -> int:
         storage_key = load_or_create_master_key(args.data_dir)
         setup_logging(
             debug=not args.quiet_debug,
+            os_network_policy=os_network_policy,
             log_dir=default_log_dir(args.data_dir),
             storage_key=storage_key,
         )
@@ -2127,12 +2248,20 @@ def main() -> int:
             detector_model=args.detector_model,
             recognizer_model=args.recognizer_model,
             debug=not args.quiet_debug,
+            os_network_policy=os_network_policy,
         )
     except ModelSetupError as exc:
         print(f"SentriFace could not start: {exc}")
         print("Install verified models with: sentriface-models")
         return 2
-    except (SentriFaceError, StorageSecurityError, RecoveryError, OSError, ValueError) as exc:
+    except (
+        SentriFaceError,
+        StorageSecurityError,
+        RecoveryError,
+        OsNetworkPolicyError,
+        OSError,
+        ValueError,
+    ) as exc:
         print(f"SentriFace could not start safely: {exc}")
         return 2
     print(f"SentriFace UI running at http://{args.host}:{server.server_port}")

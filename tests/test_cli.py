@@ -113,7 +113,7 @@ class CliTest(unittest.TestCase):
                 "missing-detector.onnx",
                 "init-db",
             ],
-        ):
+        ), patch("sentriface.cli.require_os_network_policy"):
             with redirect_stdout(output):
                 code = cli.main()
 

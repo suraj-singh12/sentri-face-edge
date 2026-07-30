@@ -26,6 +26,8 @@ MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
 PASSWORD_HASHER = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4, hash_len=32, salt_len=16)
+RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION = "2026-07-30-v1"
+RECOVERY_RISK_SETTING = "recovery_without_disaster_recovery_acknowledgement"
 
 ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
     "viewer": frozenset({"view", "recognize"}),
@@ -290,6 +292,67 @@ class AuthService:
     def role_catalog(self) -> list[dict[str, Any]]:
         return [{"role": role, "description": ROLE_DESCRIPTIONS[role], "capabilities": sorted(capabilities)} for role, capabilities in ROLE_CAPABILITIES.items()]
 
+    def recovery_risk_acknowledgement(self) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (RECOVERY_RISK_SETTING,),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            value = json.loads(row["value"])
+        except (TypeError, json.JSONDecodeError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    def acknowledge_recovery_risk(
+        self,
+        actor: AuthUser,
+        acknowledgement_version: str,
+    ) -> dict[str, Any]:
+        if not actor.has("recovery"):
+            raise AuthError(
+                "Only an administrator may accept the machine-wide disaster-recovery risk",
+                "permission_denied",
+                HTTPStatus.FORBIDDEN,
+            )
+        if acknowledgement_version != RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION:
+            raise AuthError(
+                "The disaster-recovery acknowledgement is missing or out of date",
+                "acknowledgement_required",
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+        acknowledgement = {
+            "version": RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION,
+            "acknowledged_at": _now(),
+            "acknowledged_by_user_id": actor.user_id,
+            "acknowledged_by": actor.display_name or actor.username,
+        }
+        encoded = json.dumps(acknowledgement, sort_keys=True, separators=(",", ":"))
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO app_settings(key, value, updated_at, updated_by_user_id)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(key) DO UPDATE SET
+                       value = excluded.value,
+                       updated_at = excluded.updated_at,
+                       updated_by_user_id = excluded.updated_by_user_id""",
+                (
+                    RECOVERY_RISK_SETTING,
+                    encoded,
+                    acknowledgement["acknowledged_at"],
+                    actor.user_id,
+                ),
+            )
+            self._audit(
+                connection,
+                actor.user_id,
+                actor.user_id,
+                "disaster-recovery-risk-acknowledged",
+                {"version": RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION},
+            )
+        return acknowledgement
     def _issue_session(self, user_id: str) -> str:
         token, now = secrets.token_urlsafe(32), datetime.now(timezone.utc)
         with self._lock:

@@ -190,7 +190,7 @@ export function ModelGate({ user, logout, children }) {
                     onPath={update("calibrationPath")}
                     onDigest={update("calibrationSha256")}
                     placeholder="C:\models\calibration.json"
-                    description="Leave both fields empty to use SentriFace's built-in thresholds. For a custom validation-calibrated file, provide both its path and SHA-256."
+                    description={selected.usage_basis === "noncommercial-research" ? "Leave both fields empty to use the accepted InsightFace provider baseline for this known research model. Custom threshold files remain optional." : "Leave both fields empty to use SentriFace's built-in thresholds. For a custom validation-calibrated file, provide both its path and SHA-256."}
                     required={false}
                   />
                   <Divider label="Usage declaration" labelPosition="left" />
@@ -295,7 +295,7 @@ function SetupExamples({ selected }) {
         <Text size="sm"><Text span fw={700}>Recognizer path:</Text> <code>C:\licensed-models\{recognizerName}</code></Text>
         <Text size="sm"><Text span fw={700}>Each SHA-256:</Text> <code>&lt;64 hexadecimal characters produced from that exact file&gt;</code></Text>
         <Text size="sm"><Text span fw={700}>Usage fields:</Text> {usageExample}</Text>
-        <Text size="sm"><Text span fw={700}>Calibration:</Text> leave both optional fields empty for built-in thresholds, or provide a JSON file shaped like this:</Text>
+        <Text size="sm"><Text span fw={700}>Calibration:</Text> {selected.usage_basis === "noncommercial-research" ? "leave both optional fields empty for the accepted InsightFace provider baseline" : "leave both optional fields empty for built-in thresholds"}, or provide a JSON file shaped like this:</Text>
         <Box
           component="pre"
           m={0}
