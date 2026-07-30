@@ -10,6 +10,7 @@ import os
 import platform
 import secrets
 import shutil
+import sys
 import threading
 import time
 import uuid
@@ -2215,6 +2216,14 @@ def main() -> int:
     parser.add_argument("--detector-model", type=Path)
     parser.add_argument("--recognizer-model", type=Path)
     parser.add_argument("--runtime", choices=("dev", "onnx"), default="onnx")
+    parser.add_argument(
+        "--allow-unpackaged-source-onnx",
+        action="store_true",
+        help=(
+            "Allow real ONNX inference from a macOS Git checkout without the "
+            "packaged App Sandbox boundary; unavailable in packaged builds"
+        ),
+    )
     parser.add_argument("--quiet-debug", action="store_true", help="Disable verbose UI debug logs")
     parser.add_argument("--recover-kit", type=Path, help="Install a disaster-recovery key before startup")
     args = parser.parse_args()
@@ -2222,11 +2231,15 @@ def main() -> int:
     from sentriface.logging_config import setup_logging
 
     try:
-        os_network_policy = (
-            require_os_network_policy()
-            if args.runtime == "onnx"
-            else None
+        os_network_policy = _startup_network_policy(
+            args.runtime,
+            allow_unpacked_macos_source=args.allow_unpackaged_source_onnx,
         )
+        if args.allow_unpackaged_source_onnx and os_network_policy is None:
+            print(
+                "WARNING: macOS source ONNX mode uses the loopback listener and "
+                "application socket guard, but not the packaged App Sandbox boundary."
+            )
         require_local_path(args.data_dir)
         if args.recover_kit:
             require_local_path(args.recover_kit)
@@ -2273,6 +2286,33 @@ def main() -> int:
         server.server_close()
     return 0
 
+
+
+def _startup_network_policy(
+    runtime: str,
+    *,
+    allow_unpacked_macos_source: bool = False,
+    source_root: Path | None = None,
+) -> OsNetworkPolicyStatus | None:
+    if runtime != "onnx":
+        if allow_unpacked_macos_source:
+            raise ValueError(
+                "--allow-unpackaged-source-onnx requires --runtime onnx"
+            )
+        return None
+    if not allow_unpacked_macos_source:
+        return require_os_network_policy()
+    if sys.platform != "darwin":
+        raise ValueError(
+            "--allow-unpackaged-source-onnx is available only on macOS"
+        )
+    checkout = source_root or Path(__file__).resolve().parents[2]
+    if getattr(sys, "frozen", False) or not (checkout / ".git").exists():
+        raise ValueError(
+            "--allow-unpackaged-source-onnx requires an unpackaged Git checkout"
+        )
+    status = inspect_os_network_policy()
+    return status if status.enforced else None
 
 
 def _decode_backup_passphrase(value: str) -> str:

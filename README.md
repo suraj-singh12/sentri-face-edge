@@ -164,13 +164,25 @@ master key. Stop the server with `Control-C`.
 roles, encrypted storage, backups, restore, and other workflows, but its face
 results are not real recognition results and require no model weights.
 
-Real ONNX research-model startup is fail-closed on macOS unless SentriFace is a
-dedicated signed application carrying
-`packaging/macos/SentriFace.entitlements`. Those entitlements enable App
-Sandbox and loopback server access while omitting network-client access. A
-source-run Python interpreter does not satisfy that boundary. The
-`pre-packaging` branch does not yet contain a signed macOS `.app` builder, so do
-not weaken or bypass this check to run research weights from source.
+To run real ONNX inference from this Git checkout and provide your research
+weights through Model Setup, use:
+
+```bash
+sentriface-ui --runtime onnx --allow-unpackaged-source-onnx
+```
+
+Open `http://127.0.0.1:8765`, sign in, choose the matching Research-only model
+combination, and provide the absolute paths and SHA-256 values for your detector
+and recognizer. Calibration is optional for the supported InsightFace research
+profiles. If an activated model bundle already exists in the default SentriFace
+model directory, recognition starts without asking for the paths again.
+
+This explicit source-only mode keeps the IPv4 loopback listener and application
+outbound-socket guard, but a source-run Python interpreter does not provide the
+production macOS App Sandbox boundary. The flag works only on macOS from a Git
+checkout and is rejected by packaged builds. Production ONNX startup remains
+fail-closed unless the dedicated application carries
+`packaging/macos/SentriFace.entitlements`.
 
 To run the available automated checks:
 
