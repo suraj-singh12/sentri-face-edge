@@ -77,8 +77,8 @@ export function ModelGate({ user, logout, children }) {
         detector_sha256: form.detectorSha256,
         recognizer_path: form.recognizerPath,
         recognizer_sha256: form.recognizerSha256,
-        calibration_path: form.calibrationPath,
-        calibration_sha256: form.calibrationSha256,
+        calibration_path: form.calibrationPath || undefined,
+        calibration_sha256: form.calibrationSha256 || undefined,
         organization: form.organization,
         licensor: form.licensor,
         license_reference: form.licenseReference,
@@ -102,7 +102,8 @@ export function ModelGate({ user, logout, children }) {
   const required = Boolean(selected)
     && form.detectorPath && /^[a-f0-9]{64}$/i.test(form.detectorSha256)
     && form.recognizerPath && /^[a-f0-9]{64}$/i.test(form.recognizerSha256)
-    && form.calibrationPath && /^[a-f0-9]{64}$/i.test(form.calibrationSha256)
+    && ((!form.calibrationPath && !form.calibrationSha256)
+      || (form.calibrationPath && /^[a-f0-9]{64}$/i.test(form.calibrationSha256)))
     && form.accepted
     && (selected.usage_basis !== "commercial-license" || (form.licensor && form.licenseReference))
     && (selected.usage_basis !== "permissive-license" || form.licenseName);
@@ -161,17 +162,43 @@ export function ModelGate({ user, logout, children }) {
                   </Group>
                   <Alert color="blue" icon={<IconFolder size={18} />} title="Local files only">Enter absolute paths on this machine. SentriFace never downloads or uploads model files. Verified copies will be installed under {status.models_dir}.</Alert>
                   <Text size="xs" c="dimmed">Checksum tools: Windows <code>Get-FileHash PATH -Algorithm SHA256</code>; macOS/Linux <code>shasum -a 256 PATH</code>.</Text>
+                  <SetupExamples selected={selected} />
                   <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-                    <FileFields title="Detector weights" path={form.detectorPath} digest={form.detectorSha256} onPath={update("detectorPath")} onDigest={update("detectorSha256")} placeholder="C:\models\detector.onnx" />
-                    <FileFields title="Recognizer weights" path={form.recognizerPath} digest={form.recognizerSha256} onPath={update("recognizerPath")} onDigest={update("recognizerSha256")} placeholder="C:\models\recognizer.onnx" />
+                    <FileFields
+                      title="Detector weights"
+                      path={form.detectorPath}
+                      digest={form.detectorSha256}
+                      onPath={update("detectorPath")}
+                      onDigest={update("detectorSha256")}
+                      placeholder="C:\models\detector.onnx"
+                      description={`An actual ONNX detector file from your model supplier${selected.detector_file ? `, normally named ${selected.detector_file} for this package` : ""}.`}
+                    />
+                    <FileFields
+                      title="Recognizer weights"
+                      path={form.recognizerPath}
+                      digest={form.recognizerSha256}
+                      onPath={update("recognizerPath")}
+                      onDigest={update("recognizerSha256")}
+                      placeholder="C:\models\recognizer.onnx"
+                      description={`An actual 512-dimensional ArcFace-compatible ONNX recognizer${selected.recognizer_file ? `, normally named ${selected.recognizer_file} for this package` : ""}.`}
+                    />
                   </SimpleGrid>
-                  <FileFields title="Similarity calibration" path={form.calibrationPath} digest={form.calibrationSha256} onPath={update("calibrationPath")} onDigest={update("calibrationSha256")} placeholder="C:\models\calibration.json" description="Must name the exact recognizer SHA-256, representative dataset, target false-match rate, and calibrated thresholds." />
+                  <FileFields
+                    title="Calibration threshold file (optional)"
+                    path={form.calibrationPath}
+                    digest={form.calibrationSha256}
+                    onPath={update("calibrationPath")}
+                    onDigest={update("calibrationSha256")}
+                    placeholder="C:\models\calibration.json"
+                    description="Leave both fields empty to use SentriFace's built-in thresholds. For a custom validation-calibrated file, provide both its path and SHA-256."
+                    required={false}
+                  />
                   <Divider label="Usage declaration" labelPosition="left" />
                   <SimpleGrid cols={{ base: 1, md: 2 }}>
-                    <TextInput label="Organization" value={form.organization} onChange={update("organization")} placeholder="Optional organization name" />
-                    {selected.usage_basis === "commercial-license" ? <TextInput required label="Model licensor" value={form.licensor} onChange={update("licensor")} placeholder="InsightFace or another supplier" /> : null}
-                    {selected.usage_basis === "commercial-license" ? <TextInput required label="License reference" value={form.licenseReference} onChange={update("licenseReference")} placeholder="Agreement, invoice, or entitlement ID" /> : null}
-                    {selected.usage_basis === "permissive-license" ? <TextInput required label="Model license" value={form.licenseName} onChange={update("licenseName")} placeholder="For example, Apache-2.0" /> : null}
+                    <TextInput label="Organization" value={form.organization} onChange={update("organization")} placeholder="Example: Acme Security Ltd (optional)" description="The person or organization operating this SentriFace installation." />
+                    {selected.usage_basis === "commercial-license" ? <TextInput required label="Model licensor" value={form.licensor} onChange={update("licensor")} placeholder="Example: supplier named on your licence" description="Copy the legal supplier name from your model agreement." /> : null}
+                    {selected.usage_basis === "commercial-license" ? <TextInput required label="License reference" value={form.licenseReference} onChange={update("licenseReference")} placeholder="Example: agreement, invoice, or entitlement ID" description="Use your real customer-specific reference; do not copy an example value." /> : null}
+                    {selected.usage_basis === "permissive-license" ? <TextInput required label="Model license" value={form.licenseName} onChange={update("licenseName")} placeholder="Example: Apache-2.0" description="Enter the exact licence identifier supplied with these particular weight files." /> : null}
                   </SimpleGrid>
                   <Paper withBorder p="md" radius="md" bg="var(--mantine-color-default-hover)">
                     <Checkbox checked={form.accepted} onChange={update("accepted")} label="I supplied these files and accept responsibility for model licensing, biometric permissions, calibration, and the intended use. SentriFace supplies no model rights." />
@@ -211,12 +238,87 @@ function ModelSide({ tone, icon: Icon, eyebrow, title, description, warning, ite
   );
 }
 
-function FileFields({ title, path, digest, onPath, onDigest, placeholder, description }) {
+function FileFields({ title, path, digest, onPath, onDigest, placeholder, description, required = true }) {
   return (
     <Stack gap="xs">
       <Text fw={800}>{title}</Text>
-      <TextInput required label="Local file path" value={path} onChange={onPath} placeholder={placeholder} description={description} />
-      <TextInput required label="SHA-256" value={digest} onChange={onDigest} placeholder="64 hexadecimal characters" styles={{ input: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }} />
+      <TextInput required={required} label="Local file path" value={path} onChange={onPath} placeholder={placeholder} description={description} />
+      <TextInput required={required} label="SHA-256" value={digest} onChange={onDigest} placeholder="64 hexadecimal characters" styles={{ input: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }} />
     </Stack>
   );
+}
+function SetupExamples({ selected }) {
+  const detectorName = selected.detector_file || "detector.onnx";
+  const recognizerName = selected.recognizer_file || "recognizer.onnx";
+  const usageExample = selected.usage_basis === "commercial-license"
+    ? "Licensor: <supplier on your agreement> · Reference: <your agreement/invoice/entitlement ID>"
+    : selected.usage_basis === "permissive-license"
+      ? "Model licence: <exact identifier supplied with these weights, for example Apache-2.0>"
+      : "Research declaration: non-commercial research only; organization is optional";
+  const setupFile = {
+    combination: selected.name,
+    detector_path: `<absolute-path>/${detectorName}`,
+    detector_sha256: "<64-character-sha256-of-detector>",
+    recognizer_path: `<absolute-path>/${recognizerName}`,
+    recognizer_sha256: "<64-character-sha256-of-recognizer>",
+    calibration_path: "",
+    calibration_sha256: "",
+    organization: "<optional-organization-name>",
+    usage_basis: selected.usage_basis,
+    ...(selected.usage_basis === "commercial-license" ? {
+      model_licensor: "<supplier-named-on-your-licence>",
+      license_reference: "<agreement-invoice-or-entitlement-id>",
+    } : {}),
+    ...(selected.usage_basis === "permissive-license" ? {
+      model_license: "<exact-licence-identifier-from-the-model-provider>",
+    } : {}),
+  };
+  const calibrationFile = {
+    schema_version: 1,
+    recognizer_sha256: "<64-character-sha256-of-exact-recognizer>",
+    representative_dataset: "<validation-dataset-description>",
+    target_false_match_rate: 0.0001,
+    thresholds: { possible: 0.40, likely: 0.50, strong: 0.60 },
+  };
+
+  return (
+    <Paper withBorder radius="md" p="md" bg="var(--mantine-color-default-hover)">
+      <Stack gap="xs">
+        <Group justify="space-between" align="center">
+          <Text fw={800}>Example values for this selection</Text>
+          <Group gap="xs">
+            <Button size="compact-xs" variant="default" onClick={() => downloadJsonExample(`${selected.id}.example.json`, setupFile)}>Download setup example</Button>
+            <Button size="compact-xs" variant="default" onClick={() => downloadJsonExample("calibration-thresholds.example.json", calibrationFile)}>Download calibration example</Button>
+          </Group>
+        </Group>
+        <Text size="sm"><Text span fw={700}>Detector path:</Text> <code>C:\licensed-models\{detectorName}</code></Text>
+        <Text size="sm"><Text span fw={700}>Recognizer path:</Text> <code>C:\licensed-models\{recognizerName}</code></Text>
+        <Text size="sm"><Text span fw={700}>Each SHA-256:</Text> <code>&lt;64 hexadecimal characters produced from that exact file&gt;</code></Text>
+        <Text size="sm"><Text span fw={700}>Usage fields:</Text> {usageExample}</Text>
+        <Text size="sm"><Text span fw={700}>Calibration:</Text> leave both optional fields empty for built-in thresholds, or provide a JSON file shaped like this:</Text>
+        <Box
+          component="pre"
+          m={0}
+          p="sm"
+          style={{ overflowX: "auto", borderRadius: 6, fontSize: 12, background: "var(--mantine-color-body)" }}
+        >{`{
+  "schema_version": 1,
+  "recognizer_sha256": "<SHA-256 of the exact recognizer>",
+  "representative_dataset": "<description of your validation dataset>",
+  "target_false_match_rate": 0.0001,
+  "thresholds": { "possible": 0.40, "likely": 0.50, "strong": 0.60 }
+}`}</Box>
+        <Text size="xs" c="dimmed">Angle-bracket values are placeholders, never evidence. Equivalent templates are included under docs/examples/model-onboarding.</Text>
+      </Stack>
+    </Paper>
+  );
+}
+function downloadJsonExample(filename, payload) {
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }

@@ -96,8 +96,15 @@ def main() -> int:
     parser.add_argument("--detector-sha256", required=True)
     parser.add_argument("--recognizer-source", type=Path, required=True)
     parser.add_argument("--recognizer-sha256", required=True)
-    parser.add_argument("--calibration-source", type=Path, required=True)
-    parser.add_argument("--calibration-sha256", required=True)
+    parser.add_argument(
+        "--calibration-source",
+        type=Path,
+        help="Optional validation-calibrated threshold file; omit to use SentriFace defaults",
+    )
+    parser.add_argument(
+        "--calibration-sha256",
+        help="SHA-256 of --calibration-source; required when that option is used",
+    )
     parser.add_argument(
         "--accept-model-responsibility",
         action="store_true",
@@ -136,6 +143,10 @@ def main() -> int:
         parser.error(
             "--accept-model-responsibility is required; SentriFace does not "
             "provide, verify, or grant rights to third-party model weights"
+        )
+    if bool(args.calibration_source) != bool(args.calibration_sha256):
+        parser.error(
+            "--calibration-source and --calibration-sha256 must be supplied together"
         )
     try:
         install_local_model_bundle(
@@ -208,8 +219,8 @@ def install_local_model_bundle(
     detector_sha256: str,
     recognizer_source: Path,
     recognizer_sha256: str,
-    calibration_source: Path,
-    calibration_sha256: str,
+    calibration_source: Path | None = None,
+    calibration_sha256: str | None = None,
     usage_basis: str,
     authorized_by: str,
     organization: str = "",
@@ -218,20 +229,42 @@ def install_local_model_bundle(
     license_name: str = "",
     force: bool = False,
 ) -> dict[str, object]:
-    """Install a complete local model pair plus its hash-bound calibration."""
+    """Install a local model pair with custom or built-in similarity thresholds."""
     detector_digest = _validated_digest(detector_sha256)
     recognizer_digest = _validated_digest(recognizer_sha256)
-    calibration_digest = _validated_digest(calibration_sha256)
     for label, source, digest in (
         ("Detector", detector_source, detector_digest),
         ("Recognizer", recognizer_source, recognizer_digest),
-        ("Calibration", calibration_source, calibration_digest),
     ):
         if not source.is_file():
             raise ValueError(f"{label} source was not found: {source}")
         if not verify_file(source, digest, source.stat().st_size):
             raise ValueError(f"{label} checksum verification failed: {source.name}")
-    load_similarity_calibration(calibration_source, recognizer_source, recognizer_digest)
+    if bool(calibration_source) != bool(calibration_sha256):
+        raise ValueError(
+            "Calibration source and checksum must be supplied together or both omitted"
+        )
+    calibration_digest = (
+        _validated_digest(calibration_sha256)
+        if calibration_sha256 is not None
+        else None
+    )
+    if calibration_source is not None and calibration_digest is not None:
+        if not calibration_source.is_file():
+            raise ValueError(f"Calibration source was not found: {calibration_source}")
+        if not verify_file(
+            calibration_source,
+            calibration_digest,
+            calibration_source.stat().st_size,
+        ):
+            raise ValueError(
+                f"Calibration checksum verification failed: {calibration_source.name}"
+            )
+        load_similarity_calibration(
+            calibration_source,
+            recognizer_source,
+            recognizer_digest,
+        )
     declaration = install_local_models(
         models_dir,
         detector_source=detector_source,
@@ -246,14 +279,51 @@ def install_local_model_bundle(
         license_name=license_name,
         force=force,
     )
-    _copy_verified(
-        calibration_source,
-        models_dir / CALIBRATION_FILENAME,
-        calibration_digest,
-        calibration_source.stat().st_size,
-    )
+    calibration_target = models_dir / CALIBRATION_FILENAME
+    if calibration_source is not None and calibration_digest is not None:
+        _copy_verified(
+            calibration_source,
+            calibration_target,
+            calibration_digest,
+            calibration_source.stat().st_size,
+        )
+    else:
+        _write_default_similarity_thresholds(calibration_target, recognizer_digest)
     return declaration
 
+
+def _write_default_similarity_thresholds(
+    calibration_path: Path,
+    recognizer_sha256: str,
+) -> None:
+    """Write hash-bound legacy thresholds without claiming dataset calibration."""
+    payload = {
+        "schema_version": 1,
+        "recognizer_sha256": recognizer_sha256,
+        "calibration_method": "sentriface-default",
+        "calibration_status": "not-validation-calibrated",
+        "note": (
+            "Built-in similarity thresholds. Validate and replace these thresholds "
+            "for the deployment population and target false-match rate."
+        ),
+        "thresholds": {
+            "possible": 0.40,
+            "likely": 0.50,
+            "strong": 0.60,
+        },
+    }
+    calibration_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = calibration_path.with_name(
+        f".{calibration_path.name}.{uuid.uuid4().hex}.tmp"
+    )
+    try:
+        temporary.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, calibration_path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 def load_similarity_calibration(
     calibration_path: Path,
@@ -275,14 +345,24 @@ def load_similarity_calibration(
         raise ModelSetupError("Similarity calibration has an invalid recognizer digest") from exc
     if expected_digest != actual_digest.casefold():
         raise ModelSetupError("Similarity calibration does not match the recognizer model")
+    method = str(payload.get("calibration_method") or "validation").strip()
     dataset = str(payload.get("representative_dataset") or "").strip()
-    try:
-        target_fmr = float(payload.get("target_false_match_rate", 0))
-    except (TypeError, ValueError) as exc:
-        raise ModelSetupError("Similarity calibration target false-match rate is invalid") from exc
+    target_fmr: float | None = None
+    if method != "sentriface-default":
+        try:
+            target_fmr = float(payload.get("target_false_match_rate", 0))
+        except (TypeError, ValueError) as exc:
+            raise ModelSetupError(
+                "Similarity calibration target false-match rate is invalid"
+            ) from exc
     thresholds = payload.get("thresholds")
-    if not dataset or not 0 < target_fmr <= 1 or not isinstance(thresholds, dict):
+    if (
+        method != "sentriface-default"
+        and (not dataset or target_fmr is None or not 0 < target_fmr <= 1)
+    ):
         raise ModelSetupError("Similarity calibration provenance is incomplete")
+    if not isinstance(thresholds, dict):
+        raise ModelSetupError("Similarity calibration thresholds are invalid")
     try:
         possible = float(thresholds.get("possible", -1))
         likely = float(thresholds.get("likely", -1))
@@ -293,7 +373,7 @@ def load_similarity_calibration(
         raise ModelSetupError("Similarity calibration thresholds are invalid")
     return {
         **payload,
-        "representative_dataset": dataset,
+        "representative_dataset": dataset or None,
         "target_false_match_rate": target_fmr,
         "thresholds": {"possible": possible, "likely": likely, "strong": strong},
     }

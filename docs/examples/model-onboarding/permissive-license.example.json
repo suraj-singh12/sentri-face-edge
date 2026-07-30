@@ -1,0 +1,12 @@
+{
+  "combination": "Permissively licensed compatible pair",
+  "detector_path": "<absolute-path>/detector.onnx",
+  "detector_sha256": "<64-character-sha256-of-detector>",
+  "recognizer_path": "<absolute-path>/recognizer.onnx",
+  "recognizer_sha256": "<64-character-sha256-of-recognizer>",
+  "calibration_path": "",
+  "calibration_sha256": "",
+  "organization": "<optional-organization-name>",
+  "model_license": "<exact-licence-identifier-from-the-model-provider>",
+  "usage_basis": "permissive-license"
+}

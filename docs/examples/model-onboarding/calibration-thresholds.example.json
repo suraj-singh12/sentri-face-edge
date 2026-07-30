@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "recognizer_sha256": "<64-character-sha256-of-exact-recognizer>",
+  "representative_dataset": "<validation-dataset-description>",
+  "target_false_match_rate": 0.0001,
+  "thresholds": {
+    "possible": 0.4,
+    "likely": 0.5,
+    "strong": 0.6
+  }
+}

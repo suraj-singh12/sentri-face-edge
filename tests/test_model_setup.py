@@ -183,6 +183,38 @@ class ModelSetupTest(unittest.TestCase):
             self.assertEqual(declaration["usage_basis"], "noncommercial-research")
             self.assertEqual(installed["thresholds"]["strong"], 0.6)
 
+    def test_bundle_uses_hash_bound_defaults_when_calibration_is_omitted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            detector = root / "detector.onnx"
+            recognizer = root / "recognizer.onnx"
+            detector.write_bytes(b"detector")
+            recognizer.write_bytes(b"recognizer")
+            recognizer_digest = hashlib.sha256(recognizer.read_bytes()).hexdigest()
+
+            install_local_model_bundle(
+                root / "models",
+                detector_source=detector,
+                detector_sha256=hashlib.sha256(detector.read_bytes()).hexdigest(),
+                recognizer_source=recognizer,
+                recognizer_sha256=recognizer_digest,
+                usage_basis="noncommercial-research",
+                authorized_by="Research Operator",
+            )
+
+            installed = load_similarity_calibration(
+                root / "models" / "calibration.json",
+                root / "models" / "recognizer.onnx",
+            )
+            self.assertEqual(installed["recognizer_sha256"], recognizer_digest)
+            self.assertEqual(installed["calibration_method"], "sentriface-default")
+            self.assertEqual(installed["calibration_status"], "not-validation-calibrated")
+            self.assertIsNone(installed["representative_dataset"])
+            self.assertIsNone(installed["target_false_match_rate"])
+            self.assertEqual(
+                installed["thresholds"],
+                {"possible": 0.4, "likely": 0.5, "strong": 0.6},
+            )
     def test_bundle_rejects_calibration_for_another_recognizer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

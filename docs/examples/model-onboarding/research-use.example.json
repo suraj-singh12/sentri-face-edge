@@ -1,0 +1,11 @@
+{
+  "combination": "InsightFace buffalo_s",
+  "detector_path": "<absolute-path>/det_500m.onnx",
+  "detector_sha256": "<64-character-sha256-of-detector>",
+  "recognizer_path": "<absolute-path>/w600k_mbf.onnx",
+  "recognizer_sha256": "<64-character-sha256-of-recognizer>",
+  "calibration_path": "",
+  "calibration_sha256": "",
+  "organization": "<optional-organization-name>",
+  "usage_basis": "noncommercial-research"
+}

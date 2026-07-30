@@ -1,0 +1,13 @@
+{
+  "combination": "Commercially licensed InsightFace",
+  "detector_path": "<absolute-path>/licensed-detector.onnx",
+  "detector_sha256": "<64-character-sha256-of-detector>",
+  "recognizer_path": "<absolute-path>/licensed-recognizer.onnx",
+  "recognizer_sha256": "<64-character-sha256-of-recognizer>",
+  "calibration_path": "",
+  "calibration_sha256": "",
+  "organization": "<customer-organization>",
+  "model_licensor": "<supplier-named-on-your-licence>",
+  "license_reference": "<agreement-invoice-or-entitlement-id>",
+  "usage_basis": "commercial-license"
+}

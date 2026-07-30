@@ -298,7 +298,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             "requirements": {
                 "detector": "SCRFD-compatible ONNX detector",
                 "recognizer": "ArcFace-compatible ONNX recognizer with 512-dimensional embeddings",
-                "calibration": "Hash-bound calibration.json from a representative validation dataset",
+                "calibration": "Optional hash-bound threshold file; built-in thresholds are used when omitted",
                 "checksums": "SHA-256 is required for every supplied file",
             },
             "usage": self.model_usage if ready else None,
@@ -1019,7 +1019,16 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     raise InputValidationError("Choose a supported model combination", "unsupported_model_combination")
                 detector_source = require_local_path(Path(_required(payload, "detector_path")))
                 recognizer_source = require_local_path(Path(_required(payload, "recognizer_path")))
-                calibration_source = require_local_path(Path(_required(payload, "calibration_path")))
+                calibration_path = str(payload.get("calibration_path") or "").strip()
+                calibration_sha256 = str(payload.get("calibration_sha256") or "").strip()
+                if bool(calibration_path) != bool(calibration_sha256):
+                    raise InputValidationError(
+                        "Provide both the calibration threshold file path and its SHA-256, or leave both empty",
+                        "incomplete_calibration",
+                    )
+                calibration_source = (
+                    require_local_path(Path(calibration_path)) if calibration_path else None
+                )
                 model_dir = require_local_path(self.server.config.detector_model.parent)
                 declaration = install_local_model_bundle(
                     model_dir,
@@ -1028,7 +1037,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     recognizer_source=recognizer_source,
                     recognizer_sha256=_required(payload, "recognizer_sha256"),
                     calibration_source=calibration_source,
-                    calibration_sha256=_required(payload, "calibration_sha256"),
+                    calibration_sha256=calibration_sha256 or None,
                     usage_basis=choice["usage_basis"],
                     authorized_by=self.auth_user.display_name or self.auth_user.username,
                     organization=str(payload.get("organization") or ""),
