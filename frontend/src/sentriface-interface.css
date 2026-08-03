@@ -85,6 +85,7 @@
 .queue-review-content .mantine-Grid-col {
   height: 100%;
   min-height: 0;
+  /* overflow-y: scroll; */
 }
 
 .queue-review-panel,
@@ -97,29 +98,65 @@
 }
 
 .queue-photo-selection-grid {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  height: 0;
   min-height: 0;
-  max-height: none;
-  overflow-y: auto;
+  max-height: 100%;
+  overflow-y: scroll;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding: 3px;
   grid-template-columns: repeat(auto-fill, minmax(120px, 158px)) !important;
+  grid-auto-rows: max-content;
   align-content: start;
   justify-content: start;
+}
+
+.queue-photo-selection-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.queue-photo-selection-grid::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sentriface-text) 28%, transparent);
 }
 
 .queue-incoming-panel {
   display: flex;
   flex-direction: column;
+  height: clamp(430px, calc(100dvh - 500px), 600px);
   min-height: 0;
-  max-height: 100%;
+  max-height: 600px;
   overflow: hidden;
 }
 
 .queue-selection-card {
   position: relative;
+  align-self: start;
+  min-height: 244px;
+  height: max-content;
+  flex-shrink: 0;
   background: var(--sentriface-muted-surface);
+}
+
+.queue-selection-image {
+  display: block;
+  width: 100%;
+  height: 200px !important;
+  min-height: 200px;
+  max-height: 200px;
+  flex: 0 0 200px;
+  background: var(--sentriface-page-bg);
+  object-fit: contain;
+  object-position: center;
+}
+
+.queue-selection-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .queue-selection-card[data-selected="false"] img {
@@ -336,6 +373,8 @@
   }
 
   .queue-photo-selection-grid {
+    flex: none;
+    height: auto;
     max-height: none;
     overflow: visible;
   }
@@ -1923,13 +1962,14 @@ button {
   display: grid;
   grid-template-columns: minmax(280px, 40%) minmax(0, 1fr);
   gap: 16px;
+  height: clamp(420px, calc(100dvh - 390px), 520px);
   min-height: 0;
-  max-height: calc(100dvh - 390px);
+  max-height: 520px;
 }
 
 .people-current-diff-card {
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 18px !important;
 }
 
@@ -1982,6 +2022,8 @@ button {
 }
 
 .people-change-history-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1997,12 +2039,36 @@ button {
 
 .people-change-timeline {
   display: flex;
+  flex: 1 1 auto;
   gap: 14px;
   min-width: 0;
+  min-height: 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 2px 4px 8px;
   scroll-snap-type: x proximity;
+}
+
+.people-change-timeline[data-view="list"] {
+  display: block;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 4px;
+  scroll-snap-type: none;
+}
+
+.people-change-timeline[data-view="list"] .people-change-card {
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+  margin-bottom: 10px;
+}
+
+.people-change-timeline[data-view="list"] .people-change-management-summary {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(180px, auto) minmax(0, 1fr);
+  align-items: center;
 }
 
 .people-change-card {
@@ -2784,7 +2850,16 @@ button {
 
   .people-change-history-shell {
     grid-template-columns: 1fr;
+    height: auto;
     max-height: none;
+  }
+
+  .people-current-diff-card {
+    overflow: visible;
+  }
+
+  .people-change-timeline[data-view="list"] {
+    max-height: 60dvh;
   }
 
   .debug-shell {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { ActionIcon, AppShell, Box, Button, Group, Loader, MantineProvider, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
@@ -9,10 +9,10 @@ import { RecoveryGate } from "./components/RecoveryGate.jsx";
 import { VIEWS } from "./constants.js";
 import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
 import { profileLine, tabLabel } from "./utils.js";
-const DebugView = lazy(() => import("./views/DebugView.jsx").then((module) => ({ default: module.DebugView })));
-const PeopleView = lazy(() => import("./views/PeopleView.jsx").then((module) => ({ default: module.PeopleView })));
-const QueueView = lazy(() => import("./views/QueueView.jsx").then((module) => ({ default: module.QueueView })));
-const RecognizeView = lazy(() => import("./views/RecognizeView.jsx").then((module) => ({ default: module.RecognizeView })));
+import { DebugView } from "./views/DebugView.jsx";
+import { PeopleView } from "./views/PeopleView.jsx";
+import { QueueView } from "./views/QueueView.jsx";
+import { RecognizeView } from "./views/RecognizeView.jsx";
 
 function ShellNotice({ color, title, children, action }) {
   return (
@@ -151,7 +151,6 @@ function SentriFaceShell({ user, logout, changePassword }) {
             </ShellNotice>
           ) : null}
         </Stack>
-        <Suspense fallback={<Stack align="center" py="xl"><Loader /><Text c="dimmed">Loading view...</Text></Stack>}>
         <Tabs value={selectedView} onChange={actions.setActiveView} keepMounted={false} className="sentriface-tabs">
           <Tabs.List mb="md">
             {visibleViews.map((view) => <Tabs.Tab key={view} value={view}>{tabLabel(view)}</Tabs.Tab>)}
@@ -271,7 +270,6 @@ function SentriFaceShell({ user, logout, changePassword }) {
             />
           </Tabs.Panel>
         </Tabs>
-        </Suspense>
         <Modal
           opened={state.backupModalOpen}
           onClose={actions.cancelBackup}

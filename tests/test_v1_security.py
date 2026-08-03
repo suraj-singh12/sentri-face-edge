@@ -4,6 +4,8 @@ import secrets
 import socket
 import sqlite3
 import tempfile
+import threading
+import time
 import unittest
 from contextlib import closing
 from pathlib import Path
@@ -53,6 +55,27 @@ class V1SecurityTest(unittest.TestCase):
             self.assertTrue(ensure_encrypted_database(path, key))
             with closing(connect_database(path, key)) as connection:
                 self.assertEqual(connection.execute("SELECT value FROM values_table").fetchone()[0], 7)
+
+    def test_sqlcipher_connections_are_serialized_per_database(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "sentriface.db"
+            key = secrets.token_bytes(32)
+            first = connect_database(path, key)
+            first.execute("CREATE TABLE test_value(value INTEGER)")
+            first.commit()
+            opened = threading.Event()
+
+            def open_second_connection() -> None:
+                with closing(connect_database(path, key)):
+                    opened.set()
+
+            worker = threading.Thread(target=open_second_connection)
+            worker.start()
+            time.sleep(0.05)
+            self.assertFalse(opened.is_set())
+            first.close()
+            worker.join(timeout=2)
+            self.assertTrue(opened.is_set())
 
     def test_recovery_code_unlocks_external_kit_and_automatic_backup(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

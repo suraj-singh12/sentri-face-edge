@@ -7,8 +7,8 @@ import { usePersistentState } from "./usePersistentState.js";
 export function useRecognizeController({
   apiGet,
   apiPost,
-  loadEvents,
-  loadPeople,
+  updatePerson,
+  upsertPerson,
   notifySkippedInputs,
   prepareImageFiles,
   showToast,
@@ -34,8 +34,7 @@ export function useRecognizeController({
     setRecognitionFollowup(null);
     setRecognitionFollowupDone(false);
     showToast(`Recognized ${payload.faces.length} face(s)`);
-    await loadEvents();
-  }, [apiPost, loadEvents, showToast]);
+  }, [apiPost, showToast]);
 
   const recognizeLoadedImage = useCallback(async () => {
     const file = recognizeFileRef.current?.files?.[0];
@@ -139,6 +138,8 @@ export function useRecognizeController({
     let personId = recognitionFollowup.personId;
     let embeddingId = recognitionFollowup.embeddingId;
     let detailName = recognitionFollowup.name;
+    let addedEmbedding = false;
+    let createdPerson = false;
     if (recognitionFollowup.action === "existing") {
       const payload = await apiPost("/api/recognition-accept-existing", {
         path: recognition.inputPath,
@@ -150,6 +151,7 @@ export function useRecognizeController({
       });
       embeddingId = payload.embedding_id;
       detailName = payload.name || detailName;
+      addedEmbedding = !payload.duplicate;
     }
     if (recognitionFollowup.action === "new") {
       const payload = await apiPost("/api/recognition-new", {
@@ -162,6 +164,8 @@ export function useRecognizeController({
       });
       personId = payload.person_id;
       embeddingId = payload.embedding_id;
+      addedEmbedding = true;
+      createdPerson = true;
     }
     await apiPost("/api/recognition-followup", {
       path: recognition.inputPath,
@@ -184,8 +188,29 @@ export function useRecognizeController({
     });
     setRecognitionFollowupDone(true);
     setRecognitionFollowup(null);
+    if (createdPerson) {
+      upsertPerson({
+        person_id: personId,
+        name: detailName,
+        embedding_count: 1,
+        representative_image: recognition.inputPath,
+        favorite: false,
+        tags: [],
+        created_at: new Date().toISOString(),
+        metadata: {
+          rank: recognitionFollowup.rank || "",
+          country: recognitionFollowup.country || "",
+          importance: recognitionFollowup.importance || "",
+        },
+      });
+    } else if (addedEmbedding) {
+      updatePerson(personId, (person) => ({
+        ...person,
+        embedding_count: Number(person.embedding_count || 0) + 1,
+        representative_image: person.representative_image || recognition.inputPath,
+      }));
+    }
     showToast("Recognition details confirmed");
-    await Promise.all([loadPeople(), loadEvents()]);
   };
 
   const openRecognitionGallery = async (personId) => {

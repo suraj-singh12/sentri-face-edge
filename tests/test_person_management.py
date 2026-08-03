@@ -134,6 +134,10 @@ class PersonManagementTest(unittest.TestCase):
                 engine.list_person_operations(person_id)[0]["operation_type"],
                 "person-preferences",
             )
+            self.assertEqual(
+                first_preference["changed_preferences"],
+                ["favorite", "representative_photo"],
+            )
 
             archive_operation = "22222222-2222-4222-8222-222222222222"
             self.assertTrue(engine.archive_person(person_id, archive_operation)["archived"])

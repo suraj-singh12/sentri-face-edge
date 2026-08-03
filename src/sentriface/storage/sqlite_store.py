@@ -901,8 +901,10 @@ class SQLiteIdentityStore:
             if person is None:
                 raise KeyError(f"Unknown person: {person_id}")
             metadata = json.loads(person["metadata"])
+            changed_preferences = []
             if favorite is not None:
                 metadata["favorite"] = bool(favorite)
+                changed_preferences.append("favorite")
             if representative_embedding_id is not None:
                 owned = conn.execute(
                     """
@@ -916,6 +918,7 @@ class SQLiteIdentityStore:
                         f"Embedding {representative_embedding_id} does not belong to person {person_id}"
                     )
                 metadata["representative_embedding_id"] = representative_embedding_id
+                changed_preferences.append("representative_photo")
             conn.execute(
                 "UPDATE persons SET metadata = ? WHERE person_id = ?",
                 (json.dumps(metadata, separators=(",", ":")), person_id),
@@ -924,6 +927,7 @@ class SQLiteIdentityStore:
                 "person_id": person_id,
                 "favorite": bool(metadata.get("favorite")),
                 "representative_embedding_id": metadata.get("representative_embedding_id"),
+                "changed_preferences": changed_preferences,
                 "updated": True,
             }
             _record_person_operation(conn, operation_id, "person-preferences", result)

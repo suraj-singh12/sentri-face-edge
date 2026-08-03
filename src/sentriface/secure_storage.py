@@ -5,6 +5,7 @@ import hashlib
 import os
 import secrets
 import sqlite3
+import threading
 import uuid
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,8 @@ from typing import Any
 
 KEYRING_SERVICE = "SentriFace Edge storage"
 SQLITE_HEADER = b"SQLite format 3\x00"
+_DATABASE_LOCKS: dict[str, threading.RLock] = {}
+_DATABASE_LOCKS_GUARD = threading.Lock()
 
 
 class StorageSecurityError(RuntimeError):
@@ -68,12 +71,65 @@ def connect_database(
         if row_factory:
             connection.row_factory = sqlite3.Row
         return connection
-    driver = _sqlcipher_driver()
-    connection = driver.connect(path, timeout=timeout)
-    _apply_key(connection, key)
-    if row_factory:
-        connection.row_factory = driver.Row
-    return connection
+    database_lock = _database_lock(path)
+    database_lock.acquire()
+    connection = None
+    try:
+        driver = _sqlcipher_driver()
+        connection = driver.connect(path, timeout=timeout)
+        _apply_key(connection, key)
+        if row_factory:
+            connection.row_factory = driver.Row
+        return _SerializedConnection(connection, database_lock)
+    except Exception:
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+        database_lock.release()
+        raise
+
+
+def _database_lock(path: Path) -> threading.RLock:
+    resolved = str(path.resolve())
+    with _DATABASE_LOCKS_GUARD:
+        return _DATABASE_LOCKS.setdefault(resolved, threading.RLock())
+
+
+class _SerializedConnection:
+    """Hold one per-database lock for the complete SQLCipher connection lifetime."""
+
+    def __init__(self, connection: Any, lock: threading.RLock) -> None:
+        object.__setattr__(self, "_connection", connection)
+        object.__setattr__(self, "_lock", lock)
+        object.__setattr__(self, "_closed", False)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._connection, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name.startswith("_"):
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._connection, name, value)
+
+    def backup(self, destination: Any, *args: Any, **kwargs: Any) -> Any:
+        raw_destination = (
+            destination._connection
+            if isinstance(destination, _SerializedConnection)
+            else destination
+        )
+        return self._connection.backup(raw_destination, *args, **kwargs)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        try:
+            self._connection.close()
+        finally:
+            object.__setattr__(self, "_closed", True)
+            self._lock.release()
 
 
 def ensure_encrypted_database(path: Path, key: bytes) -> bool:

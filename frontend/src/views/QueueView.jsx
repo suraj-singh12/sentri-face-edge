@@ -817,7 +817,14 @@ function QueueIncomingGrid({ faces, selectedFaces, accepted, onToggleFace }) {
             onClick={() => onToggleFace(face.init_face_id)}
           >
             <Box pos="relative">
-              <Image src={mediaUrl(face.image_path || face.crop_path || face.source_image)} alt="incoming face" fit="cover" h={132} radius="sm" />
+              <Image
+                src={mediaUrl(face.source_image || face.image_path || face.crop_path)}
+                alt="incoming face"
+                className="queue-selection-image"
+                fit="contain"
+                h={200}
+                radius="sm"
+              />
               <ThemeIcon className="queue-selection-check" color={selected ? "teal" : "gray"} radius="xl" size="sm">{selected ? <IconCheck size={14} /> : <IconX size={13} />}</ThemeIcon>
             </Box>
             <Group justify="space-between" mt={7}>

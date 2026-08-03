@@ -1252,10 +1252,14 @@ function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
     ...changeCards,
     ...managementEvents.map(normalizeManagementChange),
   ].sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
+  const [historyFilter, setHistoryFilter] = useState("all");
+  const [historyView, setHistoryView] = useState("cards");
   const [activeIndex, setActiveIndex] = useState(0);
-  const activeHistory = historyCards[activeIndex] || null;
+  const filteredHistoryCards = historyCards.filter((change) => historyChangeMatchesFilter(change, historyFilter));
+  const activeHistory = filteredHistoryCards[activeIndex] || null;
   const activeChange = activeHistory?.kind === "profile" ? activeHistory : null;
   const changedFields = new Set(activeChange?.fields.map((field) => field.key) || []);
+  useEffect(() => setActiveIndex(0), [historyFilter]);
   return (
     <Box mt="md" className="people-change-history-shell">
       <Card withBorder radius="md" className="people-profile-panel people-current-diff-card">
@@ -1283,23 +1287,41 @@ function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
           </Group>
           <Group gap="xs" wrap="nowrap">
             <Group gap={0} className="people-change-view-toggle">
-              <ActionIcon variant="light" aria-label="Card view"><IconGridDots size={16} /></ActionIcon>
-              <ActionIcon variant="default" aria-label="List view"><IconLayoutList size={16} /></ActionIcon>
+              <ActionIcon
+                variant={historyView === "cards" ? "light" : "default"}
+                aria-label="Card view"
+                aria-pressed={historyView === "cards"}
+                onClick={() => setHistoryView("cards")}
+              >
+                <IconGridDots size={16} />
+              </ActionIcon>
+              <ActionIcon
+                variant={historyView === "list" ? "light" : "default"}
+                aria-label="List view"
+                aria-pressed={historyView === "list"}
+                onClick={() => setHistoryView("list")}
+              >
+                <IconLayoutList size={16} />
+              </ActionIcon>
             </Group>
             <Menu withinPortal position="bottom-end">
               <Menu.Target>
-                <Button size="xs" variant="default" rightSection={<IconChevronDown size={14} />}>All Changes</Button>
+                <Button size="xs" variant="default" rightSection={<IconChevronDown size={14} />}>
+                  {historyFilterLabel(historyFilter)}
+                </Button>
               </Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item>All Changes</Menu.Item>
-                <Menu.Item>Identity Changes</Menu.Item>
-                <Menu.Item>Metadata Changes</Menu.Item>
+                <Menu.Item onClick={() => setHistoryFilter("all")}>All Changes</Menu.Item>
+                <Menu.Item onClick={() => setHistoryFilter("identity")}>Identity Changes</Menu.Item>
+                <Menu.Item onClick={() => setHistoryFilter("metadata")}>Metadata Changes</Menu.Item>
+                <Menu.Item onClick={() => setHistoryFilter("photos")}>Photo &amp; Favorite Changes</Menu.Item>
+                <Menu.Item onClick={() => setHistoryFilter("management")}>Record Management</Menu.Item>
               </Menu.Dropdown>
             </Menu>
           </Group>
         </Group>
-        <Box className="people-change-timeline">
-          {historyCards.length ? historyCards.map((change, index) => (
+        <Box className="people-change-timeline" data-view={historyView}>
+          {filteredHistoryCards.length ? filteredHistoryCards.map((change, index) => (
             <Card
               key={change.id}
               withBorder
@@ -1333,12 +1355,12 @@ function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
               )}
               {/* <Button mt="md" size="xs" variant="default" rightSection={<IconArrowLeft size={13} style={{ transform: "rotate(135deg)" }} />}>View Full Details</Button> */}
             </Card>
-          )) : <EmptyCard text="No profile activity recorded yet." />}
+          )) : <EmptyCard text="No activity matches this filter." />}
         </Box>
-        {historyCards.length > 1 && (
+        {historyView === "cards" && filteredHistoryCards.length > 1 && (
           <Group gap="xs" mt="sm" wrap="nowrap" className="people-change-scroll-hint">
             <Text c="dimmed">‹</Text>
-            <Box className="people-change-scroll-track"><Box className="people-change-scroll-fill" style={{ width: `${Math.max(18, ((activeIndex + 1) / historyCards.length) * 100)}%` }} /></Box>
+            <Box className="people-change-scroll-track"><Box className="people-change-scroll-fill" style={{ width: `${Math.max(18, ((activeIndex + 1) / filteredHistoryCards.length) * 100)}%` }} /></Box>
             <Text c="dimmed">›</Text>
           </Group>
         )}
@@ -1489,13 +1511,19 @@ function profileImageRecords(payload) {
 }
 
 function managementEventLabel(event) {
+  if (event.operation_type === "person-preferences") {
+    const changed = event.result?.changed_preferences || [];
+    if (changed.includes("representative_photo") && changed.includes("favorite")) return "Profile photo and favorite updated";
+    if (changed.includes("representative_photo")) return "Profile photo updated";
+    if (changed.includes("favorite")) return event.result?.favorite ? "Added to favorites" : "Removed from favorites";
+    return "Favorite or profile photo changed";
+  }
   return {
     "archive-person": "Person archived",
     "restore-person": "Person restored",
     "merge-persons": "People merged",
     "move-embedding": "Photo moved",
     "delete-embedding": "Photo removed",
-    "person-preferences": "People preferences updated",
     "update-profile": "Profile updated",
   }[event.operation_type] || "People record updated";
 }
@@ -1512,9 +1540,11 @@ function managementEventDetail(event) {
     return `${result.deleted_sightings || 0} linked sightings removed with the photo`;
   }
   if (event.operation_type === "person-preferences") {
-    return result.representative_embedding_id
-      ? "Profile photo or favorite status changed"
-      : "Favorite status changed";
+    const changed = result.changed_preferences || [];
+    if (changed.includes("representative_photo") && changed.includes("favorite")) return "The representative photo and favorite status were changed";
+    if (changed.includes("representative_photo")) return "The representative photo shown for this person was changed";
+    if (changed.includes("favorite")) return result.favorite ? "This person was added to Favorites" : "This person was removed from Favorites";
+    return "An older audit record changed either the representative photo or favorite status";
   }
   return "Completed successfully";
 }
@@ -1543,12 +1573,33 @@ function normalizeManagementChange(event) {
   return {
     id: event.operation_id,
     kind: "management",
+    operationType: event.operation_type,
     createdAt: event.created_at,
     editor: "System",
     title: managementEventLabel(event),
     detail: managementEventDetail(event),
     fields: [],
   };
+}
+
+function historyChangeMatchesFilter(change, filter) {
+  if (filter === "all") return true;
+  if (filter === "identity") return change.kind === "profile" && change.fields.some((field) => field.key === "name");
+  if (filter === "metadata") return change.kind === "profile" && change.fields.some((field) => field.key !== "name");
+  if (filter === "photos") return ["person-preferences", "move-embedding", "delete-embedding"].includes(change.operationType);
+  if (filter === "management") return change.kind === "management"
+    && !["person-preferences", "move-embedding", "delete-embedding"].includes(change.operationType);
+  return true;
+}
+
+function historyFilterLabel(filter) {
+  return {
+    all: "All Changes",
+    identity: "Identity Changes",
+    metadata: "Metadata Changes",
+    photos: "Photo & Favorite Changes",
+    management: "Record Management",
+  }[filter] || "All Changes";
 }
 
 function iconForChangeField(key) {

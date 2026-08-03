@@ -11,9 +11,12 @@ function operationId() {
 export function usePeopleController({
   apiGet,
   apiPost,
-  loadDeletedFaces,
-  loadEvents,
-  loadPeople,
+  updatePerson,
+  upsertPerson,
+  archivePersonLocally,
+  restorePersonLocally,
+  addDeletedFace,
+  removeDeletedFace,
   showToast,
 }) {
   const [peopleGallery, setPeopleGallery] = useState(null);
@@ -23,17 +26,6 @@ export function usePeopleController({
     `/api/person?person_id=${encodeURIComponent(personId)}${archived ? "&include_archived=1" : ""}`,
   );
 
-  const refreshPersonAndLists = async (personId, archived = false) => {
-    const [person] = await Promise.all([
-      loadPerson(personId, archived),
-      loadPeople(),
-      loadDeletedFaces(),
-      loadEvents(),
-    ]);
-    setPeopleGallery(person);
-    return person;
-  };
-
   const peopleOpen = async (personId, options = {}) => {
     if (!personId) return;
     setPeopleGallery(await loadPerson(personId, Boolean(options.archived)));
@@ -41,7 +33,7 @@ export function usePeopleController({
   };
 
   const savePeopleProfile = async (values) => {
-    await apiPost("/api/person-update", {
+    const payload = await apiPost("/api/person-update", {
       person_id: values.personId,
       name: values.name,
       rank: values.rank,
@@ -51,43 +43,92 @@ export function usePeopleController({
       editor_name: values.editorName,
       operation_id: operationId(),
     });
-    await refreshPersonAndLists(values.personId);
+    const metadataPatch = {
+      rank: values.rank || "",
+      country: values.country || "",
+      importance: values.importance || "",
+      tags: values.tags || [],
+    };
+    updatePerson(values.personId, (person) => ({
+      ...person,
+      name: values.name,
+      tags: values.tags || [],
+      metadata: { ...(person.metadata || {}), ...metadataPatch },
+    }));
+    setPeopleGallery((current) => current?.person?.person_id === values.personId ? {
+      ...current,
+      person: {
+        ...current.person,
+        name: values.name,
+        tags: values.tags || [],
+        metadata: { ...(current.person.metadata || {}), ...metadataPatch },
+      },
+      changes: payload.change
+        ? [payload.change, ...(current.changes || []).filter((item) => item.change_id !== payload.change.change_id)]
+        : current.changes,
+    } : current);
     showToast("Person details updated");
     return true;
   };
 
   const setFavorite = async (personId, favorite) => {
-    await apiPost("/api/person-preferences", {
+    const requestId = operationId();
+    const result = await apiPost("/api/person-preferences", {
       person_id: personId,
       favorite,
-      operation_id: operationId(),
+      operation_id: requestId,
     });
-    if (peopleGallery?.person.person_id === personId) {
-      await refreshPersonAndLists(personId);
-    } else {
-      await Promise.all([loadPeople(), loadDeletedFaces(), loadEvents()]);
-    }
+    updatePerson(personId, (person) => ({
+      ...person,
+      favorite: result.favorite,
+      metadata: { ...(person.metadata || {}), favorite: result.favorite },
+    }));
+    setPeopleGallery((current) => current?.person?.person_id === personId ? {
+      ...current,
+      person: {
+        ...current.person,
+        favorite: result.favorite,
+        metadata: { ...(current.person.metadata || {}), favorite: result.favorite },
+      },
+      management_events: [localManagementEvent(requestId, "person-preferences", result), ...(current.management_events || [])],
+    } : current);
     showToast(favorite ? "Added to favorites" : "Removed from favorites");
   };
 
   const setRepresentativePhoto = async (personId, embeddingId) => {
-    await apiPost("/api/person-preferences", {
+    const requestId = operationId();
+    const result = await apiPost("/api/person-preferences", {
       person_id: personId,
       representative_embedding_id: embeddingId,
-      operation_id: operationId(),
+      operation_id: requestId,
     });
-    await refreshPersonAndLists(personId);
+    const record = peopleGallery?.embeddings?.find((item) => item.embedding_id === embeddingId);
+    const representativeImage = record?.crop_path || record?.source_image || "";
+    updatePerson(personId, (person) => ({
+      ...person,
+      representative_image: representativeImage || person.representative_image,
+      metadata: { ...(person.metadata || {}), representative_embedding_id: embeddingId },
+    }));
+    setPeopleGallery((current) => current?.person?.person_id === personId ? {
+      ...current,
+      person: {
+        ...current.person,
+        representative_image: representativeImage || current.person.representative_image,
+        metadata: { ...(current.person.metadata || {}), representative_embedding_id: embeddingId },
+      },
+      management_events: [localManagementEvent(requestId, "person-preferences", result), ...(current.management_events || [])],
+    } : current);
     showToast("Profile photo updated");
   };
 
   const archivePerson = async (personId) => {
-    await apiPost("/api/person-archive", {
+    const result = await apiPost("/api/person-archive", {
       person_id: personId,
       operation_id: operationId(),
     });
     setPeopleGallery(null);
     setPeopleGalleryImage(null);
-    await Promise.all([loadPeople(), loadDeletedFaces(), loadEvents()]);
+    archivePersonLocally(personId, result.archived_at);
     showToast("Person moved to Archived. A database backup was created first.");
   };
 
@@ -96,7 +137,11 @@ export function usePeopleController({
       person_id: personId,
       operation_id: operationId(),
     });
-    await refreshPersonAndLists(personId);
+    restorePersonLocally(personId);
+    setPeopleGallery((current) => current?.person?.person_id === personId ? {
+      ...current,
+      person: { ...current.person, deleted_at: null },
+    } : current);
     showToast("Person restored");
   };
 
@@ -106,9 +151,11 @@ export function usePeopleController({
       target_person_id: targetPersonId,
       operation_id: operationId(),
     });
-    setPeopleGallery(await loadPerson(targetPersonId));
+    const target = await loadPerson(targetPersonId);
+    setPeopleGallery(target);
     setPeopleGalleryImage(null);
-    await Promise.all([loadPeople(), loadDeletedFaces(), loadEvents()]);
+    archivePersonLocally(sourcePersonId, new Date().toISOString(), { merged_into: targetPersonId });
+    upsertPerson(personSummaryFromPayload(target));
     showToast(
       `Merged ${result.moved_embeddings} active photo${result.moved_embeddings === 1 ? "" : "s"} and ${result.moved_deleted_faces || 0} deleted face${result.moved_deleted_faces === 1 ? "" : "s"}. A database backup was created first.`,
     );
@@ -121,7 +168,24 @@ export function usePeopleController({
       target_person_id: targetPersonId,
       operation_id: operationId(),
     });
-    await refreshPersonAndLists(personId);
+    const moved = peopleGallery?.embeddings?.find((item) => item.embedding_id === embeddingId);
+    const updatedSourceGallery = peopleGallery?.person?.person_id === personId
+      ? removeEmbeddingFromGallery(peopleGallery, embeddingId)
+      : null;
+    updatePerson(personId, (person) => ({
+      ...person,
+      embedding_count: Math.max(0, Number(person.embedding_count || 0) - 1),
+      representative_image: updatedSourceGallery?.person?.representative_image ?? person.representative_image,
+      metadata: updatedSourceGallery?.person?.metadata ?? person.metadata,
+    }));
+    updatePerson(targetPersonId, (person) => ({
+      ...person,
+      embedding_count: Number(person.embedding_count || 0) + 1,
+      representative_image: person.representative_image || moved?.crop_path || moved?.source_image,
+    }));
+    setPeopleGallery((current) => current?.person?.person_id === personId
+      ? removeEmbeddingFromGallery(current, embeddingId)
+      : current);
     setPeopleGalleryImage(null);
     showToast(`Photo moved with ${result.moved_sightings} linked sighting${result.moved_sightings === 1 ? "" : "s"}`);
     return result;
@@ -132,7 +196,28 @@ export function usePeopleController({
       embedding_id: embeddingId,
       operation_id: operationId(),
     });
-    await refreshPersonAndLists(personId);
+    const removed = peopleGallery?.embeddings?.find((item) => item.embedding_id === embeddingId);
+    const updatedGallery = peopleGallery?.person?.person_id === personId
+      ? removeEmbeddingFromGallery(peopleGallery, embeddingId, { keepDetails: true })
+      : null;
+    updatePerson(personId, (person) => ({
+      ...person,
+      embedding_count: Math.max(0, Number(person.embedding_count || 0) - 1),
+      representative_image: updatedGallery?.person?.representative_image ?? person.representative_image,
+      metadata: updatedGallery?.person?.metadata ?? person.metadata,
+    }));
+    setPeopleGallery((current) => current?.person?.person_id === personId
+      ? removeEmbeddingFromGallery(current, embeddingId, { keepDetails: true })
+      : current);
+    addDeletedFace({
+      ...result,
+      person_name: peopleGallery?.person?.name || personId,
+      person_archived: false,
+      quality_score: removed?.quality_score,
+      created_at: removed?.created_at,
+      sighting_count: result.retained_sightings || 0,
+      days_remaining: 30,
+    });
     setPeopleGalleryImage(null);
     showToast(
       `Face moved to Deleted Faces for 30 days. ${result.retained_sightings || 0} linked sighting${result.retained_sightings === 1 ? "" : "s"} retained.`,
@@ -147,10 +232,8 @@ export function usePeopleController({
       embedding_id: embeddingId,
       operation_id: operationId(),
     });
-    await Promise.all([loadPeople(), loadDeletedFaces(), loadEvents()]);
-    if (peopleGallery?.person.person_id === personId) {
-      await refreshPersonAndLists(personId);
-    }
+    removeDeletedFace(embeddingId);
+    updatePerson(personId, (person) => ({ ...person, embedding_count: Number(person.embedding_count || 0) + 1 }));
     showToast("Face restored to the person’s photo library");
     return result;
   };
@@ -160,7 +243,7 @@ export function usePeopleController({
       embedding_id: embeddingId,
       operation_id: operationId(),
     });
-    await Promise.all([loadPeople(), loadDeletedFaces(), loadEvents()]);
+    removeDeletedFace(embeddingId);
     showToast(
       `${result.deleted_sightings || 0} linked sighting${result.deleted_sightings === 1 ? "" : "s"} removed from the live library. Safety backup ${result.backup?.backup_id || "created"} retains a recovery copy.`,
       "red",
@@ -191,5 +274,46 @@ export function usePeopleController({
       restoreDeletedFace,
       permanentlyDeleteFace,
     },
+  };
+}
+
+function removeEmbeddingFromGallery(gallery, embeddingId, options = {}) {
+  const embeddings = (gallery.embeddings || []).filter((item) => item.embedding_id !== embeddingId);
+  const representativeId = gallery.person.metadata?.representative_embedding_id;
+  const removedRepresentative = representativeId === embeddingId;
+  const nextRepresentative = removedRepresentative ? embeddings[0] : null;
+  return {
+    ...gallery,
+    embeddings,
+    details: options.keepDetails
+      ? gallery.details
+      : (gallery.details || []).filter((item) => item.embedding_id !== embeddingId),
+    person: {
+      ...gallery.person,
+      representative_image: removedRepresentative
+        ? nextRepresentative?.crop_path || nextRepresentative?.source_image || ""
+        : gallery.person.representative_image,
+      metadata: removedRepresentative
+        ? { ...(gallery.person.metadata || {}), representative_embedding_id: nextRepresentative?.embedding_id || "" }
+        : gallery.person.metadata,
+    },
+  };
+}
+
+function personSummaryFromPayload(payload) {
+  return {
+    ...payload.person,
+    embedding_count: (payload.embeddings || []).length,
+    favorite: Boolean(payload.person.favorite),
+    tags: payload.person.tags || payload.person.metadata?.tags || [],
+  };
+}
+
+function localManagementEvent(id, type, result) {
+  return {
+    operation_id: id,
+    operation_type: type,
+    result,
+    created_at: new Date().toISOString(),
   };
 }

@@ -3,6 +3,7 @@ import { notifications } from "@mantine/notifications";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const SESSION_TOKEN = document.querySelector('meta[name="sentriface-session-token"]')?.content || "";
+const GET_REQUESTS_IN_FLIGHT = new Map();
 
 function authorizedHeaders(headers = {}) {
   return { ...headers, "X-SentriFace-Session": SESSION_TOKEN };
@@ -73,7 +74,16 @@ export function useApiClient() {
     }
   }, [readResponse]);
 
-  const apiGet = useCallback((path, options = {}) => request(path, {}, options), [request]);
+  const apiGet = useCallback((path, options = {}) => {
+    if (options.signal || options.dedupe === false) return request(path, {}, options);
+    const existing = GET_REQUESTS_IN_FLIGHT.get(path);
+    if (existing) return existing;
+    const pending = request(path, {}, options).finally(() => {
+      if (GET_REQUESTS_IN_FLIGHT.get(path) === pending) GET_REQUESTS_IN_FLIGHT.delete(path);
+    });
+    GET_REQUESTS_IN_FLIGHT.set(path, pending);
+    return pending;
+  }, [request]);
 
   const apiPost = useCallback((path, body, options = {}) => request(path, {
     method: "POST",

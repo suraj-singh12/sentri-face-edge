@@ -12,13 +12,27 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
   const canAdd = capabilities.includes("add");
   const uploads = useFileUploads(api);
   const appData = useAppData({ activeView, capabilities, ...api });
-  const recognize = useRecognizeController({ ...api, ...uploads, loadEvents: appData.loadEvents, loadPeople: appData.loadPeople });
-  const queue = useQueueController({ enabled: canAdd, ...api, ...uploads, loadEvents: appData.loadEvents, loadPeople: appData.loadPeople });
+  const recognize = useRecognizeController({
+    ...api,
+    ...uploads,
+    updatePerson: appData.updatePerson,
+    upsertPerson: appData.upsertPerson,
+  });
+  const queue = useQueueController({
+    enabled: canAdd && activeView === "queue",
+    ...api,
+    ...uploads,
+    updatePerson: appData.updatePerson,
+    upsertPerson: appData.upsertPerson,
+  });
   const people = usePeopleController({
     ...api,
-    loadDeletedFaces: appData.loadDeletedFaces,
-    loadEvents: appData.loadEvents,
-    loadPeople: appData.loadPeople,
+    updatePerson: appData.updatePerson,
+    upsertPerson: appData.upsertPerson,
+    archivePersonLocally: appData.archivePersonLocally,
+    restorePersonLocally: appData.restorePersonLocally,
+    addDeletedFace: appData.addDeletedFace,
+    removeDeletedFace: appData.removeDeletedFace,
   });
 
   return {

@@ -36,17 +36,14 @@ export function RecoveryGate({ user, logout, children }) {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      apiGet("/api/recovery/readiness"),
-      canConfigure
-        ? apiGet("/api/recovery/destinations", { silent: true }).catch(() => ({ destinations: [] }))
-        : Promise.resolve({ destinations: [] }),
-    ])
-      .then(([readiness, destinationResult]) => {
-        if (active) {
-          setStatus(readiness);
-          setDestinations(destinationResult.destinations || []);
-        }
+    apiGet("/api/recovery/readiness")
+      .then(async (readiness) => {
+        if (!active) return;
+        setStatus(readiness);
+        if (readiness.ready || readiness.acknowledged || !canConfigure) return;
+        const destinationResult = await apiGet("/api/recovery/destinations", { silent: true })
+          .catch(() => ({ destinations: [] }));
+        if (active) setDestinations(destinationResult.destinations || []);
       })
       .catch((caught) => {
         if (active) setError(caught.message);

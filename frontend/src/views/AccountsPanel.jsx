@@ -26,11 +26,11 @@ export function AccountsPanel({ currentUser }) {
   const createUser = async () => {
     setBusy(true);
     try {
-      await apiPost("/api/users", { username, display_name: displayName, password, roles });
+      const payload = await apiPost("/api/users", { username, display_name: displayName, password, roles });
+      setUsers((current) => [payload.user, ...current.filter((user) => user.user_id !== payload.user.user_id)]);
       showToast("Machine account created");
       setCreateOpen(false);
       clearForm();
-      await load();
     } finally { setBusy(false); }
   };
   const openEdit = (user) => {
@@ -43,11 +43,11 @@ export function AccountsPanel({ currentUser }) {
   const saveUser = async () => {
     setBusy(true);
     try {
-      await apiPost("/api/users/update", { user_id: editing.user_id, display_name: displayName, roles, disabled });
+      const payload = await apiPost("/api/users/update", { user_id: editing.user_id, display_name: displayName, roles, disabled });
+      setUsers((current) => current.map((user) => user.user_id === payload.user.user_id ? payload.user : user));
       showToast("Account roles updated");
       setEditing(null);
       clearForm();
-      await load();
     } finally { setBusy(false); }
   };
   const resetPassword = async () => {

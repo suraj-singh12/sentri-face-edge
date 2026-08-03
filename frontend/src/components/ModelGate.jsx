@@ -51,10 +51,6 @@ export function ModelGate({ user, logout, children }) {
 
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => {
-    const interval = window.setInterval(refresh, 15_000);
-    return () => window.clearInterval(interval);
-  }, [refresh]);
-  useEffect(() => {
     const requireModels = () => { setLoading(true); refresh(); };
     window.addEventListener("sentriface-models-required", requireModels);
     return () => window.removeEventListener("sentriface-models-required", requireModels);

@@ -9,8 +9,8 @@ export function useQueueController({
   apiDelete,
   apiGet,
   apiPost,
-  loadEvents,
-  loadPeople,
+  updatePerson,
+  upsertPerson,
   notifySkippedInputs,
   prepareImageFiles,
   showToast,
@@ -96,6 +96,14 @@ export function useQueueController({
     loadQueueSessions().catch((error) => console.error("[sentriface-ui] unable to restore queue", error));
   }, [enabled, loadQueueSessions]);
 
+  const removeClosedQueueSession = (sessionId) => {
+    setQueueSessions((current) => current.filter((session) => session.session_id !== sessionId));
+    if (queueSessionId === sessionId) {
+      setQueueSessionId("");
+      setQueueGroups([]);
+    }
+  };
+
   const scanQueuePath = useCallback(async (path, options = {}) => {
     const jobId = options.jobId || crypto.randomUUID();
     const startedAt = Date.now();
@@ -109,15 +117,20 @@ export function useQueueController({
       totalFiles: options.totalFiles || current?.totalFiles || 0,
       uploadedFiles: options.uploadedFiles || current?.uploadedFiles || 0,
     }));
+    let progressRequestInFlight = false;
     pollId = window.setInterval(async () => {
+      if (progressRequestInFlight) return;
+      progressRequestInFlight = true;
       try {
         const payload = await apiGet(`/api/queue-progress?job_id=${encodeURIComponent(jobId)}`);
         if (canceledQueueJobs.current.has(jobId)) return;
         setQueueProgress((current) => normalizeQueueProgress({ ...current, ...payload, jobId, startedAt }));
       } catch {
         // Progress polling is advisory; the scan request remains authoritative.
+      } finally {
+        progressRequestInFlight = false;
       }
-    }, 450);
+    }, 1000);
     try {
       const payload = await apiPost("/api/queue-scan", {
         path,
@@ -136,6 +149,10 @@ export function useQueueController({
       }
       setQueueSessionId(payload.session_id);
       setQueueGroups(payload.groups);
+      setQueueSessions((current) => [
+        queueSessionSummary(payload.session_id, payload.groups, path),
+        ...current.filter((session) => session.session_id !== payload.session_id),
+      ]);
       setQueueReviewStats({
         ...emptyQueueReviewStats,
         totalGroups: payload.groups.length,
@@ -153,7 +170,6 @@ export function useQueueController({
         groups: payload.groups.length,
         finishedAt: Date.now(),
       }));
-      await Promise.all([loadEvents(), loadQueueSessions(payload.session_id)]);
     } catch (error) {
       if (options.signal?.aborted || canceledQueueJobs.current.has(jobId)) return;
       setQueueProgress((current) => normalizeQueueProgress({
@@ -171,7 +187,7 @@ export function useQueueController({
         setQueueProgress((current) => current?.jobId === jobId && current.status === "done" ? null : current);
       }, 900);
     }
-  }, [apiGet, apiPost, loadEvents, loadQueueSessions, notifySkippedInputs, showToast]);
+  }, [apiGet, apiPost, notifySkippedInputs, setQueueSessionId, showToast]);
 
   const scanQueueFiles = async (files, options = {}) => {
     const prepared = await prepareImageFiles(files, options.source || "queue");
@@ -313,7 +329,7 @@ export function useQueueController({
           terminal = snapshot;
           break;
         }
-        await new Promise((resolve) => window.setTimeout(resolve, 150));
+        await new Promise((resolve) => window.setTimeout(resolve, 750));
       }
       if (terminal?.status === "cancelled") {
         setQueueProgress(null);
@@ -371,7 +387,9 @@ export function useQueueController({
     setQueueSelectedGroupId("");
     resetQueueDecision();
     setQueueReviewStats(emptyQueueReviewStats);
-    await Promise.all([loadQueueSessions(""), loadEvents()]);
+    const remaining = queueSessions.filter((session) => session.session_id !== discardedSessionId);
+    setQueueSessions(remaining);
+    if (remaining[0]) await loadQueueGroups(remaining[0].session_id);
     showToast("Queue session and its pending photos were discarded", "yellow");
   };
 
@@ -421,11 +439,14 @@ export function useQueueController({
     resetQueueDecision();
     setQueueSelectedGroup(null);
     setQueueSelectedGroupId("");
-    if (payload.session_closed) setQueueProgress(null);
-    await Promise.all([
-      payload.session_closed ? loadQueueSessions("") : loadQueueGroups(queueSelectedGroup.session_id),
-      loadEvents(),
-    ]);
+    if (payload.session_closed) {
+      setQueueProgress(null);
+      removeClosedQueueSession(queueSelectedGroup.session_id);
+    }
+    setQueueGroups(payload.groups || []);
+    if (!payload.session_closed) setQueueSessions((current) => current.map((session) => session.session_id === queueSelectedGroup.session_id
+        ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
+        : session));
   };
 
   const discardQueueGroup = async (group) => {
@@ -440,11 +461,14 @@ export function useQueueController({
       setQueueSelectedGroupId("");
       resetQueueDecision();
     }
-    if (payload.session_closed) setQueueProgress(null);
-    await Promise.all([
-      payload.session_closed ? loadQueueSessions("") : loadQueueGroups(group.session_id),
-      loadEvents(),
-    ]);
+    if (payload.session_closed) {
+      setQueueProgress(null);
+      removeClosedQueueSession(group.session_id);
+    }
+    setQueueGroups(payload.groups || []);
+    if (!payload.session_closed) setQueueSessions((current) => current.map((session) => session.session_id === group.session_id
+        ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
+        : session));
     showToast(`Discarded group with ${group.faces.length} face(s)`, "yellow");
   };
 
@@ -474,7 +498,6 @@ export function useQueueController({
     event.preventDefault();
     if (!queueFollowup?.faceIds?.length || !queueSelectedGroup) return;
     const confirmedSessionId = queueSelectedGroup.session_id;
-    const confirmedFaceIds = queueFollowup.faceIds;
     const payload = queueFollowup.action === "new"
       ? await apiPost("/api/queue-confirm-new", {
         session_id: queueSelectedGroup.session_id,
@@ -490,25 +513,34 @@ export function useQueueController({
       });
     const personId = payload.person_id || queueFollowup.personId;
     const entries = payload.accepted || [];
-    await Promise.all(entries.map((entry) => apiPost("/api/recognition-followup", {
-      path: entry.image_path,
-      name: queueFollowup.name,
-      person_id: personId,
-      embedding_id: entry.embedding_id,
-      image_id: entry.image_id,
-      image_path: entry.image_path,
-      decision: queueFollowup.decision,
-      date: queueFollowup.date,
-      time: queueFollowup.time,
-      rank: queueFollowup.rank,
-      country: queueFollowup.country,
-      importance: queueFollowup.importance,
-      place_seen: queueFollowup.placeSeen,
-      individual_count: Number(queueFollowup.individualCount),
-      event_occasion: queueFollowup.eventOccasion,
-      added_by: queueFollowup.addedBy,
-      operation_id: queueFollowup.followupOperationIds?.[entry.face_id] || crypto.randomUUID(),
-    })));
+    if (payload.session_closed) removeClosedQueueSession(confirmedSessionId);
+    else {
+      setQueueGroups(payload.groups || []);
+      setQueueSessions((current) => current.map((session) => session.session_id === confirmedSessionId
+        ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
+        : session));
+    }
+    for (const entry of entries) {
+      await apiPost("/api/recognition-followup", {
+        path: entry.image_path,
+        name: queueFollowup.name,
+        person_id: personId,
+        embedding_id: entry.embedding_id,
+        image_id: entry.image_id,
+        image_path: entry.image_path,
+        decision: queueFollowup.decision,
+        date: queueFollowup.date,
+        time: queueFollowup.time,
+        rank: queueFollowup.rank,
+        country: queueFollowup.country,
+        importance: queueFollowup.importance,
+        place_seen: queueFollowup.placeSeen,
+        individual_count: Number(queueFollowup.individualCount),
+        event_occasion: queueFollowup.eventOccasion,
+        added_by: queueFollowup.addedBy,
+        operation_id: queueFollowup.followupOperationIds?.[entry.face_id] || crypto.randomUUID(),
+      });
+    }
     setQueueFollowupDone(true);
     setQueueSelectedFaces([]);
     setQueueAccepted(false);
@@ -527,14 +559,29 @@ export function useQueueController({
         },
       ],
     }));
+    if (queueFollowup.action === "new") {
+      upsertPerson({
+        person_id: personId,
+        name: queueFollowup.name,
+        embedding_count: entries.length,
+        representative_image: entries[0]?.image_path || "",
+        favorite: false,
+        tags: [],
+        created_at: new Date().toISOString(),
+        metadata: {
+          rank: queueFollowup.rank || "",
+          country: queueFollowup.country || "",
+          importance: queueFollowup.importance || "",
+        },
+      });
+    } else {
+      updatePerson(personId, (person) => ({
+        ...person,
+        embedding_count: Number(person.embedding_count || 0) + entries.length,
+        representative_image: person.representative_image || entries[0]?.image_path || "",
+      }));
+    }
     showToast(`Queue details confirmed for ${entries.length} face(s)`);
-    await Promise.all([
-      payload.session_closed
-        ? loadQueueSessions("")
-        : loadQueueGroups(confirmedSessionId, { preserveSelectedGroup: true, removeFaceIds: confirmedFaceIds }),
-      loadPeople(),
-      loadEvents(),
-    ]);
     window.setTimeout(() => {
       setQueueFollowup(null);
       setQueueFollowupDone(false);
@@ -550,6 +597,9 @@ export function useQueueController({
       group_id: queueSelectedGroup.group_id,
     });
     setQueueGroups(payload.groups);
+    setQueueSessions((current) => current.map((session) => session.session_id === queueSessionId
+      ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
+      : session));
     setQueueReviewStats((current) => ({
       ...current,
       skippedGroups: current.skippedGroups + 1,
@@ -561,13 +611,15 @@ export function useQueueController({
     showToast("Group skipped for now", "yellow");
     setQueueSelectedGroup(null);
     resetQueueDecision();
-    await loadEvents();
   };
 
   const queueResumeSkipped = async () => {
     if (!queueSessionId) return;
     const payload = await apiPost("/api/queue-resume-skipped", { session_id: queueSessionId });
     setQueueGroups(payload.groups);
+    setQueueSessions((current) => current.map((session) => session.session_id === queueSessionId
+      ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
+      : session));
     setQueueReviewStats((current) => ({ ...current, skippedGroups: 0 }));
     showToast(`Restored ${payload.resumed} skipped group(s)`);
   };
@@ -581,10 +633,12 @@ export function useQueueController({
       person_id: best.person_id,
     });
     setQueueGroups(payload.groups);
+    setQueueSessions((current) => current.map((session) => session.session_id === queueSessionId
+      ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
+      : session));
     setQueueSelectedGroup(null);
     resetQueueDecision();
     showToast(`Removed ${best.name} as the suggestion`, "yellow");
-    await loadEvents();
   };
 
   const openQueueGallery = async (personId) => {
@@ -730,6 +784,19 @@ function normalizeQueueProgress(progress) {
     finishedAt: progress.finishedAt || progress.finished_at || null,
     elapsedSeconds: Number(progress.elapsedSeconds ?? progress.elapsed_seconds ?? 0),
     error: progress.error || "",
+  };
+}
+
+function queueSessionSummary(sessionId, groups = [], sourcePath = "", createdAt = "") {
+  return {
+    session_id: sessionId,
+    source_path: sourcePath,
+    status: "pending",
+    created_at: createdAt || new Date().toISOString(),
+    group_count: groups.length,
+    face_count: groups.reduce((total, group) => total + (group.faces?.length || 0), 0),
+    pending_count: groups.filter((group) => group.status === "pending" && group.faces?.length).length,
+    skipped_count: groups.filter((group) => group.status === "skipped" && group.faces?.length).length,
   };
 }
 

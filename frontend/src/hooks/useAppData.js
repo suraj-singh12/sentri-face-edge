@@ -20,6 +20,8 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const [restoreBackupSelection, setRestoreBackupSelection] = useState(null);
   const backupInFlight = useRef(false);
   const restoreInFlight = useRef(false);
+  const profileLoaded = useRef(false);
+  const loadedViews = useRef(new Set());
 
   const loadProfile = useCallback(async (options = {}) => setProfile(await apiGet("/api/profile", options)), [apiGet]);
   const loadPeople = useCallback(async (options = {}) => {
@@ -48,23 +50,73 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const refreshAll = useCallback(async (options = {}) => {
     setConnectionError("");
     try {
-      await Promise.all([
-        loadProfile(options),
-        loadPeople(options),
-        loadDeletedFaces(options),
-        loadEvents(options),
-        loadBackups(options),
-      ]);
+      if (!profileLoaded.current || options.includeProfile) {
+        await loadProfile(options);
+        profileLoaded.current = true;
+      }
+      if (activeView === "people" && (options.force || !loadedViews.current.has("people"))) {
+        await loadPeople(options);
+        await loadDeletedFaces(options);
+        loadedViews.current.add("people");
+      }
+      if (activeView === "debug" && (options.force || !loadedViews.current.has("debug"))) {
+        await loadEvents(options);
+        await loadBackups(options);
+        loadedViews.current.add("debug");
+      }
     } catch (error) {
       setConnectionError(error?.message || "SentriFace server is unavailable");
       throw error;
     }
-  }, [loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups]);
+  }, [activeView, loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups]);
+
+  const updatePerson = useCallback((personId, updater) => {
+    const update = (items) => items.map((person) => (
+      person.person_id === personId ? updater(person) : person
+    ));
+    setPeople(update);
+    setArchivedPeople(update);
+  }, []);
+
+  const upsertPerson = useCallback((person) => {
+    if (!person?.person_id) return;
+    setPeople((current) => [person, ...current.filter((item) => item.person_id !== person.person_id)]);
+    setArchivedPeople((current) => current.filter((item) => item.person_id !== person.person_id));
+  }, []);
+
+  const archivePersonLocally = useCallback((personId, archivedAt, metadata = {}) => {
+    const person = people.find((item) => item.person_id === personId);
+    if (!person) return;
+    const archived = {
+      ...person,
+      deleted_at: archivedAt || new Date().toISOString(),
+      metadata: { ...(person.metadata || {}), ...metadata },
+    };
+    setPeople((current) => current.filter((item) => item.person_id !== personId));
+    setArchivedPeople((current) => [archived, ...current.filter((item) => item.person_id !== personId)]);
+  }, [people]);
+
+  const restorePersonLocally = useCallback((personId) => {
+    const person = archivedPeople.find((item) => item.person_id === personId);
+    if (!person) return;
+    const restored = { ...person, deleted_at: null };
+    setArchivedPeople((current) => current.filter((item) => item.person_id !== personId));
+    setPeople((current) => [restored, ...current.filter((item) => item.person_id !== personId)]);
+  }, [archivedPeople]);
+
+  const addDeletedFace = useCallback((face) => {
+    if (!face?.embedding_id) return;
+    setDeletedFaces((current) => [face, ...current.filter((item) => item.embedding_id !== face.embedding_id)]);
+  }, []);
+
+  const removeDeletedFace = useCallback((embeddingId) => {
+    setDeletedFaces((current) => current.filter((item) => item.embedding_id !== embeddingId));
+  }, []);
   const reloadAppData = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      await refreshAll({ timeoutMs: 8_000, silent: true });
+      await refreshAll({ timeoutMs: 8_000, silent: true, includeProfile: true, force: true });
       showToast("App data refreshed");
     } finally {
       setRefreshing(false);
@@ -84,13 +136,6 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
       autoClose: 8500,
     });
   }, [showToast]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (activeView === "debug") loadEvents().catch((error) => console.error(error));
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [activeView, loadEvents]);
 
   const configureRecovery = async (destination) => {
     if (!canRecovery) return null;
@@ -140,7 +185,6 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
           autoClose: 7500,
         },
       );
-      await Promise.all([loadBackups(), loadEvents()]);
     } catch (error) {
       showToast(
         `${error.message || "Portable backup could not be created."}\nYour current data was not changed.`,
@@ -174,7 +218,6 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     await apiDelete(`/api/backups/${encodeURIComponent(backupId)}?${query}`);
     setBackups((current) => current.filter((item) => item.backup_id !== backupId));
     showToast("Portable backup deleted", "yellow");
-    await loadEvents();
   };
 
   const importBackup = async (file, passphrase = "") => {
@@ -205,7 +248,10 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
             : {},
         },
       );
-      await Promise.all([loadBackups(), loadEvents()]);
+      setBackups((current) => [
+        payload.backup,
+        ...current.filter((item) => item.backup_id !== payload.backup.backup_id),
+      ].slice(0, 10));
       showToast(
         `${formatBytes(payload.backup.size_bytes)} · ${payload.backup.file_count || 0} referenced file${payload.backup.file_count === 1 ? "" : "s"}`,
         payload.backup.complete ? "teal" : "yellow",
@@ -309,6 +355,12 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     loadEvents,
     loadDeletedFaces,
     loadBackups,
+    updatePerson,
+    upsertPerson,
+    archivePersonLocally,
+    restorePersonLocally,
+    addDeletedFace,
+    removeDeletedFace,
     refreshAll,
     reloadAppData,
     configureRecovery,
