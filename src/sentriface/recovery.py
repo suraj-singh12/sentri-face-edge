@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import secrets
+import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,6 +27,49 @@ SCRYPT_P = 1
 
 class RecoveryError(RuntimeError):
     """Raised when disaster recovery cannot proceed safely."""
+
+
+def available_recovery_destinations() -> list[dict[str, str]]:
+    """Return simple local-drive choices without exposing the live data drive."""
+    candidates: list[Path] = []
+    if os.name == "nt":
+        import ctypes
+
+        system_drive = Path(os.environ.get("SystemDrive", "C:")).drive.casefold()
+        bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+        for index in range(26):
+            if not bitmask & (1 << index):
+                continue
+            root = Path(f"{chr(65 + index)}:\\")
+            drive_type = ctypes.windll.kernel32.GetDriveTypeW(str(root))
+            if drive_type in {2, 3} and root.drive.casefold() != system_drive:
+                candidates.append(root)
+    elif sys.platform == "darwin":
+        volume_root = Path("/Volumes")
+        candidates.extend(volume_root.iterdir() if volume_root.is_dir() else [])
+    else:
+        user = os.environ.get("USER", "")
+        for root in (Path("/media") / user, Path("/run/media") / user, Path("/mnt")):
+            candidates.extend(root.iterdir() if root.is_dir() else [])
+
+    choices: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+            identity = str(resolved).casefold()
+            if resolved == Path("/").resolve() or identity in seen or not candidate.is_dir():
+                continue
+            if not os.access(candidate, os.W_OK):
+                continue
+        except OSError:
+            continue
+        seen.add(identity)
+        choices.append({
+            "label": candidate.name or str(candidate),
+            "path": str(candidate / "SentriFace Backup"),
+        })
+    return sorted(choices, key=lambda item: item["label"].casefold())
 
 
 def _require_local_destination(destination: Path) -> None:

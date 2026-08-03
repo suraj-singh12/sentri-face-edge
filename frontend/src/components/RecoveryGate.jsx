@@ -9,6 +9,8 @@ import {
   Code,
   Group,
   Loader,
+  Paper,
+  SimpleGrid,
   Stack,
   Text,
   TextInput,
@@ -28,13 +30,23 @@ export function RecoveryGate({ user, logout, children }) {
   const [riskAccepted, setRiskAccepted] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState("");
   const [configuredReadiness, setConfiguredReadiness] = useState(null);
+  const [destinations, setDestinations] = useState([]);
+  const [manualOpen, setManualOpen] = useState(false);
   const canConfigure = (user?.capabilities || []).includes("recovery");
 
   useEffect(() => {
     let active = true;
-    apiGet("/api/recovery/readiness")
-      .then((result) => {
-        if (active) setStatus(result);
+    Promise.all([
+      apiGet("/api/recovery/readiness"),
+      canConfigure
+        ? apiGet("/api/recovery/destinations", { silent: true }).catch(() => ({ destinations: [] }))
+        : Promise.resolve({ destinations: [] }),
+    ])
+      .then(([readiness, destinationResult]) => {
+        if (active) {
+          setStatus(readiness);
+          setDestinations(destinationResult.destinations || []);
+        }
       })
       .catch((caught) => {
         if (active) setError(caught.message);
@@ -50,7 +62,7 @@ export function RecoveryGate({ user, logout, children }) {
   if (error) {
     return (
       <Center mih="100vh" p="md">
-        <Alert color="red" title="Could not check disaster recovery">{error}</Alert>
+        <Alert color="red" title="Could not check your backup">{error}</Alert>
       </Center>
     );
   }
@@ -99,29 +111,29 @@ export function RecoveryGate({ user, logout, children }) {
               <IconLifebuoy size={26} />
             </ThemeIcon>
             <Box>
-              <Title order={2}>{recoveryCode ? "Save your recovery code" : "Protect this machine first"}</Title>
+              <Title order={2}>{recoveryCode ? "Save your recovery code" : "Set up a safety copy"}</Title>
               <Text c="dimmed" mt={4}>
                 {recoveryCode
                   ? "This code is shown once. Store it separately from this machine."
-                  : "Disaster recovery keeps an encrypted copy outside SentriFace's live data directory."}
+                  : "Save an encrypted copy on a different drive so your data can be restored if this computer is lost or damaged."}
               </Text>
             </Box>
           </Group>
 
-          {error ? <Alert color="red" title="Recovery setup failed">{error}</Alert> : null}
+          {error ? <Alert color="red" title="Backup setup failed">{error}</Alert> : null}
 
           {recoveryCode ? (
             <>
               <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Do not lose this code">
-                The recovery kit and encrypted backups cannot restore the database without it.
+                  You cannot restore your backup without this code.
               </Alert>
               <Group wrap="nowrap">
                 <Code block fz="md" style={{ flex: 1, overflowWrap: "anywhere" }}>{recoveryCode}</Code>
                 <Button variant="light" leftSection={<IconCopy size={16} />} onClick={copyRecoveryCode}>Copy</Button>
               </Group>
               {configuredReadiness && !configuredReadiness.ready ? (
-                <Alert color="yellow" title="Recovery destination is not yet ready">
-                  Check that the destination remains connected and contains the recovery kit.
+                <Alert color="yellow" title="The backup drive is not ready">
+                  Check that the drive is connected and try again.
                 </Alert>
               ) : null}
               <Button onClick={() => {
@@ -133,25 +145,59 @@ export function RecoveryGate({ user, logout, children }) {
             </>
           ) : canConfigure ? (
             <>
-              <TextInput
-                label="Recovery destination"
-                description="Choose a folder on a separate local or removable drive. Network locations are rejected."
-                placeholder="E:\SentriFace-Recovery"
-                value={destination}
-                onChange={(event) => setDestination(event.currentTarget.value)}
-              />
+              {destinations.length ? (
+                <Box>
+                  <Text fw={700} mb="xs">Choose a connected drive</Text>
+                  <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                    {destinations.map((item) => (
+                      <Paper
+                        key={item.path}
+                        component="button"
+                        type="button"
+                        withBorder
+                        radius="md"
+                        p="md"
+                        ta="left"
+                        onClick={() => setDestination(item.path)}
+                        style={{
+                          cursor: "pointer",
+                          borderColor: destination === item.path ? "var(--mantine-color-teal-6)" : undefined,
+                          background: destination === item.path ? "var(--mantine-color-teal-light)" : undefined,
+                        }}
+                      >
+                        <Text fw={700}>{item.label}</Text>
+                        <Text size="sm" c="dimmed">SentriFace Backup</Text>
+                      </Paper>
+                    ))}
+                  </SimpleGrid>
+                </Box>
+              ) : (
+                <Alert color="blue" title="No separate drive was found">
+                  Connect a USB or external drive, then refresh this page. You can also enter a folder location manually.
+                </Alert>
+              )}
+              {manualOpen || !destinations.length ? (
+                <TextInput
+                  label="Folder location"
+                  description="Use a folder on a separate or removable drive—not on this computer's main drive."
+                  placeholder={navigator.userAgent.includes("Windows") ? "E:\\SentriFace Backup" : "/Volumes/Backup Drive/SentriFace Backup"}
+                  value={destination}
+                  onChange={(event) => setDestination(event.currentTarget.value)}
+                />
+              ) : (
+                <Button variant="subtle" color="gray" onClick={() => setManualOpen(true)}>Enter a different folder</Button>
+              )}
               <Button onClick={configure} loading={working} disabled={!destination.trim()}>
-                Configure disaster recovery
+                Create safety copy
               </Button>
 
-              <Alert color="red" icon={<IconAlertTriangle size={18} />} title="Continue without disaster recovery">
-                Without an external recovery copy, disk failure, theft, ransomware, or loss of this machine may make
-                all SentriFace data permanently unrecoverable.
+              <Alert color="red" icon={<IconAlertTriangle size={18} />} title="Skip the safety copy">
+                If this computer is damaged, stolen, or infected, your SentriFace data may be lost permanently.
               </Alert>
               <Checkbox
                 checked={riskAccepted}
                 onChange={(event) => setRiskAccepted(event.currentTarget.checked)}
-                label="I understand that this machine has no usable disaster-recovery copy and accept the risk for all users of this installation."
+                label="I understand that my data may not be recoverable without a safety copy."
               />
               <Button
                 color="red"
@@ -160,13 +206,13 @@ export function RecoveryGate({ user, logout, children }) {
                 disabled={!riskAccepted}
                 onClick={continueWithoutRecovery}
               >
-                Continue without disaster recovery
+                Skip for now
               </Button>
             </>
           ) : (
             <>
-              <Alert color="orange" title="Administrator action required">
-                An administrator must configure disaster recovery or explicitly accept continuing without it.
+              <Alert color="orange" title="The owner account is needed">
+                Ask the person who set up SentriFace to create a safety copy or choose to skip it.
               </Alert>
               <Button variant="default" onClick={logout}>Sign out</Button>
             </>

@@ -9,6 +9,8 @@ from pathlib import Path
 
 from sentriface.errors import ModelSetupError
 from sentriface.model_setup import (
+    INSIGHTFACE_RESEARCH_PROFILES,
+    MODEL_COMBINATIONS,
     _extract_verified,
     install_local_model_bundle,
     install_local_models,
@@ -244,6 +246,16 @@ class ModelSetupTest(unittest.TestCase):
                 "accepted-provider-baseline",
             )
             self.assertIsNone(installed["target_false_match_rate"])
+
+    def test_lightweight_detector_r50_pair_is_a_supported_research_profile(self) -> None:
+        choice = next(
+            item
+            for item in MODEL_COMBINATIONS["research"]
+            if item["id"] == "scrfd500m-r50-research"
+        )
+        self.assertEqual(choice["detector_file"], "det_500m.onnx")
+        self.assertEqual(choice["recognizer_file"], "w600k_r50.onnx")
+        self.assertIn(choice["id"], INSIGHTFACE_RESEARCH_PROFILES)
     def test_bundle_rejects_calibration_for_another_recognizer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -57,16 +57,17 @@ export function qualityColor(status) {
 }
 
 export function profileLine(profile) {
-  if (!profile) return "Starting local engine...";
-  return `${profile.runtime.toUpperCase()} Runtime | ${titleCase(profile.hardware_tier)} Profile | ${profile.onnx_intra_threads} Threads | DB: ${profile.db_path}`;
+  if (!profile) return "Starting...";
+  if (profile.runtime === "dev") return "Demo mode · Test results only";
+  return `Ready on this computer · ${titleCase(profile.hardware_tier)} performance`;
 }
 
 export function tabLabel(view) {
   return {
-    recognize: "Recognize",
-    queue: "Queue",
+    recognize: "Check a photo",
+    queue: "Review photos",
     people: "People",
-    debug: "Advanced",
+    debug: "Settings",
   }[view];
 }
 

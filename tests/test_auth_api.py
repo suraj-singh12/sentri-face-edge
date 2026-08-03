@@ -82,6 +82,11 @@ class AuthenticationApiTest(unittest.TestCase):
             self.assertFalse(readiness["acknowledged"])
             self.assertNotIn("destination", readiness)
 
+            status, destinations, _ = self._request(server, "GET", "/api/recovery/destinations", cookie=admin_cookie)
+            self.assertEqual(status, 200)
+            self.assertIsInstance(destinations["destinations"], list)
+            self.assertEqual(self._request(server, "GET", "/api/recovery/destinations", cookie=viewer_cookie)[0], 403)
+
             status, _, _ = self._request(
                 server,
                 "POST",

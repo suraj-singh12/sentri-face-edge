@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import http.client
+import hashlib
 import json
 import tempfile
 import threading
@@ -15,6 +16,42 @@ PASSWORD = "correct horse battery staple"
 
 
 class ModelOnboardingApiTest(unittest.TestCase):
+    def test_model_upload_streams_locally_and_calculates_sha256(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            server = create_server(
+                port=0,
+                data_dir=root / "data",
+                runtime="onnx",
+                detector_model=root / "models" / "detector.onnx",
+                recognizer_model=root / "models" / "recognizer.onnx",
+                debug=False,
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                _, token = server.auth.signup_initial("owner", "Owner", PASSWORD)
+                body = b"local onnx model bytes"
+                status, payload = self._raw_request(
+                    server,
+                    "POST",
+                    "/api/models/upload?kind=detector&filename=det_500m.onnx",
+                    body,
+                    cookie=f"{AUTH_COOKIE_NAME}={token}",
+                )
+
+                self.assertEqual(status, 201)
+                self.assertEqual(payload["filename"], "det_500m.onnx")
+                self.assertEqual(payload["size"], len(body))
+                self.assertEqual(payload["sha256"], hashlib.sha256(body).hexdigest())
+                staged = Path(payload["path"])
+                self.assertEqual(staged.read_bytes(), body)
+                self.assertIn(".uploads", staged.parts)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
     def test_missing_onnx_models_start_authenticated_setup_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -114,6 +151,27 @@ class ModelOnboardingApiTest(unittest.TestCase):
         if cookie:
             headers["Cookie"] = cookie
         connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=20)
+        try:
+            connection.request(method, path, body=body, headers=headers)
+            response = connection.getresponse()
+            raw = response.read()
+            return response.status, json.loads(raw.decode("utf-8"))
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _raw_request(server, method: str, path: str, body: bytes, *, cookie: str = ""):
+        headers = {
+            "X-SentriFace-Session": server.session_token,
+            "Content-Type": "application/octet-stream",
+        }
+        if cookie:
+            headers["Cookie"] = cookie
+        connection = http.client.HTTPConnection(
+            "127.0.0.1",
+            server.server_port,
+            timeout=20,
+        )
         try:
             connection.request(method, path, body=body, headers=headers)
             response = connection.getresponse()

@@ -638,11 +638,11 @@ function QueuePreviewMosaic({ faces }) {
   const overflowCount = Math.max(0, faces.length - 5);
   return (
     <Group gap="md" wrap="nowrap" className="queue-preview-mosaic">
-      <Image src={mediaUrl(primary.crop_path || primary.source_image)} alt="group preview" fit="cover" className="queue-preview-main" radius="sm" />
+      <Image src={mediaUrl(primary.image_path || primary.crop_path || primary.source_image)} alt="group preview" fit="cover" className="queue-preview-main" radius="sm" />
       <Box className="queue-preview-thumbs">
         {thumbnails.map((face, index) => (
           <Box key={face.init_face_id} className="queue-thumb-wrap">
-            <Image src={mediaUrl(face.crop_path || face.source_image)} alt="group thumbnail" fit="cover" radius="sm" />
+            <Image src={mediaUrl(face.image_path || face.crop_path || face.source_image)} alt="group thumbnail" fit="cover" radius="sm" />
             {overflowCount > 0 && index === thumbnails.length - 1 && <Box className="queue-thumb-more">+{overflowCount}</Box>}
           </Box>
         ))}
@@ -735,7 +735,7 @@ function QueueGroupReview({
       {mode === "summary" ? (
         <Grid gutter="md" className="queue-review-content">
           <Grid.Col span={{ base: 12, md: 7 }}>
-            <Card withBorder radius="md" className="queue-review-panel">
+            <Card withBorder radius="md" className="queue-review-panel queue-incoming-panel">
               <Group justify="space-between" mb="md">
                 <Box>
                   <Text fw={800}>Incoming photos</Text>
@@ -817,7 +817,7 @@ function QueueIncomingGrid({ faces, selectedFaces, accepted, onToggleFace }) {
             onClick={() => onToggleFace(face.init_face_id)}
           >
             <Box pos="relative">
-              <Image src={mediaUrl(face.crop_path || face.source_image)} alt="incoming face" fit="cover" h={132} radius="sm" />
+              <Image src={mediaUrl(face.image_path || face.crop_path || face.source_image)} alt="incoming face" fit="cover" h={132} radius="sm" />
               <ThemeIcon className="queue-selection-check" color={selected ? "teal" : "gray"} radius="xl" size="sm">{selected ? <IconCheck size={14} /> : <IconX size={13} />}</ThemeIcon>
             </Box>
             <Group justify="space-between" mt={7}>

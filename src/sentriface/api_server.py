@@ -39,7 +39,7 @@ from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import InputImageError, InputValidationError, ModelSetupError, QueueCancellationError, SentriFaceError
 from sentriface.hardware import assess_hardware
 from sentriface.paths import default_data_dir, default_log_dir
-from sentriface.recovery import RecoveryError, RecoveryService, recover_master_key
+from sentriface.recovery import RecoveryError, RecoveryService, available_recovery_destinations, recover_master_key
 from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key
 from sentriface.secure_files import read_protected_bytes, write_protected_bytes
 from sentriface.offline_guard import install_offline_guard, offline_guard_installed, require_local_path
@@ -73,6 +73,7 @@ UPLOAD_MAX_EDGE = 1600
 UPLOAD_MAX_PIXELS = 40_000_000
 JSON_REQUEST_LIMIT_BYTES = 10_000_000
 BACKUP_IMPORT_LIMIT_BYTES = 20_000_000_000
+MODEL_UPLOAD_LIMIT_BYTES = 2_000_000_000
 DUPLICATE_MATCH_SCORE = 0.9999
 INFERENCE_ENDPOINTS = {
     "/api/recognize",
@@ -92,6 +93,7 @@ MAX_HTTP_HANDLERS = 8
 MODEL_SETUP_ALLOWED_ENDPOINTS = {
     "/api/health",
     "/api/models/status",
+    "/api/models/upload",
     "/api/models/install",
 }
 
@@ -111,12 +113,12 @@ def _required_capability(method: str, path: str) -> str | None:
         return "view"
     if path.startswith("/api/users"):
         return "administer"
-    if path == "/api/models/install":
+    if path in {"/api/models/install", "/api/models/upload"}:
         return "administer"
     if method == "GET":
         if path == "/api/events":
             return "technical"
-        if path == "/api/recovery":
+        if path in {"/api/recovery", "/api/recovery/destinations"}:
             return "recovery"
         if path == "/api/backups":
             return "backups"
@@ -623,9 +625,12 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             break
 
     def server_close(self) -> None:
-        with self.queue_progress_lock:
-            for cancellation in self.queue_cancellations.values():
-                cancellation.set()
+        queue_progress_lock = getattr(self, "queue_progress_lock", None)
+        queue_cancellations = getattr(self, "queue_cancellations", None)
+        if queue_progress_lock is not None and queue_cancellations is not None:
+            with queue_progress_lock:
+                for cancellation in queue_cancellations.values():
+                    cancellation.set()
         maintenance_stop = getattr(self, "maintenance_stop", None)
         maintenance_thread = getattr(self, "maintenance_thread", None)
         if maintenance_stop is not None:
@@ -878,6 +883,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/recovery/readiness":
                 self._json(self.server.recovery_readiness())
                 return
+            if parsed.path == "/api/recovery/destinations":
+                self._json({"destinations": available_recovery_destinations()})
+                return
             if parsed.path == "/api/recovery":
                 self._json(self.server.recovery.status())
                 return
@@ -987,6 +995,49 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     def _do_POST(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if parsed.path == "/api/models/upload":
+                kind = _query_value(parsed.query, "kind").strip().casefold()
+                if kind not in {"detector", "recognizer"}:
+                    raise InputValidationError(
+                        "Model upload kind must be detector or recognizer",
+                        "invalid_model_kind",
+                    )
+                filename = Path(_query_value(parsed.query, "filename")).name
+                if not filename.casefold().endswith(".onnx"):
+                    raise InputValidationError(
+                        "Choose an ONNX model file",
+                        "unsupported_model_file",
+                    )
+                model_dir = require_local_path(
+                    self.server.config.detector_model.parent
+                )
+                upload_dir = model_dir / ".uploads"
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                for previous in upload_dir.glob(f"{kind}-*.onnx"):
+                    previous.unlink(missing_ok=True)
+                staged_path = (
+                    upload_dir / f"{kind}-{uuid.uuid4().hex}.onnx"
+                )
+                digest, size = self._stream_model_upload(staged_path)
+                self.server.log_event(
+                    "model-file-selected",
+                    actor=self.auth_user.username,
+                    kind=kind,
+                    filename=filename,
+                    size=size,
+                    sha256=digest,
+                )
+                self._json(
+                    {
+                        "kind": kind,
+                        "filename": filename,
+                        "path": str(staged_path),
+                        "size": size,
+                        "sha256": digest,
+                    },
+                    status=HTTPStatus.CREATED,
+                )
+                return
             if parsed.path == "/api/backups/import":
                 filename = _query_value(parsed.query, "filename")
                 encrypted = filename.lower().endswith(".sfbackup.enc")
@@ -1132,6 +1183,14 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     license_reference=str(payload.get("license_reference") or ""),
                     license_name=str(payload.get("license_name") or ""),
                 )
+                for source in (detector_source, recognizer_source):
+                    upload_dir = model_dir / ".uploads"
+                    if upload_dir in source.parents:
+                        source.unlink(missing_ok=True)
+                try:
+                    (model_dir / ".uploads").rmdir()
+                except OSError:
+                    pass
                 try:
                     self.server.activate_installed_models(model_dir)
                 except Exception as exc:
@@ -2041,6 +2100,52 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         finally:
             temporary.unlink(missing_ok=True)
 
+    def _stream_model_upload(self, destination: Path) -> tuple[str, int]:
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise InputValidationError(
+                "Invalid model upload length",
+                "invalid_content_length",
+            ) from exc
+        if content_length <= 0:
+            raise InputValidationError("Model upload is empty", "empty_file")
+        if content_length > MODEL_UPLOAD_LIMIT_BYTES:
+            raise InputValidationError(
+                "Model file exceeds the 2 GB limit",
+                "file_too_large",
+            )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        available = shutil.disk_usage(destination.parent).free
+        if available < (content_length * 2) + 512 * 1024 * 1024:
+            raise InputValidationError(
+                "Not enough free disk space to stage and install this model",
+                "insufficient_disk_space",
+            )
+        temporary = destination.with_name(
+            f".{destination.name}.{uuid.uuid4().hex}.tmp"
+        )
+        digest = hashlib.sha256()
+        remaining = content_length
+        try:
+            with temporary.open("xb") as output:
+                while remaining:
+                    chunk = self.rfile.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        raise InputValidationError(
+                            "Model upload ended unexpectedly",
+                            "incomplete_upload",
+                        )
+                    output.write(chunk)
+                    digest.update(chunk)
+                    remaining -= len(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, destination)
+            return digest.hexdigest(), content_length
+        finally:
+            temporary.unlink(missing_ok=True)
+
     def _download_file(
         self,
         path: Path,
@@ -2249,7 +2354,6 @@ def main() -> int:
         storage_key = load_or_create_master_key(args.data_dir)
         setup_logging(
             debug=not args.quiet_debug,
-            os_network_policy=os_network_policy,
             log_dir=default_log_dir(args.data_dir),
             storage_key=storage_key,
         )
@@ -2833,13 +2937,20 @@ def _init_group(
         "session_id": group.session_id,
         "status": group.status,
         "representative_face_id": representative.init_face_id if representative else None,
-        "representative_image": (representative.face.crop_path or representative.source_image) if representative else None,
+        "representative_image": _available_image_path(
+            representative.face.crop_path,
+            representative.source_image,
+        ) if representative else None,
         "matches": [_match(engine, match, rank) for rank, match in enumerate(group_matches, 1)],
         "faces": [
             {
                 "init_face_id": face.init_face_id,
                 "source_image": face.source_image,
                 "crop_path": face.face.crop_path,
+                "image_path": _available_image_path(
+                    face.face.crop_path,
+                    face.source_image,
+                ),
                 "box": _box(face.face),
                 "quality": _quality(face.quality),
                 "matches": [_match(engine, match, rank) for rank, match in enumerate(face_matches[index], 1)],
@@ -2940,12 +3051,26 @@ def _representative_image(
             if record.embedding_id == representative_embedding_id:
                 return record.crop_path or record.source_image
     for record in embeddings:
-        if record.source_image:
-            return record.source_image
-    for record in embeddings:
         if record.crop_path:
             return record.crop_path
+    for record in embeddings:
+        if record.source_image:
+            return record.source_image
     return None
+
+
+def _available_image_path(*candidates: str | None) -> str | None:
+    """Prefer the first image that is still available, then a stable fallback.
+
+    Queue crops should normally exist, but an interrupted cleanup or manually
+    moved data must not make a whole group look empty when its source upload is
+    still readable.
+    """
+    paths = [candidate for candidate in candidates if candidate]
+    for candidate in paths:
+        if Path(candidate).is_file():
+            return candidate
+    return paths[0] if paths else None
 
 
 def _has_duplicate_embedding(vector: tuple[float, ...], embeddings: list[EmbeddingRecord]) -> bool:

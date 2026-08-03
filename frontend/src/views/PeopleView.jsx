@@ -585,8 +585,8 @@ function PersonCard({ person, favorite, archived, viewMode, onOpen, onFavorite }
   const photoCount = Number(person.embedding_count || 0);
   const photoFallback = <ThemeIcon size={72} radius="xl" variant="light" color="gray"><IconUser size={44} /></ThemeIcon>;
   return (
-    <Card withBorder radius="md" p="sm" className={cardClass}>
-      <Stack gap="sm" align="stretch" className="people-person-card-inner">
+    <Card withBorder radius="md" p="xs" className={cardClass}>
+      <Stack gap="xs" align="stretch" className="people-person-card-inner">
         <Box component="button" type="button" className="people-card-main" onClick={openPerson} aria-label={`Open ${person.name}`}>
           <Box className="people-card-image-wrap">
             <ImageFrame variant="peopleCard">
@@ -609,10 +609,6 @@ function PersonCard({ person, favorite, archived, viewMode, onOpen, onFavorite }
             <Group gap={5} mt={5}>
               <IconImageInPicture size={13} />
               <Text size="xs" c="dimmed">{photoCount} {photoCount === 1 ? "photo" : "photos"}</Text>
-            </Group>
-            <Group gap={6} mt={8} wrap="nowrap">
-              <Box className={photoCount ? "people-seen-dot people-seen-dot--active" : "people-seen-dot"} />
-              <Text size="xs" c={photoCount ? "teal.7" : "dimmed"} truncate>{photoCount ? "Photos available" : "No photos"}</Text>
             </Group>
           </Box>
         </Box>
@@ -1252,8 +1248,13 @@ function PeopleProfileSightings({ details, imageRecords, onSighting }) {
 
 function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
   const changeCards = changes.map(normalizeChange).filter((change) => change.fields.length);
+  const historyCards = [
+    ...changeCards,
+    ...managementEvents.map(normalizeManagementChange),
+  ].sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
   const [activeIndex, setActiveIndex] = useState(0);
-  const activeChange = changeCards[activeIndex] || null;
+  const activeHistory = historyCards[activeIndex] || null;
+  const activeChange = activeHistory?.kind === "profile" ? activeHistory : null;
   const changedFields = new Set(activeChange?.fields.map((field) => field.key) || []);
   return (
     <Box mt="md" className="people-change-history-shell">
@@ -1271,7 +1272,7 @@ function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
           <CurrentInfoRow icon={IconGlobe} label="Country" value={currentProfile.country || "-"} active={changedFields.has("country")} />
           <CurrentInfoRow icon={IconFlag} label="Importance" value={currentProfile.importance || "-"} active={changedFields.has("importance")} pill={importanceColor(currentProfile.importance)} />
           <Divider />
-          <CurrentInfoRow icon={IconRefresh} label="Last Updated" value={activeChange?.createdAt || "-"} subvalue={`By ${activeChange?.editor || "System"}`} />
+          <CurrentInfoRow icon={IconRefresh} label="Last Activity" value={activeHistory?.createdAt || "-"} subvalue={`By ${activeHistory?.editor || "System"}`} />
         </Stack>
       </Card>
       <Card withBorder radius="md" className="people-profile-panel people-change-history-panel">
@@ -1298,7 +1299,7 @@ function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
           </Group>
         </Group>
         <Box className="people-change-timeline">
-          {changeCards.length ? changeCards.map((change, index) => (
+          {historyCards.length ? historyCards.map((change, index) => (
             <Card
               key={change.id}
               withBorder
@@ -1319,38 +1320,28 @@ function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
                 </Box>
                 {index === activeIndex && <Badge size="sm" variant="light">Active</Badge>}
               </Group>
-              <Stack gap={0} className="people-change-field-list">
-                {change.fields.map((field) => <ChangeFieldRow key={field.key} field={field} />)}
-              </Stack>
+              {change.kind === "profile" ? (
+                <Stack gap={0} className="people-change-field-list">
+                  {change.fields.map((field) => <ChangeFieldRow key={field.key} field={field} />)}
+                </Stack>
+              ) : (
+                <Stack gap="sm" className="people-change-management-summary">
+                  <ThemeIcon size={42} radius="xl" variant="light"><IconRefresh size={21} /></ThemeIcon>
+                  <Text fw={800}>{change.title}</Text>
+                  <Text size="sm" c="dimmed">{change.detail}</Text>
+                </Stack>
+              )}
               {/* <Button mt="md" size="xs" variant="default" rightSection={<IconArrowLeft size={13} style={{ transform: "rotate(135deg)" }} />}>View Full Details</Button> */}
             </Card>
-          )) : <EmptyCard text="No changes recorded yet." />}
+          )) : <EmptyCard text="No profile activity recorded yet." />}
         </Box>
-        {changeCards.length > 1 && (
+        {historyCards.length > 1 && (
           <Group gap="xs" mt="sm" wrap="nowrap" className="people-change-scroll-hint">
             <Text c="dimmed">‹</Text>
-            <Box className="people-change-scroll-track"><Box className="people-change-scroll-fill" style={{ width: `${Math.max(18, ((activeIndex + 1) / changeCards.length) * 100)}%` }} /></Box>
+            <Box className="people-change-scroll-track"><Box className="people-change-scroll-fill" style={{ width: `${Math.max(18, ((activeIndex + 1) / historyCards.length) * 100)}%` }} /></Box>
             <Text c="dimmed">›</Text>
           </Group>
         )}
-        <Divider my="md" />
-        <Group gap="xs" mb="sm">
-          <IconRefresh size={16} />
-          <Text fw={900}>Management Activity</Text>
-        </Group>
-        <Stack gap="xs">
-          {managementEvents.length ? managementEvents.map((event) => (
-            <Paper key={event.operation_id} withBorder radius="md" p="sm">
-              <Group justify="space-between" align="flex-start" wrap="nowrap">
-                <Box>
-                  <Text size="sm" fw={700}>{managementEventLabel(event)}</Text>
-                  <Text size="xs" c="dimmed">{managementEventDetail(event)}</Text>
-                </Box>
-                <Text size="xs" c="dimmed">{compactChangeDate(event.created_at)}</Text>
-              </Group>
-            </Paper>
-          )) : <Text size="sm" c="dimmed">No management activity recorded yet.</Text>}
-        </Stack>
       </Card>
     </Box>
   );
@@ -1541,9 +1532,22 @@ function normalizeChange(change) {
     .map(([key, label, from, to]) => ({ key, label, from, to }));
   return {
     id: change.change_id,
+    kind: "profile",
     createdAt: change.created_at,
     editor: change.editor_name,
     fields,
+  };
+}
+
+function normalizeManagementChange(event) {
+  return {
+    id: event.operation_id,
+    kind: "management",
+    createdAt: event.created_at,
+    editor: "System",
+    title: managementEventLabel(event),
+    detail: managementEventDetail(event),
+    fields: [],
   };
 }
 

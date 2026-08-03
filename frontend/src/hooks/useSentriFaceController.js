@@ -26,6 +26,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       activeView,
       profile: appData.profile,
       connectionError: appData.connectionError,
+      refreshing: appData.refreshing,
       people: appData.people,
       archivedPeople: appData.archivedPeople,
       deletedFaces: appData.deletedFaces,

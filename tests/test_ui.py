@@ -9,6 +9,7 @@ import time
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import Mock
 
 import cv2
 import numpy as np
@@ -26,6 +27,7 @@ from sentriface.api_server import (
     _has_duplicate_embedding,
     _pending,
     _person_summary,
+    _init_group,
     _recognition,
     _save_upload,
     _save_upload_batch,
@@ -34,6 +36,14 @@ from sentriface.api_server import (
 
 
 class ApiSerializationTest(unittest.TestCase):
+    def test_partially_initialized_server_closes_without_masking_bind_error(self) -> None:
+        server = object.__new__(SentriFaceApiServer)
+        server.socket = Mock()
+
+        server.server_close()
+
+        server.socket.close.assert_called_once_with()
+
     def test_restore_operation_gate_waits_for_active_work_and_blocks_new_work(self) -> None:
         gate = OperationGate()
         active_started = threading.Event()
@@ -285,6 +295,46 @@ class ApiSerializationTest(unittest.TestCase):
             self.assertTrue(person_payload["representative_image"])
             self.assertIn("crop_path", pending_payload)
             self.assertIn("quality", pending_payload)
+
+    def test_person_summary_prefers_durable_crop_over_transient_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "external-original.jpg"
+            crop = root / "data" / "faces" / "pending" / "saved-crop.jpg"
+            self._write_image(source)
+            crop.parent.mkdir(parents=True, exist_ok=True)
+            self._write_image(crop)
+            engine = build_dev_engine(root / "data")
+            engine.initialize()
+            person = engine.store.create_person("Durable Photo")
+            engine.store.add_embedding(
+                person.person_id,
+                [0.0] * engine.config.embedding_dim,
+                quality_score=1.0,
+                source_image=str(source),
+                crop_path=str(crop),
+            )
+
+            payload = _person_summary(engine.list_persons()[0], engine)
+
+            self.assertEqual(payload["representative_image"], str(crop))
+
+    def test_queue_group_falls_back_to_source_when_crop_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "incoming.jpg"
+            self._write_image(source)
+            engine = build_dev_engine(root / "data")
+            engine.initialize()
+            session = engine.create_init_session(source)
+            group = engine.list_init_groups(session.session_id)[0]
+            missing_crop = Path(group.faces[0].face.crop_path)
+            missing_crop.unlink()
+
+            payload = _init_group(engine, group)
+
+            self.assertEqual(payload["representative_image"], str(source))
+            self.assertEqual(payload["faces"][0]["image_path"], str(source))
 
     def test_upload_save_writes_image_inside_data_dir(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

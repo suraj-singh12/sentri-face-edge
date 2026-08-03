@@ -133,6 +133,19 @@ python -m pip install -e ".[test]"
 sentriface-ui --runtime dev
 ```
 
+For the simplest macOS source run from this checkout:
+
+```bash
+./run.sh
+```
+
+The launcher creates/uses `.venv312`, installs missing dependencies, preserves
+the project-local `data/` directory, and starts the real ONNX runtime. On the
+first run, sign in, choose the matching model combination, and use the two
+**Browse for ONNX file** buttons. SentriFace calculates SHA-256 and creates the
+hash-bound calibration file automatically before recording the selected usage
+basis.
+
 ### Run the `pre-packaging` branch on macOS
 
 The source checkout supports Python 3.11 or 3.12. Install Git and a matching

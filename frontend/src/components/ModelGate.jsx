@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert, Badge, Box, Button, Card, Center, Checkbox, Divider, Grid, Group,
-  Loader, Paper, ScrollArea, SimpleGrid, Stack, Text, TextInput, ThemeIcon, Title,
+  Alert, Box, Button, Card, Center, Checkbox, FileButton, Group,
+  Loader, Paper, SimpleGrid, Stack, Text, TextInput, ThemeIcon, Title,
 } from "@mantine/core";
 import {
-  IconAlertTriangle, IconBriefcase, IconCheck, IconCpu, IconFileCertificate,
-  IconFlask, IconFolder, IconLock, IconShieldCheck,
+  IconAlertTriangle, IconBriefcase, IconCheck,
+  IconFileCheck, IconFlask, IconLock, IconShieldCheck, IconUpload,
 } from "@tabler/icons-react";
 
 import { useApiClient } from "../hooks/useApiClient.js";
@@ -13,10 +13,12 @@ import { useApiClient } from "../hooks/useApiClient.js";
 const EMPTY_FORM = {
   detectorPath: "",
   detectorSha256: "",
+  detectorName: "",
+  detectorSize: 0,
   recognizerPath: "",
   recognizerSha256: "",
-  calibrationPath: "",
-  calibrationSha256: "",
+  recognizerName: "",
+  recognizerSize: 0,
   organization: "",
   licensor: "",
   licenseReference: "",
@@ -25,12 +27,14 @@ const EMPTY_FORM = {
 };
 
 export function ModelGate({ user, logout, children }) {
-  const { apiGet, apiPost, showToast } = useApiClient();
+  const { apiGet, apiPost, apiUpload, showToast } = useApiClient();
   const [status, setStatus] = useState(null);
+  const [usageMode, setUsageMode] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
+  const [uploading, setUploading] = useState("");
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
@@ -60,10 +64,52 @@ export function ModelGate({ user, logout, children }) {
     () => [...(status?.combinations?.research || []), ...(status?.combinations?.commercial || [])],
     [status],
   );
+  const researchCombinations = status?.combinations?.research || [];
   const selected = combinations.find((item) => item.id === selectedId) || null;
+  const researchMatch = useMemo(() => {
+    if (!form.detectorName || !form.recognizerName) return null;
+    const detectorName = form.detectorName.toLowerCase();
+    const recognizerName = form.recognizerName.toLowerCase();
+    return researchCombinations.find((item) => (
+      item.detector_file?.toLowerCase() === detectorName
+      && item.recognizer_file?.toLowerCase() === recognizerName
+    )) || null;
+  }, [form.detectorName, form.recognizerName, researchCombinations]);
+  const bothFilesChosen = Boolean(form.detectorPath && form.recognizerPath);
+
+  useEffect(() => {
+    if (usageMode !== "research") return;
+    setSelectedId(researchMatch?.id || "");
+  }, [researchMatch, usageMode]);
+
   const update = (field) => (event) => {
     const value = event?.currentTarget?.type === "checkbox" ? event.currentTarget.checked : event.currentTarget.value;
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const selectModel = (kind) => async (file) => {
+    if (!file) return;
+    setUploading(kind);
+    setError("");
+    try {
+      const uploaded = await apiUpload(
+        `/api/models/upload?kind=${kind}&filename=${encodeURIComponent(file.name)}`,
+        file,
+        { silent: true, timeoutMs: 30 * 60 * 1000 },
+      );
+      setForm((current) => ({
+        ...current,
+        [`${kind}Path`]: uploaded.path,
+        [`${kind}Sha256`]: uploaded.sha256,
+        [`${kind}Name`]: uploaded.filename,
+        [`${kind}Size`]: uploaded.size,
+      }));
+      showToast(`${uploaded.filename} is ready`);
+    } catch (requestError) {
+      setError(requestError?.message || `The ${kind} model could not be read`);
+    } finally {
+      setUploading("");
+    }
   };
 
   const install = async () => {
@@ -77,8 +123,6 @@ export function ModelGate({ user, logout, children }) {
         detector_sha256: form.detectorSha256,
         recognizer_path: form.recognizerPath,
         recognizer_sha256: form.recognizerSha256,
-        calibration_path: form.calibrationPath || undefined,
-        calibration_sha256: form.calibrationSha256 || undefined,
         organization: form.organization,
         licensor: form.licensor,
         license_reference: form.licenseReference,
@@ -86,7 +130,7 @@ export function ModelGate({ user, logout, children }) {
         accept_responsibility: form.accepted,
       }, { silent: true, timeoutMs: 10 * 60 * 1000 });
       setStatus(next);
-      showToast("Recognition models verified and activated");
+      showToast("Face recognition is ready");
     } catch (requestError) {
       setError(requestError?.message || "The model bundle could not be activated");
     } finally {
@@ -95,230 +139,196 @@ export function ModelGate({ user, logout, children }) {
   };
 
   if (loading) {
-    return <Center mih="100vh"><Stack align="center"><Loader /><Text c="dimmed">Checking local recognition models...</Text></Stack></Center>;
+    return <Center mih="100vh"><Stack align="center"><Loader /><Text c="dimmed">Preparing face recognition...</Text></Stack></Center>;
   }
   if (status?.ready) return children;
 
   const required = Boolean(selected)
     && form.detectorPath && /^[a-f0-9]{64}$/i.test(form.detectorSha256)
     && form.recognizerPath && /^[a-f0-9]{64}$/i.test(form.recognizerSha256)
-    && ((!form.calibrationPath && !form.calibrationSha256)
-      || (form.calibrationPath && /^[a-f0-9]{64}$/i.test(form.calibrationSha256)))
     && form.accepted
     && (selected.usage_basis !== "commercial-license" || (form.licensor && form.licenseReference))
     && (selected.usage_basis !== "permissive-license" || form.licenseName);
 
   return (
     <Box mih="100vh" bg="var(--mantine-color-body)" p={{ base: "md", md: "xl" }}>
-      <Stack maw={1240} mx="auto" gap="lg">
+      <Stack maw={920} mx="auto" gap="lg">
         <Group justify="space-between" align="flex-start">
           <Box>
-            <Group gap="xs"><ThemeIcon color="teal" variant="light" size="lg"><IconCpu size={21} /></ThemeIcon><Title order={1} size="h2">Choose recognition models</Title></Group>
-            <Text c="dimmed" mt={6}>SentriFace is signed in, encrypted, and offline. Add a supported local detector and recognizer to continue.</Text>
+            <Title order={1} size="h2">Set up face recognition</Title>
+            <Text c="dimmed" mt={6}>Choose the two model files on this computer. SentriFace checks, copies, and configures them for you.</Text>
           </Box>
           <Stack gap={2} align="flex-end"><Text size="sm" fw={700}>{user?.display_name}</Text><Button size="compact-sm" variant="subtle" color="gray" onClick={logout}>Sign out</Button></Stack>
         </Group>
 
-        {status?.error ? <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Model setup required">{status.error}</Alert> : null}
+        {status?.error ? (
+          <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Model files are needed">
+            Choose both model files below to finish setup.
+          </Alert>
+        ) : null}
         {!status?.can_configure ? (
-          <Card withBorder radius="lg" p="xl"><Stack align="center" py="xl"><ThemeIcon size={56} radius="xl" color="orange" variant="light"><IconLock size={28} /></ThemeIcon><Title order={2} size="h3">Administrator action required</Title><Text c="dimmed" ta="center" maw={620}>Your account cannot install recognition models. Ask a SentriFace administrator to sign in and provide the locally licensed model files.</Text></Stack></Card>
+          <Card withBorder radius="lg" p="xl"><Stack align="center" py="xl"><ThemeIcon size={56} radius="xl" color="orange" variant="light"><IconLock size={28} /></ThemeIcon><Title order={2} size="h3">The owner account is needed</Title><Text c="dimmed" ta="center" maw={620}>Ask the person who set up SentriFace to sign in and choose the two model files.</Text></Stack></Card>
         ) : (
-          <>
-            <Grid gutter="lg" align="stretch">
-              <Grid.Col span={{ base: 12, md: 6 }}>
-                <ModelSide
-                  tone="orange"
-                  icon={IconFlask}
-                  eyebrow="NON-COMMERCIAL"
-                  title="Research only"
-                  description="Official InsightFace pretrained packages are supported here only for non-commercial research under their supplier terms."
-                  warning="Do not select this side for a sold product, paid service, production deployment, or other commercial use."
-                  items={status?.combinations?.research || []}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                />
-              </Grid.Col>
-              <Grid.Col span={{ base: 12, md: 6 }}>
-                <ModelSide
-                  tone="teal"
-                  icon={IconBriefcase}
-                  eyebrow="COMMERCIAL"
-                  title="Commercial use"
-                  description="Use supplier-licensed InsightFace weights or another compatible pair whose license permits your commercial deployment."
-                  warning="SentriFace records your declaration but cannot authenticate or grant third-party model rights."
-                  items={status?.combinations?.commercial || []}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                />
-              </Grid.Col>
-            </Grid>
-
-            {selected ? (
-              <Card withBorder radius="lg" p={{ base: "md", md: "xl" }} shadow="sm">
-                <Stack gap="lg">
-                  <Group justify="space-between" align="flex-start">
-                    <Box><Badge color={selected.usage_basis === "noncommercial-research" ? "orange" : "teal"} variant="light">Selected combination</Badge><Title order={2} size="h3" mt="xs">{selected.name}</Title><Text size="sm" c="dimmed">{selected.detector} + {selected.recognizer}</Text></Box>
-                    <ThemeIcon size={44} radius="xl" color="teal" variant="light"><IconCheck size={23} /></ThemeIcon>
-                  </Group>
-                  <Alert color="blue" icon={<IconFolder size={18} />} title="Local files only">Enter absolute paths on this machine. SentriFace never downloads or uploads model files. Verified copies will be installed under {status.models_dir}.</Alert>
-                  <Text size="xs" c="dimmed">Checksum tools: Windows <code>Get-FileHash PATH -Algorithm SHA256</code>; macOS/Linux <code>shasum -a 256 PATH</code>.</Text>
-                  <SetupExamples selected={selected} />
-                  <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-                    <FileFields
-                      title="Detector weights"
-                      path={form.detectorPath}
-                      digest={form.detectorSha256}
-                      onPath={update("detectorPath")}
-                      onDigest={update("detectorSha256")}
-                      placeholder="C:\models\detector.onnx"
-                      description={`An actual ONNX detector file from your model supplier${selected.detector_file ? `, normally named ${selected.detector_file} for this package` : ""}.`}
-                    />
-                    <FileFields
-                      title="Recognizer weights"
-                      path={form.recognizerPath}
-                      digest={form.recognizerSha256}
-                      onPath={update("recognizerPath")}
-                      onDigest={update("recognizerSha256")}
-                      placeholder="C:\models\recognizer.onnx"
-                      description={`An actual 512-dimensional ArcFace-compatible ONNX recognizer${selected.recognizer_file ? `, normally named ${selected.recognizer_file} for this package` : ""}.`}
-                    />
-                  </SimpleGrid>
-                  <FileFields
-                    title="Calibration threshold file (optional)"
-                    path={form.calibrationPath}
-                    digest={form.calibrationSha256}
-                    onPath={update("calibrationPath")}
-                    onDigest={update("calibrationSha256")}
-                    placeholder="C:\models\calibration.json"
-                    description={selected.usage_basis === "noncommercial-research" ? "Leave both fields empty to use the accepted InsightFace provider baseline for this known research model. Custom threshold files remain optional." : "Leave both fields empty to use SentriFace's built-in thresholds. For a custom validation-calibrated file, provide both its path and SHA-256."}
-                    required={false}
+          <Card withBorder radius="lg" p={{ base: "md", md: "xl" }} shadow="sm">
+            <Stack gap="xl">
+              <Box>
+                <Text fw={800} mb="sm">1. How will you use SentriFace?</Text>
+                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                  <UseChoice
+                    selected={usageMode === "research"}
+                    icon={IconFlask}
+                    title="Personal or research"
+                    description="Not for a paid service, a product you sell, or other business use."
+                    onClick={() => { setUsageMode("research"); setSelectedId(""); setError(""); }}
                   />
-                  <Divider label="Usage declaration" labelPosition="left" />
-                  <SimpleGrid cols={{ base: 1, md: 2 }}>
-                    <TextInput label="Organization" value={form.organization} onChange={update("organization")} placeholder="Example: Acme Security Ltd (optional)" description="The person or organization operating this SentriFace installation." />
-                    {selected.usage_basis === "commercial-license" ? <TextInput required label="Model licensor" value={form.licensor} onChange={update("licensor")} placeholder="Example: supplier named on your licence" description="Copy the legal supplier name from your model agreement." /> : null}
-                    {selected.usage_basis === "commercial-license" ? <TextInput required label="License reference" value={form.licenseReference} onChange={update("licenseReference")} placeholder="Example: agreement, invoice, or entitlement ID" description="Use your real customer-specific reference; do not copy an example value." /> : null}
-                    {selected.usage_basis === "permissive-license" ? <TextInput required label="Model license" value={form.licenseName} onChange={update("licenseName")} placeholder="Example: Apache-2.0" description="Enter the exact licence identifier supplied with these particular weight files." /> : null}
-                  </SimpleGrid>
-                  <Paper withBorder p="md" radius="md" bg="var(--mantine-color-default-hover)">
-                    <Checkbox checked={form.accepted} onChange={update("accepted")} label="I supplied these files and accept responsibility for model licensing, biometric permissions, calibration, and the intended use. SentriFace supplies no model rights." />
-                  </Paper>
-                  {error ? <Alert color="red" title="Models were not activated">{error}</Alert> : null}
-                  <Group justify="space-between"><Button variant="subtle" color="gray" onClick={() => { setSelectedId(""); setError(""); }}>Choose another combination</Button><Button size="md" leftSection={<IconShieldCheck size={18} />} loading={installing} disabled={!required} onClick={install}>Verify and start SentriFace</Button></Group>
-                </Stack>
-              </Card>
-            ) : null}
-          </>
+                  <UseChoice
+                    selected={usageMode === "commercial"}
+                    icon={IconBriefcase}
+                    title="Business or paid use"
+                    description="You have model files whose licence allows this use."
+                    onClick={() => { setUsageMode("commercial"); setSelectedId(""); setError(""); }}
+                  />
+                </SimpleGrid>
+              </Box>
+
+              {usageMode === "commercial" ? (
+                <Box>
+                  <Text fw={800} mb="sm">2. Where did your licensed model files come from?</Text>
+                  <Stack gap="sm">
+                    {(status?.combinations?.commercial || []).map((item) => (
+                      <LicenseChoice key={item.id} item={item} selected={selectedId === item.id} onClick={() => setSelectedId(item.id)} />
+                    ))}
+                  </Stack>
+                </Box>
+              ) : null}
+
+              {usageMode ? (
+                <>
+                  <Box>
+                    <Text fw={800} mb="xs">{usageMode === "commercial" ? "3" : "2"}. Choose your two model files</Text>
+                    <Text size="sm" c="dimmed" mb="md">Click each button and choose the matching file. You do not need to type a path or create a checksum.</Text>
+                    <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+                      <ModelFilePicker
+                        title="Face finder file"
+                        filename={form.detectorName}
+                        size={form.detectorSize}
+                        loading={uploading === "detector"}
+                        disabled={Boolean(uploading)}
+                        onSelect={selectModel("detector")}
+                        description="Usually starts with det_ and ends in .onnx."
+                      />
+                      <ModelFilePicker
+                        title="Face matching file"
+                        filename={form.recognizerName}
+                        size={form.recognizerSize}
+                        loading={uploading === "recognizer"}
+                        disabled={Boolean(uploading)}
+                        onSelect={selectModel("recognizer")}
+                        description="Usually starts with w600k_ and ends in .onnx."
+                      />
+                    </SimpleGrid>
+                  </Box>
+
+                  {usageMode === "research" && researchMatch ? (
+                    <Alert color="teal" icon={<IconCheck size={18} />} title="Files recognized">
+                      {researchMatch.name}. SentriFace will create the matching settings automatically.
+                    </Alert>
+                  ) : null}
+                  {usageMode === "research" && bothFilesChosen && !researchMatch ? (
+                    <Alert color="red" icon={<IconAlertTriangle size={18} />} title="These files are not a supported pair">
+                      Choose both files from the same InsightFace model package. For your files, choose <strong>det_500m.onnx</strong> and <strong>w600k_r50.onnx</strong>.
+                    </Alert>
+                  ) : null}
+
+                  {selected ? (
+                    <>
+                      <SimpleGrid cols={{ base: 1, md: 2 }}>
+                        <TextInput label="Organization or owner (optional)" value={form.organization} onChange={update("organization")} placeholder="Your name or organization" />
+                        {selected.usage_basis === "commercial-license" ? <TextInput required label="Model supplier" value={form.licensor} onChange={update("licensor")} placeholder="Name on your model licence" /> : null}
+                        {selected.usage_basis === "commercial-license" ? <TextInput required label="Licence or invoice number" value={form.licenseReference} onChange={update("licenseReference")} placeholder="Your agreement, invoice, or entitlement ID" /> : null}
+                        {selected.usage_basis === "permissive-license" ? <TextInput required label="Model licence" value={form.licenseName} onChange={update("licenseName")} placeholder="For example, Apache-2.0" /> : null}
+                      </SimpleGrid>
+                      <Paper withBorder p="md" radius="md" bg="var(--mantine-color-default-hover)">
+                        <Checkbox checked={form.accepted} onChange={update("accepted")} label="I confirm that I am allowed to use these model files and process face data for the purpose selected above." />
+                      </Paper>
+                      {error ? <Alert color="red" title="Setup could not be finished">{friendlySetupError(error)}</Alert> : null}
+                      <Group justify="flex-end">
+                        <Button size="md" leftSection={<IconShieldCheck size={18} />} loading={installing} disabled={!required} onClick={install}>Finish setup</Button>
+                      </Group>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+            </Stack>
+          </Card>
         )}
-        <Text size="xs" c="dimmed" ta="center">Supported means runtime compatibility only. It does not mean SentriFace owns, endorses, redistributes, or licenses the selected weights.</Text>
+        <Text size="xs" c="dimmed" ta="center">Your model supplier's licence still applies. SentriFace does not provide rights to third-party model files.</Text>
       </Stack>
     </Box>
   );
 }
 
-function ModelSide({ tone, icon: Icon, eyebrow, title, description, warning, items, selectedId, onSelect }) {
+function UseChoice({ selected, icon: Icon, title, description, onClick }) {
   return (
-    <Card withBorder radius="lg" p={{ base: "md", md: "xl" }} h="100%" style={{ borderTop: `4px solid var(--mantine-color-${tone}-6)` }}>
-      <Stack h="100%">
-        <Group><ThemeIcon color={tone} variant="light" size="xl" radius="xl"><Icon size={24} /></ThemeIcon><Box><Text size="xs" fw={900} c={`${tone}.7`} lts={1}>{eyebrow}</Text><Title order={2} size="h3">{title}</Title></Box></Group>
+    <Paper component="button" type="button" withBorder radius="md" p="md" ta="left" onClick={onClick} style={{ cursor: "pointer", borderColor: selected ? "var(--mantine-color-teal-6)" : undefined, background: selected ? "var(--mantine-color-teal-light)" : undefined }}>
+      <Group wrap="nowrap" align="flex-start">
+        <ThemeIcon color={selected ? "teal" : "gray"} variant="light" size="lg" radius="xl"><Icon size={19} /></ThemeIcon>
+        <Box style={{ flex: 1 }}><Text fw={800}>{title}</Text><Text size="sm" c="dimmed" mt={3}>{description}</Text></Box>
+        {selected ? <ThemeIcon color="teal" radius="xl" size="sm"><IconCheck size={13} /></ThemeIcon> : null}
+      </Group>
+    </Paper>
+  );
+}
+
+function LicenseChoice({ item, selected, onClick }) {
+  const plainNames = {
+    "insightface-commercial": "Licensed directly for InsightFace models",
+    "other-commercial": "Licensed by another model supplier",
+    "permissive-compatible": "Open-licence compatible models",
+  };
+  return (
+    <Paper component="button" type="button" withBorder radius="md" p="md" ta="left" onClick={onClick} style={{ cursor: "pointer", borderColor: selected ? "var(--mantine-color-teal-6)" : undefined, background: selected ? "var(--mantine-color-teal-light)" : undefined }}>
+      <Group justify="space-between" wrap="nowrap">
+        <Box><Text fw={700}>{plainNames[item.id] || item.name}</Text><Text size="sm" c="dimmed">{item.note}</Text></Box>
+        {selected ? <ThemeIcon color="teal" radius="xl" size="sm"><IconCheck size={13} /></ThemeIcon> : null}
+      </Group>
+    </Paper>
+  );
+}
+
+function ModelFilePicker({ title, filename, size, loading, disabled, onSelect, description }) {
+  return (
+    <Paper withBorder radius="md" p="md">
+      <Stack gap="sm">
+        <Text fw={800}>{title}</Text>
         <Text size="sm" c="dimmed">{description}</Text>
-        <Alert color={tone} variant="light" icon={<IconFileCertificate size={17} />}>{warning}</Alert>
-        <ScrollArea.Autosize mah={390} offsetScrollbars>
-          <Stack gap="sm">
-            {items.map((item) => (
-              <Paper key={item.id} component="button" type="button" withBorder radius="md" p="md" ta="left" onClick={() => onSelect(item.id)} style={{ cursor: "pointer", borderColor: selectedId === item.id ? `var(--mantine-color-${tone}-6)` : undefined, background: selectedId === item.id ? `var(--mantine-color-${tone}-light)` : undefined }}>
-                <Group justify="space-between" wrap="nowrap"><Box><Text fw={800}>{item.name}</Text><Text size="xs" c="dimmed" mt={3}>{item.detector} + {item.recognizer}</Text>{item.detector_file ? <Text size="xs" c="dimmed" mt={3}>Package files: {item.detector_file} + {item.recognizer_file}</Text> : null}</Box>{selectedId === item.id ? <ThemeIcon color={tone} radius="xl" size="sm"><IconCheck size={13} /></ThemeIcon> : null}</Group>
-                <Text size="xs" mt="sm">{item.note}</Text>
-              </Paper>
-            ))}
-          </Stack>
-        </ScrollArea.Autosize>
-      </Stack>
-    </Card>
-  );
-}
-
-function FileFields({ title, path, digest, onPath, onDigest, placeholder, description, required = true }) {
-  return (
-    <Stack gap="xs">
-      <Text fw={800}>{title}</Text>
-      <TextInput required={required} label="Local file path" value={path} onChange={onPath} placeholder={placeholder} description={description} />
-      <TextInput required={required} label="SHA-256" value={digest} onChange={onDigest} placeholder="64 hexadecimal characters" styles={{ input: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } }} />
-    </Stack>
-  );
-}
-function SetupExamples({ selected }) {
-  const detectorName = selected.detector_file || "detector.onnx";
-  const recognizerName = selected.recognizer_file || "recognizer.onnx";
-  const usageExample = selected.usage_basis === "commercial-license"
-    ? "Licensor: <supplier on your agreement> · Reference: <your agreement/invoice/entitlement ID>"
-    : selected.usage_basis === "permissive-license"
-      ? "Model licence: <exact identifier supplied with these weights, for example Apache-2.0>"
-      : "Research declaration: non-commercial research only; organization is optional";
-  const setupFile = {
-    combination: selected.name,
-    detector_path: `<absolute-path>/${detectorName}`,
-    detector_sha256: "<64-character-sha256-of-detector>",
-    recognizer_path: `<absolute-path>/${recognizerName}`,
-    recognizer_sha256: "<64-character-sha256-of-recognizer>",
-    calibration_path: "",
-    calibration_sha256: "",
-    organization: "<optional-organization-name>",
-    usage_basis: selected.usage_basis,
-    ...(selected.usage_basis === "commercial-license" ? {
-      model_licensor: "<supplier-named-on-your-licence>",
-      license_reference: "<agreement-invoice-or-entitlement-id>",
-    } : {}),
-    ...(selected.usage_basis === "permissive-license" ? {
-      model_license: "<exact-licence-identifier-from-the-model-provider>",
-    } : {}),
-  };
-  const calibrationFile = {
-    schema_version: 1,
-    recognizer_sha256: "<64-character-sha256-of-exact-recognizer>",
-    representative_dataset: "<validation-dataset-description>",
-    target_false_match_rate: 0.0001,
-    thresholds: { possible: 0.40, likely: 0.50, strong: 0.60 },
-  };
-
-  return (
-    <Paper withBorder radius="md" p="md" bg="var(--mantine-color-default-hover)">
-      <Stack gap="xs">
-        <Group justify="space-between" align="center">
-          <Text fw={800}>Example values for this selection</Text>
-          <Group gap="xs">
-            <Button size="compact-xs" variant="default" onClick={() => downloadJsonExample(`${selected.id}.example.json`, setupFile)}>Download setup example</Button>
-            <Button size="compact-xs" variant="default" onClick={() => downloadJsonExample("calibration-thresholds.example.json", calibrationFile)}>Download calibration example</Button>
-          </Group>
-        </Group>
-        <Text size="sm"><Text span fw={700}>Detector path:</Text> <code>C:\licensed-models\{detectorName}</code></Text>
-        <Text size="sm"><Text span fw={700}>Recognizer path:</Text> <code>C:\licensed-models\{recognizerName}</code></Text>
-        <Text size="sm"><Text span fw={700}>Each SHA-256:</Text> <code>&lt;64 hexadecimal characters produced from that exact file&gt;</code></Text>
-        <Text size="sm"><Text span fw={700}>Usage fields:</Text> {usageExample}</Text>
-        <Text size="sm"><Text span fw={700}>Calibration:</Text> {selected.usage_basis === "noncommercial-research" ? "leave both optional fields empty for the accepted InsightFace provider baseline" : "leave both optional fields empty for built-in thresholds"}, or provide a JSON file shaped like this:</Text>
-        <Box
-          component="pre"
-          m={0}
-          p="sm"
-          style={{ overflowX: "auto", borderRadius: 6, fontSize: 12, background: "var(--mantine-color-body)" }}
-        >{`{
-  "schema_version": 1,
-  "recognizer_sha256": "<SHA-256 of the exact recognizer>",
-  "representative_dataset": "<description of your validation dataset>",
-  "target_false_match_rate": 0.0001,
-  "thresholds": { "possible": 0.40, "likely": 0.50, "strong": 0.60 }
-}`}</Box>
-        <Text size="xs" c="dimmed">Angle-bracket values are placeholders, never evidence. Equivalent templates are included under docs/examples/model-onboarding.</Text>
+        <FileButton onChange={onSelect} accept=".onnx,application/octet-stream">
+          {(props) => (
+            <Button {...props} variant={filename ? "light" : "filled"} leftSection={<IconUpload size={17} />} loading={loading} disabled={disabled}>
+              {filename ? "Choose a different file" : "Browse files"}
+            </Button>
+          )}
+        </FileButton>
+        {filename ? (
+          <Alert color="teal" icon={<IconFileCheck size={17} />} title={filename}>
+            <Text size="sm">Ready · {formatBytes(size)}</Text>
+          </Alert>
+        ) : null}
       </Stack>
     </Paper>
   );
 }
-function downloadJsonExample(filename, payload) {
-  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+
+function friendlySetupError(message) {
+  const text = String(message || "");
+  if (/hash|sha-?256|checksum/i.test(text)) return "One of the files changed while it was being checked. Choose both files again.";
+  if (/not found|path|staged/i.test(text)) return "One of the selected files is no longer available. Choose both files again.";
+  if (/calibrat/i.test(text)) return "SentriFace could not create the matching settings for these files. Check that both files belong to the same supported model package.";
+  return text || "Check the selected files and try again.";
+}
+function formatBytes(value) {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  return `${(value / (1024 ** exponent)).toFixed(exponent ? 1 : 0)} ${units[exponent]}`;
 }

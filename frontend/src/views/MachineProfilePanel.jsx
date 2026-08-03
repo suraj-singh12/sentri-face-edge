@@ -7,7 +7,7 @@ export function MachineProfilePanel({ profile, onConfigureRecovery, canConfigure
   const [recoveryCode, setRecoveryCode] = useState("");
   const [savingRecovery, setSavingRecovery] = useState(false);
   if (!profile) {
-    return <Alert color="yellow" title="Machine profile unavailable">Reload app data after the local engine starts.</Alert>;
+    return <Alert color="yellow" title="System details are unavailable">Click Refresh after SentriFace starts.</Alert>;
   }
   const hardware = profile.hardware || {};
   const modelUsage = profile.model_usage || {};
@@ -31,8 +31,8 @@ export function MachineProfilePanel({ profile, onConfigureRecovery, canConfigure
     <Stack gap="md">
       <Group justify="space-between" align="flex-start" className="debug-main-header">
         <Box>
-          <Title order={3} size="h4">Machine Profile</Title>
-          <Text size="sm" c="dimmed">Detected hardware and active local inference configuration</Text>
+          <Title order={3} size="h4">System details</Title>
+          <Text size="sm" c="dimmed">Hardware and face-recognition settings used on this computer</Text>
         </Box>
         <Badge size="lg" color="teal" variant="light">{String(profile.hardware_tier || "unknown").toUpperCase()}</Badge>
       </Group>
@@ -84,8 +84,8 @@ export function MachineProfilePanel({ profile, onConfigureRecovery, canConfigure
       <Card withBorder radius="md">
         <Group justify="space-between" align="flex-start">
           <Box>
-            <Text fw={800}>Disaster recovery</Text>
-            <Text size="sm" c="dimmed">Automatic encrypted backups to a separate local or removable drive</Text>
+            <Text fw={800}>Safety copy</Text>
+            <Text size="sm" c="dimmed">Automatic encrypted backups to a separate or removable drive</Text>
           </Box>
           <Badge color={profile.recovery?.configured ? "teal" : "yellow"} variant="light">{profile.recovery?.configured ? "Configured" : "Action required"}</Badge>
         </Group>
@@ -96,14 +96,14 @@ export function MachineProfilePanel({ profile, onConfigureRecovery, canConfigure
           <ProfileLine label="Last external backup" value={profile.recovery?.last_external_backup ? new Date(profile.recovery.last_external_backup).toLocaleString() : "None"} />
           <ProfileLine label="Retained external backups" value={`${profile.recovery?.external_backup_count || 0} / ${profile.recovery?.external_retention_limit || 10}`} />
         </Stack>
-        {canConfigureRecovery ? <Button mt="md" variant="light" onClick={() => setRecoveryOpen(true)}>Configure recovery destination</Button> : <Text size="xs" c="dimmed" mt="md">Administrator permission is required to change disaster recovery.</Text>}
+        {canConfigureRecovery ? <Button mt="md" variant="light" onClick={() => setRecoveryOpen(true)}>Change safety-copy folder</Button> : <Text size="xs" c="dimmed" mt="md">The owner account is required to change the safety copy.</Text>}
       </Card>
 
-      <Modal opened={recoveryOpen} onClose={() => setRecoveryOpen(false)} title="Configure disaster recovery" centered>
+      <Modal opened={recoveryOpen} onClose={() => setRecoveryOpen(false)} title="Change safety-copy folder" centered>
         <Stack>
-          <Alert color="blue">Choose a folder outside the SentriFace data directory, preferably on another physical drive. SentriFace will write encrypted automatic backups and a recovery kit there.</Alert>
-          <TextInput label="Recovery folder path" value={destination} onChange={(event) => setDestination(event.currentTarget.value)} placeholder="E:\\SentriFace Recovery" />
-          <Group justify="flex-end"><Button variant="default" onClick={() => setRecoveryOpen(false)}>Cancel</Button><Button loading={savingRecovery} disabled={!destination.trim()} onClick={configureRecovery}>Create recovery kit</Button></Group>
+          <Alert color="blue">Choose a folder on a separate or removable drive. SentriFace will save encrypted automatic backups there.</Alert>
+          <TextInput label="Folder location" value={destination} onChange={(event) => setDestination(event.currentTarget.value)} placeholder={navigator.userAgent.includes("Windows") ? "E:\\SentriFace Backup" : "/Volumes/Backup Drive/SentriFace Backup"} />
+          <Group justify="flex-end"><Button variant="default" onClick={() => setRecoveryOpen(false)}>Cancel</Button><Button loading={savingRecovery} disabled={!destination.trim()} onClick={configureRecovery}>Save safety copy</Button></Group>
         </Stack>
       </Modal>
 

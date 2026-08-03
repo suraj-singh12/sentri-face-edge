@@ -29,6 +29,7 @@ INSIGHTFACE_RESEARCH_PROFILES = frozenset({
     "buffalo-s-research",
     "buffalo-l-research",
     "buffalo-m-research",
+    "scrfd500m-r50-research",
 })
 
 MODEL_COMBINATIONS = {
@@ -62,6 +63,19 @@ MODEL_COMBINATIONS = {
             "recognizer_file": "w600k_r50.onnx",
             "usage_basis": "noncommercial-research",
             "note": "Middle detector size with the buffalo_l recognition model.",
+        },
+        {
+            "id": "scrfd500m-r50-research",
+            "name": "InsightFace SCRFD-500MF + ResNet50",
+            "detector": "SCRFD-500MF",
+            "recognizer": "ResNet50 / WebFace600K",
+            "detector_file": "det_500m.onnx",
+            "recognizer_file": "w600k_r50.onnx",
+            "usage_basis": "noncommercial-research",
+            "note": (
+                "Lightweight detector paired with the higher-accuracy R50 "
+                "recognizer supplied by the operator."
+            ),
         },
     ],
     "commercial": [

@@ -60,10 +60,10 @@ export function DebugView({
 }) {
   const capabilitySet = useMemo(() => new Set(capabilities), [capabilities]);
   const navItems = useMemo(() => [
-    capabilitySet.has("technical") ? { key: "events", label: "Events Log", icon: IconInfoCircle } : null,
-    capabilitySet.has("backups") ? { key: "database", label: "Database", icon: IconDatabase } : null,
-    capabilitySet.has("technical") ? { key: "profile", label: "Machine Profile", icon: IconCpu } : null,
-    capabilitySet.has("administer") ? { key: "accounts", label: "Accounts & Roles", icon: IconUsers } : null,
+    capabilitySet.has("backups") ? { key: "database", label: "Backups & restore", icon: IconDatabase } : null,
+    capabilitySet.has("administer") ? { key: "accounts", label: "User accounts", icon: IconUsers } : null,
+    capabilitySet.has("technical") ? { key: "profile", label: "System details", icon: IconCpu } : null,
+    capabilitySet.has("technical") ? { key: "events", label: "Activity log", icon: IconInfoCircle } : null,
   ].filter(Boolean), [capabilitySet]);
   const [section, setSection] = useState(navItems[0]?.key || "database");
   const [paused, setPaused] = useState(false);
@@ -136,7 +136,7 @@ export function DebugView({
   return (
     <Paper withBorder radius="md" p="md" className="debug-workspace">
       <Box className="debug-shell">
-        <DebugSidebar section={section} onSection={setSection} summary={summary} onRefresh={refreshEvents} navItems={navItems} showSummary={capabilitySet.has("technical")} />
+        <DebugSidebar section={section} onSection={setSection} summary={summary} onRefresh={refreshEvents} navItems={navItems} showSummary={capabilitySet.has("technical") && section === "events"} />
         <Box className="debug-main">
           {section === "events" ? (
             <EventsLogPanel
@@ -192,7 +192,7 @@ function DebugSidebar({ section, onSection, summary, onRefresh, navItems, showSu
   return (
     <Stack className="debug-sidebar">
       <Card withBorder radius="md" className="debug-side-card">
-        <Text size="xs" c="dimmed" fw={800} tt="uppercase" mb="sm">Advanced</Text>
+        <Text size="xs" c="dimmed" fw={800} tt="uppercase" mb="sm">Settings</Text>
         <Stack gap={4}>
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -261,8 +261,8 @@ function EventsLogPanel({
     <Stack h="100%" gap="md">
       <Group justify="space-between" align="flex-start" wrap="nowrap" className="debug-main-header">
         <Box>
-          <Title order={3} size="h4">Events Log</Title>
-          <Text size="sm" c="dimmed">Real-time system events and application logs</Text>
+          <Title order={3} size="h4">Activity log</Title>
+          <Text size="sm" c="dimmed">Technical activity and error details for troubleshooting</Text>
         </Box>
         <Group gap="sm" wrap="nowrap" className="debug-actions">
           <Button variant="default" leftSection={<IconPlayerPause size={16} />} onClick={onPause}>{paused ? "Resume" : "Pause"}</Button>
@@ -411,8 +411,8 @@ function DatabaseBackupsPanel({
     <Stack h="100%" gap="md">
       <Group justify="space-between" align="flex-start" wrap="nowrap" className="debug-main-header">
         <Box>
-          <Title order={3} size="h4">Portable Backups</Title>
-          <Text size="sm" c="dimmed">Verified database, original images, and face crops in one recoverable package</Text>
+          <Title order={3} size="h4">Backups</Title>
+          <Text size="sm" c="dimmed">Keep your people, photos, and face data together in a restorable file</Text>
         </Box>
         <Group gap="xs" wrap="nowrap">
           <input
@@ -453,13 +453,13 @@ function DatabaseBackupsPanel({
                 <Text fw={900} size="lg">{formatDateTime(latest.created_at)}</Text>
                 <Text size="sm">{latest.reason || "Manual backup"}</Text>
                 <Text size="sm" c="dimmed">
-                  {formatBytes(latest.size_bytes)} · {latest.people_count.toLocaleString()} people · {latest.embedding_count.toLocaleString()} embeddings · {latest.file_count || 0} files
+                  {formatBytes(latest.size_bytes)} · {latest.people_count.toLocaleString()} people · {latest.embedding_count.toLocaleString()} face records · {latest.file_count || 0} files
                 </Text>
               </>
             ) : (
               <>
                 <Text fw={900} size="lg">No backup yet</Text>
-                <Text size="sm" c="dimmed">Create the first managed database snapshot.</Text>
+                <Text size="sm" c="dimmed">Create your first backup.</Text>
               </>
             )}
           </Box>
@@ -481,7 +481,7 @@ function DatabaseBackupsPanel({
                 <th>Created</th>
                 <th>Size</th>
                 <th>People</th>
-                <th>Embeddings</th>
+                <th>Face records</th>
                 <th>Files</th>
                 <th>Status</th>
                 <th>Action</th>
@@ -551,7 +551,7 @@ function DatabaseBackupsPanel({
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={8} className="debug-empty-row">No managed backups created yet.</td>
+                  <td colSpan={8} className="debug-empty-row">No backups yet.</td>
                 </tr>
               )}
             </tbody>

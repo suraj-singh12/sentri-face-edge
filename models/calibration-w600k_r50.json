@@ -1,0 +1,14 @@
+{
+  "calibration_method": "insightface-provider-baseline",
+  "calibration_profile": "scrfd500m-r50-research",
+  "calibration_status": "accepted-provider-baseline",
+  "note": "Hash-bound operational InsightFace baseline for this exact w600k_r50.onnx file. These similarity tiers are not probabilities and make no target false-match-rate claim. Validate and replace them for the deployment population and target false-match rate.",
+  "provider": "InsightFace",
+  "recognizer_sha256": "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43",
+  "schema_version": 1,
+  "thresholds": {
+    "likely": 0.5,
+    "possible": 0.4,
+    "strong": 0.6
+  }
+}

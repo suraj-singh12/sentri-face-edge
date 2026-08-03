@@ -1,0 +1,20 @@
+{
+  "accepted_at": "2026-07-31T02:45:09.365580+00:00",
+  "authorized_by": "user1",
+  "license_name": "",
+  "license_reference": "",
+  "licensor": "",
+  "models": {
+    "detector.onnx": {
+      "sha256": "5e4447f50245bbd7966bd6c0fa52938c61474a04ec7def48753668a9d8b4ea3a"
+    },
+    "recognizer.onnx": {
+      "sha256": "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43"
+    }
+  },
+  "operator_declaration": "The operator supplied these third-party model files and accepts sole responsibility for model licensing, biometric-data permissions, and use. SentriFace supplies no model rights and does not verify this assertion.",
+  "organization": "Owneer",
+  "schema_version": 1,
+  "terms_version": "2026-07-29",
+  "usage_basis": "noncommercial-research"
+}

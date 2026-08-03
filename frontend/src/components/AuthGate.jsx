@@ -48,7 +48,7 @@ export function AuthGate({ children }) {
       setPassword("");
       setConfirmation("");
       setStatus(next);
-      showToast(status?.setup_required ? "Administrator account created" : "Signed in");
+      showToast(status?.setup_required ? "Account created" : "Signed in");
     } catch (requestError) {
       setError(requestError?.message || "Authentication failed");
     } finally {
@@ -76,14 +76,21 @@ export function AuthGate({ children }) {
         <Card withBorder shadow="md" radius="lg" p="xl" w="100%" maw={460}>
           <form onSubmit={submit}>
             <Stack>
-              <Box><Title order={2}>SentriFace Edge</Title><Text c="dimmed">{setup ? "Create this machine's first administrator" : "Sign in to this machine"}</Text></Box>
-              {setup ? <Alert color="blue" title="Machine-local account">Credentials are stored only inside this machine's encrypted SentriFace database.</Alert> : null}
+              <Box>
+                <Title order={2}>SentriFace Edge</Title>
+                <Text c="dimmed">{setup ? "Create the owner account for this computer" : "Sign in to continue"}</Text>
+              </Box>
+              {setup ? (
+                <Alert color="blue" title="Private by default">
+                  Your account and face data stay on this computer. Nothing is sent to an online service.
+                </Alert>
+              ) : null}
               {error ? <Alert color="red">{error}</Alert> : null}
-              <TextInput label="Username" value={username} onChange={(event) => setUsername(event.currentTarget.value)} autoComplete="username" required />
-              {setup ? <TextInput label="Display name" value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} autoComplete="name" /> : null}
-              <PasswordInput label="Password" description={setup ? "At least 12 characters" : undefined} value={password} onChange={(event) => setPassword(event.currentTarget.value)} autoComplete={setup ? "new-password" : "current-password"} required />
+              <TextInput label="Account name" description={setup ? "You will use this name to sign in." : undefined} value={username} onChange={(event) => setUsername(event.currentTarget.value)} autoComplete="username" required />
+              {setup ? <TextInput label="Your name (optional)" value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} autoComplete="name" /> : null}
+              <PasswordInput label="Password" description={setup ? "Use at least 12 characters." : undefined} value={password} onChange={(event) => setPassword(event.currentTarget.value)} autoComplete={setup ? "new-password" : "current-password"} required />
               {setup ? <PasswordInput label="Confirm password" value={confirmation} onChange={(event) => setConfirmation(event.currentTarget.value)} autoComplete="new-password" required /> : null}
-              <Button type="submit" loading={submitting}>{setup ? "Create administrator" : "Sign in"}</Button>
+              <Button type="submit" loading={submitting}>{setup ? "Create account" : "Sign in"}</Button>
             </Stack>
           </form>
         </Card>

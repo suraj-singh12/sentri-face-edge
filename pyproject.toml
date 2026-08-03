@@ -27,6 +27,7 @@ index = [
 test = [
   "numpy>=1.26,<2.0",
   "opencv-python-headless>=4.9,<5.0",
+  "pytest>=8,<10",
 ]
 release = [
   "build>=1.2,<2",

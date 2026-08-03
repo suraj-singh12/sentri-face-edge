@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from "react";
-import { ActionIcon, Alert, AppShell, Box, Button, Group, Loader, MantineProvider, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
+import { ActionIcon, AppShell, Box, Button, Group, Loader, MantineProvider, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
-import { IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
+import { IconAlertTriangle, IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
 import { AuthGate } from "./components/AuthGate.jsx";
 import { ModelGate } from "./components/ModelGate.jsx";
@@ -13,6 +13,19 @@ const DebugView = lazy(() => import("./views/DebugView.jsx").then((module) => ({
 const PeopleView = lazy(() => import("./views/PeopleView.jsx").then((module) => ({ default: module.PeopleView })));
 const QueueView = lazy(() => import("./views/QueueView.jsx").then((module) => ({ default: module.QueueView })));
 const RecognizeView = lazy(() => import("./views/RecognizeView.jsx").then((module) => ({ default: module.RecognizeView })));
+
+function ShellNotice({ color, title, children, action }) {
+  return (
+    <Box role="alert" className="shell-notice" data-color={color}>
+      <IconAlertTriangle className="shell-notice-icon" size={16} aria-hidden="true" />
+      <Text component="div" size="xs" className="shell-notice-copy">
+        <Text component="span" inherit fw={700}>{title}</Text>
+        <Text component="span" inherit c="dimmed"> — {children}</Text>
+      </Text>
+      {action}
+    </Box>
+  );
+}
 
 export default function SentriFaceApp() {
   return (
@@ -78,58 +91,67 @@ function SentriFaceShell({ user, logout, changePassword }) {
                 {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="Reload app data">
-              <ActionIcon variant="light" size="lg" onClick={guarded(actions.reloadAppData)} aria-label="Reload app data">
-                <IconRefresh size={18} />
+            <Tooltip label="Refresh">
+              <ActionIcon variant="light" size="lg" onClick={guarded(actions.reloadAppData)} disabled={state.refreshing} aria-label={state.refreshing ? "Refreshing" : "Refresh"}>
+                {state.refreshing ? <Loader size={18} /> : <IconRefresh size={18} />}
               </ActionIcon>
             </Tooltip>
             {can("backups") ? (
-              <Tooltip label={state.backupCreating ? "Creating portable backup..." : "Create portable backup"}>
+              <Tooltip label={state.backupCreating ? "Creating backup..." : "Create backup now"}>
                 <ActionIcon
                   variant="light"
                   color="blue"
                   size="lg"
                   onClick={actions.requestBackup}
                   disabled={state.backupCreating}
-                  aria-label={state.backupCreating ? "Creating portable backup..." : "Create portable backup"}
+                  aria-label={state.backupCreating ? "Creating backup..." : "Create backup now"}
                 >
                   {state.backupCreating ? <Loader size={18} /> : <IconDatabaseExport size={18} />}
                 </ActionIcon>
               </Tooltip>
             ) : null}
             <Box visibleFrom="sm" ta="right"><Text size="sm" fw={700}>{user.display_name}</Text><Text size="xs" c="dimmed">{(user.roles || []).join(", ")}</Text></Box>
-            <Button size="xs" variant="default" onClick={() => setPasswordOpen(true)}>Password</Button>
+            <Button size="xs" variant="default" onClick={() => setPasswordOpen(true)}>Change password</Button>
             <Button size="xs" variant="light" color="gray" onClick={logout}>Sign out</Button>
           </Group>
         </Group>
       </AppShell.Header>
 
       <AppShell.Main>
-        {state.connectionError ? (
-          <Alert color="red" title="SentriFace server is unavailable" mb="md">
-            {state.connectionError}. Check that the local server is running, then use Reload app data.
-          </Alert>
-        ) : null}
-        {state.profile && !state.profile.recovery_readiness?.ready ? (
-          <Alert color="red" title="Disaster recovery is not ready" mb="md">
-            This machine has no currently usable external recovery copy. Data may be unrecoverable after disk failure,
-            theft, ransomware, or loss of the machine. An administrator can configure recovery from Advanced.
-          </Alert>
-        ) : null}        {state.profile?.runtime === "dev" ? (
-          <Alert color="yellow" title="Development inference is active" mb="md">
-            Results are synthetic and must not be trusted as real face recognition.
-          </Alert>
-        ) : null}
-        {state.profile?.model_usage?.research_only ? (
-          <Alert color="orange" title="Non-commercial research-only models are active" mb="md">
-            The operator declared these third-party weights for non-commercial research only. SentriFace supplies no model license.
-          </Alert>
-        ) : null}
-        {state.profile?.index?.degraded_reason ? (
-          <Alert color="yellow" title="Search index is in safe fallback mode" mb="md">
-            Using {state.profile.index.actual} instead of {state.profile.index.requested}: {state.profile.index.degraded_reason}
-          </Alert>
-        ) : null}        <Suspense fallback={<Stack align="center" py="xl"><Loader /><Text c="dimmed">Loading view...</Text></Stack>}>
+        <Stack gap={6} mb={10} className="shell-notices">
+          {state.connectionError ? (
+            <ShellNotice color="red" title="SentriFace is not responding">
+              Make sure SentriFace is still running, then click Refresh.
+            </ShellNotice>
+          ) : null}
+          {state.profile && !state.profile.recovery_readiness?.ready ? (
+            <ShellNotice
+              color="red"
+              title="Your safety copy needs attention"
+              action={visibleViews.includes("debug") ? (
+                <Button variant="subtle" color="red" size="compact-xs" onClick={() => actions.setActiveView("debug")}>Settings</Button>
+              ) : null}
+            >
+              Your latest external backup is not available. The owner can check it under Settings.
+            </ShellNotice>
+          ) : null}
+          {state.profile?.runtime === "dev" ? (
+            <ShellNotice color="yellow" title="Demo mode is active">
+              Results are simulated for testing and are not real face matches.
+            </ShellNotice>
+          ) : null}
+          {state.profile?.model_usage?.research_only ? (
+            <ShellNotice color="orange" title="Personal or research use only">
+              The selected model files are not approved here for business or paid use.
+            </ShellNotice>
+          ) : null}
+          {state.profile?.index?.degraded_reason ? (
+            <ShellNotice color="yellow" title="Search is using compatibility mode">
+              Face search is still available, but may be slower than usual.
+            </ShellNotice>
+          ) : null}
+        </Stack>
+        <Suspense fallback={<Stack align="center" py="xl"><Loader /><Text c="dimmed">Loading view...</Text></Stack>}>
         <Tabs value={selectedView} onChange={actions.setActiveView} keepMounted={false} className="sentriface-tabs">
           <Tabs.List mb="md">
             {visibleViews.map((view) => <Tabs.Tab key={view} value={view}>{tabLabel(view)}</Tabs.Tab>)}

@@ -7,6 +7,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const canRecovery = capabilities.includes("recovery");
   const [profile, setProfile] = useState(null);
   const [connectionError, setConnectionError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const [people, setPeople] = useState([]);
   const [archivedPeople, setArchivedPeople] = useState([]);
   const [deletedFaces, setDeletedFaces] = useState([]);
@@ -20,42 +21,55 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const backupInFlight = useRef(false);
   const restoreInFlight = useRef(false);
 
-  const loadProfile = useCallback(async () => setProfile(await apiGet("/api/profile")), [apiGet]);
-  const loadPeople = useCallback(async () => {
-    const payload = await apiGet("/api/persons");
+  const loadProfile = useCallback(async (options = {}) => setProfile(await apiGet("/api/profile", options)), [apiGet]);
+  const loadPeople = useCallback(async (options = {}) => {
+    const payload = await apiGet("/api/persons", options);
     setPeople(payload.persons || []);
     setArchivedPeople(payload.archived_persons || []);
   }, [apiGet]);
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (options = {}) => {
     if (!canTechnical) { setEvents([]); return { events: [] }; }
-    const payload = await apiGet("/api/events");
+    const payload = await apiGet("/api/events", options);
     setEvents(payload.events || []);
     return payload;
   }, [apiGet, canTechnical]);
-  const loadDeletedFaces = useCallback(async () => {
+  const loadDeletedFaces = useCallback(async (options = {}) => {
     if (!canDestroy) { setDeletedFaces([]); return { deleted_faces: [] }; }
-    const payload = await apiGet("/api/deleted-faces");
+    const payload = await apiGet("/api/deleted-faces", options);
     setDeletedFaces(payload.deleted_faces || []);
     return payload;
   }, [apiGet, canDestroy]);
-  const loadBackups = useCallback(async () => {
+  const loadBackups = useCallback(async (options = {}) => {
     if (!canBackups) { setBackups([]); return { backups: [] }; }
-    const payload = await apiGet("/api/backups");
+    const payload = await apiGet("/api/backups", options);
     setBackups(payload.backups || []);
     return payload;
   }, [apiGet, canBackups]);
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (options = {}) => {
     setConnectionError("");
     try {
-      await Promise.all([loadProfile(), loadPeople(), loadDeletedFaces(), loadEvents(), loadBackups()]);
+      await Promise.all([
+        loadProfile(options),
+        loadPeople(options),
+        loadDeletedFaces(options),
+        loadEvents(options),
+        loadBackups(options),
+      ]);
     } catch (error) {
       setConnectionError(error?.message || "SentriFace server is unavailable");
       throw error;
     }
-  }, [loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups]);  const reloadAppData = useCallback(async () => {
-    await refreshAll();
-    showToast("App data reloaded");
-  }, [refreshAll, showToast]);
+  }, [loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups]);
+  const reloadAppData = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await refreshAll({ timeoutMs: 8_000, silent: true });
+      showToast("App data refreshed");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshAll, refreshing, showToast]);
 
   useEffect(() => {
     refreshAll().catch((error) => console.error(error));
@@ -280,6 +294,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
 
   return {
     profile,
+    refreshing,
     people,
     archivedPeople,
     deletedFaces,
