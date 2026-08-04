@@ -106,6 +106,12 @@ class IdentityStore(Protocol):
     def restore_person(self, person_id: str, operation_id: str) -> dict:
         """Atomically restore one archived person."""
 
+    def list_file_references_for_person(self, person_id: str) -> list[str]:
+        """List image and crop paths owned or referenced by one person."""
+
+    def permanently_delete_person(self, person_id: str, operation_id: str) -> dict:
+        """Erase a person and all linked live-library records atomically."""
+
     def delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
         """Atomically soft-delete an embedding while retaining linked details."""
 

@@ -451,6 +451,69 @@ class SQLiteIdentityStore:
             _record_person_operation(conn, operation_id, "restore-person", result)
             return result
 
+    def list_file_references_for_person(self, person_id: str) -> list[str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT source_image AS path FROM embeddings
+                WHERE person_id = ? AND source_image IS NOT NULL
+                UNION
+                SELECT crop_path AS path FROM embeddings
+                WHERE person_id = ? AND crop_path IS NOT NULL
+                UNION
+                SELECT image_path AS path FROM recognition_details
+                WHERE person_id = ? AND image_path IS NOT NULL
+                """,
+                (person_id, person_id, person_id),
+            ).fetchall()
+        return [str(row["path"]) for row in rows if row["path"]]
+
+    def permanently_delete_person(self, person_id: str, operation_id: str) -> dict:
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "purge-person")
+            if existing:
+                return existing
+            person = conn.execute(
+                "SELECT name, deleted_at FROM persons WHERE person_id = ?",
+                (person_id,),
+            ).fetchone()
+            if person is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            embedding_count = int(conn.execute(
+                "SELECT COUNT(*) FROM embeddings WHERE person_id = ?",
+                (person_id,),
+            ).fetchone()[0])
+            sighting_count = int(conn.execute(
+                "SELECT COUNT(*) FROM recognition_details WHERE person_id = ?",
+                (person_id,),
+            ).fetchone()[0])
+            change_count = int(conn.execute(
+                "SELECT COUNT(*) FROM person_change_history WHERE person_id = ?",
+                (person_id,),
+            ).fetchone()[0])
+            exclusion_count = int(conn.execute(
+                "SELECT COUNT(*) FROM init_face_person_exclusions WHERE person_id = ?",
+                (person_id,),
+            ).fetchone()[0])
+            conn.execute("DELETE FROM recognition_details WHERE person_id = ?", (person_id,))
+            conn.execute("DELETE FROM init_face_person_exclusions WHERE person_id = ?", (person_id,))
+            conn.execute("DELETE FROM person_change_history WHERE person_id = ?", (person_id,))
+            conn.execute("DELETE FROM embeddings WHERE person_id = ?", (person_id,))
+            conn.execute("DELETE FROM persons WHERE person_id = ?", (person_id,))
+            result = {
+                "person_id": person_id,
+                "person_name": person["name"],
+                "was_archived": person["deleted_at"] is not None,
+                "deleted": True,
+                "permanent": True,
+                "deleted_embeddings": embedding_count,
+                "deleted_sightings": sighting_count,
+                "deleted_profile_changes": change_count,
+                "deleted_queue_exclusions": exclusion_count,
+            }
+            _record_person_operation(conn, operation_id, "purge-person", result)
+            return result
+
     def delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
         """Soft-delete a face for 30 days while retaining its linked sightings."""
         with self._connect() as conn:

@@ -81,6 +81,7 @@ export function PeopleView({
   onSetRepresentative,
   onArchive,
   onRestore,
+  onDelete,
   onMerge,
   onMovePhoto,
   onDeletePhoto,
@@ -93,6 +94,9 @@ export function PeopleView({
   const [viewMode, setViewMode] = useState("grid");
   const [pageSize, setPageSize] = useState("12");
   const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const resultsRef = useRef(null);
   const normalizedQuery = query.trim().toLowerCase();
   const statsCollection = filter === "archived" ? archivedPeople : people;
@@ -171,6 +175,7 @@ export function PeopleView({
           onSetRepresentative={onSetRepresentative}
           onArchive={onArchive}
           onRestore={onRestore}
+          onDelete={onDelete}
           onMerge={onMerge}
           onMovePhoto={onMovePhoto}
           onDeletePhoto={onDeletePhoto}
@@ -256,8 +261,13 @@ export function PeopleView({
                             favorite={Boolean(person.favorite)}
                             archived={Boolean(person.archived)}
                             viewMode={viewMode}
+                            canDestroy={canDestroy}
                             onOpen={() => onOpen(person.person_id, { archived: Boolean(person.archived) })}
                             onFavorite={() => toggleFavorite(person)}
+                            onDelete={() => {
+                              setDeleteTarget(person);
+                              setDeleteConfirmation("");
+                            }}
                           />
                         ))}
                       </Box>
@@ -280,6 +290,52 @@ export function PeopleView({
           </Grid.Col>
         </Grid>
       )}
+      <Modal
+        opened={Boolean(deleteTarget)}
+        onClose={() => {
+          if (deleteBusy) return;
+          setDeleteTarget(null);
+          setDeleteConfirmation("");
+        }}
+        title="Delete entire profile permanently?"
+        centered
+      >
+        <Stack>
+          <Alert color="red" icon={<IconShield size={18} />} title="This removes the live profile">
+            {deleteTarget?.name} and all linked photos, deleted faces, sightings, and profile history will be removed from the live library. A verified safety backup is created first.
+          </Alert>
+          <TextInput
+            label="Type DELETE to confirm"
+            value={deleteConfirmation}
+            onChange={(event) => setDeleteConfirmation(event.currentTarget.value)}
+            autoComplete="off"
+          />
+          <Group justify="flex-end">
+            <Button variant="default" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button
+              color="red"
+              loading={deleteBusy}
+              disabled={deleteConfirmation !== "DELETE"}
+              leftSection={<IconTrash size={16} />}
+              onClick={async () => {
+                if (!deleteTarget || deleteBusy) return;
+                setDeleteBusy(true);
+                try {
+                  await onDelete(deleteTarget.person_id);
+                  setDeleteTarget(null);
+                  setDeleteConfirmation("");
+                } catch (error) {
+                  console.error(error);
+                } finally {
+                  setDeleteBusy(false);
+                }
+              }}
+            >
+              Delete entire profile
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Paper>
   );
 }
@@ -575,7 +631,7 @@ function PeopleStatsStrip({ people, totalPhotos, favoriteCount, addedToday, arch
   );
 }
 
-function PersonCard({ person, favorite, archived, viewMode, onOpen, onFavorite }) {
+function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, onFavorite, onDelete }) {
   const cardClass = viewMode === "list" ? "people-person-card people-person-card--list" : "people-person-card";
   const openPerson = () => onOpen(person.person_id);
   const toggleFavorite = (event) => {
@@ -635,6 +691,10 @@ function PersonCard({ person, favorite, archived, viewMode, onOpen, onFavorite }
             <Menu.Dropdown onClick={(event) => event.stopPropagation()}>
               <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => navigator.clipboard?.writeText(person.person_id)}>
                 Copy ID
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={onDelete}>
+                Delete entire profile
               </Menu.Item>
             </Menu.Dropdown>
           </Menu>
@@ -702,6 +762,7 @@ function PeopleGalleryView({
   onSetRepresentative,
   onArchive,
   onRestore,
+  onDelete,
   onMerge,
   onMovePhoto,
   onDeletePhoto,
@@ -713,6 +774,7 @@ function PeopleGalleryView({
   const [managementDialog, setManagementDialog] = useState(null);
   const [targetPersonId, setTargetPersonId] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [profileDeleteConfirmation, setProfileDeleteConfirmation] = useState("");
   const archived = Boolean(payload.person.archived);
   const mergedInto = payload.person.metadata?.merged_into || "";
   const favorite = Boolean(payload.person.favorite || payload.person.metadata?.favorite);
@@ -735,6 +797,7 @@ function PeopleGalleryView({
     setEditOpen(false);
     setManagementDialog(null);
     setTargetPersonId("");
+    setProfileDeleteConfirmation("");
   }, [payload.person.person_id]);
 
   useEffect(() => {
@@ -859,6 +922,13 @@ function PeopleGalleryView({
                   </Menu.Item>
                 </>
               )}
+              {archived && <Menu.Divider />}
+              <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={() => {
+                setProfileDeleteConfirmation("");
+                setManagementDialog("delete-profile");
+              }}>
+                Delete entire profile
+              </Menu.Item>
             </Menu.Dropdown>
           </Menu>
         </Group>
@@ -997,6 +1067,37 @@ function PeopleGalleryView({
             <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
             <Button loading={actionBusy} leftSection={<IconRestore size={16} />} onClick={() => runManagement(() => onRestore(payload.person.person_id))}>
               Restore person
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={managementDialog === "delete-profile"}
+        onClose={() => !actionBusy && setManagementDialog(null)}
+        title="Delete entire profile permanently?"
+        centered
+      >
+        <Stack>
+          <Alert color="red" icon={<IconShield size={18} />} title="This cannot be undone in the live library">
+            <strong>{payload.person.name}</strong>, {imageRecords.length} photo record{imageRecords.length === 1 ? "" : "s"}, {latestSightings.length} sighting{latestSightings.length === 1 ? "" : "s"}, deleted faces, and profile history will be removed. A verified safety backup is created first.
+          </Alert>
+          <TextInput
+            label="Type DELETE to confirm"
+            value={profileDeleteConfirmation}
+            onChange={(event) => setProfileDeleteConfirmation(event.currentTarget.value)}
+            autoComplete="off"
+          />
+          <Group justify="flex-end">
+            <Button variant="default" disabled={actionBusy} onClick={() => setManagementDialog(null)}>Cancel</Button>
+            <Button
+              color="red"
+              loading={actionBusy}
+              disabled={profileDeleteConfirmation !== "DELETE"}
+              leftSection={<IconTrash size={16} />}
+              onClick={() => runManagement(() => onDelete(payload.person.person_id))}
+            >
+              Delete entire profile
             </Button>
           </Group>
         </Stack>

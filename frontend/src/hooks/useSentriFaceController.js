@@ -31,6 +31,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
     upsertPerson: appData.upsertPerson,
     archivePersonLocally: appData.archivePersonLocally,
     restorePersonLocally: appData.restorePersonLocally,
+    removePersonLocally: appData.removePersonLocally,
     addDeletedFace: appData.addDeletedFace,
     removeDeletedFace: appData.removeDeletedFace,
   });

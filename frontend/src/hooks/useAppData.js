@@ -104,6 +104,12 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     setPeople((current) => [restored, ...current.filter((item) => item.person_id !== personId)]);
   }, [archivedPeople]);
 
+  const removePersonLocally = useCallback((personId) => {
+    setPeople((current) => current.filter((item) => item.person_id !== personId));
+    setArchivedPeople((current) => current.filter((item) => item.person_id !== personId));
+    setDeletedFaces((current) => current.filter((item) => item.person_id !== personId));
+  }, []);
+
   const addDeletedFace = useCallback((face) => {
     if (!face?.embedding_id) return;
     setDeletedFaces((current) => [face, ...current.filter((item) => item.embedding_id !== face.embedding_id)]);
@@ -359,6 +365,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     upsertPerson,
     archivePersonLocally,
     restorePersonLocally,
+    removePersonLocally,
     addDeletedFace,
     removeDeletedFace,
     refreshAll,

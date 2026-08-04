@@ -63,3 +63,35 @@ test("tab navigation cannot fail on a replaced lazy-loaded chunk", async () => {
   assert.match(app, /import \{ PeopleView \} from "\.\/views\/PeopleView\.jsx"/);
   assert.match(app, /import \{ QueueView \} from "\.\/views\/QueueView\.jsx"/);
 });
+
+test("signed-in identity aligns with a consistent header control row", async () => {
+  const [app, css] = await Promise.all([
+    read("../src/SentriFaceApp.jsx"),
+    read("../src/sentriface-interface.css"),
+  ]);
+
+  assert.match(app, /className="header-user-chip"/);
+  assert.match(app, /className="header-actions"/);
+  assert.match(app, /accountInitials\(user\.display_name \|\| user\.username\)/);
+  assert.match(css, /\.header-user-chip\s*\{[^}]*height:\s*40px;/s);
+  assert.doesNotMatch(css, /\.header-user-chip\s*\{[^}]*(?:box-shadow|background):/s);
+  assert.match(app, /<Button h=\{40\}[^\n]*Change password/);
+  assert.match(app, /<Button h=\{40\}[^\n]*Sign out/);
+});
+
+test("active and archived people can delete an entire profile without refetching", async () => {
+  const [view, controller, appData] = await Promise.all([
+    read("../src/views/PeopleView.jsx"),
+    read("../src/hooks/usePeopleController.js"),
+    read("../src/hooks/useAppData.js"),
+  ]);
+
+  assert.match(view, /Delete entire profile/);
+  assert.match(view, /managementDialog === "delete-profile"/);
+  assert.match(view, /disabled=\{deleteConfirmation !== "DELETE"\}/);
+  assert.match(view, /disabled=\{profileDeleteConfirmation !== "DELETE"\}/);
+  assert.match(controller, /apiPost\("\/api\/person-purge"/);
+  assert.match(controller, /removePersonLocally\(personId\)/);
+  assert.match(appData, /setArchivedPeople\(\(current\) => current\.filter\(\(item\) => item\.person_id !== personId\)\)/);
+  assert.doesNotMatch(controller, /permanentlyDeletePerson[\s\S]{0,800}(?:loadPeople|refreshAll)\(/);
+});

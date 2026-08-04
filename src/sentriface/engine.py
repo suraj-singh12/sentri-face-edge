@@ -156,6 +156,7 @@ class FaceEngine:
     ) -> "PreparedAdditions":
         additions: list[PendingAddition] = []
         rejected: list[RejectedFace] = []
+        canonical_source = _canonical_source_path(image_path, self.config.data_dir)
         with self.metrics.timer("image_load_ms"):
             image = load_bgr_image(image_path, self.config.storage_key)
         with self.metrics.timer("detect_ms"):
@@ -179,7 +180,7 @@ class FaceEngine:
             if quality.status == QualityStatus.BAD and not allow_bad_quality:
                 rejected.append(
                     RejectedFace(
-                        source_image=str(image_path),
+                        source_image=canonical_source,
                         face=face,
                         quality=quality,
                     )
@@ -202,7 +203,7 @@ class FaceEngine:
             additions.append(
                 PendingAddition(
                     pending_id=pending_id,
-                    source_image=str(image_path),
+                    source_image=canonical_source,
                     face=_with_crop_path(face, crop_path),
                     vector=vector,
                     matches=matches,
@@ -342,6 +343,17 @@ class FaceEngine:
         with self.metrics.timer("db_restore_person_ms"):
             result = self.store.restore_person(person_id, operation_id)
         self._rebuild_index()
+        return result
+
+    def permanently_delete_person(self, person_id: str, operation_id: str) -> dict:
+        journal = self.cleanup.schedule(
+            self.store.list_file_references_for_person(person_id),
+            f"purge-person-{person_id}",
+        )
+        with self.metrics.timer("db_purge_person_ms"):
+            result = self.store.permanently_delete_person(person_id, operation_id)
+        self._rebuild_index()
+        self.cleanup.run(journal, self.store.list_all_file_references)
         return result
 
     def delete_person(self, person_id: str) -> None:
@@ -632,6 +644,7 @@ class FaceEngine:
                 invalid_images: list[str] = []
                 for image_index, image_path in enumerate(image_paths, start=1):
                     cancellation_checkpoint("before_image")
+                    canonical_source = _canonical_source_path(image_path, self.config.data_dir)
                     try:
                         with self.metrics.timer("image_load_ms"):
                             image = load_bgr_image(image_path, self.config.storage_key)
@@ -681,7 +694,7 @@ class FaceEngine:
                                 init_face_id=init_face_id,
                                 session_id=session.session_id,
                                 group_id="unassigned",
-                                source_image=str(image_path),
+                                source_image=canonical_source,
                                 face=_with_crop_path(face, crop_path),
                                 vector=vector,
                                 quality=quality,
@@ -1252,6 +1265,25 @@ def _iter_images(
                 )
     images.sort()
     return images
+
+
+def _canonical_source_path(image_path: Path, data_dir: Path) -> str:
+    """Map a queue hard link back to its content-addressed upload object."""
+    batch_root = data_dir / "uploads" / "batches"
+    try:
+        image_path.relative_to(batch_root)
+    except ValueError:
+        return str(image_path)
+    digest = image_path.stem.split("-", 1)[0]
+    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        return str(image_path)
+    candidate = data_dir / "uploads" / "objects" / f"{digest}{image_path.suffix.lower()}"
+    try:
+        if candidate.exists() and image_path.samefile(candidate):
+            return str(candidate)
+    except OSError:
+        pass
+    return str(image_path)
 
 def _assign_groups(
     faces: list[InitFace],

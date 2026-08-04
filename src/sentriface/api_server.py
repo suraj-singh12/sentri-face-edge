@@ -88,6 +88,7 @@ TERMINAL_QUEUE_STATES = {"done", "failed", "cancelled"}
 QUEUE_PROGRESS_RETENTION_SECONDS = 3600
 QUEUE_PROGRESS_LIMIT = 200
 MAX_HTTP_HANDLERS = 8
+_UPLOAD_OBJECT_LOCK = threading.Lock()
 
 
 MODEL_SETUP_ALLOWED_ENDPOINTS = {
@@ -138,7 +139,7 @@ def _required_capability(method: str, path: str) -> str | None:
     if path in {"/api/backups", "/api/backup-db"}:
         return "backups"
     if path in {
-        "/api/person-archive", "/api/person-restore", "/api/person-merge",
+        "/api/person-archive", "/api/person-restore", "/api/person-merge", "/api/person-purge",
         "/api/person-photo-move", "/api/person-photo-delete",
         "/api/person-photo-restore", "/api/person-photo-purge",
     }:
@@ -240,6 +241,8 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.session_token = secrets.token_urlsafe(32)
         self.events: list[dict[str, Any]] = []
         self.events_lock = threading.Lock()
+        self.upload_object_index: dict[str, Path] | None = None
+        self.upload_object_index_lock = threading.Lock()
         self.queue_progress: dict[str, dict[str, Any]] = {}
         self.queue_progress_lock = threading.Lock()
         self.queue_cancellations: dict[str, threading.Event] = {}
@@ -277,6 +280,29 @@ class SentriFaceApiServer(ThreadingHTTPServer):
                 daemon=True,
             )
             self.network_policy_thread.start()
+
+    def indexed_upload_objects(self) -> dict[str, Path]:
+        """Build the legacy upload hash index once, then reuse it in memory."""
+        with self.upload_object_index_lock:
+            if self.upload_object_index is not None:
+                return self.upload_object_index
+            upload_root = (self.config.data_dir / "uploads").resolve()
+            indexed: dict[str, Path] = {}
+            for raw_path in set(self.engine.store.list_all_file_references()):
+                path = Path(raw_path)
+                try:
+                    resolved = path.resolve()
+                    resolved.relative_to(upload_root)
+                    if not resolved.is_file():
+                        continue
+                    digest = hashlib.sha256(
+                        read_protected_bytes(resolved, self.config.storage_key)
+                    ).hexdigest()
+                except (OSError, ValueError, StorageSecurityError):
+                    continue
+                indexed.setdefault(digest, resolved)
+            self.upload_object_index = indexed
+            return indexed
 
     def _model_files(self) -> tuple[Path, ...]:
         model_dir = self.config.detector_model.parent
@@ -1090,6 +1116,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _query_value(parsed.query, "relative_path"),
                     self.rfile.read(content_length),
                     self.server.config.storage_key,
+                    self.server.indexed_upload_objects(),
                 )
                 self._json({
                     "path": str(saved_dir),
@@ -1288,6 +1315,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     reload_callback=self.server.engine.initialize,
                     allow_incomplete=bool(payload.get("allow_incomplete", False)),
                 )
+                with self.server.upload_object_index_lock:
+                    self.server.upload_object_index = None
                 self.server.log_event("app-state-restored", **result)
                 self._json({"restore": result})
                 return
@@ -1297,6 +1326,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _required(payload, "filename"),
                     _required(payload, "data"),
                     storage_key=self.server.config.storage_key,
+                    known_objects=self.server.indexed_upload_objects(),
                 )
                 self.server.log_event(
                     "upload",
@@ -1311,6 +1341,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     self.server.config.data_dir,
                     payload.get("files", []),
                     self.server.config.storage_key,
+                    self.server.indexed_upload_objects(),
                 )
                 self.server.log_event(
                     "upload-batch",
@@ -1432,6 +1463,25 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _operation_id(payload),
                 )
                 self.server.log_event("person-restore", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/person-purge":
+                person_id = _required(payload, "person_id")
+                operation_id = _operation_id(payload)
+                person = self.server.engine.get_person(person_id, include_archived=True)
+                existing = self.server.engine.get_person_operation(operation_id, "purge-person")
+                if person is None and existing is None:
+                    raise KeyError(f"Unknown person: {person_id}")
+                result = self.server.backed_up_people_deletion(
+                    operation_id,
+                    "purge-person",
+                    f"before-person-permanent-delete-{person.name if person else 'deleted'}-{person_id[:8]}",
+                    lambda: self.server.engine.permanently_delete_person(
+                        person_id,
+                        operation_id,
+                    ),
+                )
+                self.server.log_event("person-purge", **result)
                 self._json(result)
                 return
             if parsed.path == "/api/person-merge":
@@ -2539,7 +2589,7 @@ def _image_paths(source: Path) -> list[Path]:
     return sorted(path for path in source.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
 
 
-def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Path = Path("uploads"), storage_key: bytes | None = None) -> Path:
+def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Path = Path("uploads"), storage_key: bytes | None = None, known_objects: dict[str, Path] | None = None) -> Path:
     suffix = Path(filename).suffix.lower()
     if suffix not in IMAGE_EXTENSIONS:
         raise InputValidationError(
@@ -2554,10 +2604,10 @@ def _save_upload(data_dir: Path, filename: str, data_url: str, upload_subdir: Pa
         data = base64.b64decode(encoded, validate=True)
     except binascii.Error as exc:
         raise InputValidationError("Invalid upload data", "invalid_base64") from exc
-    return _save_upload_bytes(data_dir, filename, data, upload_subdir, storage_key)
+    return _save_upload_bytes(data_dir, filename, data, upload_subdir, storage_key, known_objects)
 
 
-def _save_upload_bytes(data_dir: Path, filename: str, data: bytes, upload_subdir: Path = Path("uploads"), storage_key: bytes | None = None) -> Path:
+def _save_upload_bytes(data_dir: Path, filename: str, data: bytes, upload_subdir: Path = Path("uploads"), storage_key: bytes | None = None, known_objects: dict[str, Path] | None = None) -> Path:
     declared_suffix = _normalize_image_suffix(Path(filename).suffix.lower())
     if declared_suffix not in {".jpg", ".png", ".bmp", ".webp"}:
         raise InputValidationError(
@@ -2592,11 +2642,52 @@ def _save_upload_bytes(data_dir: Path, filename: str, data: bytes, upload_subdir
     suffix = detected_suffix
     if len(data) > UPLOAD_RESIZE_LIMIT_BYTES:
         data, suffix = _reduce_upload_image(data, image=image)
-    upload_dir = data_dir / upload_subdir
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    target = upload_dir / f"{uuid.uuid4().hex}{suffix}"
-    write_protected_bytes(target, data, storage_key)
+    stored = _store_upload_object(data_dir, data, suffix, storage_key, known_objects)
+    if upload_subdir == Path("uploads"):
+        return stored
+    return _stage_upload_object(data_dir / upload_subdir, stored, suffix)
+
+
+def _store_upload_object(
+    data_dir: Path,
+    data: bytes,
+    suffix: str,
+    storage_key: bytes | None,
+    known_objects: dict[str, Path] | None = None,
+) -> Path:
+    """Store one physical copy of identical uploaded image bytes."""
+    digest = hashlib.sha256(data).hexdigest()
+    target = data_dir / "uploads" / "objects" / f"{digest}{suffix}"
+    with _UPLOAD_OBJECT_LOCK:
+        if target.exists():
+            existing_digest = hashlib.sha256(
+                read_protected_bytes(target, storage_key)
+            ).hexdigest()
+            if existing_digest != digest:
+                raise StorageSecurityError(
+                    f"Stored upload object failed its content check: {target.name}"
+                )
+            return target
+        legacy = known_objects.get(digest) if known_objects is not None else None
+        if legacy is not None and legacy.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.link(legacy, target)
+            except OSError:
+                write_protected_bytes(target, data, storage_key)
+        else:
+            write_protected_bytes(target, data, storage_key)
+        if known_objects is not None:
+            known_objects[digest] = target
     return target
+
+
+def _stage_upload_object(stage_dir: Path, stored: Path, suffix: str) -> Path:
+    """Expose a canonical object inside a queue batch without copying bytes."""
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    staged = stage_dir / f"{stored.stem}-{uuid.uuid4().hex}{suffix}"
+    os.link(stored, staged)
+    return staged
 
 
 def _upload_batch_subdir(upload_id: str) -> Path:
@@ -2614,10 +2705,11 @@ def _save_upload_chunk(
     relative_path: str,
     data: bytes,
     storage_key: bytes | None = None,
+    known_objects: dict[str, Path] | None = None,
 ) -> tuple[Path, Path]:
     batch_subdir = _upload_batch_subdir(upload_id)
     safe_path = _safe_relative_upload_path(relative_path or filename)
-    saved = _save_upload_bytes(data_dir, filename, data, batch_subdir / safe_path.parent, storage_key)
+    saved = _save_upload_bytes(data_dir, filename, data, batch_subdir / safe_path.parent, storage_key, known_objects)
     return data_dir / batch_subdir, saved
 
 
@@ -2629,7 +2721,7 @@ def _discard_upload_batch(data_dir: Path, upload_id: str) -> bool:
     return True
 
 
-def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]], storage_key: bytes | None = None) -> tuple[Path, int, int]:
+def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]], storage_key: bytes | None = None, known_objects: dict[str, Path] | None = None) -> tuple[Path, int, int]:
     if not isinstance(files, list) or not files:
         raise InputValidationError("No files selected", "empty_selection")
     batch_subdir = Path("uploads") / "batches" / uuid.uuid4().hex
@@ -2651,6 +2743,7 @@ def _save_upload_batch(data_dir: Path, files: list[dict[str, Any]], storage_key:
                 data_url,
                 batch_subdir / safe_path.parent,
                 storage_key,
+                known_objects,
             )
             count += int(saved.exists())
         except (InputValidationError, KeyError, TypeError, ValueError):

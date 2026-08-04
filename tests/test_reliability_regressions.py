@@ -42,6 +42,74 @@ class ReliabilityRegressionTest(unittest.TestCase):
             self.assertTrue(source.exists())
             self.assertIn(str(source), engine.store.list_all_file_references())
 
+    def test_entire_profile_purge_removes_records_but_preserves_shared_image(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            shared_source = data_dir / "uploads" / "objects" / "shared.jpg"
+            first_crop = data_dir / "faces" / "pending" / "first.jpg"
+            second_crop = data_dir / "faces" / "pending" / "second.jpg"
+            for path, content in (
+                (shared_source, b"shared"),
+                (first_crop, b"first-crop"),
+                (second_crop, b"second-crop"),
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+            engine = build_dev_engine(data_dir)
+            engine.initialize()
+            first = engine.store.create_person("Delete Me")
+            second = engine.store.create_person("Keep Me")
+            first_embedding = engine.store.add_embedding(
+                first.person_id,
+                [0.1] * engine.config.embedding_dim,
+                quality_score=0.9,
+                source_image=str(shared_source),
+                crop_path=str(first_crop),
+            )
+            engine.store.add_embedding(
+                second.person_id,
+                [0.2] * engine.config.embedding_dim,
+                quality_score=0.9,
+                source_image=str(shared_source),
+                crop_path=str(second_crop),
+            )
+            engine.add_recognition_detail(
+                embedding_id=first_embedding.embedding_id,
+                person_id=first.person_id,
+                image_id="shared.jpg#face-01",
+                image_path=str(shared_source),
+                name=first.name,
+                decision="new",
+                seen_date="2026-08-04",
+                seen_time="10:00",
+                place_seen="Test",
+                individual_count=1,
+                event_occasion="Test",
+            )
+            engine.update_person_profile(
+                first.person_id,
+                first.name,
+                "Officer",
+                "England",
+                "Regular",
+                "tester",
+            )
+            engine.archive_person(first.person_id, str(uuid.uuid4()))
+            operation_id = str(uuid.uuid4())
+
+            result = engine.permanently_delete_person(first.person_id, operation_id)
+            retry = engine.permanently_delete_person(first.person_id, operation_id)
+
+            self.assertEqual(result, retry)
+            self.assertIsNone(engine.get_person(first.person_id, include_archived=True))
+            self.assertIsNotNone(engine.get_person(second.person_id))
+            self.assertEqual(result["deleted_embeddings"], 1)
+            self.assertEqual(result["deleted_sightings"], 1)
+            self.assertEqual(result["deleted_profile_changes"], 1)
+            self.assertTrue(shared_source.exists())
+            self.assertFalse(first_crop.exists())
+            self.assertTrue(second_crop.exists())
+
     def test_pending_confirmation_and_followup_retries_do_not_duplicate(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             data_dir = Path(temp) / "data"

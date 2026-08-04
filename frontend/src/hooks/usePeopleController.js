@@ -15,6 +15,7 @@ export function usePeopleController({
   upsertPerson,
   archivePersonLocally,
   restorePersonLocally,
+  removePersonLocally,
   addDeletedFace,
   removeDeletedFace,
   showToast,
@@ -145,6 +146,22 @@ export function usePeopleController({
     showToast("Person restored");
   };
 
+  const permanentlyDeletePerson = async (personId) => {
+    const result = await apiPost("/api/person-purge", {
+      person_id: personId,
+      operation_id: operationId(),
+    });
+    setPeopleGallery(null);
+    setPeopleGalleryImage(null);
+    removePersonLocally(personId);
+    showToast(
+      `${result.deleted_embeddings || 0} photo record${result.deleted_embeddings === 1 ? "" : "s"} and ${result.deleted_sightings || 0} sighting${result.deleted_sightings === 1 ? "" : "s"} removed. Safety backup ${result.backup?.backup_id || "created"} retains a recovery copy.`,
+      "red",
+      { title: "Profile permanently deleted", autoClose: 9000 },
+    );
+    return result;
+  };
+
   const mergePeople = async (sourcePersonId, targetPersonId) => {
     const result = await apiPost("/api/person-merge", {
       source_person_id: sourcePersonId,
@@ -268,6 +285,7 @@ export function usePeopleController({
       setRepresentativePhoto,
       archivePerson,
       restorePerson,
+      permanentlyDeletePerson,
       mergePeople,
       movePersonPhoto,
       deletePersonPhoto,

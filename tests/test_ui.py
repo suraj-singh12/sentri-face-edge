@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import sqlite3
 from contextlib import closing
 import tempfile
@@ -16,8 +17,10 @@ import numpy as np
 
 from sentriface.cli import build_dev_engine
 from sentriface.backup_service import BackupError, BackupService
+from sentriface.engine import _canonical_source_path
 from sentriface.errors import InputValidationError
 from sentriface.models import EmbeddingRecord
+from sentriface.secure_files import is_protected_file, read_protected_bytes
 from sentriface.api_server import (
     OperationGate,
     UPLOAD_MAX_PIXELS,
@@ -345,8 +348,79 @@ class ApiSerializationTest(unittest.TestCase):
             saved = _save_upload(data_dir, "face.jpg", f"data:image/jpeg;base64,{encoded}")
 
             self.assertTrue(saved.exists())
-            self.assertEqual(saved.parent, data_dir / "uploads")
+            self.assertEqual(saved.parent, data_dir / "uploads" / "objects")
             self.assertEqual(saved.read_bytes(), image_bytes)
+
+    def test_identical_uploads_reuse_one_physical_image(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            image_bytes = self._image_bytes(".jpg")
+            encoded = base64.b64encode(image_bytes).decode("ascii")
+
+            first = _save_upload(data_dir, "first.jpg", encoded)
+            second = _save_upload(data_dir, "second.jpg", encoded)
+
+            self.assertEqual(first, second)
+            self.assertEqual(
+                list((data_dir / "uploads" / "objects").glob("*.jpg")),
+                [first],
+            )
+
+    def test_identical_protected_uploads_reuse_one_authenticated_object(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            storage_key = b"k" * 32
+            image_bytes = self._image_bytes(".png")
+            encoded = base64.b64encode(image_bytes).decode("ascii")
+
+            first = _save_upload(data_dir, "first.png", encoded, storage_key=storage_key)
+            second = _save_upload(data_dir, "second.png", encoded, storage_key=storage_key)
+
+            self.assertEqual(first, second)
+            self.assertTrue(is_protected_file(first))
+            self.assertEqual(read_protected_bytes(first, storage_key), image_bytes)
+
+    def test_legacy_database_image_is_hard_linked_into_canonical_storage(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            legacy = data_dir / "uploads" / "legacy-uuid.jpg"
+            legacy.parent.mkdir(parents=True)
+            image_bytes = self._image_bytes(".jpg")
+            legacy.write_bytes(image_bytes)
+            digest = hashlib.sha256(image_bytes).hexdigest()
+
+            saved = _save_upload(
+                data_dir,
+                "again.jpg",
+                base64.b64encode(image_bytes).decode("ascii"),
+                known_objects={digest: legacy},
+            )
+
+            self.assertTrue(saved.samefile(legacy))
+            self.assertEqual(saved.name, f"{digest}.jpg")
+
+    def test_queue_uploads_stage_hard_links_to_the_same_canonical_image(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            image_bytes = self._image_bytes(".jpg")
+
+            first_dir, first = _save_upload_chunk(
+                data_dir, str(uuid.uuid4()), "first.jpg", "one/first.jpg", image_bytes
+            )
+            second_dir, second = _save_upload_chunk(
+                data_dir, str(uuid.uuid4()), "second.jpg", "two/second.jpg", image_bytes
+            )
+
+            self.assertNotEqual(first_dir, second_dir)
+            canonical = next((data_dir / "uploads" / "objects").glob("*.jpg"))
+            self.assertTrue(first.samefile(canonical))
+            self.assertTrue(second.samefile(canonical))
+            self.assertEqual(_canonical_source_path(first, data_dir), str(canonical))
+            self.assertEqual(_canonical_source_path(second, data_dir), str(canonical))
+            self.assertEqual(
+                len(list((data_dir / "uploads" / "objects").glob("*.jpg"))),
+                1,
+            )
 
     def test_upload_save_reduces_large_image(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

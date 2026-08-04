@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActionIcon, AppShell, Box, Button, Group, Loader, MantineProvider, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
+import { ActionIcon, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
@@ -80,11 +80,11 @@ function SentriFaceShell({ user, logout, changePassword }) {
             <Title order={2} size="h3" className="brand-title">SentriFace <Text span inherit c="teal.4">Edge</Text></Title>
             <Text size="xs" c="dimmed" truncate>{profileLine(state.profile)}</Text>
           </Box>
-          <Group gap="xs" wrap="nowrap">
+          <Group gap="sm" wrap="nowrap" className="header-actions">
             <Tooltip label={`Switch to ${nextColorScheme} mode`}>
               <ActionIcon
                 variant="light"
-                size="lg"
+                size={40}
                 onClick={() => setColorScheme(nextColorScheme)}
                 aria-label={`Switch to ${nextColorScheme} mode`}
               >
@@ -92,7 +92,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Refresh">
-              <ActionIcon variant="light" size="lg" onClick={guarded(actions.reloadAppData)} disabled={state.refreshing} aria-label={state.refreshing ? "Refreshing" : "Refresh"}>
+              <ActionIcon variant="light" size={40} onClick={guarded(actions.reloadAppData)} disabled={state.refreshing} aria-label={state.refreshing ? "Refreshing" : "Refresh"}>
                 {state.refreshing ? <Loader size={18} /> : <IconRefresh size={18} />}
               </ActionIcon>
             </Tooltip>
@@ -101,7 +101,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
                 <ActionIcon
                   variant="light"
                   color="blue"
-                  size="lg"
+                  size={40}
                   onClick={actions.requestBackup}
                   disabled={state.backupCreating}
                   aria-label={state.backupCreating ? "Creating backup..." : "Create backup now"}
@@ -110,9 +110,19 @@ function SentriFaceShell({ user, logout, changePassword }) {
                 </ActionIcon>
               </Tooltip>
             ) : null}
-            <Box visibleFrom="sm" ta="right"><Text size="sm" fw={700}>{user.display_name}</Text><Text size="xs" c="dimmed">{(user.roles || []).join(", ")}</Text></Box>
-            <Button size="xs" variant="default" onClick={() => setPasswordOpen(true)}>Change password</Button>
-            <Button size="xs" variant="light" color="gray" onClick={logout}>Sign out</Button>
+            <Box visibleFrom="sm" className="header-user-chip">
+              <Group gap="xs" wrap="nowrap">
+                <Avatar size={32} radius="xl" color="teal" variant="light">
+                  {accountInitials(user.display_name || user.username)}
+                </Avatar>
+                <Box miw={0}>
+                  <Text size="sm" fw={800} lh={1.15} truncate>{user.display_name || user.username}</Text>
+                  <Text size="xs" c="dimmed" lh={1.15} tt="capitalize" truncate>{(user.roles || []).join(" · ")}</Text>
+                </Box>
+              </Group>
+            </Box>
+            <Button h={40} px="md" size="sm" variant="default" onClick={() => setPasswordOpen(true)}>Change password</Button>
+            <Button h={40} px="md" size="sm" variant="light" color="gray" onClick={logout}>Sign out</Button>
           </Group>
         </Group>
       </AppShell.Header>
@@ -243,6 +253,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onSetRepresentative={guarded(actions.setRepresentativePhoto)}
               onArchive={actions.archivePerson}
               onRestore={actions.restorePerson}
+              onDelete={actions.permanentlyDeletePerson}
               onMerge={actions.mergePeople}
               onMovePhoto={actions.movePersonPhoto}
               onDeletePhoto={actions.deletePersonPhoto}
@@ -327,4 +338,9 @@ function SentriFaceShell({ user, logout, changePassword }) {
         </Modal>
       </AppShell.Main>    </AppShell>
   );
+}
+
+function accountInitials(value) {
+  const words = String(value || "U").trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase() || "U";
 }
