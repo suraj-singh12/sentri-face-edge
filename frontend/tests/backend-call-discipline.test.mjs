@@ -56,6 +56,30 @@ test("idle screens do not poll or reload data they already hold", async () => {
   assert.match(queue, /setQueueSessionId\(""\)/);
 });
 
+test("queue People candidates rank only when the user opens Browse People", async () => {
+  const [app, queueController, queueView] = await Promise.all([
+    read("../src/SentriFaceApp.jsx"),
+    read("../src/hooks/useQueueController.js"),
+    read("../src/views/QueueView.jsx"),
+  ]);
+
+  assert.match(app, /onLoadPeopleCandidates=\{guarded\(actions\.loadQueuePeopleCandidates\)\}/);
+  assert.match(queueController, /\/api\/queue-person-candidates\?session_id=/);
+  assert.match(queueView, /const openPeoplePicker = async \(\) => \{[\s\S]*if \(peopleCandidatesGroupId === group\.group_id\) return;[\s\S]*await onLoadPeopleCandidates\(group\.session_id, group\.group_id\);/);
+});
+
+test("recognition People candidates rank only when Browse People is opened", async () => {
+  const [app, recognizeController, recognizeView] = await Promise.all([
+    read("../src/SentriFaceApp.jsx"),
+    read("../src/hooks/useRecognizeController.js"),
+    read("../src/views/RecognizeView.jsx"),
+  ]);
+
+  assert.match(app, /onLoadPeopleCandidates=\{guarded\(actions\.loadRecognitionPeopleCandidates\)\}/);
+  assert.match(recognizeController, /apiPost\("\/api\/recognition-person-candidates"/);
+  assert.match(recognizeView, /const openPeoplePicker = async \(faceIndex\) => \{[\s\S]*if \(peopleCandidates\[faceIndex\]\) return;[\s\S]*await onLoadPeopleCandidates\(faceIndex\);/);
+});
+
 test("tab navigation cannot fail on a replaced lazy-loaded chunk", async () => {
   const app = await read("../src/SentriFaceApp.jsx");
 

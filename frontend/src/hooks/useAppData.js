@@ -347,7 +347,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   return {
     profile,
     refreshing,
-    people,
+      people,
     archivedPeople,
     deletedFaces,
     events,

@@ -35,3 +35,15 @@ properties at startup.
 
 Paths in the service template must be resolved by the installer. Do not weaken
 `IPAddressDeny=any` or add non-loopback entries to `IPAddressAllow`.
+
+## Application icons
+
+Use the platform-specific assets supplied with this packaging contract:
+
+- Windows executable and installer: `windows/SentriFace.ico`
+- macOS application bundle (`CFBundleIconFile`): `macos/SentriFace.icns`
+- Linux desktop entry and application menu: `linux/sentriface.png`
+
+The editable high-resolution raster master is
+`assets/sentriface-app-icon-1024.png`. Browser favicon and touch-icon variants
+are copied from the same mark during the frontend build.

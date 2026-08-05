@@ -410,8 +410,8 @@ export function useQueueController({
     setQueueSelectedFaces([]);
   };
 
-  const queueAcceptExisting = async () => {
-    const best = queueSelectedGroup?.matches?.[0];
+  const queueAcceptExisting = async (selectedPerson = null) => {
+    const best = selectedPerson || queueSelectedGroup?.matches?.[0];
     if (!queueSelectedGroup || !best || isNewPersonSuggestion(best)) return;
     const faceIds = selectedOrGroupFaceIds();
     setQueueAccepted(true);
@@ -641,6 +641,10 @@ export function useQueueController({
     showToast(`Removed ${best.name} as the suggestion`, "yellow");
   };
 
+  const loadQueuePeopleCandidates = async (sessionId, groupId) => apiGet(
+    `/api/queue-person-candidates?session_id=${encodeURIComponent(sessionId)}&group_id=${encodeURIComponent(groupId)}`,
+  );
+
   const openQueueGallery = async (personId) => {
     if (!personId) return;
     setQueueGallery(await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`));
@@ -747,6 +751,7 @@ export function useQueueController({
       queueSkipGroup,
       queueResumeSkipped,
       queueRejectSuggestedMatch,
+      loadQueuePeopleCandidates,
       updateQueueFollowup,
       confirmQueueFollowup,
       clearQueueFollowupForm,

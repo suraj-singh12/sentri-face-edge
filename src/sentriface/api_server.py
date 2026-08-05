@@ -78,6 +78,7 @@ DUPLICATE_MATCH_SCORE = 0.9999
 INFERENCE_ENDPOINTS = {
     "/api/recognize",
     "/api/recognize-batch",
+    "/api/recognition-person-candidates",
     "/api/recognition-accept-existing",
     "/api/recognition-new",
     "/api/enroll",
@@ -125,7 +126,7 @@ def _required_capability(method: str, path: str) -> str | None:
             return "backups"
         if path in {"/api/deleted-faces"}:
             return "destroy"
-        if path in {"/api/pending", "/api/queue-progress", "/api/queue-sessions", "/api/queue-groups"}:
+        if path in {"/api/pending", "/api/queue-progress", "/api/queue-sessions", "/api/queue-groups", "/api/queue-person-candidates"}:
             return "add"
         return "view"
     if method == "DELETE":
@@ -152,6 +153,7 @@ def _required_capability(method: str, path: str) -> str | None:
         return "recognize"
     if path in {
         "/api/enroll", "/api/person-update", "/api/person-preferences",
+        "/api/recognition-person-candidates",
         "/api/recognition-accept-existing", "/api/recognition-new",
         "/api/recognition-followup", "/api/queue-add", "/api/queue-cancel",
         "/api/queue-scan", "/api/queue-confirm-new", "/api/queue-confirm-existing",
@@ -1011,6 +1013,24 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 groups = self.server.engine.refresh_init_groups(session_id)
                 self._json({"groups": [_init_group(self.server.engine, group) for group in groups]})
                 return
+            if parsed.path == "/api/queue-person-candidates":
+                session_id = _query_value(parsed.query, "session_id")
+                group_id = _query_value(parsed.query, "group_id")
+                group = self.server.engine.get_init_group(session_id, group_id)
+                candidates = self.server.engine.ranked_people_for_init_group(group)
+                self._json({
+                    "candidates": [
+                        {
+                            **_person_summary_from_embeddings(candidate.summary, candidate.embeddings),
+                            "match": {
+                                "rank": rank,
+                                **_match_policy(self.server.engine, candidate.match.score),
+                            } if candidate.match else None,
+                        }
+                        for rank, candidate in enumerate(candidates, 1)
+                    ]
+                })
+                return
             if parsed.path == "/media":
                 self._media(_query_value(parsed.query, "path"))
                 return
@@ -1404,6 +1424,26 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 ]
                 self.server.log_event("recognize-batch", path=str(source), images=len(images))
                 self._json({"batch": batch, "metrics": self.server.engine.metrics_snapshot()})
+                return
+            if parsed.path == "/api/recognition-person-candidates":
+                image_path = require_local_path(Path(_required(payload, "path")))
+                candidates = self.server.engine.ranked_people_for_recognition_face(
+                    image_path,
+                    int(_required(payload, "face_index")),
+                    expected_box=_face_box(payload),
+                )
+                self._json({
+                    "candidates": [
+                        {
+                            **_person_summary_from_embeddings(candidate.summary, candidate.embeddings),
+                            "match": {
+                                "rank": rank,
+                                **_match_policy(self.server.engine, candidate.match.score),
+                            } if candidate.match else None,
+                        }
+                        for rank, candidate in enumerate(candidates, 1)
+                    ]
+                })
                 return
             if parsed.path == "/api/person-update":
                 tags = payload.get("tags", [])
@@ -2916,6 +2956,13 @@ def _person_summary(summary: PersonSummary, engine: FaceEngine | None = None) ->
         if engine
         else []
     )
+    return _person_summary_from_embeddings(summary, embeddings)
+
+
+def _person_summary_from_embeddings(
+    summary: PersonSummary,
+    embeddings: list[EmbeddingRecord] | tuple[EmbeddingRecord, ...],
+) -> dict[str, Any]:
     return {
         **_person(summary.person),
         "embedding_count": summary.embedding_count,

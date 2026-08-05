@@ -52,6 +52,7 @@ version = {attr = "sentriface.__version__"}
 [tool.setuptools.package-data]
 sentriface = [
   "ui_static/index.html",
+  "ui_static/*.png",
   "ui_static/assets/*",
 ]
 

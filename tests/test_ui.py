@@ -39,6 +39,77 @@ from sentriface.api_server import (
 
 
 class ApiSerializationTest(unittest.TestCase):
+    def test_recognition_browse_ranks_people_only_for_the_selected_face(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            image = root / "face.jpg"
+            self._write_image(image)
+            engine = build_dev_engine(root / "data")
+            engine.initialize()
+            session = engine.create_init_session(image)
+            group = engine.list_init_groups(session.session_id)[0]
+            vector = group.faces[0].vector
+
+            closest = engine.store.create_person("Closest")
+            engine.store.add_embedding(
+                closest.person_id,
+                vector,
+                quality_score=1.0,
+                source_image=str(image),
+            )
+            opposite = engine.store.create_person("Opposite")
+            engine.store.add_embedding(
+                opposite.person_id,
+                tuple(-value for value in vector),
+                quality_score=1.0,
+                source_image=str(image),
+            )
+            without_reference = engine.store.create_person("No Reference")
+
+            candidates = engine.ranked_people_for_recognition_face(
+                image,
+                1,
+                expected_box=group.faces[0].face.box,
+            )
+
+            self.assertEqual(candidates[0].summary.person.person_id, closest.person_id)
+            self.assertEqual(candidates[-1].summary.person.person_id, without_reference.person_id)
+            self.assertEqual(
+                {candidate.summary.person.person_id for candidate in candidates},
+                {closest.person_id, opposite.person_id, without_reference.person_id},
+            )
+
+    def test_browse_people_ranks_every_active_person_in_one_bulk_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            image = root / "face.jpg"
+            self._write_image(image)
+            engine = build_dev_engine(root / "data")
+            engine.initialize()
+            session = engine.create_init_session(image)
+            group = engine.list_init_groups(session.session_id)[0]
+            vector = group.faces[0].vector
+
+            expected = []
+            for name, scale in (("Closest", 1.0), ("Middle", 0.6), ("Lowest", 0.2)):
+                person = engine.store.create_person(name)
+                engine.store.add_embedding(
+                    person.person_id,
+                    tuple(value * scale for value in vector),
+                    quality_score=1.0,
+                    source_image=str(image),
+                )
+                expected.append(person.person_id)
+            without_photo = engine.store.create_person("No Reference")
+
+            candidates = engine.ranked_people_for_init_group(group)
+
+            self.assertEqual(
+                [candidate.summary.person.person_id for candidate in candidates],
+                [*expected, without_photo.person_id],
+            )
+            self.assertEqual([candidate.match is not None for candidate in candidates], [True, True, True, False])
+
     def test_partially_initialized_server_closes_without_masking_bind_error(self) -> None:
         server = object.__new__(SentriFaceApiServer)
         server.socket = Mock()

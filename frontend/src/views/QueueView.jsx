@@ -19,6 +19,7 @@ import {
   Stack,
   Switch,
   Text,
+  TextInput,
   ThemeIcon,
   Title,
 } from "@mantine/core";
@@ -34,6 +35,7 @@ import {
   IconFolderOpen,
   IconPhotoUp,
   IconRefresh,
+  IconSearch,
   IconClock,
   IconBulb,
   IconFileText,
@@ -83,6 +85,7 @@ export function QueueView({
   onResumeSkipped,
   onRejectSuggestedMatch,
   onViewPeople,
+  onLoadPeopleCandidates,
   onFollowupChange,
   onFollowupSubmit,
   onFollowupClear,
@@ -139,6 +142,7 @@ export function QueueView({
               onGallery={onGallery}
               onGalleryImage={onGalleryImage}
               onGalleryBack={onGalleryBack}
+              onLoadPeopleCandidates={onLoadPeopleCandidates}
               onBack={onBack}
             />
           ) : (
@@ -343,7 +347,7 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
   }
 
   return (
-    <Stack className="queue-review-list">
+    <Stack className="queue-review-list" data-processing={isProcessing || undefined} gap={isProcessing ? "sm" : "md"}>
       <Group align="flex-start" justify="space-between" gap="md">
         <Group align="center" gap="md">
           <Box>
@@ -486,7 +490,7 @@ function QueueProcessingPanel({ progress }) {
   ];
   return (
     <Card withBorder radius="md" className="queue-processing-card">
-      <Stack gap="lg">
+      <Stack gap="md">
         <Group justify="space-between" wrap="nowrap" className="queue-processing-source">
           <Group gap="sm" wrap="nowrap" miw={0}>
             <ThemeIcon size="lg" variant="default" color="gray"><IconFolderOpen size={22} /></ThemeIcon>
@@ -507,7 +511,7 @@ function QueueProcessingPanel({ progress }) {
             const complete = index < phaseIndex || progress.phase === "done";
             return (
               <Box key={stage.phase} className="queue-processing-step" data-active={active} data-complete={complete}>
-                <ThemeIcon size={42} radius="xl" variant={active || complete ? "light" : "default"} color={complete ? "teal" : active ? "blue" : "gray"}>
+                <ThemeIcon size={36} radius="xl" variant={active || complete ? "light" : "default"} color={complete ? "teal" : active ? "blue" : "gray"}>
                   <Icon size={20} />
                 </ThemeIcon>
                 <Text fw={700} size="sm">{stage.label}</Text>
@@ -550,7 +554,7 @@ function QueueGroupsPendingPlaceholder() {
           <Text size="sm" c="dimmed">As processing completes, groups will be shown automatically in this area.</Text>
         </Box>
         <Box className="queue-pending-skeleton" aria-hidden="true">
-          {[0, 1, 2, 3].map((item) => (
+          {[0, 1, 2].map((item) => (
             <Box key={item} className="queue-pending-skeleton-card">
               <ThemeIcon variant="default" color="gray" radius="xl" size="sm"><IconUsers size={14} /></ThemeIcon>
               <Box className="queue-pending-line-stack">
@@ -673,6 +677,8 @@ function QueueGroupReview({
   onFollowupSubmit,
   onFollowupClear,
   onGallery,
+  onGalleryBack,
+  onLoadPeopleCandidates,
   onBack,
 }) {
   const followupRef = useRef(null);
@@ -683,7 +689,16 @@ function QueueGroupReview({
   const [referenceIndex, setReferenceIndex] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [syncZoom, setSyncZoom] = useState(true);
-  const best = group.matches?.[0] || null;
+  const [peoplePickerOpen, setPeoplePickerOpen] = useState(false);
+  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [peopleQuery, setPeopleQuery] = useState("");
+  const [peopleCandidates, setPeopleCandidates] = useState([]);
+  const [peopleCandidatesGroupId, setPeopleCandidatesGroupId] = useState("");
+  const [manualPerson, setManualPerson] = useState(null);
+  const automaticBest = group.matches?.[0] || null;
+  const automaticKnown = automaticBest && !isNewPersonSuggestion(automaticBest);
+  const best = manualPerson || (automaticKnown ? automaticBest : null);
+  const weakMatch = automaticBest && !automaticKnown ? automaticBest : null;
   const selectedCount = selectedFaces.length;
   const currentIndex = Math.max(0, groups.findIndex((item) => item.group_id === group.group_id));
   const references = gallery?.embeddings || [];
@@ -694,6 +709,11 @@ function QueueGroupReview({
     setIncomingIndex(0);
     setReferenceIndex(0);
     setZoom(1);
+    setPeoplePickerOpen(false);
+    setPeopleQuery("");
+    setPeopleCandidates([]);
+    setPeopleCandidatesGroupId("");
+    setManualPerson(null);
   }, [group.group_id]);
 
   useEffect(() => {
@@ -702,8 +722,35 @@ function QueueGroupReview({
   }, [followup]);
 
   const openCompare = async () => {
-    if (best?.person_id && !gallery) await onGallery(best.person_id);
+    if (best?.person_id && gallery?.person?.person_id !== best.person_id) await onGallery(best.person_id);
     setMode("compare");
+  };
+
+  const openPeoplePicker = async () => {
+    setPeoplePickerOpen(true);
+    if (peopleCandidatesGroupId === group.group_id) return;
+    setPeopleLoading(true);
+    try {
+      const payload = await onLoadPeopleCandidates(group.session_id, group.group_id);
+      setPeopleCandidates(payload.candidates || []);
+      setPeopleCandidatesGroupId(group.group_id);
+    } finally {
+      setPeopleLoading(false);
+    }
+  };
+
+  const choosePerson = (person) => {
+    setManualPerson({
+      ...person,
+      classification: "manual",
+      is_known: true,
+      manual_selection: true,
+    });
+    setPeoplePickerOpen(false);
+    setPeopleQuery("");
+    setMode("summary");
+    setFocused(false);
+    onGalleryBack();
   };
 
   return (
@@ -750,7 +797,13 @@ function QueueGroupReview({
             </Card>
           </Grid.Col>
           <Grid.Col span={{ base: 12, md: 5 }}>
-            <QueueSuggestedMatch best={best} face={group.faces[0]} onCompare={openCompare} />
+            <QueueSuggestedMatch
+              best={best}
+              weakMatch={weakMatch}
+              manual={Boolean(manualPerson)}
+              onBrowse={openPeoplePicker}
+              onCompare={openCompare}
+            />
           </Grid.Col>
         </Grid>
       ) : focused ? (
@@ -787,14 +840,33 @@ function QueueGroupReview({
       )}
 
       <Group grow className="queue-review-actionbar">
-        <Button leftSection={<IconCheck size={18} />} onClick={onAcceptExisting} disabled={!best || isNewPersonSuggestion(best) || !selectedCount || accepted}>
-          {best && !isNewPersonSuggestion(best) ? `Accept ${selectedCount} as ${best.name}` : "Accept suggested match"}
+        <Button leftSection={<IconCheck size={18} />} onClick={() => onAcceptExisting(best)} disabled={!best || !selectedCount || accepted}>
+          {best ? `Accept ${selectedCount} as ${best.name}` : "Choose a person to accept"}
         </Button>
         <Button variant="light" leftSection={<IconUserPlus size={18} />} onClick={onNewPerson} disabled={!selectedCount || accepted}>Create new person</Button>
         <Button variant="light" color="red" leftSection={<IconTrash size={18} />} onClick={onDiscard} disabled={!selectedCount || accepted}>Discard selected</Button>
-        <Button variant="default" color="orange" leftSection={<IconX size={18} />} onClick={onRejectSuggestedMatch} disabled={!best || isNewPersonSuggestion(best) || accepted}>Reject suggested match</Button>
+        <Button variant="default" color="orange" leftSection={<IconX size={18} />} onClick={onRejectSuggestedMatch} disabled={!automaticKnown || Boolean(manualPerson) || accepted}>Reject suggested match</Button>
         <Button variant="subtle" color="gray" rightSection={<IconChevronRight size={17} />} onClick={onSkip} disabled={accepted}>Skip for now</Button>
       </Group>
+
+      <PeoplePicker
+        opened={peoplePickerOpen}
+        people={peopleCandidates}
+        loading={peopleLoading}
+        query={peopleQuery}
+        onQuery={setPeopleQuery}
+        onClose={() => setPeoplePickerOpen(false)}
+        onNewPerson={() => {
+          setManualPerson(null);
+          setPeoplePickerOpen(false);
+          setPeopleQuery("");
+          setMode("summary");
+          setFocused(false);
+          onGalleryBack();
+          onNewPerson();
+        }}
+        onSelect={choosePerson}
+      />
     </Stack>
   );
 }
@@ -838,30 +910,102 @@ function QueueIncomingGrid({ faces, selectedFaces, accepted, onToggleFace }) {
   );
 }
 
-function QueueSuggestedMatch({ best, face, onCompare }) {
-  const known = best && !isNewPersonSuggestion(best);
-  const display = matchDisplay(best);
-  const suggestionImage = best?.representative_image || best?.image_path || face?.crop_path || face?.source_image;
+function QueueSuggestedMatch({ best, weakMatch, manual, onBrowse, onCompare }) {
+  const display = best ? matchDisplay(best) : null;
+  const suggestionImage = best?.representative_image || best?.image_path;
   return (
     <Card withBorder radius="md" className="queue-review-panel queue-suggestion-panel">
-      <Text fw={800}>Suggested match</Text>
-      <Text size="xs" c="dimmed" mb="md">Best result from your People database.</Text>
+      <Group justify="space-between" align="flex-start" wrap="nowrap" mb="md">
+        <Box>
+          <Text fw={800}>{best ? (manual ? "Selected person" : "Suggested match") : "Weak match"}</Text>
+          <Text size="xs" c="dimmed">
+            {best ? (manual ? "Chosen manually from your People library." : "Best result from your People database.") : "No reliable automatic match. Choose the correct person yourself."}
+          </Text>
+        </Box>
+        <Button size="xs" variant="light" leftSection={<IconUsers size={16} />} onClick={onBrowse}>Browse People</Button>
+      </Group>
       <Group align="stretch" wrap="nowrap" className="queue-suggestion-body">
         <Box className="queue-suggestion-hero">
-          <Image src={mediaUrl(suggestionImage)} alt="suggested person" fit="contain" radius="md" />
+          {suggestionImage ? (
+            <Image src={mediaUrl(suggestionImage)} alt={best.name} fit="contain" radius="md" />
+          ) : (
+            <ThemeIcon size={64} radius="xl" variant="light" color="orange"><IconUsers size={32} /></ThemeIcon>
+          )}
         </Box>
         <Stack justify="space-between" gap="sm" className="queue-suggestion-copy">
           <Box>
             <Group justify="space-between" align="flex-start" wrap="nowrap">
-              <Text size="xl" fw={900}>{known ? best.name : "Unknown person"}</Text>
-              {best && <Badge color={display.color} size="lg">{display.badge}</Badge>}
+              <Text size="xl" fw={900}>{best ? best.name : "Human review needed"}</Text>
+              <Badge color={best ? (manual ? "teal" : display.color) : "orange"} size="lg">
+                {best ? (manual ? "Selected" : display.badge) : "Weak match"}
+              </Badge>
             </Group>
-            <Text size="xs" c="dimmed" mt={4}>{known ? `ID ${best.person_id}` : "No match found"}</Text>
+            <Text size="xs" c="dimmed" mt={4}>
+              {best ? `ID ${best.person_id}` : weakMatch ? "The closest result did not meet the matching threshold." : "No candidate was found in People."}
+            </Text>
           </Box>
-          {known && <Button variant="default" fullWidth leftSection={<IconArrowsHorizontal size={17} />} onClick={onCompare}>View reference photos</Button>}
+          {best && <Button variant="default" fullWidth leftSection={<IconArrowsHorizontal size={17} />} onClick={onCompare}>View reference photos</Button>}
         </Stack>
       </Group>
     </Card>
+  );
+}
+
+function PeoplePicker({ opened, people, loading, query, onQuery, onClose, onNewPerson, onSelect }) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const visiblePeople = (people || []).filter((person) => (
+    !normalizedQuery
+    || person.name?.toLowerCase().includes(normalizedQuery)
+    || person.person_id?.toLowerCase().includes(normalizedQuery)
+  ));
+  return (
+    <Modal opened={opened} onClose={onClose} title="Browse People" size="xl" centered>
+      <Text size="sm" c="dimmed" mb="md">Choose who the selected incoming photos belong to.</Text>
+      <TextInput
+        value={query}
+        onChange={(event) => onQuery(event.currentTarget.value)}
+        leftSection={<IconSearch size={16} />}
+        placeholder="Search people by name or ID"
+        mb="md"
+      />
+      <ScrollArea.Autosize mah="60dvh" type="auto" offsetScrollbars>
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} className="queue-people-picker-grid">
+          <Card component="button" withBorder radius="md" className="queue-person-picker-card queue-person-picker-new" onClick={onNewPerson}>
+            <ThemeIcon size={58} radius="xl" variant="light" color="teal"><IconUserPlus size={28} /></ThemeIcon>
+            <Text fw={800}>New person</Text>
+            <Text size="xs" c="dimmed">Create a profile from these photos</Text>
+          </Card>
+          {visiblePeople.map((person) => {
+            const candidateDisplay = person.match?.classification === "unknown"
+              ? { badge: "Weak match", color: "orange" }
+              : matchDisplay(person.match);
+            return (
+              <Card key={person.person_id} component="button" withBorder radius="md" className="queue-person-picker-card" onClick={() => onSelect(person)}>
+                <Box className="queue-person-picker-photo">
+                  {person.representative_image ? (
+                    <Image src={mediaUrl(person.representative_image)} alt={person.name} fit="contain" />
+                  ) : (
+                    <ThemeIcon size={54} radius="xl" variant="light" color="gray"><IconUsers size={27} /></ThemeIcon>
+                  )}
+                  {person.match && <Badge className="queue-person-picker-rank" color={candidateDisplay.color}>#{person.match.rank}</Badge>}
+                </Box>
+                <Group justify="space-between" wrap="nowrap" gap={6}>
+                  <Text fw={800} truncate>{person.name}</Text>
+                  <Badge size="xs" variant="light" color={person.match ? candidateDisplay.color : "gray"}>
+                    {person.match ? candidateDisplay.badge : "No references"}
+                  </Badge>
+                </Group>
+                <Text size="xs" c="dimmed">{person.embedding_count || 0} reference photo{Number(person.embedding_count || 0) === 1 ? "" : "s"}</Text>
+              </Card>
+            );
+          })}
+        </SimpleGrid>
+        {!loading && !visiblePeople.length && (
+          <Text ta="center" c="dimmed" py="xl">No existing people match this search.</Text>
+        )}
+        {loading && <Text ta="center" c="dimmed" py="xl">Loading People…</Text>}
+      </ScrollArea.Autosize>
+    </Modal>
   );
 }
 

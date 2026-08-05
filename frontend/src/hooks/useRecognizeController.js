@@ -57,10 +57,10 @@ export function useRecognizeController({
     recognitionRequestRef.current = null;
   }, [notifySkippedInputs, prepareImageFiles, runRecognition, uploadFile]);
 
-  const recognitionAccept = async (requestedFaceIndex, forceBadQuality = false) => {
+  const recognitionAccept = async (requestedFaceIndex, forceBadQuality = false, selectedPerson = null) => {
     const faceIndex = requestedFaceIndex || selectedRecognitionFace;
     const face = recognition?.faces?.find((item) => item.index === faceIndex);
-    const best = face?.matches?.[0];
+    const best = selectedPerson || face?.matches?.[0];
     if (!recognition?.inputPath || !best || isNewPersonSuggestion(best)) return;
     setSelectedRecognitionFace(faceIndex);
     setRecognitionGallery(null);
@@ -92,6 +92,16 @@ export function useRecognizeController({
     setSelectedRecognitionFace(faceIndex);
     setRecognitionGallery(null);
     setRecognitionGalleryImage(null);
+  };
+
+  const loadRecognitionPeopleCandidates = async (faceIndex) => {
+    const face = recognition?.faces?.find((item) => item.index === faceIndex);
+    if (!recognition?.inputPath || !face) return { candidates: [] };
+    return apiPost("/api/recognition-person-candidates", {
+      path: recognition.inputPath,
+      face_index: faceIndex,
+      face_box: face.box,
+    });
   };
 
   const recognitionClear = () => {
@@ -273,6 +283,7 @@ export function useRecognizeController({
       recognitionNew,
       recognitionClear,
       selectRecognitionFace,
+      loadRecognitionPeopleCandidates,
       openRecognitionGallery,
       setRecognitionGalleryImage: selectRecognitionGalleryImage,
       recognitionGalleryBack,

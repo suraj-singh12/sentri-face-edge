@@ -199,6 +199,11 @@
   align-self: start;
 }
 
+.queue-suggestion-panel > .mantine-Group-root:first-child .mantine-Button-root {
+  flex: 0 0 auto;
+  min-width: 132px;
+}
+
 .queue-suggestion-body {
   min-height: 158px;
 }
@@ -207,6 +212,8 @@
   flex: 0 0 158px;
   width: 158px;
   height: 158px;
+  display: grid;
+  place-items: center;
   overflow: hidden;
   border: 1px solid var(--sentriface-card-border);
   border-radius: var(--mantine-radius-md);
@@ -223,6 +230,72 @@
 .queue-suggestion-copy {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.queue-suggestion-copy .mantine-Badge-root {
+  flex: 0 0 auto;
+  min-width: 104px;
+}
+
+.queue-people-picker-grid {
+  padding: 3px 8px 10px 3px;
+  align-items: stretch;
+}
+
+.queue-person-picker-card {
+  display: flex;
+  min-width: 0;
+  min-height: 210px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 10px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.queue-person-picker-card:hover {
+  border-color: color-mix(in srgb, var(--mantine-color-teal-5) 65%, var(--sentriface-card-border));
+  transform: translateY(-1px);
+}
+
+.queue-person-picker-new {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--mantine-color-teal-9) 8%, var(--sentriface-card-bg));
+}
+
+.queue-person-picker-photo {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 132px;
+  flex: 0 0 132px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--mantine-radius-sm);
+  background: var(--sentriface-muted-surface);
+}
+
+.queue-person-picker-rank {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+}
+
+.queue-person-picker-photo .mantine-Image-root,
+.queue-person-picker-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .queue-review-actionbar {
@@ -682,6 +755,27 @@ button {
   letter-spacing: 0;
 }
 
+.brand-lockup {
+  flex: 1 1 auto;
+}
+
+.brand-icon,
+.auth-brand-icon {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.brand-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.auth-brand-icon {
+  width: 52px;
+  height: 52px;
+}
+
 .shell-notices:empty {
   display: none;
 }
@@ -1050,6 +1144,11 @@ button {
   padding-right: 8px;
 }
 
+.queue-review-list[data-processing="true"] {
+  align-content: start;
+  overscroll-behavior: contain;
+}
+
 .queue-list-divider {
   width: 100%;
   height: 1px;
@@ -1061,21 +1160,22 @@ button {
 }
 
 .queue-processing-card {
-  padding: 22px 24px !important;
+  flex: 0 0 auto;
+  padding: 16px 20px !important;
   background: var(--sentriface-card-bg);
   border-color: var(--sentriface-card-border);
   box-shadow: var(--sentriface-card-shadow);
 }
 
 .queue-processing-source {
-  padding-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--sentriface-card-border);
 }
 
 .queue-processing-steps {
   display: grid;
   grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 12px;
+  gap: 10px;
   align-items: start;
 }
 
@@ -1083,7 +1183,7 @@ button {
   position: relative;
   display: grid;
   justify-items: center;
-  gap: 6px;
+  gap: 3px;
   min-width: 0;
   text-align: center;
 }
@@ -1091,9 +1191,9 @@ button {
 .queue-processing-step::before {
   content: "";
   position: absolute;
-  top: 21px;
-  left: calc(-50% + 21px);
-  width: calc(100% - 42px);
+  top: 18px;
+  left: calc(-50% + 18px);
+  width: calc(100% - 36px);
   height: 2px;
   background: var(--sentriface-card-border);
 }
@@ -1131,8 +1231,8 @@ button {
 
 .queue-processing-stat {
   min-width: 0;
-  min-height: 62px;
-  padding: 10px 12px;
+  min-height: 52px;
+  padding: 7px 10px;
   border-right: 1px solid var(--sentriface-card-border);
 }
 
@@ -1141,38 +1241,39 @@ button {
 }
 
 .queue-processing-note {
-  padding: 12px 14px;
+  padding: 8px 12px;
   border: 1px solid rgba(59, 130, 246, 0.34);
   border-radius: var(--mantine-radius-md);
   background: rgba(37, 99, 235, 0.12);
 }
 
 .queue-groups-pending-card {
-  padding: 20px 24px !important;
-  min-height: 132px;
+  flex: 0 0 auto;
+  padding: 12px 18px !important;
+  min-height: 88px;
   border-style: dashed;
   background: color-mix(in srgb, var(--sentriface-card-bg) 92%, transparent);
   border-color: color-mix(in srgb, var(--sentriface-card-border) 70%, var(--mantine-color-gray-5));
 }
 
 .queue-groups-pending-card > .mantine-Group-root {
-  min-height: 92px;
+  min-height: 62px;
 }
 
 .queue-pending-skeleton {
   display: flex;
   align-items: center;
-  gap: 28px;
-  min-width: 440px;
+  gap: 12px;
+  min-width: 396px;
 }
 
 .queue-pending-skeleton-card {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 126px;
-  min-height: 56px;
-  padding: 10px;
+  width: 124px;
+  min-height: 46px;
+  padding: 8px;
   border-radius: var(--mantine-radius-md);
   background: color-mix(in srgb, var(--sentriface-muted-surface) 80%, transparent);
 }
@@ -1194,7 +1295,8 @@ button {
 }
 
 .queue-processing-tip {
-  padding: 12px 14px !important;
+  flex: 0 0 auto;
+  padding: 8px 12px !important;
   background: color-mix(in srgb, var(--sentriface-muted-surface) 65%, transparent);
   border-color: var(--sentriface-card-border);
 }

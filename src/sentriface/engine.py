@@ -27,6 +27,7 @@ from sentriface.models import (
     PersonChange,
     PersonMatch,
     PersonSummary,
+    RankedPersonCandidate,
     QualityStatus,
     RejectedFace,
     RecognitionResult,
@@ -1143,6 +1144,86 @@ class FaceEngine:
         )
         excluded_person_ids = set().union(*exclusions.values()) if exclusions else set()
         return self.matches_for_vector(representative, excluded_person_ids=excluded_person_ids)
+
+    def ranked_people_for_init_group(self, group: InitGroup) -> list[RankedPersonCandidate]:
+        """Rank every active person for an explicit human-review browse action.
+
+        This deliberately uses two bulk reads (people and embeddings) and ranks
+        in memory, avoiding one database query per person.
+        """
+        representative = group_representative_embedding(group)
+        exclusions = self.excluded_person_ids_for_init_faces(
+            group.session_id,
+            [face.init_face_id for face in group.faces],
+        )
+        excluded_person_ids = set().union(*exclusions.values()) if exclusions else set()
+        return self._rank_people_for_vector(representative, excluded_person_ids)
+
+    def ranked_people_for_recognition_face(
+        self,
+        image_path: Path,
+        face_index: int,
+        expected_box: FaceBox | None = None,
+    ) -> list[RankedPersonCandidate]:
+        """Rank active people for one explicitly browsed recognition face."""
+        with self.metrics.timer("detect_browse_face_ms"):
+            faces = self.detector.detect(image_path)
+        if face_index < 1 or face_index > len(faces):
+            raise KeyError(f"Face {face_index} is no longer available in this image")
+        selected_face = faces[face_index - 1]
+        if expected_box is not None and _box_iou(selected_face.box, expected_box) < 0.5:
+            selected_face = max(faces, key=lambda face: _box_iou(face.box, expected_box))
+            if _box_iou(selected_face.box, expected_box) < 0.5:
+                raise KeyError(f"Face {face_index} is no longer available in this image")
+        with self.metrics.timer("embed_browse_face_ms"):
+            vector = self.embedder.encode(image_path, selected_face)
+        return self._rank_people_for_vector(vector)
+
+    def _rank_people_for_vector(
+        self,
+        representative,
+        excluded_person_ids: set[str] | None = None,
+    ) -> list[RankedPersonCandidate]:
+        excluded_person_ids = excluded_person_ids or set()
+        with self.metrics.timer("db_list_people_candidates_ms"):
+            people = self.store.list_persons()
+            embeddings = self.store.list_embeddings()
+        embeddings_by_person: dict[str, list] = {}
+        for record in embeddings:
+            if record.person_id not in excluded_person_ids:
+                embeddings_by_person.setdefault(record.person_id, []).append(record)
+
+        candidates: list[RankedPersonCandidate] = []
+        with self.metrics.timer("rank_people_candidates_ms"):
+            for summary in people:
+                if summary.person.person_id in excluded_person_ids:
+                    continue
+                records = embeddings_by_person.get(summary.person.person_id, [])
+                scored = sorted(
+                    (
+                        Match(
+                            person_id=record.person_id,
+                            score=_cosine(representative, record.vector),
+                            embedding_id=record.embedding_id,
+                        )
+                        for record in records
+                    ),
+                    key=lambda item: item.score,
+                    reverse=True,
+                ) if representative else []
+                match = PersonMatch(
+                    person_id=summary.person.person_id,
+                    score=scored[0].score,
+                    embedding_ids=tuple(item.embedding_id for item in scored[: self.config.top_k]),
+                    embeddings_matched=len(scored),
+                ) if scored else None
+                candidates.append(RankedPersonCandidate(summary, match, tuple(records)))
+        candidates.sort(key=lambda item: (
+            item.match is None,
+            -(item.match.score if item.match else -2.0),
+            item.summary.person.name.casefold(),
+        ))
+        return candidates
 
     def excluded_person_ids_for_init_faces(
         self,

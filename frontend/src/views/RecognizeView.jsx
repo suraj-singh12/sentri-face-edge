@@ -12,8 +12,10 @@ import {
   Progress,
   ScrollArea,
   Select,
+  SimpleGrid,
   Stack,
   Text,
+  TextInput,
   ThemeIcon,
 } from "@mantine/core";
 import {
@@ -23,9 +25,11 @@ import {
   IconChevronUp,
   IconFolder,
   IconAdjustmentsHorizontal,
+  IconSearch,
   IconTrash,
   IconUserCheck,
   IconUserPlus,
+  IconUsers,
 } from "@tabler/icons-react";
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
@@ -53,15 +57,22 @@ export function RecognizeView({
   onGallery,
   onGalleryImage,
   onGalleryBack,
+  onLoadPeopleCandidates,
   onFollowupChange,
   onFollowupSubmit,
   onFollowupClear,
 }) {
   const faces = recognition?.faces || [];
   const selectedFace = faces.find((face) => face.index === selectedFaceIndex) || faces[0] || null;
-  const selectedMatch = selectedFace?.matches?.[0] || null;
+  const [manualMatches, setManualMatches] = useState({});
+  const [peoplePickerFace, setPeoplePickerFace] = useState(null);
+  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [peopleQuery, setPeopleQuery] = useState("");
+  const [peopleCandidates, setPeopleCandidates] = useState({});
+  const selectedManualMatch = manualMatches[selectedFace?.index] || null;
+  const selectedMatch = selectedManualMatch || selectedFace?.matches?.[0] || null;
   const selectedAccepted = recognitionAcceptedFaces.includes(selectedFace?.index);
-  const selectedIsKnown = Boolean(selectedMatch?.is_known);
+  const selectedIsKnown = Boolean(selectedManualMatch || (selectedFace?.decision !== "unknown" && selectedMatch?.is_known));
   const selectedIsBad = selectedFace?.quality?.status === "bad";
   const imageSrc = recognition?.inputPath ? mediaUrl(recognition.inputPath) : null;
   const imageSize = useImageSize(imageSrc);
@@ -72,7 +83,13 @@ export function RecognizeView({
     if (sort === "confidence") return (right.box?.confidence || 0) - (left.box?.confidence || 0) || left.index - right.index;
     return left.index - right.index;
   }), [faces, sort]);
-  useEffect(() => setQualityOverride(null), [recognition?.inputPath]);
+  useEffect(() => {
+    setQualityOverride(null);
+    setManualMatches({});
+    setPeoplePickerFace(null);
+    setPeopleQuery("");
+    setPeopleCandidates({});
+  }, [recognition?.inputPath]);
 
   const requestFaceAction = (action, faceIndex) => {
     if (!canAdd) return;
@@ -80,19 +97,60 @@ export function RecognizeView({
     if (!face) return;
     onSelectFace(faceIndex);
     if (face.quality?.status === "bad") {
-      setQualityOverride({ action, face });
+      setQualityOverride({ action, face, selectedPerson: manualMatches[faceIndex] || null });
       return;
     }
-    if (action === "accept") onAccept(faceIndex);
+    if (action === "accept") onAccept(faceIndex, false, manualMatches[faceIndex] || null);
     else onNew(faceIndex);
   };
 
   const confirmQualityOverride = () => {
     if (!qualityOverride) return;
-    const { action, face } = qualityOverride;
+    const { action, face, selectedPerson } = qualityOverride;
     setQualityOverride(null);
-    if (action === "accept") onAccept(face.index, true);
+    if (action === "accept") onAccept(face.index, true, selectedPerson || null);
     else onNew(face.index, true);
+  };
+
+  const openPeoplePicker = async (faceIndex) => {
+    setPeoplePickerFace(faceIndex);
+    setPeopleQuery("");
+    if (peopleCandidates[faceIndex]) return;
+    setPeopleLoading(true);
+    try {
+      const payload = await onLoadPeopleCandidates(faceIndex);
+      setPeopleCandidates((current) => ({ ...current, [faceIndex]: payload.candidates || [] }));
+    } finally {
+      setPeopleLoading(false);
+    }
+  };
+
+  const choosePerson = (person) => {
+    setManualMatches((current) => ({
+      ...current,
+      [peoplePickerFace]: {
+        ...person,
+        classification: "manual",
+        is_known: true,
+        manual_selection: true,
+      },
+    }));
+    setPeoplePickerFace(null);
+    setPeopleQuery("");
+    onGalleryBack();
+  };
+
+  const chooseNewPerson = () => {
+    const faceIndex = peoplePickerFace;
+    setManualMatches((current) => {
+      const next = { ...current };
+      delete next[faceIndex];
+      return next;
+    });
+    setPeoplePickerFace(null);
+    setPeopleQuery("");
+    onGalleryBack();
+    requestFaceAction("new", faceIndex);
   };
 
   return (
@@ -179,8 +237,11 @@ export function RecognizeView({
                       selectedFaceIndex={selectedFace?.index}
                       acceptedFaces={recognitionAcceptedFaces}
                       canAdd={canAdd}
+                      manualMatches={manualMatches}
                       onSelectFace={onSelectFace}
                       onAccept={(faceIndex) => requestFaceAction("accept", faceIndex)}
+                      onNew={(faceIndex) => requestFaceAction("new", faceIndex)}
+                      onBrowse={openPeoplePicker}
                       onGallery={onGallery}
                     />
                   )}
@@ -243,6 +304,16 @@ export function RecognizeView({
           </Group>
         </Stack>
       </Modal>
+      <RecognitionPeoplePicker
+        opened={Boolean(peoplePickerFace)}
+        people={peopleCandidates[peoplePickerFace] || []}
+        loading={peopleLoading}
+        query={peopleQuery}
+        onQuery={setPeopleQuery}
+        onClose={() => setPeoplePickerFace(null)}
+        onNewPerson={chooseNewPerson}
+        onSelect={choosePerson}
+      />
       {recognitionFollowup && (
         <RecognitionFollowupForm
           values={recognitionFollowup}
@@ -333,7 +404,7 @@ function QualityMeter({ label, value, color }) {
   );
 }
 
-function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acceptedFaces, canAdd, onSelectFace, onAccept, onGallery }) {
+function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acceptedFaces, canAdd, manualMatches, onSelectFace, onAccept, onNew, onBrowse, onGallery }) {
   if (!faces.length) {
     return (
       <Paper withBorder className="recognition-results-empty">
@@ -355,8 +426,11 @@ function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acc
               selected={face.index === selectedFaceIndex}
               accepted={acceptedFaces.includes(face.index)}
               canAdd={canAdd}
+              manualMatch={manualMatches[face.index] || null}
               onSelect={() => onSelectFace(face.index)}
               onAccept={() => onAccept(face.index)}
+              onNew={() => onNew(face.index)}
+              onBrowse={() => onBrowse(face.index)}
               onGallery={onGallery}
             />
           ))}
@@ -367,9 +441,11 @@ function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acc
   );
 }
 
-function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, canAdd, onSelect, onAccept, onGallery }) {
-  const best = face.matches?.[0] || null;
-  const unknown = isNewPersonSuggestion(best);
+function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, canAdd, manualMatch, onSelect, onAccept, onNew, onBrowse, onGallery }) {
+  const automaticBest = face.matches?.[0] || null;
+  const automaticKnown = face.decision !== "unknown" && automaticBest && !isNewPersonSuggestion(automaticBest);
+  const best = manualMatch || (automaticKnown ? automaticBest : null);
+  const unknown = !best;
   const display = matchDisplay(best);
   const faceLabel = `Face ${faceNumber(face.index)}`;
   const matchImage = best?.representative_image;
@@ -383,27 +459,90 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, ca
         </Box>
         <Box miw={0} className="recognition-face-identity">
           <Text size="sm" fw={700} className="recognition-face-label">{faceLabel}</Text>
-          <Text fw={800} truncate>{unknown ? "Unknown" : best.name}</Text>
-          <Group gap="xs" wrap="nowrap">
-            <Progress value={(best?.score || 0) * 100} color={display.color === "red" ? "orange" : display.color} size={5} className="recognition-score-bar" />
-            <Text size="xs" c="dimmed">{((best?.score || 0) * 100).toFixed(1)}%</Text>
-            <Badge size="xs" color={unknown ? "orange" : display.color} variant="light">{unknown ? "Review" : accepted ? "Accepted" : "Match"}</Badge>
-          </Group>
+          <Text fw={800} truncate>{unknown ? "No match found" : best.name}</Text>
+          <Badge size="xs" color={unknown ? "orange" : display.color} variant="light">
+            {unknown ? "Human review" : accepted ? "Accepted" : manualMatch ? "Selected" : display.badge}
+          </Badge>
         </Box>
         {selected ? <IconChevronUp size={18} /> : <IconChevronDown size={18} />}
       </button>
       {selected && (
         <Box className="recognition-face-details">
-          <Text size="xs" c="dimmed">{unknown ? "No confident match" : `ID ${best.person_id}`}</Text>
+          <Group justify="space-between" align="center" gap="xs" wrap="nowrap">
+            <Text size="xs" c="dimmed">{unknown ? "No person met the recognition threshold." : `ID ${best.person_id}`}</Text>
+            <Button size="compact-xs" variant="subtle" leftSection={<IconUsers size={14} />} disabled={!canAdd || accepted} onClick={onBrowse}>Browse People</Button>
+          </Group>
           <Group grow mt="xs">
-            <Button size="xs" variant="default" disabled={unknown} onClick={() => best && onGallery(best.person_id)}>View profile</Button>
-            <Button size="xs" color={face.quality?.status === "bad" ? "orange" : "green"} leftSection={<IconCheck size={14} />} disabled={!canAdd || unknown || accepted} onClick={onAccept}>
-              {unknown ? "No Match" : accepted ? "Accepted" : face.quality?.status === "bad" ? "Accept Anyway" : "Accept"}
-            </Button>
+            {unknown ? (
+              <Button size="xs" variant="light" leftSection={<IconUserPlus size={14} />} disabled={!canAdd || accepted} onClick={onNew}>Create new person</Button>
+            ) : (
+              <>
+                <Button size="xs" variant="default" onClick={() => onGallery(best.person_id)}>View profile</Button>
+                <Button size="xs" color={face.quality?.status === "bad" ? "orange" : "green"} leftSection={<IconCheck size={14} />} disabled={!canAdd || accepted} onClick={onAccept}>
+                  {accepted ? "Accepted" : face.quality?.status === "bad" ? "Accept Anyway" : "Accept"}
+                </Button>
+              </>
+            )}
           </Group>
         </Box>
       )}
     </Card>
+  );
+}
+
+function RecognitionPeoplePicker({ opened, people, loading, query, onQuery, onClose, onNewPerson, onSelect }) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const visiblePeople = (people || []).filter((person) => (
+    !normalizedQuery
+    || person.name?.toLowerCase().includes(normalizedQuery)
+    || person.person_id?.toLowerCase().includes(normalizedQuery)
+  ));
+  return (
+    <Modal opened={opened} onClose={onClose} title="Browse People" size="xl" centered>
+      <Text size="sm" c="dimmed" mb="md">People are ordered from the closest visual match to the least similar.</Text>
+      <TextInput
+        value={query}
+        onChange={(event) => onQuery(event.currentTarget.value)}
+        leftSection={<IconSearch size={16} />}
+        placeholder="Search people by name or ID"
+        mb="md"
+      />
+      <ScrollArea.Autosize mah="60dvh" type="auto" offsetScrollbars>
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} className="queue-people-picker-grid">
+          <Card component="button" withBorder radius="md" className="queue-person-picker-card queue-person-picker-new" onClick={onNewPerson}>
+            <ThemeIcon size={58} radius="xl" variant="light" color="teal"><IconUserPlus size={28} /></ThemeIcon>
+            <Text fw={800}>New person</Text>
+            <Text size="xs" c="dimmed">Create a profile from this face</Text>
+          </Card>
+          {visiblePeople.map((person) => {
+            const candidateDisplay = person.match?.classification === "unknown"
+              ? { badge: "Weak match", color: "orange" }
+              : matchDisplay(person.match);
+            return (
+              <Card key={person.person_id} component="button" withBorder radius="md" className="queue-person-picker-card" onClick={() => onSelect(person)}>
+                <Box className="queue-person-picker-photo">
+                  {person.representative_image ? (
+                    <Image src={mediaUrl(person.representative_image)} alt={person.name} fit="contain" />
+                  ) : (
+                    <ThemeIcon size={54} radius="xl" variant="light" color="gray"><IconUsers size={27} /></ThemeIcon>
+                  )}
+                  {person.match && <Badge className="queue-person-picker-rank" color={candidateDisplay.color}>#{person.match.rank}</Badge>}
+                </Box>
+                <Group justify="space-between" wrap="nowrap" gap={6}>
+                  <Text fw={800} truncate>{person.name}</Text>
+                  <Badge size="xs" variant="light" color={person.match ? candidateDisplay.color : "gray"}>
+                    {person.match ? candidateDisplay.badge : "No references"}
+                  </Badge>
+                </Group>
+                <Text size="xs" c="dimmed">{person.embedding_count || 0} reference photo{Number(person.embedding_count || 0) === 1 ? "" : "s"}</Text>
+              </Card>
+            );
+          })}
+        </SimpleGrid>
+        {!loading && !visiblePeople.length && <Text ta="center" c="dimmed" py="xl">No existing people match this search.</Text>}
+        {loading && <Text ta="center" c="dimmed" py="xl">Ranking People…</Text>}
+      </ScrollArea.Autosize>
+    </Modal>
   );
 }
 

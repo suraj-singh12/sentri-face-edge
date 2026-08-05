@@ -44,6 +44,7 @@ export function scoreColor(match) {
 
 export function matchDisplay(match) {
   switch (match?.classification) {
+    case "manual": return { badge: "Selected", color: "teal", guidance: "Chosen manually" };
     case "duplicate":
     case "strong": return { badge: "Strong Match", color: "green", guidance: "Strong match based on the calibrated model setting" };
     case "likely": return { badge: "Likely Match", color: "blue", guidance: "Review recommended" };

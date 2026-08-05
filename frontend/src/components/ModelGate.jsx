@@ -150,10 +150,13 @@ export function ModelGate({ user, logout, children }) {
     <Box mih="100vh" bg="var(--mantine-color-body)" p={{ base: "md", md: "xl" }}>
       <Stack maw={920} mx="auto" gap="lg">
         <Group justify="space-between" align="flex-start">
-          <Box>
-            <Title order={1} size="h2">Set up face recognition</Title>
-            <Text c="dimmed" mt={6}>Choose the two model files on this computer. SentriFace checks, copies, and configures them for you.</Text>
-          </Box>
+          <Group gap="sm" wrap="nowrap" align="flex-start">
+            <img src="/sentriface-icon-64.png" alt="" className="auth-brand-icon" aria-hidden="true" />
+            <Box>
+              <Title order={1} size="h2">Set up face recognition</Title>
+              <Text c="dimmed" mt={6}>Choose the two model files on this computer. SentriFace checks, copies, and configures them for you.</Text>
+            </Box>
+          </Group>
           <Stack gap={2} align="flex-end"><Text size="sm" fw={700}>{user?.display_name}</Text><Button size="compact-sm" variant="subtle" color="gray" onClick={logout}>Sign out</Button></Stack>
         </Group>
 

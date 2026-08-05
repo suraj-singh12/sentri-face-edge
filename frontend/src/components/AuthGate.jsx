@@ -76,10 +76,13 @@ export function AuthGate({ children }) {
         <Card withBorder shadow="md" radius="lg" p="xl" w="100%" maw={460}>
           <form onSubmit={submit}>
             <Stack>
-              <Box>
-                <Title order={2}>SentriFace Edge</Title>
-                <Text c="dimmed">{setup ? "Create the owner account for this computer" : "Sign in to continue"}</Text>
-              </Box>
+              <Group gap="sm" wrap="nowrap">
+                <img src="/sentriface-icon-64.png" alt="" className="auth-brand-icon" aria-hidden="true" />
+                <Box>
+                  <Title order={2}>SentriFace Edge</Title>
+                  <Text c="dimmed">{setup ? "Create the owner account for this computer" : "Sign in to continue"}</Text>
+                </Box>
+              </Group>
               {setup ? (
                 <Alert color="blue" title="Private by default">
                   Your account and face data stay on this computer. Nothing is sent to an online service.

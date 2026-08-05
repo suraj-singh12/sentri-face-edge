@@ -76,10 +76,13 @@ function SentriFaceShell({ user, logout, changePassword }) {
     <AppShell header={{ height: 72 }} padding="sm" className="sentriface-shell">
       <AppShell.Header className="sentriface-header">
         <Group h="100%" px="xl" justify="space-between" wrap="nowrap">
-          <Box miw={0}>
-            <Title order={2} size="h3" className="brand-title">SentriFace <Text span inherit c="teal.4">Edge</Text></Title>
-            <Text size="xs" c="dimmed" truncate>{profileLine(state.profile)}</Text>
-          </Box>
+          <Group gap="sm" wrap="nowrap" miw={0} className="brand-lockup">
+            <img src="/sentriface-icon-64.png" alt="" className="brand-icon" aria-hidden="true" />
+            <Box miw={0}>
+              <Title order={2} size="h3" className="brand-title">SentriFace <Text span inherit c="teal.4">Edge</Text></Title>
+              <Text size="xs" c="dimmed" truncate>{profileLine(state.profile)}</Text>
+            </Box>
+          </Group>
           <Group gap="sm" wrap="nowrap" className="header-actions">
             <Tooltip label={`Switch to ${nextColorScheme} mode`}>
               <ActionIcon
@@ -186,6 +189,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onGallery={guarded(actions.openRecognitionGallery)}
               onGalleryImage={actions.setRecognitionGalleryImage}
               onGalleryBack={actions.recognitionGalleryBack}
+              onLoadPeopleCandidates={guarded(actions.loadRecognitionPeopleCandidates)}
               onFollowupChange={actions.updateRecognitionFollowup}
               onFollowupSubmit={guarded(actions.confirmRecognitionFollowup)}
               onFollowupClear={actions.clearRecognitionFollowupForm}
@@ -225,6 +229,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onResumeSkipped={guarded(actions.queueResumeSkipped)}
               onRejectSuggestedMatch={guarded(actions.queueRejectSuggestedMatch)}
               onViewPeople={() => actions.setActiveView("people")}
+              onLoadPeopleCandidates={guarded(actions.loadQueuePeopleCandidates)}
               onFollowupChange={actions.updateQueueFollowup}
               onFollowupSubmit={guarded(actions.confirmQueueFollowup)}
               onFollowupClear={actions.clearQueueFollowupForm}

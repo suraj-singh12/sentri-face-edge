@@ -25,6 +25,10 @@ test("identity matches use calibrated plain-language tiers without numeric score
 test("user-facing recognition screens do not render raw similarity numbers", () => {
   const shared = fs.readFileSync(new URL("../src/components/Shared.jsx", import.meta.url), "utf8");
   const queue = fs.readFileSync(new URL("../src/views/QueueView.jsx", import.meta.url), "utf8");
+  const recognize = fs.readFileSync(new URL("../src/views/RecognizeView.jsx", import.meta.url), "utf8");
   assert.doesNotMatch(shared, /score\.toFixed|similarity score|Cosine similarity/i);
   assert.doesNotMatch(queue, /score\.toFixed|similarity \{/i);
+  assert.doesNotMatch(recognize, /score\.toFixed|similarity \{/i);
+  assert.match(recognize, /No match found/);
+  assert.match(recognize, /Browse People/);
 });

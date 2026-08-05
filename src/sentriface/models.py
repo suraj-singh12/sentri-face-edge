@@ -109,6 +109,13 @@ class PersonSummary:
     embedding_count: int
 
 
+@dataclass(frozen=True)
+class RankedPersonCandidate:
+    summary: PersonSummary
+    match: PersonMatch | None
+    embeddings: tuple[EmbeddingRecord, ...]
+
+
 class MatchDecision(str, Enum):
     STRONG = "strong"
     AMBIGUOUS = "ambiguous"
