@@ -83,6 +83,7 @@ export function PeopleView({
   onRestore,
   onDelete,
   onMerge,
+  onUndoMerge,
   onMovePhoto,
   onDeletePhoto,
   onRestoreDeletedFace,
@@ -177,6 +178,7 @@ export function PeopleView({
           onRestore={onRestore}
           onDelete={onDelete}
           onMerge={onMerge}
+          onUndoMerge={onUndoMerge}
           onMovePhoto={onMovePhoto}
           onDeletePhoto={onDeletePhoto}
         />
@@ -259,10 +261,12 @@ export function PeopleView({
                             key={person.person_id}
                             person={person}
                             favorite={Boolean(person.favorite)}
-                            archived={Boolean(person.archived)}
+                            archived={filter === "archived" || Boolean(person.archived || person.deleted_at)}
                             viewMode={viewMode}
                             canDestroy={canDestroy}
-                            onOpen={() => onOpen(person.person_id, { archived: Boolean(person.archived) })}
+                            onOpen={() => onOpen(person.person_id, {
+                              archived: filter === "archived" || Boolean(person.archived || person.deleted_at),
+                            })}
                             onFavorite={() => toggleFavorite(person)}
                             onDelete={() => {
                               setDeleteTarget(person);
@@ -764,6 +768,7 @@ function PeopleGalleryView({
   onRestore,
   onDelete,
   onMerge,
+  onUndoMerge,
   onMovePhoto,
   onDeletePhoto,
 }) {
@@ -790,6 +795,16 @@ function PeopleGalleryView({
   const latestSightingLabel = lastSeenLabel(latestSightings[0]);
   const changes = payload.changes || [];
   const managementEvents = payload.management_events || [];
+  const mergeEvent = managementEvents.find((event) => (
+    event.operation_type === "merge-persons"
+    && event.result?.source_person_id === payload.person.person_id
+    && event.result?.target_person_id === mergedInto
+  ));
+  const mergeWasUndone = managementEvents.some((event) => (
+    event.operation_type === "undo-merge-persons"
+    && event.result?.merge_operation_id === mergeEvent?.operation_id
+  ));
+  const canUndoMerge = Boolean(mergeEvent?.result?.undo_supported && !mergeWasUndone);
   const [editValues, setEditValues] = useState(summaryProfile);
 
   useEffect(() => {
@@ -894,13 +909,28 @@ function PeopleGalleryView({
             </Button>
           )}
           {archived && mergedInto && (
-            <Button
-              size="xs"
-              leftSection={<IconSwitchHorizontal size={14} />}
-              onClick={() => onOpen(mergedInto, { archived: true })}
-            >
-              View merged person
-            </Button>
+            <>
+              {canUndoMerge && (
+                <Button
+                  size="xs"
+                  color="orange"
+                  variant="light"
+                  leftSection={<IconRestore size={14} />}
+                  disabled={!canDestroy}
+                  onClick={() => setManagementDialog("undo-merge")}
+                >
+                  Undo merge
+                </Button>
+              )}
+              <Button
+                size="xs"
+                variant="default"
+                leftSection={<IconSwitchHorizontal size={14} />}
+                onClick={() => onOpen(mergedInto)}
+              >
+                View merged person
+              </Button>
+            </>
           )}
           <Menu withinPortal position="bottom-end">
             <Menu.Target>
@@ -1131,6 +1161,33 @@ function PeopleGalleryView({
               onClick={() => runManagement(() => onMerge(payload.person.person_id, targetPersonId))}
             >
               Merge people
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={managementDialog === "undo-merge"}
+        onClose={() => !actionBusy && setManagementDialog(null)}
+        title="Undo this merge?"
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            SentriFace will restore <strong>{payload.person.name}</strong> as a separate active person and return exactly the photos and sightings recorded by the merge.
+          </Text>
+          <Alert color="orange" title="Protected undo">
+            Undo stops without changing anything if either profile or any merged photo changed after the merge. A safety backup is created first.
+          </Alert>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
+            <Button
+              color="orange"
+              loading={actionBusy}
+              leftSection={<IconRestore size={16} />}
+              onClick={() => runManagement(() => onUndoMerge(mergeEvent.operation_id))}
+            >
+              Undo merge
             </Button>
           </Group>
         </Stack>
@@ -1623,6 +1680,7 @@ function managementEventLabel(event) {
     "archive-person": "Person archived",
     "restore-person": "Person restored",
     "merge-persons": "People merged",
+    "undo-merge-persons": "People merge undone",
     "move-embedding": "Photo moved",
     "delete-embedding": "Photo removed",
     "update-profile": "Profile updated",
@@ -1633,6 +1691,9 @@ function managementEventDetail(event) {
   const result = event.result || {};
   if (event.operation_type === "merge-persons") {
     return `${result.moved_embeddings || 0} photos and ${result.moved_sightings || 0} sightings moved`;
+  }
+  if (event.operation_type === "undo-merge-persons") {
+    return `${result.restored_embeddings || 0} photos and ${result.restored_sightings || 0} sightings restored`;
   }
   if (event.operation_type === "move-embedding") {
     return `${result.moved_sightings || 0} linked sightings moved with the photo`;

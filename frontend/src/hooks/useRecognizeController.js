@@ -211,6 +211,7 @@ export function useRecognizeController({
           rank: recognitionFollowup.rank || "",
           country: recognitionFollowup.country || "",
           importance: recognitionFollowup.importance || "",
+          added_by: recognitionFollowup.addedBy || "",
         },
       });
     } else if (addedEmbedding) {

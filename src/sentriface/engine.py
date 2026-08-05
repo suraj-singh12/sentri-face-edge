@@ -503,6 +503,11 @@ class FaceEngine:
         self._rebuild_index()
         return result
 
+    def undo_merge_persons(self, merge_operation_id: str, operation_id: str) -> dict:
+        result = self.store.undo_merge_persons(merge_operation_id, operation_id)
+        self._rebuild_index()
+        return result
+
     def update_person_preferences(
         self,
         person_id: str,

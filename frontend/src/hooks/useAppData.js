@@ -89,6 +89,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     if (!person) return;
     const archived = {
       ...person,
+      archived: true,
       deleted_at: archivedAt || new Date().toISOString(),
       metadata: { ...(person.metadata || {}), ...metadata },
     };
@@ -99,7 +100,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const restorePersonLocally = useCallback((personId) => {
     const person = archivedPeople.find((item) => item.person_id === personId);
     if (!person) return;
-    const restored = { ...person, deleted_at: null };
+    const restored = { ...person, archived: false, deleted_at: null };
     setArchivedPeople((current) => current.filter((item) => item.person_id !== personId));
     setPeople((current) => [restored, ...current.filter((item) => item.person_id !== personId)]);
   }, [archivedPeople]);

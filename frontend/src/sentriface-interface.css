@@ -5,11 +5,10 @@
 .header-user-chip {
   min-width: 124px;
   max-width: 190px;
-  height: 40px;
-  padding: 4px 4px 4px 0;
+  padding-right: 2px;
 }
 
-.header-user-chip .mantine-Avatar-root {
+.header-account-trigger .mantine-Avatar-root {
   flex: 0 0 auto;
   border: 1px solid color-mix(in srgb, var(--mantine-color-teal-5) 36%, transparent);
 }
@@ -18,9 +17,38 @@
   flex: 0 0 auto;
 }
 
-.header-actions .mantine-ActionIcon-root,
-.header-actions .mantine-Button-root {
+.header-actions .mantine-ActionIcon-root {
   border-radius: var(--mantine-radius-md);
+}
+
+.header-utility-group,
+.header-account-trigger {
+  height: 44px;
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: var(--mantine-radius-lg);
+  background: color-mix(in srgb, var(--sentriface-card-bg) 84%, transparent);
+}
+
+.header-utility-group {
+  padding: 3px;
+}
+
+.header-account-trigger {
+  min-width: 174px;
+  padding: 4px 9px 4px 5px;
+  color: inherit;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.header-account-trigger:hover,
+.header-account-trigger[data-expanded="true"] {
+  border-color: color-mix(in srgb, var(--mantine-color-teal-5) 48%, var(--sentriface-card-border));
+  background: color-mix(in srgb, var(--sentriface-muted-surface) 76%, transparent);
+}
+
+.header-account-chevron {
+  flex: 0 0 auto;
+  color: var(--mantine-color-dimmed);
 }
 
 /* Queue review flow */

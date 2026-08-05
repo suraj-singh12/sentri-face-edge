@@ -852,29 +852,38 @@ class SQLiteIdentityStore:
             if source_person_id == target_person_id:
                 raise KeyError("Source and target person must be different")
             source = conn.execute(
-                "SELECT name, metadata FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                "SELECT name, metadata, deleted_at FROM persons WHERE person_id = ? AND deleted_at IS NULL",
                 (source_person_id,),
             ).fetchone()
             target = conn.execute(
-                "SELECT name, metadata FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                "SELECT name, metadata, deleted_at FROM persons WHERE person_id = ? AND deleted_at IS NULL",
                 (target_person_id,),
             ).fetchone()
             if source is None:
                 raise KeyError(f"Unknown source person: {source_person_id}")
             if target is None:
                 raise KeyError(f"Unknown target person: {target_person_id}")
-            moved_embeddings = conn.execute(
-                "SELECT COUNT(*) FROM embeddings WHERE person_id = ? AND deleted_at IS NULL",
+            embedding_rows = conn.execute(
+                "SELECT embedding_id, deleted_at FROM embeddings WHERE person_id = ? ORDER BY embedding_id",
                 (source_person_id,),
-            ).fetchone()[0]
-            moved_deleted_faces = conn.execute(
-                "SELECT COUNT(*) FROM embeddings WHERE person_id = ? AND deleted_at IS NOT NULL",
+            ).fetchall()
+            detail_rows = conn.execute(
+                "SELECT detail_id, name FROM recognition_details WHERE person_id = ? ORDER BY detail_id",
                 (source_person_id,),
-            ).fetchone()[0]
-            moved_sightings = conn.execute(
-                "SELECT COUNT(*) FROM recognition_details WHERE person_id = ?",
+            ).fetchall()
+            source_exclusions = conn.execute(
+                "SELECT session_id, init_face_id FROM init_face_person_exclusions WHERE person_id = ? ORDER BY session_id, init_face_id",
                 (source_person_id,),
-            ).fetchone()[0]
+            ).fetchall()
+            target_exclusions = conn.execute(
+                "SELECT session_id, init_face_id FROM init_face_person_exclusions WHERE person_id = ? ORDER BY session_id, init_face_id",
+                (target_person_id,),
+            ).fetchall()
+            moved_embeddings = sum(1 for row in embedding_rows if row["deleted_at"] is None)
+            moved_deleted_faces = sum(1 for row in embedding_rows if row["deleted_at"] is not None)
+            moved_sightings = len(detail_rows)
+            original_source_metadata = json.loads(source["metadata"])
+            original_target_metadata = json.loads(target["metadata"])
             conn.execute(
                 "UPDATE embeddings SET person_id = ? WHERE person_id = ?",
                 (target_person_id, source_person_id),
@@ -887,8 +896,8 @@ class SQLiteIdentityStore:
                 """,
                 (target_person_id, target["name"], source_person_id),
             )
-            source_metadata = json.loads(source["metadata"])
-            target_metadata = json.loads(target["metadata"])
+            source_metadata = dict(original_source_metadata)
+            target_metadata = dict(original_target_metadata)
             merged_tags = _normalize_tags([
                 *target_metadata.get("tags", []),
                 *source_metadata.get("tags", []),
@@ -942,8 +951,164 @@ class SQLiteIdentityStore:
                 "moved_embeddings": moved_embeddings,
                 "moved_deleted_faces": moved_deleted_faces,
                 "moved_sightings": moved_sightings,
+                "undo_supported": True,
+                "undo_snapshot": {
+                    "source_name": source["name"],
+                    "target_name": target["name"],
+                    "source_metadata": original_source_metadata,
+                    "target_metadata": original_target_metadata,
+                    "merged_source_metadata": source_metadata,
+                    "merged_target_metadata": target_metadata,
+                    "embedding_ids": [row["embedding_id"] for row in embedding_rows],
+                    "embedding_states": [
+                        {
+                            "embedding_id": row["embedding_id"],
+                            "deleted_at": row["deleted_at"],
+                        }
+                        for row in embedding_rows
+                    ],
+                    "details": [
+                        {"detail_id": row["detail_id"], "name": row["name"]}
+                        for row in detail_rows
+                    ],
+                    "source_exclusions": [dict(row) for row in source_exclusions],
+                    "target_exclusions": [dict(row) for row in target_exclusions],
+                },
             }
             _record_person_operation(conn, operation_id, "merge-persons", result)
+            return result
+
+    def undo_merge_persons(self, merge_operation_id: str, operation_id: str) -> dict:
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "undo-merge-persons")
+            if existing:
+                return existing
+            merge = _existing_person_operation(conn, merge_operation_id, "merge-persons")
+            if merge is None:
+                raise KeyError("Unknown merge operation")
+            snapshot = merge.get("undo_snapshot")
+            if not snapshot:
+                raise KeyError("This older merge cannot be undone safely from profile history")
+            source_person_id = str(merge["source_person_id"])
+            target_person_id = str(merge["target_person_id"])
+            prior_undo = conn.execute(
+                "SELECT 1 FROM person_operations WHERE operation_type = 'undo-merge-persons' AND json_extract(result, '$.merge_operation_id') = ?",
+                (merge_operation_id,),
+            ).fetchone()
+            if prior_undo:
+                raise KeyError("This merge has already been undone")
+            source = conn.execute(
+                "SELECT metadata, deleted_at FROM persons WHERE person_id = ?",
+                (source_person_id,),
+            ).fetchone()
+            target = conn.execute(
+                "SELECT metadata, deleted_at FROM persons WHERE person_id = ?",
+                (target_person_id,),
+            ).fetchone()
+            if source is None or target is None:
+                raise KeyError("One of the merged profiles no longer exists")
+            if target["deleted_at"] is not None:
+                raise KeyError("Restore the kept profile before undoing this merge")
+            if json.loads(source["metadata"]) != snapshot["merged_source_metadata"]:
+                raise KeyError("The merged record changed after the merge; undo was not applied")
+            if json.loads(target["metadata"]) != snapshot["merged_target_metadata"]:
+                raise KeyError("The kept profile changed after the merge; undo was not applied")
+            embedding_ids = list(snapshot.get("embedding_ids") or [])
+            if embedding_ids:
+                placeholders = ", ".join("?" for _ in embedding_ids)
+                rows = conn.execute(
+                    f"SELECT embedding_id, person_id, deleted_at FROM embeddings WHERE embedding_id IN ({placeholders})",
+                    embedding_ids,
+                ).fetchall()
+                expected_embedding_states = {
+                    str(item["embedding_id"]): item.get("deleted_at")
+                    for item in snapshot.get("embedding_states") or []
+                }
+                if len(rows) != len(embedding_ids) or any(
+                    row["person_id"] != target_person_id
+                    or (
+                        expected_embedding_states
+                        and row["deleted_at"] != expected_embedding_states.get(str(row["embedding_id"]))
+                    )
+                    for row in rows
+                ):
+                    raise KeyError("Merged photos changed after the merge; undo was not applied")
+                detail_ids = {str(item["detail_id"]) for item in snapshot.get("details") or []}
+                linked_details = conn.execute(
+                    f"SELECT detail_id, person_id, name FROM recognition_details WHERE embedding_id IN ({placeholders})",
+                    embedding_ids,
+                ).fetchall()
+                if any(
+                    row["person_id"] != target_person_id
+                    or row["detail_id"] not in detail_ids
+                    or row["name"] != snapshot["target_name"]
+                    for row in linked_details
+                ):
+                    raise KeyError("Merged sightings changed after the merge; undo was not applied")
+                conn.execute(
+                    f"UPDATE embeddings SET person_id = ? WHERE embedding_id IN ({placeholders})",
+                    (source_person_id, *embedding_ids),
+                )
+            for detail in snapshot.get("details") or []:
+                cursor = conn.execute(
+                    "UPDATE recognition_details SET person_id = ?, name = ? WHERE detail_id = ? AND person_id = ?",
+                    (source_person_id, detail["name"], detail["detail_id"], target_person_id),
+                )
+                if cursor.rowcount != 1:
+                    raise KeyError("A merged sighting changed after the merge; undo was not applied")
+            conn.execute(
+                "UPDATE persons SET metadata = ?, deleted_at = NULL WHERE person_id = ?",
+                (json.dumps(snapshot["source_metadata"], separators=(",", ":")), source_person_id),
+            )
+            conn.execute(
+                "UPDATE persons SET metadata = ? WHERE person_id = ?",
+                (json.dumps(snapshot["target_metadata"], separators=(",", ":")), target_person_id),
+            )
+            source_exclusions = snapshot.get("source_exclusions") or []
+            target_exclusions = snapshot.get("target_exclusions") or []
+            affected = {
+                (item["session_id"], item["init_face_id"])
+                for item in [*source_exclusions, *target_exclusions]
+            }
+            expected_target_exclusions = affected
+            if affected:
+                current_exclusions = conn.execute(
+                    "SELECT session_id, init_face_id, person_id FROM init_face_person_exclusions WHERE person_id IN (?, ?)",
+                    (source_person_id, target_person_id),
+                ).fetchall()
+                current_source = {
+                    (row["session_id"], row["init_face_id"])
+                    for row in current_exclusions
+                    if row["person_id"] == source_person_id
+                }
+                current_target = {
+                    (row["session_id"], row["init_face_id"])
+                    for row in current_exclusions
+                    if row["person_id"] == target_person_id
+                    and (row["session_id"], row["init_face_id"]) in affected
+                }
+                if current_source.intersection(affected) or current_target != expected_target_exclusions:
+                    raise KeyError("Merge exclusions changed after the merge; undo was not applied")
+            for session_id, init_face_id in affected:
+                conn.execute(
+                    "DELETE FROM init_face_person_exclusions WHERE session_id = ? AND init_face_id = ? AND person_id IN (?, ?)",
+                    (session_id, init_face_id, source_person_id, target_person_id),
+                )
+            now = utc_now()
+            conn.executemany(
+                "INSERT OR IGNORE INTO init_face_person_exclusions(session_id, init_face_id, person_id, created_at) VALUES (?, ?, ?, ?)",
+                [(item["session_id"], item["init_face_id"], source_person_id, now) for item in source_exclusions]
+                + [(item["session_id"], item["init_face_id"], target_person_id, now) for item in target_exclusions],
+            )
+            result = {
+                "source_person_id": source_person_id,
+                "target_person_id": target_person_id,
+                "merge_operation_id": merge_operation_id,
+                "restored_embeddings": len(embedding_ids),
+                "restored_sightings": len(snapshot.get("details") or []),
+                "undone": True,
+            }
+            _record_person_operation(conn, operation_id, "undo-merge-persons", result)
             return result
 
     def update_person_preferences(
@@ -1096,7 +1261,8 @@ class SQLiteIdentityStore:
                 }.items()
                 if value
             }
-            if profile_updates:
+            creator_name = added_by.strip() if decision == "new" and added_by and added_by.strip() else ""
+            if profile_updates or creator_name:
                 row = conn.execute(
                     "SELECT metadata FROM persons WHERE person_id = ? AND deleted_at IS NULL",
                     (person_id,),
@@ -1104,6 +1270,8 @@ class SQLiteIdentityStore:
                 if row is not None:
                     metadata = json.loads(row["metadata"])
                     metadata.update(profile_updates)
+                    if creator_name:
+                        metadata.setdefault("added_by", creator_name)
                     conn.execute(
                         "UPDATE persons SET metadata = ? WHERE person_id = ? AND deleted_at IS NULL",
                         (json.dumps(metadata, separators=(",", ":")), person_id),

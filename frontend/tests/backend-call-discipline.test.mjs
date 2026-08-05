@@ -94,13 +94,13 @@ test("signed-in identity aligns with a consistent header control row", async () 
     read("../src/sentriface-interface.css"),
   ]);
 
-  assert.match(app, /className="header-user-chip"/);
+  assert.match(app, /className="header-account-trigger"/);
+  assert.match(app, /className="header-utility-group"/);
   assert.match(app, /className="header-actions"/);
   assert.match(app, /accountInitials\(user\.display_name \|\| user\.username\)/);
-  assert.match(css, /\.header-user-chip\s*\{[^}]*height:\s*40px;/s);
-  assert.doesNotMatch(css, /\.header-user-chip\s*\{[^}]*(?:box-shadow|background):/s);
-  assert.match(app, /<Button h=\{40\}[^\n]*Change password/);
-  assert.match(app, /<Button h=\{40\}[^\n]*Sign out/);
+  assert.match(css, /\.header-utility-group,\s*\.header-account-trigger\s*\{[^}]*height:\s*44px;/s);
+  assert.match(app, /<Menu\.Item leftSection=\{<IconKey size=\{16\} \/>\}[^\n]*Change password<\/Menu\.Item>/);
+  assert.match(app, /<Menu\.Item color="red" leftSection=\{<IconLogout size=\{16\} \/>\}[^\n]*Sign out<\/Menu\.Item>/);
 });
 
 test("active and archived people can delete an entire profile without refetching", async () => {
@@ -118,4 +118,52 @@ test("active and archived people can delete an entire profile without refetching
   assert.match(controller, /removePersonLocally\(personId\)/);
   assert.match(appData, /setArchivedPeople\(\(current\) => current\.filter\(\(item\) => item\.person_id !== personId\)\)/);
   assert.doesNotMatch(controller, /permanentlyDeletePerson[\s\S]{0,800}(?:loadPeople|refreshAll)\(/);
+});
+
+test("activity log sorts full timestamps newest first before pagination", async () => {
+  const debugView = await read("../src/views/DebugView.jsx");
+
+  assert.match(debugView, /snapshot\.map\(normalizeEvent\)\.sort\(compareEventsNewestFirst\)/);
+  assert.match(debugView, /function compareEventsNewestFirst\(left, right\)/);
+  assert.match(debugView, /return rightTime - leftTime;/);
+  assert.match(debugView, /return right\.sourceIndex - left\.sourceIndex;/);
+  assert.match(debugView, /const pageEvents = filteredEvents\.slice/);
+});
+
+test("new-person creator is retained in local state and profile history fallback", async () => {
+  const [recognize, queue, utils] = await Promise.all([
+    read("../src/hooks/useRecognizeController.js"),
+    read("../src/hooks/useQueueController.js"),
+    read("../src/utils.js"),
+  ]);
+
+  assert.match(recognize, /added_by: recognitionFollowup\.addedBy \|\| ""/);
+  assert.match(queue, /added_by: queueFollowup\.addedBy \|\| ""/);
+  assert.match(utils, /metadata\.added_by \|\| creatorDetail\.added_by \|\| ""/);
+});
+
+test("a recorded People merge can be undone with one narrow backend request", async () => {
+  const [view, controller] = await Promise.all([
+    read("../src/views/PeopleView.jsx"),
+    read("../src/hooks/usePeopleController.js"),
+  ]);
+
+  assert.match(view, /Undo merge/);
+  assert.match(view, /mergeEvent\?\.result\?\.undo_supported/);
+  assert.match(view, /managementDialog === "undo-merge"/);
+  assert.match(controller, /apiPost\("\/api\/person-merge-undo"/);
+  assert.match(controller, /upsertPerson\(result\.source_person\)/);
+  assert.match(controller, /upsertPerson\(result\.target_person\)/);
+  assert.doesNotMatch(controller, /undoPeopleMerge[\s\S]{0,900}(?:loadPeople|loadPerson|refreshAll)\(/);
+});
+
+test("a newly archived merge opens immediately without requiring a tab refresh", async () => {
+  const [view, appData] = await Promise.all([
+    read("../src/views/PeopleView.jsx"),
+    read("../src/hooks/useAppData.js"),
+  ]);
+
+  assert.match(appData, /archived:\s*true,[\s\S]*deleted_at:/);
+  assert.match(appData, /archived:\s*false,\s*deleted_at:\s*null/);
+  assert.match(view, /archived:\s*filter === "archived" \|\| Boolean\(person\.archived \|\| person\.deleted_at\)/);
 });

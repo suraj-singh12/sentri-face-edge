@@ -99,6 +99,9 @@ export function personProfile(payload, scopedDetails = payload.details || [], im
   const details = scopedDetails.length ? scopedDetails : payload.details || [];
   const metadata = payload.person.metadata || {};
   const latestDetail = details.find((detail) => detail.rank || detail.country || detail.importance || detail.name) || {};
+  const creatorDetail = [...(payload.details || [])]
+    .filter((detail) => detail.added_by)
+    .sort((left, right) => String(left.created_at || "").localeCompare(String(right.created_at || "")))[0] || {};
   const hasScopedDetails = scopedDetails.length > 0;
   return {
     personId: payload.person.person_id,
@@ -108,7 +111,7 @@ export function personProfile(payload, scopedDetails = payload.details || [], im
     importance: hasScopedDetails ? latestDetail.importance || metadata.importance || "Regular" : metadata.importance || latestDetail.importance || "Regular",
     tags: Array.isArray(payload.person.tags) ? payload.person.tags : Array.isArray(metadata.tags) ? metadata.tags : [],
     createdAt: payload.person.created_at || "",
-    addedBy: metadata.added_by || "",
+    addedBy: metadata.added_by || creatorDetail.added_by || "",
     scopeLabel: hasScopedDetails ? "Selected image details" : imageSelected ? "Selected image has no saved details" : "Person summary",
   };
 }

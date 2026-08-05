@@ -179,6 +179,23 @@ export function usePeopleController({
     return result;
   };
 
+  const undoPeopleMerge = async (mergeOperationId) => {
+    const result = await apiPost("/api/person-merge-undo", {
+      merge_operation_id: mergeOperationId,
+      operation_id: operationId(),
+    });
+    upsertPerson(result.source_person);
+    upsertPerson(result.target_person);
+    setPeopleGallery(null);
+    setPeopleGalleryImage(null);
+    showToast(
+      `${result.restored_embeddings || 0} photo record${result.restored_embeddings === 1 ? "" : "s"} returned to the original profile.`,
+      "teal",
+      { title: "Merge undone" },
+    );
+    return result;
+  };
+
   const movePersonPhoto = async (personId, embeddingId, targetPersonId) => {
     const result = await apiPost("/api/person-photo-move", {
       embedding_id: embeddingId,
@@ -287,6 +304,7 @@ export function usePeopleController({
       restorePerson,
       permanentlyDeletePerson,
       mergePeople,
+      undoPeopleMerge,
       movePersonPhoto,
       deletePersonPhoto,
       restoreDeletedFace,

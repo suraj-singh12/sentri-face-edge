@@ -223,7 +223,7 @@ class StorageMigrationTest(unittest.TestCase):
                 image_id="image-a.jpg",
                 image_path="uploads/image-a.jpg",
                 name=person.name,
-                decision="duplicate",
+                decision="new",
                 seen_date="2026-06-07",
                 seen_time="13:45",
                 place_seen="Gate 1",
@@ -247,6 +247,7 @@ class StorageMigrationTest(unittest.TestCase):
             self.assertEqual(details[0].country, "India")
             self.assertEqual(details[0].importance, "Important")
             self.assertEqual(details[0].added_by, "Analyst A")
+            self.assertEqual(store.get_person(person.person_id).metadata["added_by"], "Analyst A")
 
     def test_person_profile_update_keeps_change_history(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

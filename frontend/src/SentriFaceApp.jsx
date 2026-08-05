@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ActionIcon, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
+import { ActionIcon, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Menu, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, UnstyledButton, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
-import { IconAlertTriangle, IconDatabaseExport, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
+import { IconAlertTriangle, IconChevronDown, IconDatabaseExport, IconKey, IconLogout, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
 import { AuthGate } from "./components/AuthGate.jsx";
 import { ModelGate } from "./components/ModelGate.jsx";
@@ -84,48 +84,59 @@ function SentriFaceShell({ user, logout, changePassword }) {
             </Box>
           </Group>
           <Group gap="sm" wrap="nowrap" className="header-actions">
-            <Tooltip label={`Switch to ${nextColorScheme} mode`}>
-              <ActionIcon
-                variant="light"
-                size={40}
-                onClick={() => setColorScheme(nextColorScheme)}
-                aria-label={`Switch to ${nextColorScheme} mode`}
-              >
-                {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Refresh">
-              <ActionIcon variant="light" size={40} onClick={guarded(actions.reloadAppData)} disabled={state.refreshing} aria-label={state.refreshing ? "Refreshing" : "Refresh"}>
-                {state.refreshing ? <Loader size={18} /> : <IconRefresh size={18} />}
-              </ActionIcon>
-            </Tooltip>
-            {can("backups") ? (
-              <Tooltip label={state.backupCreating ? "Creating backup..." : "Create backup now"}>
+            <Group gap={2} wrap="nowrap" className="header-utility-group">
+              <Tooltip label={`Switch to ${nextColorScheme} mode`}>
                 <ActionIcon
-                  variant="light"
-                  color="blue"
-                  size={40}
-                  onClick={actions.requestBackup}
-                  disabled={state.backupCreating}
-                  aria-label={state.backupCreating ? "Creating backup..." : "Create backup now"}
+                  variant="subtle"
+                  size={36}
+                  onClick={() => setColorScheme(nextColorScheme)}
+                  aria-label={`Switch to ${nextColorScheme} mode`}
                 >
-                  {state.backupCreating ? <Loader size={18} /> : <IconDatabaseExport size={18} />}
+                  {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
                 </ActionIcon>
               </Tooltip>
-            ) : null}
-            <Box visibleFrom="sm" className="header-user-chip">
-              <Group gap="xs" wrap="nowrap">
-                <Avatar size={32} radius="xl" color="teal" variant="light">
-                  {accountInitials(user.display_name || user.username)}
-                </Avatar>
-                <Box miw={0}>
-                  <Text size="sm" fw={800} lh={1.15} truncate>{user.display_name || user.username}</Text>
-                  <Text size="xs" c="dimmed" lh={1.15} tt="capitalize" truncate>{(user.roles || []).join(" · ")}</Text>
-                </Box>
-              </Group>
-            </Box>
-            <Button h={40} px="md" size="sm" variant="default" onClick={() => setPasswordOpen(true)}>Change password</Button>
-            <Button h={40} px="md" size="sm" variant="light" color="gray" onClick={logout}>Sign out</Button>
+              <Tooltip label="Refresh">
+                <ActionIcon variant="subtle" size={36} onClick={guarded(actions.reloadAppData)} disabled={state.refreshing} aria-label={state.refreshing ? "Refreshing" : "Refresh"}>
+                  {state.refreshing ? <Loader size={18} /> : <IconRefresh size={18} />}
+                </ActionIcon>
+              </Tooltip>
+              {can("backups") ? (
+                <Tooltip label={state.backupCreating ? "Creating backup..." : "Create backup now"}>
+                  <ActionIcon
+                    variant="subtle"
+                    color="blue"
+                    size={36}
+                    onClick={actions.requestBackup}
+                    disabled={state.backupCreating}
+                    aria-label={state.backupCreating ? "Creating backup..." : "Create backup now"}
+                  >
+                    {state.backupCreating ? <Loader size={18} /> : <IconDatabaseExport size={18} />}
+                  </ActionIcon>
+                </Tooltip>
+              ) : null}
+            </Group>
+            <Menu shadow="md" width={220} position="bottom-end" offset={8}>
+              <Menu.Target>
+                <UnstyledButton className="header-account-trigger" aria-label="Open account menu">
+                  <Group gap="xs" wrap="nowrap">
+                    <Avatar size={34} radius="xl" color="teal" variant="light">
+                      {accountInitials(user.display_name || user.username)}
+                    </Avatar>
+                    <Box visibleFrom="sm" miw={0} className="header-user-chip">
+                      <Text size="sm" fw={800} lh={1.15} truncate>{user.display_name || user.username}</Text>
+                      <Text size="xs" c="dimmed" lh={1.15} tt="capitalize" truncate>{(user.roles || []).join(" · ")}</Text>
+                    </Box>
+                    <IconChevronDown size={15} className="header-account-chevron" aria-hidden="true" />
+                  </Group>
+                </UnstyledButton>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Label>Account</Menu.Label>
+                <Menu.Item leftSection={<IconKey size={16} />} onClick={() => setPasswordOpen(true)}>Change password</Menu.Item>
+                <Menu.Divider />
+                <Menu.Item color="red" leftSection={<IconLogout size={16} />} onClick={logout}>Sign out</Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
           </Group>
         </Group>
       </AppShell.Header>
@@ -260,6 +271,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onRestore={actions.restorePerson}
               onDelete={actions.permanentlyDeletePerson}
               onMerge={actions.mergePeople}
+              onUndoMerge={guarded(actions.undoPeopleMerge)}
               onMovePhoto={actions.movePersonPhoto}
               onDeletePhoto={actions.deletePersonPhoto}
               onRestoreDeletedFace={actions.restoreDeletedFace}

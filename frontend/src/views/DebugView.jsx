@@ -84,7 +84,10 @@ export function DebugView({
     if (!paused && !cleared) setSnapshot(events);
   }, [cleared, events, paused]);
 
-  const normalizedEvents = useMemo(() => snapshot.map(normalizeEvent), [snapshot]);
+  const normalizedEvents = useMemo(
+    () => snapshot.map(normalizeEvent).sort(compareEventsNewestFirst),
+    [snapshot],
+  );
   const eventTypes = useMemo(() => Array.from(new Set(normalizedEvents.map((event) => event.event))).filter(Boolean).sort(), [normalizedEvents]);
   const summary = useMemo(() => summarizeEvents(normalizedEvents), [normalizedEvents]);
   const filteredEvents = useMemo(() => {
@@ -654,6 +657,7 @@ function normalizeEvent(event, index) {
     : "-";
   return {
     key: `${index}-${eventName}-${timestamp || JSON.stringify(event).slice(0, 40)}`,
+    sourceIndex: index,
     event: eventName,
     level,
     time: parsedTime && !Number.isNaN(parsedTime.getTime()) ? parsedTime : null,
@@ -661,6 +665,16 @@ function normalizeEvent(event, index) {
     details: summarizeEventDetails(event),
     raw: JSON.stringify(event),
   };
+}
+
+function compareEventsNewestFirst(left, right) {
+  const leftTime = left.time?.getTime();
+  const rightTime = right.time?.getTime();
+  const leftHasTime = Number.isFinite(leftTime);
+  const rightHasTime = Number.isFinite(rightTime);
+  if (leftHasTime && rightHasTime && leftTime !== rightTime) return rightTime - leftTime;
+  if (leftHasTime !== rightHasTime) return rightHasTime ? 1 : -1;
+  return right.sourceIndex - left.sourceIndex;
 }
 
 function inferLevel(event) {

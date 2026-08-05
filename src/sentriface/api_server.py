@@ -140,7 +140,7 @@ def _required_capability(method: str, path: str) -> str | None:
     if path in {"/api/backups", "/api/backup-db"}:
         return "backups"
     if path in {
-        "/api/person-archive", "/api/person-restore", "/api/person-merge", "/api/person-purge",
+        "/api/person-archive", "/api/person-restore", "/api/person-merge", "/api/person-merge-undo", "/api/person-purge",
         "/api/person-photo-move", "/api/person-photo-delete",
         "/api/person-photo-restore", "/api/person-photo-purge",
     }:
@@ -1546,6 +1546,37 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 self.server.log_event("person-merge", **result)
                 self._json(result)
+                return
+            if parsed.path == "/api/person-merge-undo":
+                merge_operation_id = _required(payload, "merge_operation_id")
+                operation_id = _operation_id(payload)
+                merge = self.server.engine.get_person_operation(merge_operation_id, "merge-persons")
+                if merge is None:
+                    raise KeyError("Unknown merge operation")
+                source_id = str(merge["source_person_id"])
+                target_id = str(merge["target_person_id"])
+                result = self.server.backed_up_people_deletion(
+                    operation_id,
+                    "undo-merge-persons",
+                    f"before-person-merge-undo-{source_id[:8]}-from-{target_id[:8]}",
+                    lambda: self.server.engine.undo_merge_persons(
+                        merge_operation_id,
+                        operation_id,
+                    ),
+                )
+                source = next(
+                    item for item in self.server.engine.list_persons() if item.person.person_id == source_id
+                )
+                target = next(
+                    item for item in self.server.engine.list_persons() if item.person.person_id == target_id
+                )
+                response = {
+                    **result,
+                    "source_person": _person_summary(source, self.server.engine),
+                    "target_person": _person_summary(target, self.server.engine),
+                }
+                self.server.log_event("person-merge-undo", **result)
+                self._json(response)
                 return
             if parsed.path == "/api/person-photo-move":
                 result = self.server.engine.move_embedding(

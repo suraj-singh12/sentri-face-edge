@@ -280,6 +280,104 @@ class PersonManagementTest(unittest.TestCase):
                     "99999999-9999-4999-8999-999999999999",
                 )
 
+    def test_undo_merge_restores_both_people_and_their_original_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_a = temp_path / "face-a.jpg"
+            image_b = temp_path / "face-b.jpg"
+            self._write_image(image_a, shade=128)
+            self._write_image(image_b, shade=145)
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            source = engine.confirm_new_person(
+                engine.prepare_additions(image_a)[0],
+                "Source",
+                metadata={"favorite": True, "tags": ["source"]},
+            )
+            target = engine.confirm_new_person(
+                engine.prepare_additions(image_b)[0],
+                "Target",
+                metadata={"tags": ["target"]},
+            )
+            source_before = engine.get_person(source)
+            target_before = engine.get_person(target)
+            source_embedding = engine.list_person_embeddings(source)[0]
+            target_embedding = engine.list_person_embeddings(target)[0]
+            engine.add_recognition_detail(
+                embedding_id=source_embedding.embedding_id,
+                person_id=source,
+                image_id="source-image",
+                image_path=str(image_a),
+                name="Source",
+                decision="accepted",
+                seen_date="2026-08-05",
+                seen_time="10:30",
+                place_seen="Gate",
+                individual_count=1,
+                event_occasion="Arrival",
+            )
+
+            merge_operation_id = "10101010-1010-4010-8010-101010101010"
+            undo_operation_id = "20202020-2020-4020-8020-202020202020"
+            merge_result = engine.merge_persons(source, target, merge_operation_id)
+            self.assertTrue(merge_result["undo_supported"])
+
+            undo_result = engine.undo_merge_persons(merge_operation_id, undo_operation_id)
+
+            self.assertTrue(undo_result["undone"])
+            self.assertEqual(undo_result["restored_embeddings"], 1)
+            self.assertEqual(undo_result["restored_sightings"], 1)
+            self.assertEqual(engine.get_person(source).metadata, source_before.metadata)
+            self.assertEqual(engine.get_person(target).metadata, target_before.metadata)
+            self.assertEqual(
+                [item.embedding_id for item in engine.list_person_embeddings(source)],
+                [source_embedding.embedding_id],
+            )
+            self.assertEqual(
+                [item.embedding_id for item in engine.list_person_embeddings(target)],
+                [target_embedding.embedding_id],
+            )
+            restored_detail = engine.list_recognition_details_for_person(source)[0]
+            self.assertEqual(restored_detail.person_id, source)
+            self.assertEqual(restored_detail.name, "Source")
+            self.assertEqual(
+                engine.undo_merge_persons(merge_operation_id, undo_operation_id),
+                undo_result,
+            )
+
+    def test_undo_merge_refuses_to_overwrite_changes_made_after_merge(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image_a = temp_path / "face-a.jpg"
+            image_b = temp_path / "face-b.jpg"
+            self._write_image(image_a, shade=128)
+            self._write_image(image_b, shade=145)
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            source = engine.confirm_new_person(engine.prepare_additions(image_a)[0], "Source")
+            target = engine.confirm_new_person(engine.prepare_additions(image_b)[0], "Target")
+            merge_operation_id = "30303030-3030-4030-8030-303030303030"
+            engine.merge_persons(source, target, merge_operation_id)
+            engine.update_person_profile(
+                person_id=target,
+                name="Edited after merge",
+                rank="",
+                country="",
+                importance="",
+                editor_name="Reviewer",
+                tags=[],
+                operation_id="40404040-4040-4040-8040-404040404040",
+            )
+
+            with self.assertRaisesRegex(KeyError, "changed after the merge"):
+                engine.undo_merge_persons(
+                    merge_operation_id,
+                    "50505050-5050-4050-8050-505050505050",
+                )
+
+            self.assertIsNone(engine.get_person(source))
+            self.assertEqual(engine.get_person(target).name, "Edited after merge")
+
     def test_failed_merge_leaves_both_people_unchanged(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)

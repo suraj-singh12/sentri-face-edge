@@ -572,6 +572,7 @@ export function useQueueController({
           rank: queueFollowup.rank || "",
           country: queueFollowup.country || "",
           importance: queueFollowup.importance || "",
+          added_by: queueFollowup.addedBy || "",
         },
       });
     } else {
