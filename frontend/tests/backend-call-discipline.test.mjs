@@ -88,6 +88,26 @@ test("tab navigation cannot fail on a replaced lazy-loaded chunk", async () => {
   assert.match(app, /import \{ QueueView \} from "\.\/views\/QueueView\.jsx"/);
 });
 
+test("About and support uses loaded data and only calls the backend for explicit export", async () => {
+  const [view, panel, appData] = await Promise.all([
+    read("../src/views/DebugView.jsx"),
+    read("../src/views/AboutSupportPanel.jsx"),
+    read("../src/hooks/useAppData.js"),
+  ]);
+
+  assert.match(view, /About & support/);
+  assert.match(panel, /profile\.application/);
+  assert.match(panel, /profile\?\.hardware/);
+  assert.match(panel, /buildDiagnosticReport\(profile, events\)/);
+  assert.doesNotMatch(panel, /support@sentriface/);
+  assert.match(panel, /Suraj Singh/);
+  assert.match(panel, /sentriface-support@gmail\.com/);
+  assert.match(panel, /mailto:\$\{SUPPORT_EMAIL\}/);
+  assert.match(panel, /copyText\(SUPPORT_EMAIL\)/);
+  assert.doesNotMatch(panel, /apiGet|apiPost|apiDownload/);
+  assert.match(appData, /const downloadSupportPackage = async \(\) => \{[\s\S]*"\/api\/support-package"/);
+});
+
 test("signed-in identity aligns with a consistent header control row", async () => {
   const [app, css] = await Promise.all([
     read("../src/SentriFaceApp.jsx"),

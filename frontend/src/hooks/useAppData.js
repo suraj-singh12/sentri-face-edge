@@ -304,6 +304,28 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     }
   };
 
+  const downloadSupportPackage = async () => {
+    const { blob, contentDisposition } = await apiDownload(
+      "/api/support-package",
+      {},
+      { silent: true },
+    );
+    const match = contentDisposition.match(/filename="?([^";]+)"?/i);
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = match?.[1] || `sentriface-support-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      showToast("Support package exported", "teal");
+      return true;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const requestRestoreBackup = (backup) => {
     if (!backupRestoring && backup?.verified && backup?.portable && backup?.complete) {
       setRestoreBackupSelection(backup);
@@ -378,6 +400,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     deleteBackup,
     importBackup,
     downloadBackup,
+    downloadSupportPackage,
     requestRestoreBackup,
     cancelRestoreBackup,
     restoreBackup,

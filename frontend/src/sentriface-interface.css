@@ -1780,6 +1780,100 @@ button {
   min-width: 260px;
 }
 
+.about-support-panel {
+  min-height: 100%;
+}
+
+.about-support-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.about-card {
+  min-width: 0;
+  height: 100%;
+  padding: 24px !important;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+  box-shadow: var(--sentriface-card-shadow);
+}
+
+.about-logo {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: 12px;
+}
+
+.about-detail-list {
+  border-top: 1px solid var(--sentriface-card-border);
+}
+
+.about-detail-row {
+  min-height: 58px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--sentriface-card-border);
+}
+
+.about-detail-row > .mantine-Text-root {
+  max-width: 58%;
+  overflow-wrap: anywhere;
+}
+
+.support-action {
+  height: 66px;
+  justify-content: flex-start;
+}
+
+.support-action .mantine-Button-label {
+  white-space: normal;
+  text-align: left;
+}
+
+.developer-contact-card {
+  padding: 18px !important;
+  background: color-mix(in srgb, var(--sentriface-card-bg) 82%, var(--mantine-color-teal-9));
+  border-color: var(--sentriface-card-border);
+}
+
+.developer-contact-copy {
+  min-width: 0;
+}
+
+.support-email-link {
+  display: inline-block;
+  color: var(--mantine-color-teal-5);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.support-email-link:hover {
+  text-decoration: underline;
+}
+
+.support-contents-grid {
+  padding: 18px;
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: var(--mantine-radius-md);
+}
+
+.support-included-item {
+  min-width: 0;
+  padding: 3px 0;
+}
+
+.support-included-item .mantine-ThemeIcon-root {
+  flex: 0 0 18px;
+}
+
+@media (max-width: 74em) {
+  .about-support-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .debug-select {
   flex: 0 0 178px;
 }

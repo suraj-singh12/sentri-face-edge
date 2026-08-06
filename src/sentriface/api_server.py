@@ -4,6 +4,7 @@ import argparse
 import base64
 import binascii
 import hashlib
+import io
 import ipaddress
 import json
 import os
@@ -14,6 +15,7 @@ import sys
 import threading
 import time
 import uuid
+import zipfile
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -24,6 +26,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
+from sentriface import __version__
 from sentriface.auth import (
     AUTH_COOKIE_NAME,
     RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION,
@@ -97,6 +100,7 @@ MODEL_SETUP_ALLOWED_ENDPOINTS = {
     "/api/models/status",
     "/api/models/upload",
     "/api/models/install",
+    "/api/support-package",
 }
 
 
@@ -139,6 +143,8 @@ def _required_capability(method: str, path: str) -> str | None:
         return "backups"
     if path in {"/api/backups", "/api/backup-db"}:
         return "backups"
+    if path == "/api/support-package":
+        return "technical"
     if path in {
         "/api/person-archive", "/api/person-restore", "/api/person-merge", "/api/person-merge-undo", "/api/person-purge",
         "/api/person-photo-move", "/api/person-photo-delete",
@@ -1041,6 +1047,19 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     def _do_POST(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if parsed.path == "/api/support-package":
+                package = _support_package_bytes(self.server)
+                timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+                self.server.log_event(
+                    "support-package-exported",
+                    actor=self.auth_user.username,
+                )
+                self._download_bytes(
+                    package,
+                    f"sentriface-support-{timestamp}.zip",
+                    "application/zip",
+                )
+                return
             if parsed.path == "/api/models/upload":
                 kind = _query_value(parsed.query, "kind").strip().casefold()
                 if kind not in {"detector", "recognizer"}:
@@ -2073,6 +2092,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     def _profile(self) -> dict[str, Any]:
         config = self.server.config
         profile = {
+            "application": {
+                "name": "SentriFace Edge",
+                "version": __version__,
+                "database_schema_version": SCHEMA_VERSION,
+            },
             "runtime": self.server.runtime,
             "hardware_tier": config.hardware_tier,
             "hardware": {
@@ -2288,6 +2312,22 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 if not chunk:
                     break
                 self.wfile.write(chunk)
+
+    def _download_bytes(
+        self,
+        content: bytes,
+        download_name: str,
+        content_type: str,
+    ) -> None:
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header(
+            "Content-Disposition",
+            f'attachment; filename="{download_name}"',
+        )
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
 
     def _error(self, exc: Exception) -> None:
         message = str(exc).strip("'")
@@ -3299,6 +3339,105 @@ def _sanitize_log_value(value: Any) -> Any:
     if hasattr(value, "shape"):
         return "<array omitted>"
     return f"<{type(value).__name__}>"
+
+
+def _support_diagnostic_report(server: SentriFaceApiServer) -> dict[str, Any]:
+    """Return troubleshooting facts without identity data or local paths."""
+    config = server.config
+    with server.events_lock:
+        events = list(server.events)
+    event_counts: dict[str, int] = {}
+    event_history: list[dict[str, str]] = []
+    for item in events:
+        event_name = str(item.get("event") or "unknown")
+        event_counts[event_name] = event_counts.get(event_name, 0) + 1
+        event_history.append({
+            "timestamp": str(item.get("timestamp") or ""),
+            "event": event_name,
+        })
+    security = {
+        "database_encrypted": database_is_encrypted(config.db_path),
+        "managed_files_encrypted": bool(config.storage_key),
+        "managed_backups_encrypted": bool(config.storage_key),
+        "persistent_logs_encrypted": bool(config.storage_key),
+        "key_protection": "operating-system-vault" if config.storage_key else "none",
+    }
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "application": {
+            "name": "SentriFace Edge",
+            "version": __version__,
+            "database_schema_version": SCHEMA_VERSION,
+        },
+        "runtime": server.runtime,
+        "hardware": {
+            "tier": config.hardware_tier,
+            "cpu_count": server.hardware_profile.cpu_count,
+            "memory_gb": server.hardware_profile.memory_gb,
+            "operating_system": platform.system(),
+            "architecture": platform.machine(),
+        },
+        "processing": {
+            "max_workers": config.max_workers,
+            "onnx_intra_threads": config.onnx_intra_threads,
+            "max_image_edge": config.max_image_edge,
+            "detector_input_size": config.detector_input_size,
+            "batch_size": config.batch_size,
+            "prefer_small_models": config.prefer_small_models,
+        },
+        "models": {
+            "ready": server.models_available(),
+            "detector": config.detector_model.name,
+            "recognizer": config.recognizer_model.name,
+            "usage": {
+                "usage_basis": server.model_usage.get("usage_basis", "unknown"),
+                "terms_version": server.model_usage.get("terms_version", ""),
+                "licensor": server.model_usage.get("licensor", ""),
+                "license_name": server.model_usage.get("license_name", ""),
+            },
+        },
+        "offline_enforcement": {
+            "loopback_only": True,
+            "outbound_socket_guard": offline_guard_installed(),
+            "os_network_enforced": bool(server.os_network_policy and server.os_network_policy.enforced),
+            "os_network_mechanism": server.os_network_policy.mechanism if server.os_network_policy else "not-verified",
+        },
+        "storage_security": security,
+        "recovery_readiness": {
+            key: value
+            for key, value in server.recovery_readiness().items()
+            if key in {
+                "ready", "configured", "destination_available",
+                "recovery_kit_present", "external_backup_present", "acknowledged",
+            }
+        },
+        "index": {
+            "requested": server.engine.index_status.get("requested"),
+            "actual": server.engine.index_status.get("actual"),
+            "degraded": bool(server.engine.index_status.get("degraded_reason")),
+        },
+        "events": {
+            "total": len(event_history),
+            "counts": event_counts,
+            "history": event_history,
+        },
+    }
+
+
+def _support_package_bytes(server: SentriFaceApiServer) -> bytes:
+    report = _support_diagnostic_report(server)
+    readme = (
+        "SentriFace Edge support package\n\n"
+        "This package contains application, system, runtime, configuration, model filename, "
+        "database schema, protection, recovery-readiness, and event-type/timestamp information.\n\n"
+        "It does not contain face images, source images, embeddings, names, identity records, "
+        "database contents, arbitrary event details, secrets, or local file paths.\n"
+    )
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("diagnostic-report.json", json.dumps(report, indent=2, sort_keys=True))
+        archive.writestr("README.txt", readme)
+    return output.getvalue()
 
 
 def _backup(record: BackupRecord) -> dict[str, Any]:

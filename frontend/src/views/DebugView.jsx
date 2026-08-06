@@ -30,6 +30,7 @@ import {
   IconDatabase,
   IconDatabaseExport,
   IconDownload,
+  IconHelpCircle,
   IconInfoCircle,
   IconPlayerPause,
   IconRefresh,
@@ -40,6 +41,7 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 import { AccountsPanel } from "./AccountsPanel.jsx";
+import { AboutSupportPanel } from "./AboutSupportPanel.jsx";
 import { MachineProfilePanel } from "./MachineProfilePanel.jsx";
 
 export function DebugView({
@@ -57,6 +59,7 @@ export function DebugView({
   onImportBackup,
   onDownloadBackup,
   onRestoreBackup,
+  onExportSupportPackage,
 }) {
   const capabilitySet = useMemo(() => new Set(capabilities), [capabilities]);
   const navItems = useMemo(() => [
@@ -64,6 +67,7 @@ export function DebugView({
     capabilitySet.has("administer") ? { key: "accounts", label: "User accounts", icon: IconUsers } : null,
     capabilitySet.has("technical") ? { key: "profile", label: "System details", icon: IconCpu } : null,
     capabilitySet.has("technical") ? { key: "events", label: "Activity log", icon: IconInfoCircle } : null,
+    capabilitySet.has("technical") ? { key: "about", label: "About & support", icon: IconHelpCircle } : null,
   ].filter(Boolean), [capabilitySet]);
   const [section, setSection] = useState(navItems[0]?.key || "database");
   const [paused, setPaused] = useState(false);
@@ -141,7 +145,9 @@ export function DebugView({
       <Box className="debug-shell">
         <DebugSidebar section={section} onSection={setSection} summary={summary} onRefresh={refreshEvents} navItems={navItems} showSummary={capabilitySet.has("technical") && section === "events"} />
         <Box className="debug-main">
-          {section === "events" ? (
+          {section === "about" ? (
+            <AboutSupportPanel profile={profile} events={events} onExportSupportPackage={onExportSupportPackage} />
+          ) : section === "events" ? (
             <EventsLogPanel
               events={pageEvents}
               eventTypes={eventTypes}

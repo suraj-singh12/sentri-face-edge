@@ -295,6 +295,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onImportBackup={guarded(actions.importBackup)}
               onDownloadBackup={actions.downloadBackup}
               onRestoreBackup={actions.requestRestoreBackup}
+              onExportSupportPackage={guarded(actions.downloadSupportPackage)}
             />
           </Tabs.Panel>
         </Tabs>

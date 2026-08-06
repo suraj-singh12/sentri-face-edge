@@ -72,6 +72,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       deleteBackup: appData.deleteBackup,
       importBackup: appData.importBackup,
       downloadBackup: appData.downloadBackup,
+      downloadSupportPackage: appData.downloadSupportPackage,
       requestRestoreBackup: appData.requestRestoreBackup,
       cancelRestoreBackup: appData.cancelRestoreBackup,
       restoreBackup: appData.restoreBackup,
