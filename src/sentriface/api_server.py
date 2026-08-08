@@ -1572,6 +1572,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     editor_name=self.auth_user.display_name or self.auth_user.username,
                     operation_id=_operation_id(payload),
                     mentioned_person_ids=[str(item) for item in mentioned_person_ids],
+                    actor=self._operation_actor(),
+                    source=parsed.path,
                 )
                 associations = self.server.engine.list_person_associations(person.person_id)
                 person_summaries = {item.person.person_id: item for item in self.server.engine.list_persons()}

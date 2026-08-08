@@ -5,6 +5,7 @@ import unittest
 import sqlite3
 from pathlib import Path
 
+from sentriface.graph_service import GlobalIdentityGraphService
 from sentriface.storage.sqlite_store import SQLiteIdentityStore
 
 
@@ -73,7 +74,7 @@ class PersonNotesTest(unittest.TestCase):
         self.assertEqual(self.store.list_recognition_details_for_person(person.person_id)[0].notes, "sighting note")
         self.assertEqual(self.store.get_person(person.person_id).notes, "profile note")
 
-    def test_mentions_create_automatic_associations_and_manual_link_upgrades_origin(self) -> None:
+    def test_explicit_mentions_create_graph_evidence_without_legacy_association(self) -> None:
         owner = self.store.create_person("Owner")
         mentioned = self.store.create_person("Mentioned Person")
         changed, _, _ = self.store.update_person_notes(
@@ -85,16 +86,21 @@ class PersonNotesTest(unittest.TestCase):
             [mentioned.person_id],
         )
         self.assertTrue(changed)
-        association = self.store.list_person_associations(owner.person_id)[0]
-        self.assertEqual(association.association_origin, "automatic_mention")
+        evidence = GlobalIdentityGraphService(self.store).get_connection_evidence(
+            owner.person_id, mentioned.person_id,
+        )
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0].evidence_type, "NOTE_REFERENCE")
+        self.assertEqual(evidence[0].directionality, "DIRECTED")
+        self.assertEqual(self.store.list_person_associations(owner.person_id), [])
 
-        upgraded = self.store.create_person_association(
+        manual = self.store.create_person_association(
             mentioned.person_id, owner.person_id, "Operator", "manual-upgrade",
         )
-        self.assertEqual(upgraded.association_id, association.association_id)
-        self.assertEqual(upgraded.association_origin, "manual")
+        self.assertEqual(manual.association_origin, "manual")
+        self.assertEqual(len(evidence), 1)
 
-    def test_sighting_mentions_also_create_automatic_associations(self) -> None:
+    def test_sighting_plain_text_does_not_infer_association(self) -> None:
         owner = self.store.create_person("Observed")
         mentioned = self.store.create_person("Companion")
         embedding = self.store.add_embedding(owner.person_id, (0.0, 1.0, 0.0), 0.9)
@@ -111,8 +117,13 @@ class PersonNotesTest(unittest.TestCase):
             "Visit",
             notes="Seen with @Companion",
         )
-        association = self.store.list_person_associations(owner.person_id)[0]
-        self.assertEqual(association.association_origin, "automatic_mention")
+        self.assertEqual(self.store.list_person_associations(owner.person_id), [])
+        self.assertEqual(
+            GlobalIdentityGraphService(self.store).get_connection_evidence(
+                owner.person_id, mentioned.person_id,
+            ),
+            [],
+        )
 
     def test_duplicate_names_require_an_explicit_suggestion_selection(self) -> None:
         owner = self.store.create_person("Duplicate Owner")
@@ -131,12 +142,11 @@ class PersonNotesTest(unittest.TestCase):
             "duplicate-selected",
             [second.person_id],
         )
-        association = self.store.list_person_associations(owner.person_id)[0]
-        self.assertEqual(
-            {association.source_person_id, association.target_person_id},
-            {owner.person_id, second.person_id},
-        )
-        self.assertNotIn(first.person_id, {association.source_person_id, association.target_person_id})
+        graph = GlobalIdentityGraphService(self.store)
+        evidence = graph.get_connection_evidence(owner.person_id, second.person_id)
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0].target_person_id, second.person_id)
+        self.assertEqual(graph.get_connection_evidence(owner.person_id, first.person_id), [])
 
     def test_v14_migration_adds_empty_notes_without_changing_existing_data(self) -> None:
         path = Path(self.tempdir.name) / "legacy.sqlite3"

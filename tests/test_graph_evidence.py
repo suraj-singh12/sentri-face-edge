@@ -222,36 +222,22 @@ class GlobalGraphEvidenceTest(unittest.TestCase):
             first = store.create_person("A")
             second = store.create_person("B")
             operation_id = "evidence-direction-fixture"
+            graph.create_note(
+                first.person_id,
+                "@B",
+                "directed-note-a-to-b",
+                mentioned_person_ids=[second.person_id],
+            )
+            graph.create_note(
+                second.person_id,
+                "@A",
+                "directed-note-b-to-a",
+                mentioned_person_ids=[first.person_id],
+            )
             store.begin_operation("test.evidence-direction", operation_id=operation_id)
             store.mark_operation_committed(operation_id)
             created_at = utc_now()
             with store._connect() as conn:
-                _insert_relationship_evidence(
-                    conn,
-                    evidence_type="NOTE_REFERENCE",
-                    source_entity_type="NOTE",
-                    source_entity_id="note-a-to-b",
-                    source_person_id=first.person_id,
-                    target_person_id=second.person_id,
-                    relationship_type="REFERENCES",
-                    directionality="DIRECTED",
-                    source="test",
-                    created_operation_id=operation_id,
-                    created_at=created_at,
-                )
-                _insert_relationship_evidence(
-                    conn,
-                    evidence_type="NOTE_REFERENCE",
-                    source_entity_type="NOTE",
-                    source_entity_id="note-b-to-a",
-                    source_person_id=second.person_id,
-                    target_person_id=first.person_id,
-                    relationship_type="REFERENCES",
-                    directionality="DIRECTED",
-                    source="test",
-                    created_operation_id=operation_id,
-                    created_at=created_at,
-                )
                 first_undirected_id = _insert_relationship_evidence(
                     conn,
                     evidence_type="MANUAL_ASSOCIATION",
@@ -283,13 +269,17 @@ class GlobalGraphEvidenceTest(unittest.TestCase):
             self.assertEqual(first_undirected_id, reversed_undirected_id)
             forward = graph.get_connection_evidence(first.person_id, second.person_id)
             reverse = graph.get_connection_evidence(second.person_id, first.person_id)
+            forward_directed = [item for item in forward if item.directionality == "DIRECTED"]
+            reverse_directed = [item for item in reverse if item.directionality == "DIRECTED"]
+            self.assertEqual(len(forward_directed), 1)
+            self.assertEqual(len(reverse_directed), 1)
             self.assertEqual(
-                [item.source_entity_id for item in forward if item.directionality == "DIRECTED"],
-                ["note-a-to-b"],
+                (forward_directed[0].source_person_id, forward_directed[0].target_person_id),
+                (first.person_id, second.person_id),
             )
             self.assertEqual(
-                [item.source_entity_id for item in reverse if item.directionality == "DIRECTED"],
-                ["note-b-to-a"],
+                (reverse_directed[0].source_person_id, reverse_directed[0].target_person_id),
+                (second.person_id, first.person_id),
             )
             self.assertEqual(
                 len([item for item in forward if item.directionality == "UNDIRECTED"]),

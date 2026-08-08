@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 import struct
 import uuid
@@ -24,6 +23,8 @@ from sentriface.models import (
     InitGroup,
     InitSession,
     MatchDecision,
+    Note,
+    NoteRevision,
     Observation,
     ObservationMedia,
     ObservationParticipant,
@@ -42,7 +43,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
 PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
@@ -174,7 +175,9 @@ class SQLiteIdentityStore:
                     person.created_at,
                 ),
             )
-            _create_note_associations(conn, person.person_id, person.notes, "SentriFace", [])
+            _insert_unjournaled_profile_note(
+                conn, person.person_id, person.notes, person.created_at,
+            )
         return person
 
     def create_placeholder_person(
@@ -420,6 +423,366 @@ class SQLiteIdentityStore:
                 )
         return change
 
+    def create_note(
+        self,
+        owner_person_id: str,
+        content: str,
+        operation_id: str,
+        *,
+        mentioned_person_ids: list[str] | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> Note:
+        normalized_content = content.strip()
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "note.create",
+            )
+            if existing_result is not None:
+                if existing_result.get("owner_person_id") != owner_person_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                row = _note_row(conn, str(existing_result["note_id"]))
+                if row is None:
+                    raise RuntimeError("Committed note creation is missing its note")
+                return _note_from_row(conn, row)
+            owner = conn.execute(
+                """
+                SELECT person_id FROM persons
+                WHERE person_id = ? AND lifecycle_status = 'ACTIVE' AND deleted_at IS NULL
+                """,
+                (owner_person_id,),
+            ).fetchone()
+            if owner is None:
+                raise KeyError(f"Unknown active person: {owner_person_id}")
+            mentions = _normalize_note_mentions(
+                conn, owner_person_id, mentioned_person_ids,
+            )
+            note_id = str(uuid.uuid4())
+            created_at = utc_now()
+            _begin_journal_operation(
+                conn,
+                "note.create",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "notes-service",
+                affected_entities=[
+                    {"entity_type": "note", "entity_id": note_id},
+                    {"entity_type": "person", "entity_id": owner_person_id},
+                    *[
+                        {"entity_type": "person", "entity_id": person_id}
+                        for person_id, _ in mentions
+                    ],
+                ],
+            )
+            conn.execute(
+                """
+                INSERT INTO notes(
+                    note_id, owner_person_id, subject_type, subject_id,
+                    is_profile_note, status, created_operation_id, created_at, updated_at
+                ) VALUES (?, ?, 'PERSON', ?, 0, 'ACTIVE', ?, ?, ?)
+                """,
+                (
+                    note_id,
+                    owner_person_id,
+                    owner_person_id,
+                    operation_id,
+                    created_at,
+                    created_at,
+                ),
+            )
+            revision_id = _insert_note_revision(
+                conn,
+                note_id=note_id,
+                revision_number=1,
+                content=normalized_content,
+                mentions=mentions,
+                actor=actor,
+                author_name="",
+                operation_id=operation_id,
+                created_at=created_at,
+            )
+            _sync_note_reference_evidence(
+                conn,
+                note_id=note_id,
+                owner_person_id=owner_person_id,
+                revision_id=revision_id,
+                mentions=mentions,
+                operation_id=operation_id,
+                source=_optional_text(source),
+                created_at=created_at,
+            )
+            _replace_graph_projection(conn)
+            validation = _validate_graph_projection(conn)
+            if not validation["valid"]:
+                raise RuntimeError(
+                    "Graph projection validation failed: " + "; ".join(validation["errors"])
+                )
+            _transition_journal_operation(conn, operation_id, "COMMITTED", {
+                "note_id": note_id,
+                "owner_person_id": owner_person_id,
+                "revision_number": 1,
+                "mentioned_person_ids": [person_id for person_id, _ in mentions],
+            })
+            return _note_from_row(conn, _note_row(conn, note_id))
+
+    def update_note(
+        self,
+        note_id: str,
+        content: str,
+        operation_id: str,
+        *,
+        mentioned_person_ids: list[str] | None = None,
+        expected_revision_number: int | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> Note:
+        normalized_content = content.strip()
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "note.update",
+            )
+            if existing_result is not None:
+                if existing_result.get("note_id") != note_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                row = _note_row(conn, note_id)
+                if row is None:
+                    raise RuntimeError("Committed note update is missing its note")
+                return _note_from_row(conn, row)
+            row = _note_row(conn, note_id)
+            if row is None or row["status"] != "ACTIVE":
+                raise KeyError(f"Unknown active note: {note_id}")
+            current = _note_from_row(conn, row)
+            if (
+                expected_revision_number is not None
+                and current.revision_number != expected_revision_number
+            ):
+                raise KeyError("The note was changed elsewhere. Reload it and try again.")
+            mentions = _normalize_note_mentions(
+                conn, current.owner_person_id, mentioned_person_ids,
+            )
+            desired_mention_ids = tuple(person_id for person_id, _ in mentions)
+            changed = (
+                current.content != normalized_content
+                or current.mentioned_person_ids != desired_mention_ids
+            )
+            _begin_journal_operation(
+                conn,
+                "note.update",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "notes-service",
+                affected_entities=[
+                    {"entity_type": "note", "entity_id": note_id},
+                    {"entity_type": "person", "entity_id": current.owner_person_id},
+                    *[
+                        {"entity_type": "person", "entity_id": person_id}
+                        for person_id, _ in mentions
+                    ],
+                ],
+                details={"previous_revision_number": current.revision_number},
+            )
+            revision_number = current.revision_number
+            if changed:
+                revision_number += 1
+                created_at = utc_now()
+                revision_id = _insert_note_revision(
+                    conn,
+                    note_id=note_id,
+                    revision_number=revision_number,
+                    content=normalized_content,
+                    mentions=mentions,
+                    actor=actor,
+                    author_name="",
+                    operation_id=operation_id,
+                    created_at=created_at,
+                )
+                _sync_note_reference_evidence(
+                    conn,
+                    note_id=note_id,
+                    owner_person_id=current.owner_person_id,
+                    revision_id=revision_id,
+                    mentions=mentions,
+                    operation_id=operation_id,
+                    source=_optional_text(source),
+                    created_at=created_at,
+                )
+                conn.execute(
+                    "UPDATE notes SET updated_at = ? WHERE note_id = ?",
+                    (created_at, note_id),
+                )
+                if row["is_profile_note"]:
+                    conn.execute(
+                        "UPDATE persons SET notes = ? WHERE person_id = ?",
+                        (normalized_content, current.owner_person_id),
+                    )
+                _replace_graph_projection(conn)
+                validation = _validate_graph_projection(conn)
+                if not validation["valid"]:
+                    raise RuntimeError(
+                        "Graph projection validation failed: "
+                        + "; ".join(validation["errors"])
+                    )
+            _transition_journal_operation(conn, operation_id, "COMMITTED", {
+                "note_id": note_id,
+                "owner_person_id": current.owner_person_id,
+                "revision_number": revision_number,
+                "changed": changed,
+                "mentioned_person_ids": list(desired_mention_ids),
+            })
+            return _note_from_row(conn, _note_row(conn, note_id))
+
+    def get_note(self, note_id: str, include_retired: bool = False) -> Note | None:
+        with self._connect() as conn:
+            row = _note_row(conn, note_id)
+            if row is None or (row["status"] == "RETIRED" and not include_retired):
+                return None
+            return _note_from_row(conn, row)
+
+    def get_person_note(
+        self, person_id: str, include_retired: bool = False,
+    ) -> Note | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                f"""
+                SELECT note_id FROM notes
+                WHERE owner_person_id = ? AND is_profile_note = 1
+                {' ' if include_retired else "AND status = 'ACTIVE'"}
+                ORDER BY CASE status WHEN 'ACTIVE' THEN 0 ELSE 1 END,
+                         updated_at DESC, note_id
+                LIMIT 1
+                """,
+                (person_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            note_row = _note_row(conn, str(row["note_id"]))
+            return _note_from_row(conn, note_row)
+
+    def list_note_revisions(self, note_id: str) -> list[NoteRevision]:
+        with self._connect() as conn:
+            if conn.execute(
+                "SELECT 1 FROM notes WHERE note_id = ?", (note_id,),
+            ).fetchone() is None:
+                raise KeyError(f"Unknown note: {note_id}")
+            rows = conn.execute(
+                """
+                SELECT * FROM note_revisions
+                WHERE note_id = ? ORDER BY revision_number
+                """,
+                (note_id,),
+            ).fetchall()
+            revisions: list[NoteRevision] = []
+            for row in rows:
+                mention_rows = conn.execute(
+                    """
+                    SELECT referenced_person_id FROM note_revision_mentions
+                    WHERE revision_id = ? ORDER BY referenced_person_id
+                    """,
+                    (row["revision_id"],),
+                ).fetchall()
+                revisions.append(NoteRevision(
+                    revision_id=str(row["revision_id"]),
+                    note_id=str(row["note_id"]),
+                    revision_number=int(row["revision_number"]),
+                    content=str(row["content"]),
+                    mentioned_person_ids=tuple(str(item[0]) for item in mention_rows),
+                    actor=json.loads(row["actor"]),
+                    author_name=str(row["author_name"]),
+                    operation_id=row["operation_id"],
+                    created_at=str(row["created_at"]),
+                ))
+            return revisions
+
+    def retire_note(
+        self,
+        note_id: str,
+        operation_id: str,
+        *,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> Note:
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "note.retire",
+            )
+            if existing_result is not None:
+                if existing_result.get("note_id") != note_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                row = _note_row(conn, note_id)
+                if row is None:
+                    raise RuntimeError("Committed note retirement is missing its note")
+                return _note_from_row(conn, row)
+            row = _note_row(conn, note_id)
+            if row is None or row["status"] != "ACTIVE":
+                raise KeyError(f"Unknown active note: {note_id}")
+            _begin_journal_operation(
+                conn,
+                "note.retire",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "notes-service",
+                affected_entities=[
+                    {"entity_type": "note", "entity_id": note_id},
+                    {"entity_type": "person", "entity_id": row["owner_person_id"]},
+                ],
+            )
+            retired_at = utc_now()
+            active_mentions = conn.execute(
+                """
+                SELECT mention_id FROM note_mentions
+                WHERE note_id = ? AND active = 1 ORDER BY mention_id
+                """,
+                (note_id,),
+            ).fetchall()
+            for mention in active_mentions:
+                mention_id = str(mention["mention_id"])
+                conn.execute(
+                    """
+                    UPDATE note_mentions
+                    SET active = 0, retired_revision_id = ?, retired_operation_id = ?,
+                        retired_at = ?
+                    WHERE mention_id = ? AND active = 1
+                    """,
+                    (row["revision_id"], operation_id, retired_at, mention_id),
+                )
+                conn.execute(
+                    """
+                    UPDATE relationship_evidence
+                    SET active = 0, deactivated_operation_id = ?, deactivated_at = ?
+                    WHERE evidence_type = 'NOTE_REFERENCE'
+                      AND source_entity_type = 'NOTE'
+                      AND source_entity_id = ? AND active = 1
+                    """,
+                    (operation_id, retired_at, mention_id),
+                )
+            conn.execute(
+                """
+                UPDATE notes
+                SET status = 'RETIRED', retired_operation_id = ?, retired_at = ?,
+                    updated_at = ?
+                WHERE note_id = ? AND status = 'ACTIVE'
+                """,
+                (operation_id, retired_at, retired_at, note_id),
+            )
+            if row["is_profile_note"]:
+                conn.execute(
+                    "UPDATE persons SET notes = '' WHERE person_id = ?",
+                    (row["owner_person_id"],),
+                )
+            _replace_graph_projection(conn)
+            validation = _validate_graph_projection(conn)
+            if not validation["valid"]:
+                raise RuntimeError(
+                    "Graph projection validation failed: " + "; ".join(validation["errors"])
+                )
+            _transition_journal_operation(conn, operation_id, "COMMITTED", {
+                "note_id": note_id,
+                "owner_person_id": row["owner_person_id"],
+                "retired": True,
+                "deactivated_mentions": len(active_mentions),
+            })
+            return _note_from_row(conn, _note_row(conn, note_id))
+
     def update_person_notes(
         self,
         person_id: str,
@@ -428,11 +791,18 @@ class SQLiteIdentityStore:
         editor_name: str,
         operation_id: str,
         mentioned_person_ids: list[str] | None = None,
+        *,
+        actor: dict | None = None,
+        source: str | None = None,
     ) -> tuple[bool, Person, PersonChange | None]:
         next_notes = notes.strip()
         with self._connect() as conn:
-            existing = _begin_person_operation(conn, operation_id, "update-person-notes")
-            if existing:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "note.profile-save",
+            )
+            if existing_result is not None:
+                if existing_result.get("person_id") != person_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
                 person_row = conn.execute(
                     "SELECT * FROM persons WHERE person_id = ? AND deleted_at IS NULL",
                     (person_id,),
@@ -440,15 +810,43 @@ class SQLiteIdentityStore:
                 if person_row is None:
                     raise KeyError("This person no longer exists")
                 change = None
-                if existing.get("change_id"):
-                    row = conn.execute(
+                if existing_result.get("change_id"):
+                    change_row = conn.execute(
                         "SELECT * FROM person_change_history WHERE change_id = ?",
-                        (existing["change_id"],),
+                        (existing_result["change_id"],),
                     ).fetchone()
-                    change = _person_change_from_row(row) if row else None
-                return bool(existing.get("changed")), _person_from_row(person_row), change
+                    change = _person_change_from_row(change_row) if change_row else None
+                return (
+                    bool(existing_result.get("changed")),
+                    _person_from_row(person_row),
+                    change,
+                )
+            legacy_result = _existing_person_operation(
+                conn, operation_id, "update-person-notes",
+            )
+            if legacy_result is not None:
+                person_row = conn.execute(
+                    "SELECT * FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                    (person_id,),
+                ).fetchone()
+                if person_row is None:
+                    raise KeyError("This person no longer exists")
+                change_row = None
+                if legacy_result.get("change_id"):
+                    change_row = conn.execute(
+                        "SELECT * FROM person_change_history WHERE change_id = ?",
+                        (legacy_result["change_id"],),
+                    ).fetchone()
+                return (
+                    bool(legacy_result.get("changed")),
+                    _person_from_row(person_row),
+                    _person_change_from_row(change_row) if change_row else None,
+                )
             row = conn.execute(
-                "SELECT * FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                """
+                SELECT * FROM persons
+                WHERE person_id = ? AND lifecycle_status = 'ACTIVE' AND deleted_at IS NULL
+                """,
                 (person_id,),
             ).fetchone()
             if row is None:
@@ -456,56 +854,139 @@ class SQLiteIdentityStore:
             current_notes = row["notes"] or ""
             if current_notes != expected_previous_notes:
                 raise KeyError("Notes were changed elsewhere. Reopen this profile and try again.")
-            if current_notes == next_notes:
-                automatic_associations = _create_note_associations(
-                    conn, person_id, next_notes, editor_name.strip(), mentioned_person_ids or [],
+            mentions = _normalize_note_mentions(conn, person_id, mentioned_person_ids)
+            desired_ids = tuple(person_id for person_id, _ in mentions)
+            active_note_row = conn.execute(
+                """
+                SELECT note_id FROM notes
+                WHERE owner_person_id = ? AND is_profile_note = 1 AND status = 'ACTIVE'
+                """,
+                (person_id,),
+            ).fetchone()
+            note_row = (
+                _note_row(conn, str(active_note_row["note_id"]))
+                if active_note_row is not None else None
+            )
+            current_note = _note_from_row(conn, note_row) if note_row is not None else None
+            mentions_changed = (
+                current_note is None or current_note.mentioned_person_ids != desired_ids
+            )
+            content_changed = current_notes != next_notes
+            changed = content_changed or mentions_changed
+            note_id = current_note.note_id if current_note is not None else str(uuid.uuid4())
+            operation_actor = actor or {
+                "display_name": editor_name.strip(),
+                "roles": [],
+            }
+            _begin_journal_operation(
+                conn,
+                "note.profile-save",
+                operation_id=operation_id,
+                actor=operation_actor,
+                source=_optional_text(source) or "person-notes",
+                affected_entities=[
+                    {"entity_type": "note", "entity_id": note_id},
+                    {"entity_type": "person", "entity_id": person_id},
+                    *[
+                        {"entity_type": "person", "entity_id": mentioned_id}
+                        for mentioned_id, _ in mentions
+                    ],
+                ],
+            )
+            change = None
+            revision_number = current_note.revision_number if current_note else 0
+            if changed:
+                created_at = utc_now()
+                if current_note is None:
+                    conn.execute(
+                        """
+                        INSERT INTO notes(
+                            note_id, owner_person_id, subject_type, subject_id,
+                            is_profile_note, status, created_operation_id, created_at, updated_at
+                        ) VALUES (?, ?, 'PERSON', ?, 1, 'ACTIVE', ?, ?, ?)
+                        """,
+                        (
+                            note_id,
+                            person_id,
+                            person_id,
+                            operation_id,
+                            created_at,
+                            created_at,
+                        ),
+                    )
+                revision_number += 1
+                revision_id = _insert_note_revision(
+                    conn,
+                    note_id=note_id,
+                    revision_number=revision_number,
+                    content=next_notes,
+                    mentions=mentions,
+                    actor=operation_actor,
+                    author_name=editor_name,
+                    operation_id=operation_id,
+                    created_at=created_at,
                 )
-                if automatic_associations:
-                    _record_person_operation(conn, operation_id, "update-person-notes", {
-                        "person_id": person_id,
-                        "person_ids": [person_id, *[item.target_person_id if item.source_person_id == person_id else item.source_person_id for item in automatic_associations]],
-                        "changed": False,
-                        "automatic_association_ids": [item.association_id for item in automatic_associations],
-                    })
-                    return True, _person_from_row(row), None
-                return False, _person_from_row(row), None
-            cursor = conn.execute(
-                "UPDATE persons SET notes = ? WHERE person_id = ? AND deleted_at IS NULL AND notes = ?",
-                (next_notes, person_id, current_notes),
-            )
-            if cursor.rowcount != 1:
-                raise KeyError("Notes could not be saved because this profile changed. Reopen it and try again.")
-            change = PersonChange(
-                change_id=str(uuid.uuid4()),
-                person_id=person_id,
-                previous_name=row["name"],
-                new_name=row["name"],
-                previous_rank=(json.loads(row["metadata"]).get("rank") or ""),
-                new_rank=(json.loads(row["metadata"]).get("rank") or ""),
-                previous_country=(json.loads(row["metadata"]).get("country") or ""),
-                new_country=(json.loads(row["metadata"]).get("country") or ""),
-                previous_importance=(json.loads(row["metadata"]).get("importance") or ""),
-                new_importance=(json.loads(row["metadata"]).get("importance") or ""),
-                previous_status=row["enrollment_status"],
-                new_status=row["enrollment_status"],
-                previous_notes=current_notes,
-                new_notes=next_notes,
-                editor_name=editor_name.strip(),
-                created_at=utc_now(),
-            )
-            _insert_person_change(conn, change)
-            automatic_associations = _create_note_associations(
-                conn, person_id, next_notes, editor_name.strip(), mentioned_person_ids or [],
-            )
-            _record_person_operation(conn, operation_id, "update-person-notes", {
+                _sync_note_reference_evidence(
+                    conn,
+                    note_id=note_id,
+                    owner_person_id=person_id,
+                    revision_id=revision_id,
+                    mentions=mentions,
+                    operation_id=operation_id,
+                    source=_optional_text(source),
+                    created_at=created_at,
+                )
+                conn.execute(
+                    "UPDATE notes SET updated_at = ? WHERE note_id = ?",
+                    (created_at, note_id),
+                )
+                conn.execute(
+                    "UPDATE persons SET notes = ? WHERE person_id = ?",
+                    (next_notes, person_id),
+                )
+                if content_changed:
+                    metadata = json.loads(row["metadata"])
+                    change = PersonChange(
+                        change_id=str(uuid.uuid4()),
+                        person_id=person_id,
+                        previous_name=row["name"],
+                        new_name=row["name"],
+                        previous_rank=(metadata.get("rank") or ""),
+                        new_rank=(metadata.get("rank") or ""),
+                        previous_country=(metadata.get("country") or ""),
+                        new_country=(metadata.get("country") or ""),
+                        previous_importance=(metadata.get("importance") or ""),
+                        new_importance=(metadata.get("importance") or ""),
+                        previous_status=row["enrollment_status"],
+                        new_status=row["enrollment_status"],
+                        previous_notes=current_notes,
+                        new_notes=next_notes,
+                        editor_name=editor_name.strip(),
+                        created_at=created_at,
+                    )
+                    _insert_person_change(conn, change)
+                _replace_graph_projection(conn)
+                validation = _validate_graph_projection(conn)
+                if not validation["valid"]:
+                    raise RuntimeError(
+                        "Graph projection validation failed: "
+                        + "; ".join(validation["errors"])
+                    )
+            result = {
                 "person_id": person_id,
-                "person_ids": [person_id, *[item.target_person_id if item.source_person_id == person_id else item.source_person_id for item in automatic_associations]],
-                "change_id": change.change_id,
-                "changed": True,
-                "automatic_association_ids": [item.association_id for item in automatic_associations],
-            })
+                "person_ids": [person_id, *list(desired_ids)],
+                "note_id": note_id,
+                "change_id": change.change_id if change else None,
+                "changed": changed,
+                "revision_number": revision_number,
+                "mentioned_person_ids": list(desired_ids),
+            }
+            _record_person_operation(
+                conn, operation_id, "update-person-notes", result,
+            )
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             updated = conn.execute("SELECT * FROM persons WHERE person_id = ?", (person_id,)).fetchone()
-        return True, _person_from_row(updated), change
+        return changed, _person_from_row(updated), change
 
     def list_person_changes(self, person_id: str) -> list[PersonChange]:
         with self._connect() as conn:
@@ -4480,6 +4961,236 @@ def _migrate_20_to_21(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_21_to_22(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(
+        conn,
+        """
+        CREATE TABLE notes (
+            note_id TEXT PRIMARY KEY,
+            owner_person_id TEXT NOT NULL,
+            subject_type TEXT NOT NULL CHECK(subject_type IN ('PERSON', 'RECOGNITION_DETAIL')),
+            subject_id TEXT NOT NULL,
+            is_profile_note INTEGER NOT NULL DEFAULT 0 CHECK(is_profile_note IN (0, 1)),
+            status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'RETIRED')),
+            created_operation_id TEXT,
+            retired_operation_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            retired_at TEXT,
+            FOREIGN KEY(owner_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(created_operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            FOREIGN KEY(retired_operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            CHECK(
+                (status = 'ACTIVE' AND retired_operation_id IS NULL AND retired_at IS NULL)
+                OR
+                (status = 'RETIRED' AND retired_operation_id IS NOT NULL AND retired_at IS NOT NULL)
+            )
+        );
+
+        CREATE UNIQUE INDEX idx_notes_active_profile
+        ON notes(owner_person_id)
+        WHERE is_profile_note = 1 AND status = 'ACTIVE';
+
+        CREATE INDEX idx_notes_subject
+        ON notes(subject_type, subject_id, status);
+
+        CREATE TABLE note_revisions (
+            revision_id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            revision_number INTEGER NOT NULL CHECK(revision_number > 0),
+            content TEXT NOT NULL,
+            actor TEXT NOT NULL DEFAULT '{}',
+            author_name TEXT NOT NULL DEFAULT '',
+            operation_id TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(note_id) REFERENCES notes(note_id) ON DELETE RESTRICT,
+            FOREIGN KEY(operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            UNIQUE(note_id, revision_number)
+        );
+
+        CREATE INDEX idx_note_revisions_note
+        ON note_revisions(note_id, revision_number);
+
+        CREATE TABLE note_revision_mentions (
+            revision_id TEXT NOT NULL,
+            referenced_person_id TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(revision_id, referenced_person_id),
+            FOREIGN KEY(revision_id) REFERENCES note_revisions(revision_id) ON DELETE RESTRICT,
+            FOREIGN KEY(referenced_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE note_mentions (
+            mention_id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            referenced_person_id TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+            created_revision_id TEXT NOT NULL,
+            retired_revision_id TEXT,
+            created_operation_id TEXT NOT NULL,
+            retired_operation_id TEXT,
+            created_at TEXT NOT NULL,
+            retired_at TEXT,
+            FOREIGN KEY(note_id) REFERENCES notes(note_id) ON DELETE RESTRICT,
+            FOREIGN KEY(referenced_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(created_revision_id) REFERENCES note_revisions(revision_id) ON DELETE RESTRICT,
+            FOREIGN KEY(retired_revision_id) REFERENCES note_revisions(revision_id) ON DELETE RESTRICT,
+            FOREIGN KEY(created_operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            FOREIGN KEY(retired_operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            CHECK(
+                (active = 1 AND retired_revision_id IS NULL
+                 AND retired_operation_id IS NULL AND retired_at IS NULL)
+                OR
+                (active = 0 AND retired_operation_id IS NOT NULL AND retired_at IS NOT NULL)
+            )
+        );
+
+        CREATE UNIQUE INDEX idx_note_mentions_active_target
+        ON note_mentions(note_id, referenced_person_id)
+        WHERE active = 1;
+
+        CREATE TRIGGER notes_no_delete
+        BEFORE DELETE ON notes
+        BEGIN
+            SELECT RAISE(ABORT, 'notes cannot be deleted');
+        END;
+
+        CREATE TRIGGER notes_identity_immutable
+        BEFORE UPDATE OF note_id, owner_person_id, subject_type, subject_id,
+                         is_profile_note, created_operation_id, created_at
+        ON notes
+        BEGIN
+            SELECT RAISE(ABORT, 'note identity and provenance are immutable');
+        END;
+
+        CREATE TRIGGER notes_retirement_only
+        BEFORE UPDATE OF status, retired_operation_id, retired_at ON notes
+        WHEN OLD.status = 'RETIRED' OR NEW.status <> 'RETIRED'
+        BEGIN
+            SELECT RAISE(ABORT, 'notes can only transition from active to retired');
+        END;
+
+        CREATE TRIGGER note_revisions_no_update
+        BEFORE UPDATE ON note_revisions
+        BEGIN
+            SELECT RAISE(ABORT, 'note revisions are immutable');
+        END;
+
+        CREATE TRIGGER note_revisions_no_delete
+        BEFORE DELETE ON note_revisions
+        BEGIN
+            SELECT RAISE(ABORT, 'note revisions cannot be deleted');
+        END;
+
+        CREATE TRIGGER note_revision_mentions_no_update
+        BEFORE UPDATE ON note_revision_mentions
+        BEGIN
+            SELECT RAISE(ABORT, 'note revision mentions are immutable');
+        END;
+
+        CREATE TRIGGER note_revision_mentions_no_delete
+        BEFORE DELETE ON note_revision_mentions
+        BEGIN
+            SELECT RAISE(ABORT, 'note revision mentions cannot be deleted');
+        END;
+
+        CREATE TRIGGER note_mentions_no_delete
+        BEFORE DELETE ON note_mentions
+        BEGIN
+            SELECT RAISE(ABORT, 'note mentions cannot be deleted');
+        END;
+
+        CREATE TRIGGER note_mentions_identity_immutable
+        BEFORE UPDATE OF mention_id, note_id, referenced_person_id,
+                         created_revision_id, created_operation_id, created_at
+        ON note_mentions
+        BEGIN
+            SELECT RAISE(ABORT, 'note mention provenance is immutable');
+        END;
+
+        CREATE TRIGGER note_mentions_deactivation_only
+        BEFORE UPDATE OF active, retired_revision_id, retired_operation_id, retired_at
+        ON note_mentions
+        WHEN OLD.active = 0 OR NEW.active <> 0
+        BEGIN
+            SELECT RAISE(ABORT, 'note mentions can only transition from active to inactive');
+        END;
+        """,
+    )
+    actor_payload = json.dumps(
+        {"display_name": "Legacy migration", "roles": []}, separators=(",", ":"),
+    )
+    person_rows = conn.execute(
+        """
+        SELECT person_id, notes, created_at
+        FROM persons
+        WHERE trim(notes) <> ''
+        ORDER BY person_id
+        """
+    ).fetchall()
+    for row in person_rows:
+        note_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:person-note:{row['person_id']}"))
+        revision_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{note_id}:revision:1"))
+        created_at = str(row["created_at"] or utc_now())
+        conn.execute(
+            """
+            INSERT INTO notes(
+                note_id, owner_person_id, subject_type, subject_id, is_profile_note,
+                status, created_at, updated_at
+            ) VALUES (?, ?, 'PERSON', ?, 1, 'ACTIVE', ?, ?)
+            """,
+            (note_id, row["person_id"], row["person_id"], created_at, created_at),
+        )
+        conn.execute(
+            """
+            INSERT INTO note_revisions(
+                revision_id, note_id, revision_number, content, actor,
+                author_name, operation_id, created_at
+            ) VALUES (?, ?, 1, ?, ?, 'Legacy migration', NULL, ?)
+            """,
+            (revision_id, note_id, row["notes"], actor_payload, created_at),
+        )
+    tables = {
+        str(row[0])
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+    }
+    if "recognition_details" in tables:
+        detail_rows = conn.execute(
+            """
+            SELECT detail_id, person_id, notes, created_at
+            FROM recognition_details
+            WHERE trim(notes) <> ''
+            ORDER BY detail_id
+            """
+        ).fetchall()
+        for row in detail_rows:
+            note_id = str(uuid.uuid5(
+                uuid.NAMESPACE_URL, f"sentriface:recognition-note:{row['detail_id']}",
+            ))
+            revision_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{note_id}:revision:1"))
+            created_at = str(row["created_at"] or utc_now())
+            conn.execute(
+                """
+                INSERT INTO notes(
+                    note_id, owner_person_id, subject_type, subject_id,
+                    is_profile_note, status, created_at, updated_at
+                ) VALUES (?, ?, 'RECOGNITION_DETAIL', ?, 0, 'ACTIVE', ?, ?)
+                """,
+                (note_id, row["person_id"], row["detail_id"], created_at, created_at),
+            )
+            conn.execute(
+                """
+                INSERT INTO note_revisions(
+                    revision_id, note_id, revision_number, content, actor,
+                    author_name, operation_id, created_at
+                ) VALUES (?, ?, 1, ?, ?, 'Legacy migration', NULL, ?)
+                """,
+                (revision_id, note_id, row["notes"], actor_payload, created_at),
+            )
+    conn.execute("PRAGMA user_version = 22")
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -4509,6 +5220,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(18, 19, _migrate_18_to_19),
         SchemaMigration(19, 20, _migrate_19_to_20),
         SchemaMigration(20, 21, _migrate_20_to_21),
+        SchemaMigration(21, 22, _migrate_21_to_22),
     )
 
 
@@ -4651,6 +5363,9 @@ def _create_placeholder_record(
             created_at=person.created_at,
         ),
     )
+    _insert_unjournaled_profile_note(
+        conn, person.person_id, person.notes, person.created_at,
+    )
     return person
 
 
@@ -4659,6 +5374,244 @@ def _optional_text(value: object | None) -> str | None:
         return None
     normalized = str(value).strip()
     return normalized or None
+
+
+def _normalize_note_mentions(
+    conn: sqlite3.Connection,
+    owner_person_id: str,
+    mentioned_person_ids: list[str] | None,
+) -> list[tuple[str, str]]:
+    normalized_ids = sorted({
+        str(person_id).strip()
+        for person_id in (mentioned_person_ids or [])
+        if str(person_id).strip()
+    })
+    mentions: list[tuple[str, str]] = []
+    for person_id in normalized_ids:
+        row = conn.execute(
+            """
+            SELECT name, lifecycle_status, deleted_at
+            FROM persons WHERE person_id = ?
+            """,
+            (person_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"Unknown mentioned person: {person_id}")
+        if person_id != owner_person_id and (
+            row["lifecycle_status"] != "ACTIVE" or row["deleted_at"] is not None
+        ):
+            raise KeyError(f"Mentioned person is not active: {person_id}")
+        mentions.append((person_id, str(row["name"])))
+    return mentions
+
+
+def _note_row(conn: sqlite3.Connection, note_id: str) -> sqlite3.Row | None:
+    return conn.execute(
+        """
+        SELECT n.*, r.revision_id, r.revision_number, r.content,
+               r.actor, r.author_name, r.operation_id AS revision_operation_id,
+               r.created_at AS revision_created_at
+        FROM notes n
+        JOIN note_revisions r ON r.note_id = n.note_id
+        WHERE n.note_id = ?
+          AND r.revision_number = (
+              SELECT MAX(latest.revision_number)
+              FROM note_revisions latest WHERE latest.note_id = n.note_id
+          )
+        """,
+        (note_id,),
+    ).fetchone()
+
+
+def _note_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> Note:
+    mention_rows = conn.execute(
+        """
+        SELECT referenced_person_id
+        FROM note_revision_mentions
+        WHERE revision_id = ?
+        ORDER BY referenced_person_id
+        """,
+        (row["revision_id"],),
+    ).fetchall()
+    return Note(
+        note_id=str(row["note_id"]),
+        owner_person_id=str(row["owner_person_id"]),
+        status=str(row["status"]),
+        content=str(row["content"]),
+        revision_number=int(row["revision_number"]),
+        mentioned_person_ids=tuple(str(item[0]) for item in mention_rows),
+        subject_type=str(row["subject_type"]),
+        subject_id=str(row["subject_id"]),
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+        retired_at=row["retired_at"],
+    )
+
+
+def _insert_note_revision(
+    conn: sqlite3.Connection,
+    *,
+    note_id: str,
+    revision_number: int,
+    content: str,
+    mentions: list[tuple[str, str]],
+    actor: dict | None,
+    author_name: str,
+    operation_id: str | None,
+    created_at: str,
+) -> str:
+    actor_snapshot, actor_payload, _ = _operation_actor_snapshot(actor)
+    resolved_author = (
+        author_name.strip()
+        or str(actor_snapshot.get("display_name") or actor_snapshot.get("username") or "")
+        or "SentriFace"
+    )
+    revision_id = str(uuid.uuid4())
+    conn.execute(
+        """
+        INSERT INTO note_revisions(
+            revision_id, note_id, revision_number, content, actor,
+            author_name, operation_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            revision_id,
+            note_id,
+            revision_number,
+            content,
+            actor_payload,
+            resolved_author,
+            operation_id,
+            created_at,
+        ),
+    )
+    conn.executemany(
+        """
+        INSERT INTO note_revision_mentions(
+            revision_id, referenced_person_id, display_name, created_at
+        ) VALUES (?, ?, ?, ?)
+        """,
+        [
+            (revision_id, person_id, display_name, created_at)
+            for person_id, display_name in mentions
+        ],
+    )
+    return revision_id
+
+
+def _sync_note_reference_evidence(
+    conn: sqlite3.Connection,
+    *,
+    note_id: str,
+    owner_person_id: str,
+    revision_id: str,
+    mentions: list[tuple[str, str]],
+    operation_id: str,
+    source: str | None,
+    created_at: str,
+) -> None:
+    desired_ids = {
+        person_id for person_id, _ in mentions if person_id != owner_person_id
+    }
+    active_rows = conn.execute(
+        """
+        SELECT mention_id, referenced_person_id
+        FROM note_mentions
+        WHERE note_id = ? AND active = 1
+        ORDER BY referenced_person_id
+        """,
+        (note_id,),
+    ).fetchall()
+    active_by_person = {
+        str(row["referenced_person_id"]): str(row["mention_id"])
+        for row in active_rows
+    }
+    removed_ids = sorted(set(active_by_person) - desired_ids)
+    for person_id in removed_ids:
+        mention_id = active_by_person[person_id]
+        conn.execute(
+            """
+            UPDATE note_mentions
+            SET active = 0, retired_revision_id = ?, retired_operation_id = ?,
+                retired_at = ?
+            WHERE mention_id = ? AND active = 1
+            """,
+            (revision_id, operation_id, created_at, mention_id),
+        )
+        conn.execute(
+            """
+            UPDATE relationship_evidence
+            SET active = 0, deactivated_operation_id = ?, deactivated_at = ?
+            WHERE evidence_type = 'NOTE_REFERENCE'
+              AND source_entity_type = 'NOTE'
+              AND source_entity_id = ? AND active = 1
+            """,
+            (operation_id, created_at, mention_id),
+        )
+    for person_id in sorted(desired_ids - set(active_by_person)):
+        mention_id = str(uuid.uuid4())
+        conn.execute(
+            """
+            INSERT INTO note_mentions(
+                mention_id, note_id, referenced_person_id, active,
+                created_revision_id, created_operation_id, created_at
+            ) VALUES (?, ?, ?, 1, ?, ?, ?)
+            """,
+            (
+                mention_id,
+                note_id,
+                person_id,
+                revision_id,
+                operation_id,
+                created_at,
+            ),
+        )
+        _insert_relationship_evidence(
+            conn,
+            evidence_type="NOTE_REFERENCE",
+            source_entity_type="NOTE",
+            source_entity_id=mention_id,
+            source_person_id=owner_person_id,
+            target_person_id=person_id,
+            relationship_type="REFERENCES",
+            directionality="DIRECTED",
+            source=source,
+            created_operation_id=operation_id,
+            created_at=created_at,
+        )
+
+
+def _insert_unjournaled_profile_note(
+    conn: sqlite3.Connection,
+    person_id: str,
+    content: str,
+    created_at: str,
+) -> None:
+    if not content or conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'notes'"
+    ).fetchone() is None:
+        return
+    note_id = str(uuid.uuid4())
+    conn.execute(
+        """
+        INSERT INTO notes(
+            note_id, owner_person_id, subject_type, subject_id, is_profile_note,
+            status, created_at, updated_at
+        ) VALUES (?, ?, 'PERSON', ?, 1, 'ACTIVE', ?, ?)
+        """,
+        (note_id, person_id, person_id, created_at, created_at),
+    )
+    _insert_note_revision(
+        conn,
+        note_id=note_id,
+        revision_number=1,
+        content=content,
+        mentions=[],
+        actor={"display_name": "SentriFace", "roles": []},
+        author_name="SentriFace",
+        operation_id=None,
+        created_at=created_at,
+    )
 
 
 def _normalize_evidence_endpoints(
@@ -4812,6 +5765,27 @@ def _expected_graph_connections(
                 or row["target_person_id"] not in participant_ids
             ):
                 errors.append(f"Evidence {evidence_id} endpoints are not observation participants")
+        elif row["evidence_type"] == "NOTE_REFERENCE":
+            mention = conn.execute(
+                """
+                SELECT m.referenced_person_id, m.active, n.owner_person_id, n.status
+                FROM note_mentions m
+                JOIN notes n ON n.note_id = m.note_id
+                WHERE m.mention_id = ?
+                """,
+                (row["source_entity_id"],),
+            ).fetchone()
+            if mention is None:
+                errors.append(f"Evidence {evidence_id} has a missing note mention source")
+            else:
+                if (
+                    row["source_person_id"] != mention["owner_person_id"]
+                    or row["target_person_id"] != mention["referenced_person_id"]
+                ):
+                    errors.append(f"Evidence {evidence_id} endpoints do not match its note mention")
+                should_be_active = bool(mention["active"]) and mention["status"] == "ACTIVE"
+                if bool(row["active"]) != should_be_active:
+                    errors.append(f"Evidence {evidence_id} active state does not match its note")
         if not bool(row["active"]):
             continue
         active_evidence_count += 1
@@ -5323,27 +6297,21 @@ def _create_note_associations(
     actor_name: str,
     explicit_person_ids: list[str],
 ) -> list[PersonAssociation]:
-    if "@" not in notes:
+    if not explicit_person_ids:
         return []
     active_rows = conn.execute(
-        "SELECT person_id, name FROM persons WHERE deleted_at IS NULL AND person_id <> ?",
+        """
+        SELECT person_id, name FROM persons
+        WHERE lifecycle_status = 'ACTIVE' AND deleted_at IS NULL AND person_id <> ?
+        """,
         (owner_person_id,),
     ).fetchall()
     rows_by_id = {row["person_id"]: row for row in active_rows}
-    names: dict[str, list[sqlite3.Row]] = {}
-    for row in active_rows:
-        names.setdefault(row["name"].strip().casefold(), []).append(row)
-    mentioned_ids: set[str] = set()
-    for person_id in explicit_person_ids:
-        row = rows_by_id.get(str(person_id))
-        if row and re.search(rf"(?<!\w)@{re.escape(row['name'])}(?!\w)", notes, re.IGNORECASE):
-            mentioned_ids.add(row["person_id"])
-    for normalized_name, matching_rows in names.items():
-        if len(matching_rows) != 1 or not normalized_name:
-            continue
-        row = matching_rows[0]
-        if re.search(rf"(?<!\w)@{re.escape(row['name'])}(?!\w)", notes, re.IGNORECASE):
-            mentioned_ids.add(row["person_id"])
+    mentioned_ids = {
+        str(person_id)
+        for person_id in explicit_person_ids
+        if str(person_id) in rows_by_id
+    }
     created: list[PersonAssociation] = []
     for mentioned_id in sorted(mentioned_ids):
         person_a_id, person_b_id = _canonical_person_pair(owner_person_id, mentioned_id)

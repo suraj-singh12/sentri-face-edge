@@ -23,6 +23,8 @@ from sentriface.models import (
     InitFace,
     InitGroup,
     InitSession,
+    Note,
+    NoteRevision,
     Observation,
     ObservationMedia,
     ObservationParticipant,
@@ -340,12 +342,37 @@ class FaceEngine:
     def update_person_notes(
         self, person_id: str, notes: str, expected_previous_notes: str,
         editor_name: str, operation_id: str, mentioned_person_ids: list[str] | None = None,
+        actor: dict | None = None, source: str | None = None,
     ) -> tuple[bool, Person, PersonChange | None]:
         with self.metrics.timer("db_update_person_notes_ms"):
-            return self.store.update_person_notes(
+            return self.graph.update_person_notes(
                 person_id, notes, expected_previous_notes, editor_name, operation_id,
-                mentioned_person_ids,
+                mentioned_person_ids, actor=actor, source=source,
             )
+
+    def create_note(
+        self, owner_person_id: str, content: str, operation_id: str, **values,
+    ) -> Note:
+        return self.graph.create_note(owner_person_id, content, operation_id, **values)
+
+    def update_note(
+        self, note_id: str, content: str, operation_id: str, **values,
+    ) -> Note:
+        return self.graph.update_note(note_id, content, operation_id, **values)
+
+    def get_note(self, note_id: str, include_retired: bool = False) -> Note | None:
+        return self.graph.get_note(note_id, include_retired)
+
+    def get_person_note(
+        self, person_id: str, include_retired: bool = False,
+    ) -> Note | None:
+        return self.graph.get_person_note(person_id, include_retired)
+
+    def list_note_revisions(self, note_id: str) -> list[NoteRevision]:
+        return self.graph.list_note_revisions(note_id)
+
+    def retire_note(self, note_id: str, operation_id: str, **values) -> Note:
+        return self.graph.retire_note(note_id, operation_id, **values)
 
     def list_person_operations(
         self,

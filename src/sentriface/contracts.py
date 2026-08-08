@@ -12,6 +12,8 @@ from sentriface.models import (
     InitFace,
     InitGroup,
     InitSession,
+    Note,
+    NoteRevision,
     Observation,
     ObservationMedia,
     ObservationParticipant,
@@ -115,8 +117,55 @@ class IdentityStore(Protocol):
     def update_person_notes(
         self, person_id: str, notes: str, expected_previous_notes: str,
         editor_name: str, operation_id: str, mentioned_person_ids: list[str] | None = None,
+        *, actor: dict | None = None, source: str | None = None,
     ) -> tuple[bool, Person, PersonChange | None]:
         """Update profile notes with optimistic concurrency and change history."""
+
+    def create_note(
+        self,
+        owner_person_id: str,
+        content: str,
+        operation_id: str,
+        *,
+        mentioned_person_ids: list[str] | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> Note:
+        """Create one revisioned profile note and its explicit references atomically."""
+
+    def update_note(
+        self,
+        note_id: str,
+        content: str,
+        operation_id: str,
+        *,
+        mentioned_person_ids: list[str] | None = None,
+        expected_revision_number: int | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> Note:
+        """Append a note revision and reconcile its explicit references atomically."""
+
+    def get_note(self, note_id: str, include_retired: bool = False) -> Note | None:
+        """Load the current state of one note."""
+
+    def get_person_note(
+        self, person_id: str, include_retired: bool = False,
+    ) -> Note | None:
+        """Load the current revisioned profile note for one person."""
+
+    def list_note_revisions(self, note_id: str) -> list[NoteRevision]:
+        """List immutable note revisions oldest first."""
+
+    def retire_note(
+        self,
+        note_id: str,
+        operation_id: str,
+        *,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> Note:
+        """Retire a note and only its active NOTE_REFERENCE evidence."""
 
     def list_person_changes(self, person_id: str) -> list[PersonChange]:
         """List profile changes for one person, newest first."""

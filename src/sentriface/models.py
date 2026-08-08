@@ -115,6 +115,34 @@ class ObservationParticipant:
 
 
 @dataclass(frozen=True)
+class Note:
+    note_id: str
+    owner_person_id: str
+    status: str
+    content: str
+    revision_number: int
+    mentioned_person_ids: tuple[str, ...] = ()
+    subject_type: str = "PERSON"
+    subject_id: str = ""
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+    retired_at: str | None = None
+
+
+@dataclass(frozen=True)
+class NoteRevision:
+    revision_id: str
+    note_id: str
+    revision_number: int
+    content: str
+    mentioned_person_ids: tuple[str, ...] = ()
+    actor: dict[str, Any] = field(default_factory=dict)
+    author_name: str = ""
+    operation_id: str | None = None
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
 class RelationshipEvidence:
     evidence_id: str
     evidence_type: str

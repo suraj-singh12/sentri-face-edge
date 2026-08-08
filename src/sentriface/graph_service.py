@@ -4,6 +4,10 @@ from sentriface.contracts import IdentityStore
 from sentriface.models import (
     GlobalGraphProjection,
     GraphConnection,
+    Note,
+    NoteRevision,
+    Person,
+    PersonChange,
     RelationshipEvidence,
 )
 
@@ -54,6 +58,56 @@ class GlobalIdentityGraphService:
             source=source,
             actor=actor,
         )
+
+    def create_note(
+        self,
+        owner_person_id: str,
+        content: str,
+        operation_id: str,
+        **values,
+    ) -> Note:
+        return self.store.create_note(
+            owner_person_id, content, operation_id, **values,
+        )
+
+    def update_person_notes(
+        self,
+        person_id: str,
+        notes: str,
+        expected_previous_notes: str,
+        editor_name: str,
+        operation_id: str,
+        mentioned_person_ids: list[str] | None = None,
+        **values,
+    ) -> tuple[bool, Person, PersonChange | None]:
+        return self.store.update_person_notes(
+            person_id,
+            notes,
+            expected_previous_notes,
+            editor_name,
+            operation_id,
+            mentioned_person_ids,
+            **values,
+        )
+
+    def update_note(
+        self, note_id: str, content: str, operation_id: str, **values,
+    ) -> Note:
+        return self.store.update_note(note_id, content, operation_id, **values)
+
+    def get_note(self, note_id: str, include_retired: bool = False) -> Note | None:
+        return self.store.get_note(note_id, include_retired)
+
+    def get_person_note(
+        self, person_id: str, include_retired: bool = False,
+    ) -> Note | None:
+        return self.store.get_person_note(person_id, include_retired)
+
+    def list_note_revisions(self, note_id: str) -> list[NoteRevision]:
+        return self.store.list_note_revisions(note_id)
+
+    def retire_note(self, note_id: str, operation_id: str, **values) -> Note:
+        return self.store.retire_note(note_id, operation_id, **values)
 
     def get_person_neighbors(self, person_id: str) -> list[GraphConnection]:
         return self.store.get_person_neighbors(person_id)
