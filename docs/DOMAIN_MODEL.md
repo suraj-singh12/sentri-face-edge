@@ -16,7 +16,7 @@ Canonical resolution is explicit and transitive: a merged source remains address
 
 ### Observation/Event
 
-`Observation` (or Event) is the preferred co-occurrence unit. It holds event time/place/occasion and may own multiple photos. Each detected face has a review decision; accepted `ObservationParticipant` records reference both the originally selected person and its canonical resolution as appropriate.
+`Observation` (or Event) is the preferred co-occurrence unit. It holds event time/place/context and may reference multiple existing photos without duplicating their media storage. `ObservationParticipant` retains the originally selected person ID; reads also expose its current canonical resolution without rewriting historical ownership.
 
 Within one event, a canonical person appears at most once as a participant. Repeated recognition across photos or faces must not create duplicate participants or self-links. Rejected/ignored/unknown decisions remain review history but do not become accepted participants.
 
@@ -38,14 +38,14 @@ A projected relationship exists while at least one active evidence record suppor
 
 Identity corrections (move face, add face, change a participant decision) are first-class historical operations; they do not silently rewrite provenance. Every important write has an immutable operation-journal entry with operation/idempotency ID, type, actor, timestamp, affected entities, before/after or inverse data, and status. A graph-affecting write and its journal entry commit in the same SQLite transaction.
 
-## Current repository map (schema version 18)
+## Current repository map (schema version 19)
 
 | Concern | Current implementation |
 | --- | --- |
-| Domain types | `src/sentriface/models.py`: `Person`, `EmbeddingRecord`, `RecognitionDetail`, `PendingAddition`, `InitSession`, `InitGroup`, `InitFace`, `PersonAssociation`, `PersonChange` |
+| Domain types | `src/sentriface/models.py`: `Person`, `EmbeddingRecord`, `RecognitionDetail`, `Observation`, `ObservationMedia`, `ObservationParticipant`, `PendingAddition`, `InitSession`, `InitGroup`, `InitFace`, `PersonAssociation`, `PersonChange` |
 | Storage boundary | `src/sentriface/contracts.py::IdentityStore` |
-| Database and migrations | `src/sentriface/storage/sqlite_store.py`: `SCHEMA_VERSION`, `SQLiteIdentityStore.initialize()`, and the validated `_schema_migrations()` registry through `_migrate_17_to_18`; `_connect()` enables foreign keys and commits/rolls back a connection-scoped transaction |
-| Current tables | `persons`, `embeddings`, `pending_additions`, `init_sessions`, `init_faces`, `init_groups`, `init_face_person_exclusions`, `recognition_details`, `person_change_history`, legacy `person_operations`, global `operation_journal` and `operation_journal_status_history`, `person_associations`, plus `app_users`, `auth_audit`, `app_settings` |
+| Database and migrations | `src/sentriface/storage/sqlite_store.py`: `SCHEMA_VERSION`, `SQLiteIdentityStore.initialize()`, and the validated `_schema_migrations()` registry through `_migrate_18_to_19`; `_connect()` enables foreign keys and commits/rolls back a connection-scoped transaction |
+| Current tables | `persons`, `embeddings`, `observations`, `observation_media`, `observation_participants`, `pending_additions`, `init_sessions`, `init_faces`, `init_groups`, `init_face_person_exclusions`, `recognition_details`, `person_change_history`, legacy `person_operations`, global `operation_journal` and `operation_journal_status_history`, `person_associations`, plus `app_users`, `auth_audit`, `app_settings` |
 | Application service | `src/sentriface/engine.py::FaceEngine`; recognition, pending confirmation, queue grouping/confirmation, lifecycle, face move, merge, and index rebuild |
 | Recognition/index | `FaceEngine.recognize()` returns proposals; `linear_index.py`/`hnsw_index.py` are rebuilt from active embeddings and are derived caches |
 | API | `src/sentriface/api_server.py`; relevant routes include `/api/recognize`, `/api/recognition-*`, `/api/queue-*`, `/api/person*`, `/api/person-association*`, photo lifecycle, merge/undo, and backups |
@@ -60,7 +60,8 @@ Identity corrections (move face, add face, change a participant decision) are fi
 
 - `persons` now has explicit `lifecycle_status`, `canonical_person_id`, `identity_status`, `biometric_status`, and `lifecycle_changed_at`. Existing live rows migrate to `ACTIVE`; legacy archived rows remain historical, and valid `metadata.merged_into` sources migrate to `MERGED` mappings.
 - Ordinary archive, restore, and delete paths now use atomic lifecycle transitions plus the global operation journal. The compatibility `permanently_delete_person()` entry point tombstones as `DELETED` and retains linked history; the former destructive implementation remains isolated as the storage-only `physically_purge_person()` exceptional capability.
-- `recognition_details` is attached to one embedding/person/image and duplicates event fields (`seen_date`, `seen_time`, `place_seen`, `event_occasion`, `individual_count`). There is no event, event-photo, face-decision, or deduplicated participant model.
+- `observations`, `observation_media`, and `observation_participants` now provide draft/finalized events, existing-media membership, and canonical-aware participant deduplication while retaining original person IDs. Finalized observations require at least one participant and are immutable through P3 APIs.
+- Existing `recognition_details` rows remain unchanged and accessible. Their nullable `observation_id` is the compatibility bridge for later atomic P6 workflow integration; P3 does not invent or backfill events from ambiguous legacy rows.
 - Queue identity confirmation is atomic per selected group subset in `confirm_init_faces_atomic()`, but `useQueueController.js::confirmQueueFollowup()` then creates one `/api/recognition-followup` write per accepted face. There is no explicit all-faces-final event completion transaction, so identity, sighting, mention, and future graph writes can partially commit.
 - Check Photo similarly performs identity confirmation and recognition follow-up as separate API operations in `useRecognizeController.js`.
 - `person_associations` stores one unique undirected `ASSOCIATED_WITH` row per pair with only an `association_origin` of `manual` or `automatic_mention`. It cannot retain multiple evidence records or distinguish co-observation evidence.

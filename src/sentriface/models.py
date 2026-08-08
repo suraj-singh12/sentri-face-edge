@@ -80,6 +80,41 @@ class RecognitionDetail:
 
 
 @dataclass(frozen=True)
+class Observation:
+    observation_id: str
+    status: str = "DRAFT"
+    observed_at: str | None = None
+    location: str | None = None
+    context: dict[str, Any] = field(default_factory=dict)
+    source: str | None = None
+    created_operation_id: str = ""
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+    finalized_at: str | None = None
+
+
+@dataclass(frozen=True)
+class ObservationMedia:
+    observation_id: str
+    media_id: str
+    media_path: str | None = None
+    source: str | None = None
+    operation_id: str = ""
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class ObservationParticipant:
+    observation_id: str
+    person_id: str
+    canonical_person_id: str
+    person_lifecycle_status: str
+    source: str | None = None
+    operation_id: str = ""
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
 class PersonChange:
     change_id: str
     person_id: str

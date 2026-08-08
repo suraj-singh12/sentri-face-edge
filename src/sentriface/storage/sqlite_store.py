@@ -21,6 +21,9 @@ from sentriface.models import (
     InitGroup,
     InitSession,
     MatchDecision,
+    Observation,
+    ObservationMedia,
+    ObservationParticipant,
     PendingAddition,
     Person,
     PersonAssociation,
@@ -35,7 +38,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
 PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
@@ -817,6 +820,428 @@ class SQLiteIdentityStore:
                 (limit,),
             ).fetchall()
             return [_get_journal_operation(conn, row["operation_id"]) for row in rows]
+
+    def create_observation(
+        self,
+        operation_id: str,
+        *,
+        observed_at: str | None = None,
+        location: str | None = None,
+        context: dict | None = None,
+        source: str | None = None,
+        actor: dict | None = None,
+        participant_ids: list[str] | None = None,
+        media: list[dict] | None = None,
+    ) -> Observation:
+        observation_id = str(uuid.uuid4())
+        _, context_payload = _journal_json_object(context, "observation context")
+        normalized_source = _optional_text(source)
+        participants = [str(item).strip() for item in (participant_ids or [])]
+        if any(not item for item in participants):
+            raise ValueError("Observation participant IDs cannot be empty")
+        media_items = media or []
+        if not isinstance(media_items, list) or any(
+            not isinstance(item, dict) for item in media_items
+        ):
+            raise ValueError("Observation media must be a list of objects")
+        created_at = utc_now()
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "observation.create",
+            )
+            if existing_result is not None:
+                row = conn.execute(
+                    "SELECT * FROM observations WHERE observation_id = ?",
+                    (existing_result.get("observation_id"),),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("Committed observation creation is missing its observation")
+                return _observation_from_row(row)
+            _begin_journal_operation(
+                conn,
+                "observation.create",
+                operation_id=operation_id,
+                actor=actor,
+                source=normalized_source or "observation-service",
+                affected_entities=[
+                    {"entity_type": "observation", "entity_id": observation_id},
+                    *[
+                        {"entity_type": "person", "entity_id": person_id}
+                        for person_id in participants
+                    ],
+                    *[
+                        {"entity_type": "media", "entity_id": str(item.get("media_id") or "")}
+                        for item in media_items
+                    ],
+                ],
+                details={"initial_status": "DRAFT"},
+            )
+            conn.execute(
+                """
+                INSERT INTO observations(
+                    observation_id, status, observed_at, location, context, source,
+                    created_operation_id, created_at, updated_at
+                ) VALUES (?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    observation_id,
+                    _optional_text(observed_at),
+                    _optional_text(location),
+                    context_payload,
+                    normalized_source,
+                    operation_id,
+                    created_at,
+                    created_at,
+                ),
+            )
+            for item in media_items:
+                _attach_observation_media(
+                    conn,
+                    observation_id,
+                    str(item.get("media_id") or ""),
+                    item.get("media_path"),
+                    _optional_text(item.get("source")) or normalized_source,
+                    operation_id,
+                )
+            for person_id in participants:
+                _add_observation_participant(
+                    conn, observation_id, person_id, normalized_source, operation_id,
+                )
+            result = {
+                "observation_id": observation_id,
+                "status": "DRAFT",
+                "participant_count": len(_list_observation_participants(conn, observation_id)),
+                "media_count": len(_list_observation_media(conn, observation_id)),
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            row = conn.execute(
+                "SELECT * FROM observations WHERE observation_id = ?",
+                (observation_id,),
+            ).fetchone()
+            return _observation_from_row(row)
+
+    def get_observation(self, observation_id: str) -> Observation | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM observations WHERE observation_id = ?",
+                (observation_id,),
+            ).fetchone()
+        return _observation_from_row(row) if row else None
+
+    def update_observation(
+        self,
+        observation_id: str,
+        operation_id: str,
+        *,
+        observed_at: str | None = None,
+        location: str | None = None,
+        context: dict | None = None,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> Observation:
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "observation.update",
+            )
+            if existing_result is not None:
+                if existing_result.get("observation_id") != observation_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                row = _require_observation(conn, observation_id)
+                return _observation_from_row(row)
+            current = _require_draft_observation(conn, observation_id)
+            if context is None:
+                context_payload = current["context"]
+            else:
+                _, context_payload = _journal_json_object(context, "observation context")
+            _begin_journal_operation(
+                conn,
+                "observation.update",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "observation-service",
+                affected_entities=[
+                    {"entity_type": "observation", "entity_id": observation_id},
+                ],
+            )
+            updated_at = utc_now()
+            conn.execute(
+                """
+                UPDATE observations
+                SET observed_at = ?, location = ?, context = ?, source = ?, updated_at = ?
+                WHERE observation_id = ? AND status = 'DRAFT'
+                """,
+                (
+                    current["observed_at"] if observed_at is None else _optional_text(observed_at),
+                    current["location"] if location is None else _optional_text(location),
+                    context_payload,
+                    current["source"] if source is None else _optional_text(source),
+                    updated_at,
+                    observation_id,
+                ),
+            )
+            result = {"observation_id": observation_id, "updated": True}
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            updated = conn.execute(
+                "SELECT * FROM observations WHERE observation_id = ?",
+                (observation_id,),
+            ).fetchone()
+            return _observation_from_row(updated)
+
+    def attach_observation_media(
+        self,
+        observation_id: str,
+        media_id: str,
+        operation_id: str,
+        *,
+        media_path: str | None = None,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> ObservationMedia:
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "observation.media.attach",
+            )
+            if existing_result is not None:
+                if existing_result.get("observation_id") != observation_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                row = conn.execute(
+                    """
+                    SELECT observation_id, media_id, media_path, source, operation_id, created_at
+                    FROM observation_media WHERE observation_id = ? AND media_id = ?
+                    """,
+                    (observation_id, existing_result.get("media_id")),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("Committed media attachment is missing its membership")
+                return _observation_media_from_row(row)
+            _require_draft_observation(conn, observation_id)
+            _begin_journal_operation(
+                conn,
+                "observation.media.attach",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "observation-service",
+                affected_entities=[
+                    {"entity_type": "observation", "entity_id": observation_id},
+                    {"entity_type": "media", "entity_id": str(media_id).strip()},
+                ],
+            )
+            item, changed = _attach_observation_media(
+                conn, observation_id, media_id, media_path, source, operation_id,
+            )
+            _transition_journal_operation(
+                conn,
+                operation_id,
+                "COMMITTED",
+                {"observation_id": observation_id, "media_id": item.media_id, "changed": changed},
+            )
+            return item
+
+    def add_observation_participant(
+        self,
+        observation_id: str,
+        person_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> ObservationParticipant:
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "observation.participant.add",
+            )
+            if existing_result is not None:
+                if existing_result.get("observation_id") != observation_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                participants = _list_observation_participants(conn, observation_id)
+                for participant in participants:
+                    if participant.person_id == existing_result.get("person_id"):
+                        return participant
+                raise RuntimeError("Committed participant addition is missing its participant")
+            _require_draft_observation(conn, observation_id)
+            raw_person_id = str(person_id).strip()
+            if not raw_person_id:
+                raise ValueError("Person ID is required")
+            if conn.execute(
+                "SELECT 1 FROM persons WHERE person_id = ?", (raw_person_id,),
+            ).fetchone() is None:
+                raise KeyError(f"Unknown person: {raw_person_id}")
+            _begin_journal_operation(
+                conn,
+                "observation.participant.add",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "observation-service",
+                affected_entities=[
+                    {"entity_type": "observation", "entity_id": observation_id},
+                    {"entity_type": "person", "entity_id": raw_person_id},
+                ],
+            )
+            participant, changed = _add_observation_participant(
+                conn, observation_id, raw_person_id, source, operation_id,
+            )
+            _transition_journal_operation(
+                conn,
+                operation_id,
+                "COMMITTED",
+                {
+                    "observation_id": observation_id,
+                    "person_id": participant.person_id,
+                    "canonical_person_id": participant.canonical_person_id,
+                    "changed": changed,
+                },
+            )
+            return participant
+
+    def remove_observation_participant(
+        self,
+        observation_id: str,
+        person_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> dict:
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "observation.participant.remove",
+            )
+            if existing_result is not None:
+                if (
+                    existing_result.get("observation_id") != observation_id
+                    or existing_result.get("person_id") != str(person_id).strip()
+                ):
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                return existing_result
+            _require_draft_observation(conn, observation_id)
+            raw_person_id = str(person_id).strip()
+            if not raw_person_id:
+                raise ValueError("Person ID is required")
+            _begin_journal_operation(
+                conn,
+                "observation.participant.remove",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "observation-service",
+                affected_entities=[
+                    {"entity_type": "observation", "entity_id": observation_id},
+                    {"entity_type": "person", "entity_id": raw_person_id},
+                ],
+            )
+            cursor = conn.execute(
+                "DELETE FROM observation_participants WHERE observation_id = ? AND person_id = ?",
+                (observation_id, raw_person_id),
+            )
+            result = {
+                "observation_id": observation_id,
+                "person_id": raw_person_id,
+                "removed": bool(cursor.rowcount),
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def list_observation_participants(
+        self, observation_id: str,
+    ) -> list[ObservationParticipant]:
+        with self._connect() as conn:
+            _require_observation(conn, observation_id)
+            return _list_observation_participants(conn, observation_id)
+
+    def list_observation_media(self, observation_id: str) -> list[ObservationMedia]:
+        with self._connect() as conn:
+            _require_observation(conn, observation_id)
+            return _list_observation_media(conn, observation_id)
+
+    def finalize_observation(
+        self,
+        observation_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> Observation:
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "observation.finalize",
+            )
+            if existing_result is not None:
+                if existing_result.get("observation_id") != observation_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                row = _require_observation(conn, observation_id)
+                return _observation_from_row(row)
+            _require_draft_observation(conn, observation_id)
+            participant_count = int(conn.execute(
+                "SELECT COUNT(*) FROM observation_participants WHERE observation_id = ?",
+                (observation_id,),
+            ).fetchone()[0])
+            if participant_count < 1:
+                raise ValueError("A finalized observation requires at least one participant")
+            _begin_journal_operation(
+                conn,
+                "observation.finalize",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "observation-service",
+                affected_entities=[
+                    {"entity_type": "observation", "entity_id": observation_id},
+                ],
+                details={"participant_count": participant_count},
+            )
+            finalized_at = utc_now()
+            conn.execute(
+                """
+                UPDATE observations
+                SET status = 'FINALIZED', finalized_at = ?, updated_at = ?
+                WHERE observation_id = ? AND status = 'DRAFT'
+                """,
+                (finalized_at, finalized_at, observation_id),
+            )
+            result = {
+                "observation_id": observation_id,
+                "status": "FINALIZED",
+                "participant_count": participant_count,
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            row = conn.execute(
+                "SELECT * FROM observations WHERE observation_id = ?",
+                (observation_id,),
+            ).fetchone()
+            return _observation_from_row(row)
+
+    def list_observations_for_person(self, person_id: str) -> list[Observation]:
+        with self._connect() as conn:
+            if conn.execute(
+                "SELECT 1 FROM persons WHERE person_id = ?", (person_id,),
+            ).fetchone() is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            rows = conn.execute(
+                """
+                SELECT o.*
+                FROM observations o
+                JOIN observation_participants p ON p.observation_id = o.observation_id
+                WHERE p.person_id = ?
+                ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
+                """,
+                (person_id,),
+            ).fetchall()
+        return [_observation_from_row(row) for row in rows]
+
+    def list_observations_for_media(self, media_id: str) -> list[Observation]:
+        normalized_media_id = str(media_id).strip()
+        if not normalized_media_id:
+            raise ValueError("Media ID is required")
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT o.*
+                FROM observations o
+                JOIN observation_media m ON m.observation_id = o.observation_id
+                WHERE m.media_id = ?
+                ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
+                """,
+                (normalized_media_id,),
+            ).fetchall()
+        return [_observation_from_row(row) for row in rows]
 
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         with self._connect() as conn:
@@ -3359,6 +3784,165 @@ def _migrate_17_to_18(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_18_to_19(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(
+        conn,
+        """
+        CREATE TABLE observations (
+            observation_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'DRAFT'
+                CHECK(status IN ('DRAFT', 'FINALIZED')),
+            observed_at TEXT,
+            location TEXT,
+            context TEXT NOT NULL DEFAULT '{}',
+            source TEXT,
+            created_operation_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            finalized_at TEXT,
+            FOREIGN KEY(created_operation_id)
+                REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            CHECK(
+                (status = 'DRAFT' AND finalized_at IS NULL)
+                OR (status = 'FINALIZED' AND finalized_at IS NOT NULL)
+            )
+        );
+
+        CREATE INDEX idx_observations_status_time
+        ON observations(status, observed_at, created_at);
+
+        CREATE TABLE observation_media (
+            observation_id TEXT NOT NULL,
+            media_id TEXT NOT NULL,
+            media_path TEXT,
+            source TEXT,
+            operation_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(observation_id, media_id),
+            FOREIGN KEY(observation_id)
+                REFERENCES observations(observation_id) ON DELETE RESTRICT,
+            FOREIGN KEY(operation_id)
+                REFERENCES operation_journal(operation_id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX idx_observation_media_media
+        ON observation_media(media_id, observation_id);
+
+        CREATE TABLE observation_participants (
+            observation_id TEXT NOT NULL,
+            person_id TEXT NOT NULL,
+            source TEXT,
+            operation_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(observation_id, person_id),
+            FOREIGN KEY(observation_id)
+                REFERENCES observations(observation_id) ON DELETE RESTRICT,
+            FOREIGN KEY(person_id)
+                REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(operation_id)
+                REFERENCES operation_journal(operation_id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX idx_observation_participants_person
+        ON observation_participants(person_id, observation_id);
+
+        CREATE TRIGGER observations_no_delete
+        BEFORE DELETE ON observations
+        BEGIN
+            SELECT RAISE(ABORT, 'observations cannot be deleted');
+        END;
+
+        CREATE TRIGGER observations_id_immutable
+        BEFORE UPDATE OF observation_id ON observations
+        BEGIN
+            SELECT RAISE(ABORT, 'observation IDs are immutable');
+        END;
+
+        CREATE TRIGGER observations_finalized_immutable
+        BEFORE UPDATE OF observed_at, location, context, source ON observations
+        WHEN OLD.status = 'FINALIZED'
+        BEGIN
+            SELECT RAISE(ABORT, 'finalized observations are immutable');
+        END;
+
+        CREATE TRIGGER observations_status_transition
+        BEFORE UPDATE OF status ON observations
+        BEGIN
+            SELECT CASE
+                WHEN OLD.status <> 'DRAFT' OR NEW.status <> 'FINALIZED'
+                THEN RAISE(ABORT, 'invalid observation status transition')
+            END;
+            SELECT CASE
+                WHEN NOT EXISTS(
+                    SELECT 1 FROM observation_participants p
+                    WHERE p.observation_id = OLD.observation_id
+                )
+                THEN RAISE(ABORT, 'a finalized observation requires a participant')
+            END;
+        END;
+
+        CREATE TRIGGER observation_media_draft_insert
+        BEFORE INSERT ON observation_media
+        WHEN NOT EXISTS(
+            SELECT 1 FROM observations o
+            WHERE o.observation_id = NEW.observation_id AND o.status = 'DRAFT'
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'observation media can change only while draft');
+        END;
+
+        CREATE TRIGGER observation_media_draft_delete
+        BEFORE DELETE ON observation_media
+        WHEN NOT EXISTS(
+            SELECT 1 FROM observations o
+            WHERE o.observation_id = OLD.observation_id AND o.status = 'DRAFT'
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'observation media can change only while draft');
+        END;
+
+        CREATE TRIGGER observation_participants_draft_insert
+        BEFORE INSERT ON observation_participants
+        WHEN NOT EXISTS(
+            SELECT 1 FROM observations o
+            WHERE o.observation_id = NEW.observation_id AND o.status = 'DRAFT'
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'observation participants can change only while draft');
+        END;
+
+        CREATE TRIGGER observation_participants_draft_delete
+        BEFORE DELETE ON observation_participants
+        WHEN NOT EXISTS(
+            SELECT 1 FROM observations o
+            WHERE o.observation_id = OLD.observation_id AND o.status = 'DRAFT'
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'observation participants can change only while draft');
+        END;
+
+        PRAGMA user_version = 19;
+        """,
+    )
+    tables = {
+        str(row[0])
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+    }
+    if "recognition_details" in tables:
+        detail_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(recognition_details)")
+        }
+        if "observation_id" not in detail_columns:
+            conn.execute(
+                "ALTER TABLE recognition_details ADD COLUMN observation_id TEXT "
+                "REFERENCES observations(observation_id) ON DELETE RESTRICT"
+            )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_recognition_details_observation "
+            "ON recognition_details(observation_id)"
+        )
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -3385,6 +3969,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(15, 16, _migrate_15_to_16),
         SchemaMigration(16, 17, _migrate_16_to_17),
         SchemaMigration(17, 18, _migrate_17_to_18),
+        SchemaMigration(18, 19, _migrate_18_to_19),
     )
 
 
@@ -3528,6 +4113,247 @@ def _create_placeholder_record(
         ),
     )
     return person
+
+
+def _optional_text(value: object | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _require_observation(conn: sqlite3.Connection, observation_id: str) -> sqlite3.Row:
+    normalized_id = str(observation_id).strip()
+    if not normalized_id:
+        raise ValueError("Observation ID is required")
+    row = conn.execute(
+        "SELECT * FROM observations WHERE observation_id = ?", (normalized_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"Unknown observation: {normalized_id}")
+    return row
+
+
+def _require_draft_observation(conn: sqlite3.Connection, observation_id: str) -> sqlite3.Row:
+    row = _require_observation(conn, observation_id)
+    if row["status"] != "DRAFT":
+        raise ValueError("Finalized observations cannot be changed")
+    return row
+
+
+def _require_existing_media(
+    conn: sqlite3.Connection,
+    media_id: str,
+    media_path: str | None,
+) -> None:
+    candidates = {media_id}
+    if media_path:
+        candidates.add(media_path)
+    tables = {
+        str(row[0])
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+    }
+    references = (
+        ("recognition_details", "image_id"),
+        ("recognition_details", "image_path"),
+        ("embeddings", "source_image"),
+        ("embeddings", "crop_path"),
+        ("pending_additions", "source_image"),
+        ("init_faces", "source_image"),
+        ("init_faces", "crop_path"),
+    )
+    for table, column in references:
+        if table not in tables:
+            continue
+        columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            continue
+        for value in candidates:
+            if conn.execute(
+                f"SELECT 1 FROM {table} WHERE {column} = ? LIMIT 1", (value,),
+            ).fetchone() is not None:
+                return
+    raise KeyError(f"Unknown existing media: {media_id}")
+
+
+def _attach_observation_media(
+    conn: sqlite3.Connection,
+    observation_id: str,
+    media_id: str,
+    media_path: str | None,
+    source: str | None,
+    operation_id: str,
+) -> tuple[ObservationMedia, bool]:
+    normalized_media_id = str(media_id).strip()
+    if not normalized_media_id:
+        raise ValueError("Media ID is required")
+    normalized_media_path = _optional_text(media_path)
+    existing = conn.execute(
+        """
+        SELECT observation_id, media_id, media_path, source, operation_id, created_at
+        FROM observation_media WHERE observation_id = ? AND media_id = ?
+        """,
+        (observation_id, normalized_media_id),
+    ).fetchone()
+    if existing is not None:
+        return _observation_media_from_row(existing), False
+    _require_existing_media(conn, normalized_media_id, normalized_media_path)
+    created_at = utc_now()
+    conn.execute(
+        """
+        INSERT INTO observation_media(
+            observation_id, media_id, media_path, source, operation_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            observation_id,
+            normalized_media_id,
+            normalized_media_path,
+            _optional_text(source),
+            operation_id,
+            created_at,
+        ),
+    )
+    row = conn.execute(
+        """
+        SELECT observation_id, media_id, media_path, source, operation_id, created_at
+        FROM observation_media WHERE observation_id = ? AND media_id = ?
+        """,
+        (observation_id, normalized_media_id),
+    ).fetchone()
+    return _observation_media_from_row(row), True
+
+
+def _add_observation_participant(
+    conn: sqlite3.Connection,
+    observation_id: str,
+    person_id: str,
+    source: str | None,
+    operation_id: str,
+) -> tuple[ObservationParticipant, bool]:
+    normalized_person_id = str(person_id).strip()
+    if not normalized_person_id:
+        raise ValueError("Person ID is required")
+    if conn.execute(
+        "SELECT 1 FROM persons WHERE person_id = ?", (normalized_person_id,),
+    ).fetchone() is None:
+        raise KeyError(f"Unknown person: {normalized_person_id}")
+    canonical_person_id = _resolve_canonical_person_id(conn, normalized_person_id)
+    existing_rows = conn.execute(
+        """
+        SELECT p.observation_id, p.person_id, p.source, p.operation_id, p.created_at,
+               person.lifecycle_status
+        FROM observation_participants p
+        JOIN persons person ON person.person_id = p.person_id
+        WHERE p.observation_id = ?
+        ORDER BY p.created_at, p.person_id
+        """,
+        (observation_id,),
+    ).fetchall()
+    for row in existing_rows:
+        existing = _observation_participant_from_row(conn, row)
+        if existing.person_id == normalized_person_id:
+            return existing, False
+        if existing.canonical_person_id == canonical_person_id:
+            return existing, False
+    created_at = utc_now()
+    conn.execute(
+        """
+        INSERT INTO observation_participants(
+            observation_id, person_id, source, operation_id, created_at
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            observation_id,
+            normalized_person_id,
+            _optional_text(source),
+            operation_id,
+            created_at,
+        ),
+    )
+    row = conn.execute(
+        """
+        SELECT p.observation_id, p.person_id, p.source, p.operation_id, p.created_at,
+               person.lifecycle_status
+        FROM observation_participants p
+        JOIN persons person ON person.person_id = p.person_id
+        WHERE p.observation_id = ? AND p.person_id = ?
+        """,
+        (observation_id, normalized_person_id),
+    ).fetchone()
+    return _observation_participant_from_row(conn, row), True
+
+
+def _list_observation_media(
+    conn: sqlite3.Connection, observation_id: str,
+) -> list[ObservationMedia]:
+    rows = conn.execute(
+        """
+        SELECT observation_id, media_id, media_path, source, operation_id, created_at
+        FROM observation_media
+        WHERE observation_id = ?
+        ORDER BY created_at, media_id
+        """,
+        (observation_id,),
+    ).fetchall()
+    return [_observation_media_from_row(row) for row in rows]
+
+
+def _list_observation_participants(
+    conn: sqlite3.Connection, observation_id: str,
+) -> list[ObservationParticipant]:
+    rows = conn.execute(
+        """
+        SELECT p.observation_id, p.person_id, p.source, p.operation_id, p.created_at,
+               person.lifecycle_status
+        FROM observation_participants p
+        JOIN persons person ON person.person_id = p.person_id
+        WHERE p.observation_id = ?
+        ORDER BY p.created_at, p.person_id
+        """,
+        (observation_id,),
+    ).fetchall()
+    return [_observation_participant_from_row(conn, row) for row in rows]
+
+
+def _observation_from_row(row: sqlite3.Row) -> Observation:
+    return Observation(
+        observation_id=row["observation_id"],
+        status=row["status"],
+        observed_at=row["observed_at"],
+        location=row["location"],
+        context=json.loads(row["context"]),
+        source=row["source"],
+        created_operation_id=row["created_operation_id"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        finalized_at=row["finalized_at"],
+    )
+
+
+def _observation_media_from_row(row: sqlite3.Row) -> ObservationMedia:
+    return ObservationMedia(
+        observation_id=row["observation_id"],
+        media_id=row["media_id"],
+        media_path=row["media_path"],
+        source=row["source"],
+        operation_id=row["operation_id"],
+        created_at=row["created_at"],
+    )
+
+
+def _observation_participant_from_row(
+    conn: sqlite3.Connection, row: sqlite3.Row,
+) -> ObservationParticipant:
+    return ObservationParticipant(
+        observation_id=row["observation_id"],
+        person_id=row["person_id"],
+        canonical_person_id=_resolve_canonical_person_id(conn, row["person_id"]),
+        person_lifecycle_status=row["lifecycle_status"],
+        source=row["source"],
+        operation_id=row["operation_id"],
+        created_at=row["created_at"],
+    )
 
 
 def _has_meaningful_identity_context(name: str, metadata: dict, notes: str) -> bool:
@@ -4002,6 +4828,24 @@ def _get_journal_operation(conn: sqlite3.Connection, operation_id: str) -> dict 
             for item in history
         ],
     }
+
+
+def _existing_committed_operation_result(
+    conn: sqlite3.Connection,
+    operation_id: str,
+    operation_type: str,
+) -> dict | None:
+    operation = _get_journal_operation(conn, operation_id)
+    if operation is None:
+        return None
+    if operation["operation_type"] != operation_type:
+        raise KeyError(f"Operation ID already exists: {operation_id}")
+    if operation["status"] != "COMMITTED":
+        raise RuntimeError(
+            f"Operation {operation_id} is {operation['status']} and cannot be retried"
+        )
+    history = operation["status_history"]
+    return dict(history[-1]["details"]) if history else {}
 
 
 def _existing_person_operation(

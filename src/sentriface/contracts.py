@@ -10,6 +10,9 @@ from sentriface.models import (
     InitFace,
     InitGroup,
     InitSession,
+    Observation,
+    ObservationMedia,
+    ObservationParticipant,
     PendingAddition,
     Person,
     PersonAssociation,
@@ -186,6 +189,94 @@ class IdentityStore(Protocol):
 
     def list_recent_operations(self, limit: int = 50) -> list[dict]:
         """List recent global operations, newest first."""
+
+    def create_observation(
+        self,
+        operation_id: str,
+        *,
+        observed_at: str | None = None,
+        location: str | None = None,
+        context: dict | None = None,
+        source: str | None = None,
+        actor: dict | None = None,
+        participant_ids: list[str] | None = None,
+        media: list[dict] | None = None,
+    ) -> Observation:
+        """Create one draft observation, optionally with initial media and participants."""
+
+    def get_observation(self, observation_id: str) -> Observation | None:
+        """Load one observation."""
+
+    def update_observation(
+        self,
+        observation_id: str,
+        operation_id: str,
+        *,
+        observed_at: str | None = None,
+        location: str | None = None,
+        context: dict | None = None,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> Observation:
+        """Update context fields while an observation is draft."""
+
+    def attach_observation_media(
+        self,
+        observation_id: str,
+        media_id: str,
+        operation_id: str,
+        *,
+        media_path: str | None = None,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> ObservationMedia:
+        """Attach an existing durable media reference to a draft observation."""
+
+    def add_observation_participant(
+        self,
+        observation_id: str,
+        person_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> ObservationParticipant:
+        """Idempotently add one historical identity to a draft observation."""
+
+    def remove_observation_participant(
+        self,
+        observation_id: str,
+        person_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> dict:
+        """Remove one participant while the observation is draft."""
+
+    def list_observation_participants(
+        self, observation_id: str,
+    ) -> list[ObservationParticipant]:
+        """List participants with original and current canonical identity."""
+
+    def list_observation_media(self, observation_id: str) -> list[ObservationMedia]:
+        """List durable media memberships for one observation."""
+
+    def finalize_observation(
+        self,
+        observation_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> Observation:
+        """Finalize a valid draft observation."""
+
+    def list_observations_for_person(self, person_id: str) -> list[Observation]:
+        """List observations retaining this exact historical participant identity."""
+
+    def list_observations_for_media(self, media_id: str) -> list[Observation]:
+        """List observations containing a media identifier."""
 
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         """Load face ownership and deletion state."""

@@ -22,6 +22,9 @@ from sentriface.models import (
     InitFace,
     InitGroup,
     InitSession,
+    Observation,
+    ObservationMedia,
+    ObservationParticipant,
     PendingAddition,
     Person,
     PersonAssociation,
@@ -429,6 +432,57 @@ class FaceEngine:
 
     def list_recent_operations(self, limit: int = 50) -> list[dict]:
         return self.store.list_recent_operations(limit)
+
+    def create_observation(self, operation_id: str, **values) -> Observation:
+        return self.store.create_observation(operation_id, **values)
+
+    def get_observation(self, observation_id: str) -> Observation | None:
+        return self.store.get_observation(observation_id)
+
+    def update_observation(
+        self, observation_id: str, operation_id: str, **values,
+    ) -> Observation:
+        return self.store.update_observation(observation_id, operation_id, **values)
+
+    def attach_observation_media(
+        self, observation_id: str, media_id: str, operation_id: str, **values,
+    ) -> ObservationMedia:
+        return self.store.attach_observation_media(
+            observation_id, media_id, operation_id, **values,
+        )
+
+    def add_observation_participant(
+        self, observation_id: str, person_id: str, operation_id: str, **values,
+    ) -> ObservationParticipant:
+        return self.store.add_observation_participant(
+            observation_id, person_id, operation_id, **values,
+        )
+
+    def remove_observation_participant(
+        self, observation_id: str, person_id: str, operation_id: str, **values,
+    ) -> dict:
+        return self.store.remove_observation_participant(
+            observation_id, person_id, operation_id, **values,
+        )
+
+    def list_observation_participants(
+        self, observation_id: str,
+    ) -> list[ObservationParticipant]:
+        return self.store.list_observation_participants(observation_id)
+
+    def list_observation_media(self, observation_id: str) -> list[ObservationMedia]:
+        return self.store.list_observation_media(observation_id)
+
+    def finalize_observation(
+        self, observation_id: str, operation_id: str, **values,
+    ) -> Observation:
+        return self.store.finalize_observation(observation_id, operation_id, **values)
+
+    def list_observations_for_person(self, person_id: str) -> list[Observation]:
+        return self.store.list_observations_for_person(person_id)
+
+    def list_observations_for_media(self, media_id: str) -> list[Observation]:
+        return self.store.list_observations_for_media(media_id)
 
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         return self.store.get_embedding_lifecycle(embedding_id)
