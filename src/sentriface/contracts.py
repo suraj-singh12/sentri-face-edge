@@ -44,7 +44,7 @@ class IdentityStore(Protocol):
     def initialize(self) -> None:
         """Create or migrate durable storage."""
 
-    def create_person(self, name: str, metadata: dict | None = None) -> Person:
+    def create_person(self, name: str, metadata: dict | None = None, notes: str = "") -> Person:
         """Create a person record."""
 
     def create_placeholder_person(
@@ -53,6 +53,8 @@ class IdentityStore(Protocol):
         metadata: dict | None,
         editor_name: str,
         operation_id: str,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
     ) -> Person:
         """Create an identity-only person with no biometric data."""
 
@@ -97,6 +99,12 @@ class IdentityStore(Protocol):
         operation_id: str | None = None,
     ) -> PersonChange:
         """Update editable person profile fields and keep a change record."""
+
+    def update_person_notes(
+        self, person_id: str, notes: str, expected_previous_notes: str,
+        editor_name: str, operation_id: str, mentioned_person_ids: list[str] | None = None,
+    ) -> tuple[bool, Person, PersonChange | None]:
+        """Update profile notes with optimistic concurrency and change history."""
 
     def list_person_changes(self, person_id: str) -> list[PersonChange]:
         """List profile changes for one person, newest first."""
@@ -214,6 +222,9 @@ class IdentityStore(Protocol):
         country: str | None = None,
         importance: str | None = None,
         added_by: str | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
+        recognition_detail: dict | None = None,
         operation_id: str | None = None,
     ) -> RecognitionDetail:
         """Persist visit/event details for a recognition tied to an embedding."""
@@ -241,6 +252,8 @@ class IdentityStore(Protocol):
         person_id: str | None = None,
         name: str | None = None,
         metadata: dict | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
     ) -> tuple[Person, EmbeddingRecord]:
         """Atomically and idempotently confirm one pending face."""
     def delete_pending_addition(self, pending_id: str) -> None:
@@ -273,6 +286,8 @@ class IdentityStore(Protocol):
         *,
         person_id: str | None = None,
         name: str | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
     ) -> dict:
         """Atomically and idempotently confirm selected queue faces."""
     def delete_init_faces(self, init_face_ids: list[str]) -> None:

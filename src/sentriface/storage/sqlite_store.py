@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import struct
 import uuid
@@ -32,7 +33,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 16
 DELETED_FACE_RETENTION_DAYS = 30
 
 
@@ -113,6 +114,12 @@ class SQLiteIdentityStore:
             if version == 13:
                 _migrate_13_to_14(conn)
                 version = 14
+            if version == 14:
+                _migrate_14_to_15(conn)
+                version = 15
+            if version == 15:
+                _migrate_15_to_16(conn)
+                version = 16
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -142,25 +149,28 @@ class SQLiteIdentityStore:
         if not backup.verified or not service.verify_backup(backup.backup_id):
             raise BackupError(f"Pre-migration backup failed verification: {backup.backup_id}")
 
-    def create_person(self, name: str, metadata: dict | None = None) -> Person:
+    def create_person(self, name: str, metadata: dict | None = None, notes: str = "") -> Person:
         person = Person(
             person_id=str(uuid.uuid4()),
             name=name,
             metadata=metadata or {},
+            notes=notes.strip(),
         )
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO persons(person_id, name, metadata, created_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO persons(person_id, name, metadata, created_at, notes)
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 (
                     person.person_id,
                     person.name,
                     json.dumps(person.metadata, separators=(",", ":")),
                     person.created_at,
+                    person.notes,
                 ),
             )
+            _create_note_associations(conn, person.person_id, person.notes, "SentriFace", [])
         return person
 
     def create_placeholder_person(
@@ -169,6 +179,8 @@ class SQLiteIdentityStore:
         metadata: dict | None,
         editor_name: str,
         operation_id: str,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
     ) -> Person:
         normalized_name = name.strip()
         if not normalized_name:
@@ -180,7 +192,7 @@ class SQLiteIdentityStore:
             if existing:
                 row = conn.execute(
                     """
-                    SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status
+                    SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status, notes
                     FROM persons WHERE person_id = ?
                     """,
                     (existing["person_id"],),
@@ -193,12 +205,21 @@ class SQLiteIdentityStore:
                 normalized_name,
                 metadata,
                 editor_name.strip(),
+                notes,
+            )
+            automatic_associations = _create_note_associations(
+                conn, person.person_id, person.notes, editor_name.strip(), mentioned_person_ids or [],
             )
             _record_person_operation(
                 conn,
                 operation_id,
                 "create-placeholder",
-                {"person_id": person.person_id, "enrollment_status": "placeholder"},
+                {
+                    "person_id": person.person_id,
+                    "person_ids": [person.person_id, *[item.target_person_id if item.source_person_id == person.person_id else item.source_person_id for item in automatic_associations]],
+                    "enrollment_status": "placeholder",
+                    "automatic_association_ids": [item.association_id for item in automatic_associations],
+                },
             )
         return person
 
@@ -206,7 +227,7 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             row = conn.execute(
                 f"""
-                SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status
+                SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status, notes
                 FROM persons
                 WHERE person_id = ? {" " if include_archived else "AND deleted_at IS NULL"}
                 """,
@@ -221,7 +242,7 @@ class SQLiteIdentityStore:
             rows = conn.execute(
                 f"""
                 SELECT p.person_id, p.name, p.metadata, p.created_at, p.deleted_at,
-                       p.enrollment_status,
+                       p.enrollment_status, p.notes,
                        (
                            SELECT COUNT(*)
                            FROM embeddings e
@@ -259,6 +280,7 @@ class SQLiteIdentityStore:
                     created_at=row["created_at"],
                     deleted_at=row["deleted_at"],
                     enrollment_status=row["enrollment_status"],
+                    notes=row["notes"],
                 ),
                 embedding_count=row["embedding_count"],
                 sighting_count=row["sighting_count"],
@@ -320,7 +342,8 @@ class SQLiteIdentityStore:
                         SELECT change_id, person_id, previous_name, new_name,
                                previous_rank, new_rank, previous_country, new_country,
                                previous_importance, new_importance,
-                               previous_status, new_status, editor_name, created_at
+                               previous_status, new_status, previous_notes, new_notes,
+                               editor_name, created_at
                         FROM person_change_history
                         WHERE change_id = ?
                         """,
@@ -331,7 +354,7 @@ class SQLiteIdentityStore:
                     return _person_change_from_row(change_row)
             row = conn.execute(
                 """
-                SELECT person_id, name, metadata, enrollment_status
+                SELECT person_id, name, metadata, enrollment_status, notes
                 FROM persons
                 WHERE person_id = ? AND deleted_at IS NULL
                 """,
@@ -361,6 +384,8 @@ class SQLiteIdentityStore:
                 new_importance=importance or "",
                 previous_status=row["enrollment_status"],
                 new_status=row["enrollment_status"],
+                previous_notes=row["notes"],
+                new_notes=row["notes"],
                 editor_name=editor_name,
                 created_at=utc_now(),
             )
@@ -389,6 +414,93 @@ class SQLiteIdentityStore:
                 )
         return change
 
+    def update_person_notes(
+        self,
+        person_id: str,
+        notes: str,
+        expected_previous_notes: str,
+        editor_name: str,
+        operation_id: str,
+        mentioned_person_ids: list[str] | None = None,
+    ) -> tuple[bool, Person, PersonChange | None]:
+        next_notes = notes.strip()
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "update-person-notes")
+            if existing:
+                person_row = conn.execute(
+                    "SELECT * FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                    (person_id,),
+                ).fetchone()
+                if person_row is None:
+                    raise KeyError("This person no longer exists")
+                change = None
+                if existing.get("change_id"):
+                    row = conn.execute(
+                        "SELECT * FROM person_change_history WHERE change_id = ?",
+                        (existing["change_id"],),
+                    ).fetchone()
+                    change = _person_change_from_row(row) if row else None
+                return bool(existing.get("changed")), _person_from_row(person_row), change
+            row = conn.execute(
+                "SELECT * FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                (person_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError("This person no longer exists")
+            current_notes = row["notes"] or ""
+            if current_notes != expected_previous_notes:
+                raise KeyError("Notes were changed elsewhere. Reopen this profile and try again.")
+            if current_notes == next_notes:
+                automatic_associations = _create_note_associations(
+                    conn, person_id, next_notes, editor_name.strip(), mentioned_person_ids or [],
+                )
+                if automatic_associations:
+                    _record_person_operation(conn, operation_id, "update-person-notes", {
+                        "person_id": person_id,
+                        "person_ids": [person_id, *[item.target_person_id if item.source_person_id == person_id else item.source_person_id for item in automatic_associations]],
+                        "changed": False,
+                        "automatic_association_ids": [item.association_id for item in automatic_associations],
+                    })
+                    return True, _person_from_row(row), None
+                return False, _person_from_row(row), None
+            cursor = conn.execute(
+                "UPDATE persons SET notes = ? WHERE person_id = ? AND deleted_at IS NULL AND notes = ?",
+                (next_notes, person_id, current_notes),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError("Notes could not be saved because this profile changed. Reopen it and try again.")
+            change = PersonChange(
+                change_id=str(uuid.uuid4()),
+                person_id=person_id,
+                previous_name=row["name"],
+                new_name=row["name"],
+                previous_rank=(json.loads(row["metadata"]).get("rank") or ""),
+                new_rank=(json.loads(row["metadata"]).get("rank") or ""),
+                previous_country=(json.loads(row["metadata"]).get("country") or ""),
+                new_country=(json.loads(row["metadata"]).get("country") or ""),
+                previous_importance=(json.loads(row["metadata"]).get("importance") or ""),
+                new_importance=(json.loads(row["metadata"]).get("importance") or ""),
+                previous_status=row["enrollment_status"],
+                new_status=row["enrollment_status"],
+                previous_notes=current_notes,
+                new_notes=next_notes,
+                editor_name=editor_name.strip(),
+                created_at=utc_now(),
+            )
+            _insert_person_change(conn, change)
+            automatic_associations = _create_note_associations(
+                conn, person_id, next_notes, editor_name.strip(), mentioned_person_ids or [],
+            )
+            _record_person_operation(conn, operation_id, "update-person-notes", {
+                "person_id": person_id,
+                "person_ids": [person_id, *[item.target_person_id if item.source_person_id == person_id else item.source_person_id for item in automatic_associations]],
+                "change_id": change.change_id,
+                "changed": True,
+                "automatic_association_ids": [item.association_id for item in automatic_associations],
+            })
+            updated = conn.execute("SELECT * FROM persons WHERE person_id = ?", (person_id,)).fetchone()
+        return True, _person_from_row(updated), change
+
     def list_person_changes(self, person_id: str) -> list[PersonChange]:
         with self._connect() as conn:
             rows = conn.execute(
@@ -396,7 +508,8 @@ class SQLiteIdentityStore:
                 SELECT change_id, person_id, previous_name, new_name,
                        previous_rank, new_rank, previous_country, new_country,
                        previous_importance, new_importance,
-                       previous_status, new_status, editor_name, created_at
+                       previous_status, new_status, previous_notes, new_notes,
+                       editor_name, created_at
                 FROM person_change_history
                 WHERE person_id = ?
                 ORDER BY created_at DESC
@@ -464,6 +577,29 @@ class SQLiteIdentityStore:
                     raise RuntimeError("Stored association result is no longer available")
                 return _person_association_from_row(row)
             _require_active_people(conn, person_a_id, person_b_id)
+            current = conn.execute(
+                "SELECT * FROM person_associations WHERE source_person_id = ? AND target_person_id = ? AND relationship_type = 'ASSOCIATED_WITH'",
+                (person_a_id, person_b_id),
+            ).fetchone()
+            if current is not None:
+                if current["association_origin"] == "automatic_mention":
+                    conn.execute(
+                        "UPDATE person_associations SET association_origin = 'manual', updated_at = ?, created_by = ? WHERE association_id = ?",
+                        (utc_now(), actor, current["association_id"]),
+                    )
+                    association = _person_association_from_row(conn.execute(
+                        "SELECT * FROM person_associations WHERE association_id = ?", (current["association_id"],),
+                    ).fetchone())
+                    _record_person_operation(conn, operation_id, "create-person-association", {
+                        "association_id": association.association_id,
+                        "source_person_id": source_person_id,
+                        "target_person_id": target_person_id,
+                        "relationship_type": association.relationship_type,
+                        "actor_name": actor,
+                        "upgraded_from_automatic": True,
+                    })
+                    return association
+                raise KeyError("These people are already associated")
             association = _new_person_association(person_a_id, person_b_id, actor)
             try:
                 _insert_person_association(conn, association)
@@ -569,7 +705,7 @@ class SQLiteIdentityStore:
             rows = conn.execute(
                 """
                 SELECT association_id, source_person_id, target_person_id,
-                       relationship_type, created_at, updated_at, created_by
+                       relationship_type, created_at, updated_at, created_by, association_origin
                 FROM person_associations
                 WHERE source_person_id = ? OR target_person_id = ?
                 ORDER BY updated_at DESC, association_id
@@ -1446,6 +1582,8 @@ class SQLiteIdentityStore:
         country: str | None = None,
         importance: str | None = None,
         added_by: str | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
         operation_id: str | None = None,
     ) -> RecognitionDetail:
         detail = RecognitionDetail(
@@ -1465,6 +1603,7 @@ class SQLiteIdentityStore:
             country=country,
             importance=importance,
             added_by=added_by,
+            notes=notes.strip(),
             created_at=utc_now(),
         )
         with self._connect() as conn:
@@ -1496,9 +1635,9 @@ class SQLiteIdentityStore:
                     detail_id, embedding_id, person_id, image_id, image_path,
                     name, decision, seen_date, seen_time, place_seen,
                     individual_count, event_occasion, rank, country,
-                    importance, added_by, created_at
+                    importance, added_by, notes, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     detail.detail_id,
@@ -1517,6 +1656,7 @@ class SQLiteIdentityStore:
                     detail.country,
                     detail.importance,
                     detail.added_by,
+                    detail.notes,
                     detail.created_at,
                 ),
             )
@@ -1544,12 +1684,19 @@ class SQLiteIdentityStore:
                         "UPDATE persons SET metadata = ? WHERE person_id = ? AND deleted_at IS NULL",
                         (json.dumps(metadata, separators=(",", ":")), person_id),
                     )
+            automatic_associations = _create_note_associations(
+                conn, person_id, detail.notes, (added_by or "").strip(), mentioned_person_ids or [],
+            )
             if operation_id:
                 _record_person_operation(
                     conn,
                     operation_id,
                     "recognition-followup",
-                    {"detail_id": detail.detail_id},
+                    {
+                        "detail_id": detail.detail_id,
+                        "person_ids": [person_id, *[item.target_person_id if item.source_person_id == person_id else item.source_person_id for item in automatic_associations]],
+                        "automatic_association_ids": [item.association_id for item in automatic_associations],
+                    },
                 )
         return detail
 
@@ -1560,7 +1707,7 @@ class SQLiteIdentityStore:
                 SELECT detail_id, embedding_id, person_id, image_id, image_path,
                        name, decision, seen_date, seen_time, place_seen,
                        individual_count, event_occasion, rank, country,
-                       importance, added_by, created_at
+                       importance, added_by, notes, created_at
                 FROM recognition_details
                 WHERE embedding_id = ?
                 ORDER BY created_at ASC
@@ -1576,7 +1723,7 @@ class SQLiteIdentityStore:
                 SELECT d.detail_id, d.embedding_id, d.person_id, d.image_id, d.image_path,
                        d.name, d.decision, d.seen_date, d.seen_time, d.place_seen,
                        d.individual_count, d.event_occasion, d.rank, d.country,
-                       d.importance, d.added_by, d.created_at
+                       d.importance, d.added_by, d.notes, d.created_at
                 FROM recognition_details d
                 JOIN embeddings e ON e.embedding_id = d.embedding_id
                 WHERE d.person_id = ? AND e.deleted_at IS NULL
@@ -1754,8 +1901,12 @@ class SQLiteIdentityStore:
         person_id: str | None = None,
         name: str | None = None,
         metadata: dict | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
+        recognition_detail: dict | None = None,
     ) -> tuple[Person, EmbeddingRecord]:
         operation_type = "confirm-pending-existing" if person_id else "confirm-pending-new"
+        creating_new_person = person_id is None
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, operation_type)
             if existing:
@@ -1782,14 +1933,20 @@ class SQLiteIdentityStore:
                     raise KeyError("Person name is required")
                 person_id = str(uuid.uuid4())
                 conn.execute(
-                    "INSERT INTO persons(person_id, name, metadata, created_at) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO persons(person_id, name, metadata, created_at, notes) VALUES (?, ?, ?, ?, ?)",
                     (
                         person_id,
                         name.strip(),
                         json.dumps(metadata or {}, separators=(",", ":")),
                         utc_now(),
+                        notes.strip(),
                     ),
                 )
+                automatic_associations = _create_note_associations(
+                    conn, person_id, notes.strip(), "SentriFace", mentioned_person_ids or [],
+                )
+            if not creating_new_person:
+                automatic_associations = []
             embedding_id = str(uuid.uuid4())
             conn.execute(
                 """
@@ -1809,12 +1966,47 @@ class SQLiteIdentityStore:
                 ),
             )
             _mark_person_enrolled(conn, person_id)
+            detail_id = None
+            if recognition_detail is not None:
+                detail_id = str(uuid.uuid4())
+                detail_notes = str(recognition_detail.get("notes") or "").strip()
+                conn.execute(
+                    """
+                    INSERT INTO recognition_details(
+                        detail_id, embedding_id, person_id, image_id, image_path,
+                        name, decision, seen_date, seen_time, place_seen,
+                        individual_count, event_occasion, rank, country,
+                        importance, added_by, notes, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        detail_id, embedding_id, person_id,
+                        recognition_detail["image_id"], recognition_detail.get("image_path"),
+                        recognition_detail["name"], recognition_detail.get("decision", "existing"),
+                        recognition_detail["seen_date"], recognition_detail["seen_time"],
+                        recognition_detail["place_seen"], int(recognition_detail["individual_count"]),
+                        recognition_detail["event_occasion"], recognition_detail.get("rank"),
+                        recognition_detail.get("country"), recognition_detail.get("importance"),
+                        recognition_detail.get("added_by"), detail_notes, utc_now(),
+                    ),
+                )
+                automatic_associations.extend(_create_note_associations(
+                    conn, person_id, detail_notes,
+                    str(recognition_detail.get("added_by") or "").strip(),
+                    list(recognition_detail.get("mentioned_person_ids") or []),
+                ))
             conn.execute("DELETE FROM pending_additions WHERE pending_id = ?", (pending_id,))
             _record_person_operation(
                 conn,
                 operation_id,
                 operation_type,
-                {"person_id": person_id, "embedding_id": embedding_id},
+                {
+                    "person_id": person_id,
+                    "person_ids": [person_id, *[item.target_person_id if item.source_person_id == person_id else item.source_person_id for item in automatic_associations]],
+                    "embedding_id": embedding_id,
+                    "detail_id": detail_id,
+                    "automatic_association_ids": [item.association_id for item in automatic_associations],
+                },
             )
             return self._confirmed_records(conn, person_id, embedding_id)
 
@@ -1990,8 +2182,11 @@ class SQLiteIdentityStore:
         *,
         person_id: str | None = None,
         name: str | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
     ) -> dict:
         operation_type = "confirm-init-existing" if person_id else "confirm-init-new"
+        creating_new_person = person_id is None
         selected_ids = list(dict.fromkeys(item for item in init_face_ids if item))
         if not selected_ids:
             raise KeyError("Select at least one image")
@@ -2029,9 +2224,14 @@ class SQLiteIdentityStore:
                     raise KeyError("Person name is required")
                 person_id = str(uuid.uuid4())
                 conn.execute(
-                    "INSERT INTO persons(person_id, name, metadata, created_at) VALUES (?, ?, '{}', ?)",
-                    (person_id, name.strip(), utc_now()),
+                    "INSERT INTO persons(person_id, name, metadata, created_at, notes) VALUES (?, ?, '{}', ?, ?)",
+                    (person_id, name.strip(), utc_now(), notes.strip()),
                 )
+                automatic_associations = _create_note_associations(
+                    conn, person_id, notes.strip(), "SentriFace", mentioned_person_ids or [],
+                )
+            if not creating_new_person:
+                automatic_associations = []
             existing_embeddings = conn.execute(
                 """
                 SELECT embedding_id, vector FROM embeddings
@@ -2117,7 +2317,12 @@ class SQLiteIdentityStore:
                 """,
                 (session_id, group_id, status, utc_now()),
             )
-            result = {"person_id": person_id, "accepted": accepted}
+            result = {
+                "person_id": person_id,
+                "person_ids": [person_id, *[item.target_person_id if item.source_person_id == person_id else item.source_person_id for item in automatic_associations]],
+                "accepted": accepted,
+                "automatic_association_ids": [item.association_id for item in automatic_associations],
+            }
             _record_person_operation(conn, operation_id, operation_type, result)
             return result
     def delete_init_faces(self, init_face_ids: list[str]) -> None:
@@ -2608,11 +2813,50 @@ def _migrate_13_to_14(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_14_to_15(conn: sqlite3.Connection) -> None:
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    person_columns = {row[1] for row in conn.execute("PRAGMA table_info(persons)")}
+    detail_columns = {row[1] for row in conn.execute("PRAGMA table_info(recognition_details)")}
+    history_columns = {row[1] for row in conn.execute("PRAGMA table_info(person_change_history)")}
+    if "persons" in tables and "notes" not in person_columns:
+        conn.execute("ALTER TABLE persons ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+    if "recognition_details" in tables and "notes" not in detail_columns:
+        conn.execute("ALTER TABLE recognition_details ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+    if "person_change_history" in tables and "previous_notes" not in history_columns:
+        conn.execute("ALTER TABLE person_change_history ADD COLUMN previous_notes TEXT")
+    if "person_change_history" in tables and "new_notes" not in history_columns:
+        conn.execute("ALTER TABLE person_change_history ADD COLUMN new_notes TEXT")
+    conn.execute("PRAGMA user_version = 15")
+
+
+def _migrate_15_to_16(conn: sqlite3.Connection) -> None:
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(person_associations)")}
+    person_columns = {row[1] for row in conn.execute("PRAGMA table_info(persons)")}
+    detail_columns = {row[1] for row in conn.execute("PRAGMA table_info(recognition_details)")}
+    if "person_associations" in tables and "association_origin" not in columns:
+        conn.execute(
+            "ALTER TABLE person_associations ADD COLUMN association_origin TEXT NOT NULL DEFAULT 'manual'"
+        )
+    if "notes" in person_columns and "person_associations" in tables:
+        for row in conn.execute(
+            "SELECT person_id, notes FROM persons WHERE deleted_at IS NULL AND notes LIKE '%@%'"
+        ).fetchall():
+            _create_note_associations(conn, row["person_id"], row["notes"] or "", "SentriFace migration", [])
+    if "notes" in detail_columns and "person_associations" in tables:
+        for row in conn.execute(
+            "SELECT person_id, notes FROM recognition_details WHERE notes LIKE '%@%'"
+        ).fetchall():
+            _create_note_associations(conn, row["person_id"], row["notes"] or "", "SentriFace migration", [])
+    conn.execute("PRAGMA user_version = 16")
+
+
 def _create_placeholder_record(
     conn: sqlite3.Connection,
     name: str,
     metadata: dict | None,
     editor_name: str,
+    notes: str = "",
 ) -> Person:
     duplicate = conn.execute(
         """
@@ -2636,13 +2880,14 @@ def _create_placeholder_record(
         name=name,
         metadata=placeholder_metadata,
         enrollment_status="placeholder",
+        notes=notes.strip(),
     )
     try:
         conn.execute(
             """
             INSERT INTO persons(
-                person_id, name, metadata, created_at, enrollment_status
-            ) VALUES (?, ?, ?, ?, ?)
+                person_id, name, metadata, created_at, enrollment_status, notes
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 person.person_id,
@@ -2650,6 +2895,7 @@ def _create_placeholder_record(
                 json.dumps(person.metadata, separators=(",", ":")),
                 person.created_at,
                 person.enrollment_status,
+                person.notes,
             ),
         )
     except sqlite3.IntegrityError as exc:
@@ -2671,6 +2917,8 @@ def _create_placeholder_record(
             new_importance=str(person.metadata.get("importance") or ""),
             previous_status=None,
             new_status="placeholder",
+            previous_notes="",
+            new_notes=person.notes,
             editor_name=editor_name,
             created_at=person.created_at,
         ),
@@ -2702,6 +2950,7 @@ def _new_person_association(
     person_a_id: str,
     person_b_id: str,
     actor_name: str,
+    association_origin: str = "manual",
 ) -> PersonAssociation:
     created_at = utc_now()
     return PersonAssociation(
@@ -2711,6 +2960,7 @@ def _new_person_association(
         created_at=created_at,
         updated_at=created_at,
         created_by=actor_name,
+        association_origin=association_origin,
     )
 
 
@@ -2722,8 +2972,8 @@ def _insert_person_association(
         """
         INSERT INTO person_associations(
             association_id, source_person_id, target_person_id,
-            relationship_type, created_at, updated_at, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            relationship_type, created_at, updated_at, created_by, association_origin
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             association.association_id,
@@ -2733,6 +2983,7 @@ def _insert_person_association(
             association.created_at,
             association.updated_at,
             association.created_by,
+            association.association_origin,
         ),
     )
 
@@ -2746,7 +2997,53 @@ def _person_association_from_row(row: sqlite3.Row) -> PersonAssociation:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         created_by=row["created_by"],
+        association_origin=row["association_origin"] if "association_origin" in row.keys() else "manual",
     )
+
+
+def _create_note_associations(
+    conn: sqlite3.Connection,
+    owner_person_id: str,
+    notes: str,
+    actor_name: str,
+    explicit_person_ids: list[str],
+) -> list[PersonAssociation]:
+    if "@" not in notes:
+        return []
+    active_rows = conn.execute(
+        "SELECT person_id, name FROM persons WHERE deleted_at IS NULL AND person_id <> ?",
+        (owner_person_id,),
+    ).fetchall()
+    rows_by_id = {row["person_id"]: row for row in active_rows}
+    names: dict[str, list[sqlite3.Row]] = {}
+    for row in active_rows:
+        names.setdefault(row["name"].strip().casefold(), []).append(row)
+    mentioned_ids: set[str] = set()
+    for person_id in explicit_person_ids:
+        row = rows_by_id.get(str(person_id))
+        if row and re.search(rf"(?<!\w)@{re.escape(row['name'])}(?!\w)", notes, re.IGNORECASE):
+            mentioned_ids.add(row["person_id"])
+    for normalized_name, matching_rows in names.items():
+        if len(matching_rows) != 1 or not normalized_name:
+            continue
+        row = matching_rows[0]
+        if re.search(rf"(?<!\w)@{re.escape(row['name'])}(?!\w)", notes, re.IGNORECASE):
+            mentioned_ids.add(row["person_id"])
+    created: list[PersonAssociation] = []
+    for mentioned_id in sorted(mentioned_ids):
+        person_a_id, person_b_id = _canonical_person_pair(owner_person_id, mentioned_id)
+        existing = conn.execute(
+            "SELECT 1 FROM person_associations WHERE source_person_id = ? AND target_person_id = ? AND relationship_type = 'ASSOCIATED_WITH'",
+            (person_a_id, person_b_id),
+        ).fetchone()
+        if existing is not None:
+            continue
+        association = _new_person_association(
+            person_a_id, person_b_id, actor_name or "SentriFace", "automatic_mention",
+        )
+        _insert_person_association(conn, association)
+        created.append(association)
+    return created
 
 
 def _person_from_row(row: sqlite3.Row) -> Person:
@@ -2757,6 +3054,7 @@ def _person_from_row(row: sqlite3.Row) -> Person:
         created_at=row["created_at"],
         deleted_at=row["deleted_at"],
         enrollment_status=row["enrollment_status"],
+        notes=row["notes"] if "notes" in row.keys() else "",
     )
 
 
@@ -2767,8 +3065,8 @@ def _insert_person_change(conn: sqlite3.Connection, change: PersonChange) -> Non
             change_id, person_id, previous_name, new_name,
             previous_rank, new_rank, previous_country, new_country,
             previous_importance, new_importance, previous_status, new_status,
-            editor_name, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            previous_notes, new_notes, editor_name, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             change.change_id,
@@ -2783,6 +3081,8 @@ def _insert_person_change(conn: sqlite3.Connection, change: PersonChange) -> Non
             change.new_importance,
             change.previous_status,
             change.new_status,
+            change.previous_notes,
+            change.new_notes,
             change.editor_name,
             change.created_at,
         ),
@@ -2792,7 +3092,7 @@ def _insert_person_change(conn: sqlite3.Connection, change: PersonChange) -> Non
 def _mark_person_enrolled(conn: sqlite3.Connection, person_id: str) -> None:
     row = conn.execute(
         """
-        SELECT name, metadata, enrollment_status
+        SELECT name, metadata, enrollment_status, notes
         FROM persons WHERE person_id = ? AND deleted_at IS NULL
         """,
         (person_id,),
@@ -2821,6 +3121,8 @@ def _mark_person_enrolled(conn: sqlite3.Connection, person_id: str) -> None:
             new_importance=metadata.get("importance") or "",
             previous_status="placeholder",
             new_status="enrolled",
+            previous_notes=row["notes"],
+            new_notes=row["notes"],
             editor_name="SentriFace",
         ),
     )
@@ -2971,6 +3273,7 @@ def _recognition_detail_from_row(row: sqlite3.Row) -> RecognitionDetail:
         country=row["country"],
         importance=row["importance"],
         added_by=row["added_by"],
+        notes=row["notes"] if "notes" in row.keys() else "",
         created_at=row["created_at"],
     )
 
@@ -2989,6 +3292,8 @@ def _person_change_from_row(row: sqlite3.Row) -> PersonChange:
         new_importance=row["new_importance"],
         previous_status=row["previous_status"],
         new_status=row["new_status"],
+        previous_notes=row["previous_notes"] if "previous_notes" in row.keys() else None,
+        new_notes=row["new_notes"] if "new_notes" in row.keys() else None,
         editor_name=row["editor_name"],
         created_at=row["created_at"],
     )

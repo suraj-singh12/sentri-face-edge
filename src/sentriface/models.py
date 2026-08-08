@@ -39,6 +39,7 @@ class Person:
     created_at: str = field(default_factory=utc_now)
     deleted_at: str | None = None
     enrollment_status: str = "enrolled"
+    notes: str = ""
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,7 @@ class RecognitionDetail:
     country: str | None = None
     importance: str | None = None
     added_by: str | None = None
+    notes: str = ""
     created_at: str = field(default_factory=utc_now)
 
 
@@ -87,6 +89,8 @@ class PersonChange:
     new_importance: str | None = None
     previous_status: str | None = None
     new_status: str | None = None
+    previous_notes: str | None = None
+    new_notes: str | None = None
     editor_name: str = ""
     created_at: str = field(default_factory=utc_now)
 
@@ -123,6 +127,7 @@ class PersonAssociation:
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
     created_by: str = ""
+    association_origin: str = "manual"
 
 
 @dataclass(frozen=True)

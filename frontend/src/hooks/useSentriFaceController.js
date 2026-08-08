@@ -12,19 +12,6 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
   const canAdd = capabilities.includes("add");
   const uploads = useFileUploads(api);
   const appData = useAppData({ activeView, capabilities, ...api });
-  const recognize = useRecognizeController({
-    ...api,
-    ...uploads,
-    updatePerson: appData.updatePerson,
-    upsertPerson: appData.upsertPerson,
-  });
-  const queue = useQueueController({
-    enabled: canAdd && activeView === "queue",
-    ...api,
-    ...uploads,
-    updatePerson: appData.updatePerson,
-    upsertPerson: appData.upsertPerson,
-  });
   const people = usePeopleController({
     ...api,
     updatePerson: appData.updatePerson,
@@ -34,6 +21,23 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
     removePersonLocally: appData.removePersonLocally,
     addDeletedFace: appData.addDeletedFace,
     removeDeletedFace: appData.removeDeletedFace,
+  });
+  const recognize = useRecognizeController({
+    ...api,
+    ...uploads,
+    updatePerson: appData.updatePerson,
+    upsertPerson: appData.upsertPerson,
+    onExistingPersonEnrolled: async (personId) => {
+      await people.actions.refreshPeopleProfile(personId);
+      setActiveView("people");
+    },
+  });
+  const queue = useQueueController({
+    enabled: canAdd && activeView === "queue",
+    ...api,
+    ...uploads,
+    updatePerson: appData.updatePerson,
+    upsertPerson: appData.upsertPerson,
   });
 
   return {

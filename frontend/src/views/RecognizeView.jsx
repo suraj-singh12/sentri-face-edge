@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Badge,
   Box,
   Button,
@@ -39,6 +40,7 @@ import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor } from "../
 const FACE_COLORS = ["#35d6d0", "#bd83ff", "#f5a623", "#59a7ff", "#f472b6", "#a3e635"];
 
 export function RecognizeView({
+  people = [],
   canAdd = false,
   recognizeFileRef,
   recognition,
@@ -48,6 +50,7 @@ export function RecognizeView({
   recognitionAcceptedFaces,
   recognitionFollowup,
   recognitionFollowupDone,
+  targetPerson,
   onRecognizeFile,
   onLoadAnother,
   onSelectFace,
@@ -61,6 +64,7 @@ export function RecognizeView({
   onFollowupChange,
   onFollowupSubmit,
   onFollowupClear,
+  onCancelTarget,
 }) {
   const faces = recognition?.faces || [];
   const selectedFace = faces.find((face) => face.index === selectedFaceIndex) || faces[0] || null;
@@ -78,6 +82,7 @@ export function RecognizeView({
   const imageSize = useImageSize(imageSrc);
   const [sort, setSort] = useState("index");
   const [qualityOverride, setQualityOverride] = useState(null);
+  const [targetConflict, setTargetConflict] = useState(null);
   const sortedFaces = useMemo(() => [...faces].sort((left, right) => {
     if (sort === "quality") return (right.quality?.score || 0) - (left.quality?.score || 0) || left.index - right.index;
     if (sort === "confidence") return (right.box?.confidence || 0) - (left.box?.confidence || 0) || left.index - right.index;
@@ -91,11 +96,33 @@ export function RecognizeView({
     setPeopleCandidates({});
   }, [recognition?.inputPath]);
 
+  const conflictingMatch = (face) => {
+    const match = face?.matches?.[0];
+    return face?.decision !== "unknown" && match?.person_id && match.person_id !== targetPerson?.person_id
+      ? match
+      : null;
+  };
+  const continueTargetEnrollment = (face, forceBadQuality = false) => {
+    const conflict = conflictingMatch(face);
+    if (conflict) {
+      setTargetConflict({ face, conflict, forceBadQuality });
+      return;
+    }
+    onAccept(face.index, forceBadQuality, targetPerson);
+  };
   const requestFaceAction = (action, faceIndex) => {
     if (!canAdd) return;
     const face = faces.find((item) => item.index === faceIndex);
     if (!face) return;
     onSelectFace(faceIndex);
+    if (targetPerson) {
+      if (face.quality?.status === "bad") {
+        setQualityOverride({ action: "target", face, selectedPerson: targetPerson });
+        return;
+      }
+      continueTargetEnrollment(face);
+      return;
+    }
     if (face.quality?.status === "bad") {
       setQualityOverride({ action, face, selectedPerson: manualMatches[faceIndex] || null });
       return;
@@ -108,7 +135,8 @@ export function RecognizeView({
     if (!qualityOverride) return;
     const { action, face, selectedPerson } = qualityOverride;
     setQualityOverride(null);
-    if (action === "accept") onAccept(face.index, true, selectedPerson || null);
+    if (action === "target") continueTargetEnrollment(face, true);
+    else if (action === "accept") onAccept(face.index, true, selectedPerson || null);
     else onNew(face.index, true);
   };
 
@@ -156,6 +184,11 @@ export function RecognizeView({
   return (
     <>
       <input ref={recognizeFileRef} className="hidden-file" type="file" accept="image/*" onChange={onRecognizeFile} />
+      {targetPerson && (
+        <Alert color="blue" title={`Adding a photograph to ${targetPerson.name}`} icon={<IconUserCheck size={18} />} mb="md">
+          The selected face will be added only to this existing person (ID {String(targetPerson.person_id).slice(0, 8)}). No new person will be created.
+        </Alert>
+      )}
       <Paper withBorder radius="md" p="md" className="recognize-workspace">
         <Stack gap="md">
           <Grid align="stretch" className="recognize-grid recognize-grid--multi">
@@ -236,7 +269,7 @@ export function RecognizeView({
                       imageSize={imageSize}
                       selectedFaceIndex={selectedFace?.index}
                       acceptedFaces={recognitionAcceptedFaces}
-                      canAdd={canAdd}
+                      canAdd={canAdd && !targetPerson}
                       manualMatches={manualMatches}
                       onSelectFace={onSelectFace}
                       onAccept={(faceIndex) => requestFaceAction("accept", faceIndex)}
@@ -248,7 +281,23 @@ export function RecognizeView({
               </Surface>
             </Grid.Col>
           </Grid>
-          <Group grow className="action-slot">
+          {targetPerson ? (
+            <Group grow className="action-slot">
+              <Button
+                className="recognize-action recognize-action--accept"
+                leftSection={<IconUserCheck size={20} />}
+                onClick={() => requestFaceAction("target", selectedFace?.index)}
+                disabled={!canAdd || !selectedFace || selectedAccepted}
+              >
+                Add Face {selectedFace ? faceNumber(selectedFace.index) : ""} to {targetPerson.name}
+                <Text component="span" size="xs" fw={400}>Keep the existing person ID, notes, metadata, associations, and history</Text>
+              </Button>
+              <Button className="recognize-action recognize-action--clear" color="red" variant="light" leftSection={<IconTrash size={20} />} onClick={onCancelTarget}>
+                Cancel
+                <Text component="span" size="xs" fw={400}>Leave the placeholder unchanged</Text>
+              </Button>
+            </Group>
+          ) : <Group grow className="action-slot">
             <Button
               className="recognize-action recognize-action--accept"
               leftSection={<IconUserCheck size={20} />}
@@ -272,7 +321,7 @@ export function RecognizeView({
               Clear
               <Text component="span" size="xs" fw={400}>Reset and try another photo</Text>
             </Button>
-          </Group>
+          </Group>}
         </Stack>
       </Paper>
       <Modal
@@ -314,8 +363,33 @@ export function RecognizeView({
         onNewPerson={chooseNewPerson}
         onSelect={choosePerson}
       />
+      <Modal
+        opened={Boolean(targetConflict)}
+        onClose={() => setTargetConflict(null)}
+        title="This face resembles another person"
+        centered
+      >
+        <Stack gap="md">
+          <Alert color="orange" title="Review before adding">
+            Recognition suggests {targetConflict?.conflict?.name || "another existing person"}, but you selected {targetPerson?.name}. SentriFace will not merge either profile.
+          </Alert>
+          <Text size="sm">Continue only if you are certain this photograph belongs to {targetPerson?.name}.</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setTargetConflict(null)}>Cancel</Button>
+            <Button color="orange" onClick={() => {
+              const pending = targetConflict;
+              setTargetConflict(null);
+              if (pending?.face) onAccept(pending.face.index, pending.forceBadQuality, {
+                ...targetPerson,
+                conflict_acknowledged: true,
+              });
+            }}>Add to {targetPerson?.name}</Button>
+          </Group>
+        </Stack>
+      </Modal>
       {recognitionFollowup && (
         <RecognitionFollowupForm
+          people={people}
           values={recognitionFollowup}
           confirmed={recognitionFollowupDone}
           onChange={onFollowupChange}

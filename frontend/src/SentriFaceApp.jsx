@@ -71,6 +71,11 @@ function SentriFaceShell({ user, logout, changePassword }) {
     setNewPassword("");
     setConfirmPassword("");
   });
+  const beginPhotoEnrollment = (person) => {
+    actions.startExistingPersonEnrollment(person);
+    actions.setActiveView("recognize");
+    window.setTimeout(() => refs.recognizeFileRef.current?.click(), 0);
+  };
 
   return (
     <AppShell header={{ height: 72 }} padding="sm" className="sentriface-shell">
@@ -182,6 +187,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
 
           <Tabs.Panel value="recognize">
             <RecognizeView
+              people={state.people}
               canAdd={can("add")}
               recognizeFileRef={refs.recognizeFileRef}
               recognition={state.recognition}
@@ -191,6 +197,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               recognitionAcceptedFaces={state.recognitionAcceptedFaces}
               recognitionFollowup={state.recognitionFollowup}
               recognitionFollowupDone={state.recognitionFollowupDone}
+              targetPerson={state.recognitionTargetPerson}
               onRecognizeFile={guarded(actions.recognizeLoadedImage)}
               onLoadAnother={() => refs.recognizeFileRef.current?.click()}
               onSelectFace={actions.selectRecognitionFace}
@@ -204,11 +211,13 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onFollowupChange={actions.updateRecognitionFollowup}
               onFollowupSubmit={guarded(actions.confirmRecognitionFollowup)}
               onFollowupClear={actions.clearRecognitionFollowupForm}
+              onCancelTarget={actions.cancelExistingPersonEnrollment}
             />
           </Tabs.Panel>
 
           <Tabs.Panel value="queue">
             <QueueView
+              people={state.people}
               queueSessions={state.queueSessions}
               queueGroups={state.queueGroups}
               queueSessionId={state.queueSessionId}
@@ -269,6 +278,8 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onImage={actions.setPeopleGalleryImage}
               onBack={actions.peopleBack}
               onSave={actions.savePeopleProfile}
+              onSaveNotes={guarded(actions.savePersonNotes)}
+              onAddPhoto={beginPhotoEnrollment}
               onFavorite={guarded(actions.setPeopleFavorite)}
               onSetRepresentative={guarded(actions.setRepresentativePhoto)}
               onArchive={actions.archivePerson}

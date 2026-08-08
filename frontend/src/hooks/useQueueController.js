@@ -489,6 +489,8 @@ export function useQueueController({
       country: "",
       importance: current.action === "new" ? NEW_PERSON_IMPORTANCE_OPTIONS[1] : "",
       addedBy: "",
+      notes: "",
+      mentionedPersonIds: [],
       name: current.action === "new" ? "" : current.name,
     } : current);
     setQueueFollowupDone(false);
@@ -504,6 +506,8 @@ export function useQueueController({
         group_id: queueSelectedGroup.group_id,
         face_ids: queueFollowup.faceIds,
         name: queueFollowup.name,
+        notes: queueFollowup.notes,
+        mentioned_person_ids: queueFollowup.mentionedPersonIds || [],
       })
       : await apiPost("/api/queue-confirm-existing", {
         session_id: queueSelectedGroup.session_id,
@@ -538,6 +542,8 @@ export function useQueueController({
         individual_count: Number(queueFollowup.individualCount),
         event_occasion: queueFollowup.eventOccasion,
         added_by: queueFollowup.addedBy,
+        notes: queueFollowup.action === "new" ? "" : queueFollowup.notes,
+        mentioned_person_ids: queueFollowup.action === "new" ? [] : queueFollowup.mentionedPersonIds || [],
         operation_id: queueFollowup.followupOperationIds?.[entry.face_id] || crypto.randomUUID(),
       });
     }
@@ -569,6 +575,7 @@ export function useQueueController({
         representative_image: entries[0]?.image_path || "",
         favorite: false,
         tags: [],
+        notes: queueFollowup.notes?.trim() || "",
         created_at: new Date().toISOString(),
         metadata: {
           rank: queueFollowup.rank || "",
@@ -690,6 +697,8 @@ export function useQueueController({
       country: "",
       importance: action === "new" ? NEW_PERSON_IMPORTANCE_OPTIONS[1] : "",
       addedBy: "",
+      notes: "",
+      mentionedPersonIds: [],
       name,
       personId,
       decision,

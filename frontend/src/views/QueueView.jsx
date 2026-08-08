@@ -54,6 +54,7 @@ import { EmptyCard } from "../components/Shared.jsx";
 import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor, recognitionText } from "../utils.js";
 
 export function QueueView({
+  people = [],
   queueSessions,
   queueGroups,
   queueSessionId,
@@ -118,6 +119,7 @@ export function QueueView({
         <Grid.Col span={queueSelectedGroup ? 12 : "auto"} className="queue-main-col">
           {queueSelectedGroup ? (
             <QueueGroupReview
+              people={people}
               group={queueSelectedGroup}
               selectedFaces={queueSelectedFaces}
               accepted={queueAccepted}
@@ -656,6 +658,7 @@ function QueuePreviewMosaic({ faces }) {
 }
 
 function QueueGroupReview({
+  people,
   group,
   groups,
   selectedFaces,
@@ -835,7 +838,7 @@ function QueueGroupReview({
         <Card withBorder radius="md" ref={followupRef} className="queue-followup-card">
           <Text fw={700}>{followup.name || "New person"}</Text>
           <Text size="xs" c="dimmed" mb="sm">{followup.faceIds.length} photo{followup.faceIds.length === 1 ? "" : "s"}</Text>
-          <RecognitionFollowupForm values={followup} confirmed={followupDone} onChange={onFollowupChange} onSubmit={onFollowupSubmit} onClear={onFollowupClear} embedded showAddedBy />
+          <RecognitionFollowupForm people={people} values={followup} confirmed={followupDone} onChange={onFollowupChange} onSubmit={onFollowupSubmit} onClear={onFollowupClear} embedded showAddedBy />
         </Card>
       )}
 

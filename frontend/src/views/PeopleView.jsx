@@ -14,6 +14,7 @@ import {
   Image,
   Menu,
   Modal,
+  NumberInput,
   Paper,
   ScrollArea,
   Select,
@@ -23,6 +24,7 @@ import {
   TagsInput,
   Text,
   TextInput,
+  Textarea,
   ThemeIcon,
   Title,
   Tooltip,
@@ -31,6 +33,7 @@ import {
   IconArrowLeft,
   IconAt,
   IconArchive,
+  IconCalendar,
   IconChevronDown,
   IconCopy,
   IconDots,
@@ -58,12 +61,14 @@ import {
   IconTag,
   IconUser,
   IconUserPlus,
+  IconUsers,
   IconUnlink,
 } from "@tabler/icons-react";
 
 import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import {
+  currentDateTimeParts,
   detailsForEmbedding,
   formatSeenDateTime,
   mediaUrl,
@@ -87,6 +92,8 @@ export function PeopleView({
   onImage,
   onBack,
   onSave,
+  onSaveNotes,
+  onAddPhoto,
   onFavorite,
   onSetRepresentative,
   onArchive,
@@ -111,9 +118,7 @@ export function PeopleView({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
   const [placeholderBusy, setPlaceholderBusy] = useState(false);
-  const [placeholderValues, setPlaceholderValues] = useState({
-    name: "", rank: "", country: "", importance: "", tags: [],
-  });
+  const [placeholderValues, setPlaceholderValues] = useState(() => newPlaceholderValues());
   const resultsRef = useRef(null);
   const normalizedQuery = query.trim().toLowerCase();
   const statsCollection = filter === "archived" ? archivedPeople : people;
@@ -194,6 +199,9 @@ export function PeopleView({
           canEdit={canEdit}
           canDestroy={canDestroy}
           onSave={onSave}
+          onSaveNotes={onSaveNotes}
+          onAddPhoto={onAddPhoto}
+          onCreatePlaceholder={onCreatePlaceholder}
           onCreateAssociation={onCreateAssociation}
           onCreatePlaceholderAssociation={onCreatePlaceholderAssociation}
           onRemoveAssociation={onRemoveAssociation}
@@ -264,7 +272,10 @@ export function PeopleView({
                       onViewMode={setViewMode}
                     />
                     {canEdit && filter !== "archived" && (
-                      <Button leftSection={<IconUserPlus size={16} />} onClick={() => setPlaceholderOpen(true)}>
+                      <Button leftSection={<IconUserPlus size={16} />} onClick={() => {
+                        setPlaceholderValues(newPlaceholderValues());
+                        setPlaceholderOpen(true);
+                      }}>
                         Add without photo
                       </Button>
                     )}
@@ -325,6 +336,7 @@ export function PeopleView({
         opened={placeholderOpen}
         onClose={() => !placeholderBusy && setPlaceholderOpen(false)}
         title="Add person without a photograph"
+        size="xl"
         centered
       >
         <form onSubmit={async (event) => {
@@ -333,19 +345,17 @@ export function PeopleView({
           setPlaceholderBusy(true);
           try {
             await onCreatePlaceholder(placeholderValues);
-            setPlaceholderValues({ name: "", rank: "", country: "", importance: "", tags: [] });
+            setPlaceholderValues(newPlaceholderValues());
             setPlaceholderOpen(false);
           } finally {
             setPlaceholderBusy(false);
           }
         }}>
           <Stack>
-            <Text size="sm" c="dimmed">Create an identity-only profile now. A photograph and biometric data can be added later.</Text>
-            <TextInput required autoFocus label="Name" value={placeholderValues.name} onChange={(event) => setPlaceholderValues((current) => ({ ...current, name: event.currentTarget.value }))} />
-            <TextInput label="Rank or role" value={placeholderValues.rank} onChange={(event) => setPlaceholderValues((current) => ({ ...current, rank: event.currentTarget.value }))} />
-            <TextInput label="Country" value={placeholderValues.country} onChange={(event) => setPlaceholderValues((current) => ({ ...current, country: event.currentTarget.value }))} />
-            <Select clearable label="Importance" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={placeholderValues.importance || null} onChange={(value) => setPlaceholderValues((current) => ({ ...current, importance: value || "" }))} />
-            <TagsInput label="Tags" value={placeholderValues.tags} onChange={(tags) => setPlaceholderValues((current) => ({ ...current, tags }))} />
+            <Alert color="orange" title="This creates an identity without a face" icon={<IconUserPlus size={18} />}>
+              No photograph or biometric data will be stored. Add only observation details you actually know; a face can be enrolled later.
+            </Alert>
+            <PlaceholderPersonFields values={placeholderValues} onChange={setPlaceholderValues} people={people} />
             <Group justify="flex-end">
               <Button type="button" variant="default" disabled={placeholderBusy} onClick={() => setPlaceholderOpen(false)}>Cancel</Button>
               <Button type="submit" loading={placeholderBusy} disabled={!placeholderValues.name.trim()}>Create person</Button>
@@ -1029,6 +1039,9 @@ function PeopleGalleryView({
   onOpen,
   onBack,
   onSave,
+  onSaveNotes,
+  onAddPhoto,
+  onCreatePlaceholder,
   onCreateAssociation,
   onCreatePlaceholderAssociation,
   onRemoveAssociation,
@@ -1046,10 +1059,17 @@ function PeopleGalleryView({
   const tabContentRef = useRef(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [editOpen, setEditOpen] = useState(false);
+  const [notesEditOpen, setNotesEditOpen] = useState(false);
   const [managementDialog, setManagementDialog] = useState(null);
   const [targetPersonId, setTargetPersonId] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [profileDeleteConfirmation, setProfileDeleteConfirmation] = useState("");
+  const [notesDraft, setNotesDraft] = useState(payload.person.notes || "");
+  const [notesBusy, setNotesBusy] = useState(false);
+  const [selectedNoteMentionIds, setSelectedNoteMentionIds] = useState([]);
+  const [notePlaceholderOpen, setNotePlaceholderOpen] = useState(false);
+  const [notePlaceholderBusy, setNotePlaceholderBusy] = useState(false);
+  const [notePlaceholderValues, setNotePlaceholderValues] = useState(() => newPlaceholderValues());
   const archived = Boolean(payload.person.archived);
   const mergedInto = payload.person.metadata?.merged_into || "";
   const favorite = Boolean(payload.person.favorite || payload.person.metadata?.favorite);
@@ -1066,6 +1086,24 @@ function PeopleGalleryView({
   const changes = payload.changes || [];
   const managementEvents = payload.management_events || [];
   const associations = payload.associations || [];
+  const activeMentionQuery = noteMentionQuery(notesDraft);
+  const noteMentionSuggestions = useMemo(() => {
+    if (!notesEditOpen || activeMentionQuery.length < 3) return [];
+    const normalized = activeMentionQuery.toLocaleLowerCase();
+    return people.filter((candidate) => (
+      candidate.person_id !== payload.person.person_id
+      && !candidate.archived
+      && [candidate.name, candidate.person_id, candidate.metadata?.rank, candidate.metadata?.country]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase().includes(normalized))
+    )).slice(0, 6);
+  }, [activeMentionQuery, notesEditOpen, payload.person.person_id, people]);
+  const noteMentionHasExactPerson = activeMentionQuery.length >= 3 && people.some(
+    (candidate) => candidate.name.trim().toLocaleLowerCase() === activeMentionQuery.toLocaleLowerCase(),
+  );
+  const noteMentionCanCreate = notesEditOpen
+    && activeMentionQuery.length >= 3
+    && !noteMentionHasExactPerson;
   const mergeEvent = managementEvents.find((event) => (
     event.operation_type === "merge-persons"
     && event.result?.source_person_id === payload.person.person_id
@@ -1081,10 +1119,36 @@ function PeopleGalleryView({
   useEffect(() => {
     setActiveTab("overview");
     setEditOpen(false);
+    setNotesEditOpen(false);
+    setNotePlaceholderOpen(false);
     setManagementDialog(null);
     setTargetPersonId("");
     setProfileDeleteConfirmation("");
+    setSelectedNoteMentionIds([]);
   }, [payload.person.person_id]);
+
+  useEffect(() => {
+    setNotesDraft(payload.person.notes || "");
+  }, [payload.person.person_id, payload.person.notes]);
+
+  const openProfileEdit = () => {
+    setEditValues({ ...summaryProfile, editorName: "" });
+    setEditOpen(true);
+  };
+  const openNotesEdit = () => {
+    setNotesDraft(payload.person.notes || "");
+    setSelectedNoteMentionIds([]);
+    setNotesEditOpen(true);
+  };
+  const cancelNotesEdit = () => {
+    setNotesDraft(payload.person.notes || "");
+    setSelectedNoteMentionIds([]);
+    setNotesEditOpen(false);
+  };
+  const openNotePlaceholder = () => {
+    setNotePlaceholderValues(newPlaceholderValues(activeMentionQuery));
+    setNotePlaceholderOpen(true);
+  };
 
   useEffect(() => {
     setEditValues({ ...summaryProfile, editorName: "" });
@@ -1104,6 +1168,28 @@ function PeopleGalleryView({
       if (await onSave(editValues)) setEditOpen(false);
     } catch (error) {
       console.error(error);
+    }
+  };
+  const saveNotes = async () => {
+    if (notesBusy) return false;
+    const previousNotes = payload.person.notes || "";
+    if (notesDraft.trim() === previousNotes && selectedNoteMentionIds.length === 0) {
+      setNotesEditOpen(false);
+      return false;
+    }
+    setNotesBusy(true);
+    try {
+      const result = await onSaveNotes(
+        payload.person.person_id, notesDraft, previousNotes, selectedNoteMentionIds,
+      );
+      if (result?.updated) {
+        setNotesDraft(result.notes);
+        setSelectedNoteMentionIds([]);
+        setNotesEditOpen(false);
+      }
+      return Boolean(result?.updated);
+    } finally {
+      setNotesBusy(false);
     }
   };
   const selectPhoto = (path) => {
@@ -1158,10 +1244,23 @@ function PeopleGalleryView({
         <Group gap="xs">
           {!archived && (
             <>
+              {payload.person.is_placeholder && (
+                <Button size="xs" leftSection={<IconPhoto size={14} />} disabled={!canEdit} onClick={() => onAddPhoto(payload.person)}>
+                  Add photograph
+                </Button>
+              )}
               <Button size="xs" variant="default" leftSection={<IconPhoto size={14} />} disabled={!canEdit && !canDestroy} onClick={() => changeTab("photos")}>
                 Manage faces
               </Button>
-              <Button size="xs" disabled={!canEdit} onClick={() => setEditOpen(true)}>Edit profile</Button>
+              <Menu withinPortal position="bottom-end">
+                <Menu.Target>
+                  <Button size="xs" disabled={!canEdit} rightSection={<IconChevronDown size={14} />}>Edit</Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item leftSection={<IconEdit size={14} />} onClick={openProfileEdit}>Edit profile</Menu.Item>
+                  <Menu.Item leftSection={<IconNotes size={14} />} onClick={openNotesEdit}>Edit notes</Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
               <Button
                 size="xs"
                 variant="light"
@@ -1274,6 +1373,10 @@ function PeopleGalleryView({
           </Group>
           <Text size="xs" c="dimmed" mt="sm">ID: {payload.person.person_id}</Text>
         </Box>
+        <Card withBorder radius="md" p="sm" className="people-profile-notes">
+          <Text size="sm" fw={800} mb="xs">Notes</Text>
+          <ProfileNoteSummary notes={payload.person.notes || ""} associations={associations} onOpen={onOpen} />
+        </Card>
       </Group>
 
       <Tabs value={activeTab} onChange={changeTab} className="people-profile-tabs" keepMounted={false}>
@@ -1347,6 +1450,107 @@ function PeopleGalleryView({
           </Stack>
         </form>
       </Drawer>
+
+      <Drawer opened={notesEditOpen} onClose={() => !notesBusy && cancelNotesEdit()} position="right" size={420} title="Edit Notes" className="people-edit-drawer">
+        <Stack>
+          <Textarea
+            autoFocus
+            autosize
+            minRows={7}
+            maxRows={16}
+            label="Notes"
+            description="Type @ and at least three characters to mention a person"
+            value={notesDraft}
+            disabled={notesBusy}
+            placeholder="Add a short summary or detail about this person"
+            onChange={(event) => setNotesDraft(event.currentTarget.value)}
+          />
+          {(noteMentionSuggestions.length > 0 || noteMentionCanCreate) && (
+            <Stack gap={4} className="people-note-mention-suggestions">
+              {noteMentionSuggestions.map((candidate) => (
+                <Paper
+                  key={candidate.person_id}
+                  withBorder
+                  radius="md"
+                  p="xs"
+                  component="button"
+                  type="button"
+                  className="mantine-click-card"
+                  onClick={() => {
+                    setNotesDraft((current) => replaceNoteMentionQuery(current, candidate.name));
+                    setSelectedNoteMentionIds((current) => current.includes(candidate.person_id)
+                      ? current
+                      : [...current, candidate.person_id]);
+                  }}
+                >
+                  <AssociationIdentity person={candidate} />
+                </Paper>
+              ))}
+              {noteMentionCanCreate && (
+                <Paper withBorder radius="md" p="xs">
+                  <Group justify="space-between" gap="md" wrap="nowrap">
+                    <Box>
+                      <Text size="sm" fw={700}>No exact person named “{activeMentionQuery}”</Text>
+                      <Text size="xs" c="dimmed">Create a profile without a photograph, then mention it here.</Text>
+                    </Box>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="light"
+                      color="orange"
+                      leftSection={<IconUserPlus size={14} />}
+                      onClick={openNotePlaceholder}
+                    >
+                      Create profile
+                    </Button>
+                  </Group>
+                </Paper>
+              )}
+            </Stack>
+          )}
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" disabled={notesBusy} onClick={cancelNotesEdit}>Cancel</Button>
+            <Button loading={notesBusy} onClick={saveNotes}>Save notes</Button>
+          </Group>
+        </Stack>
+      </Drawer>
+
+      <Modal
+        opened={notePlaceholderOpen}
+        onClose={() => !notePlaceholderBusy && setNotePlaceholderOpen(false)}
+        title={`Create “${notePlaceholderValues.name || activeMentionQuery}” without a photograph?`}
+        size="xl"
+        centered
+      >
+        <form onSubmit={async (event) => {
+          event.preventDefault();
+          if (notePlaceholderBusy || !notePlaceholderValues.name.trim()) return;
+          setNotePlaceholderBusy(true);
+          try {
+            const createdPerson = await onCreatePlaceholder(notePlaceholderValues);
+            setNotesDraft((current) => replaceNoteMentionQuery(current, createdPerson.name));
+            setSelectedNoteMentionIds((current) => current.includes(createdPerson.person_id)
+              ? current
+              : [...current, createdPerson.person_id]);
+            setNotePlaceholderOpen(false);
+          } finally {
+            setNotePlaceholderBusy(false);
+          }
+        }}>
+          <Stack>
+            <Alert color="orange" title="This creates an unknown identity" icon={<IconUserPlus size={18} />}>
+              This person will have no photograph or biometric data. Create the profile only when tracking their known details, habits, patterns, or relationships is useful. A face can be added later.
+            </Alert>
+            <PlaceholderPersonFields values={notePlaceholderValues} onChange={setNotePlaceholderValues} people={people} />
+            <Group justify="flex-end">
+              <Button type="button" variant="default" disabled={notePlaceholderBusy} onClick={() => setNotePlaceholderOpen(false)}>Cancel</Button>
+              <Button type="submit" color="orange" loading={notePlaceholderBusy} disabled={!notePlaceholderValues.name.trim()}>
+                Create profile without photo
+              </Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
 
       <Modal
         opened={managementDialog === "archive"}
@@ -1650,6 +1854,7 @@ function PeopleProfilePhotos({
             ["Embedding", selectedRecord?.embeddingId ? "Indexed" : "-"],
             ["Rank", profile.rank || "-"],
           ]} />
+          {photoDetail.notes && <Text size="sm" mt="md" style={{ whiteSpace: "pre-wrap" }}><Text span fw={700}>Notes: </Text>{photoDetail.notes}</Text>}
           {!archived && selectedRecord && (
             <Stack gap="xs" mt="lg">
               <Button
@@ -1706,7 +1911,7 @@ function PeopleProfileAssociations({
   const searchText = query.replace(/^@/, "").trim();
   const normalizedSearch = searchText.toLowerCase();
   const associatedIds = new Set(associations.map((item) => item.person?.person_id));
-  const allMatches = normalizedSearch ? people.filter((candidate) => [
+  const allMatches = normalizedSearch.length >= 3 ? people.filter((candidate) => [
     candidate.name,
     candidate.person_id,
     candidate.metadata?.rank,
@@ -1763,7 +1968,7 @@ function PeopleProfileAssociations({
               Link person
             </Button>
           </Group>
-        ) : normalizedSearch ? (
+        ) : normalizedSearch.length >= 3 ? (
           <Stack gap="xs" mt="sm">
             {availableMatches.map((candidate) => (
               <Paper
@@ -1831,7 +2036,12 @@ function PeopleProfileAssociations({
               <Group justify="space-between" wrap="nowrap">
                 <AssociationIdentity person={association.person} />
                 <Group gap="xs" wrap="nowrap">
-                  <Badge variant="light" color="gray">Associated with</Badge>
+                  <Badge
+                    variant="light"
+                    color={association.association_origin === "automatic_mention" ? "violet" : "teal"}
+                  >
+                    {association.association_origin === "automatic_mention" ? "Mention-linked" : "Manually linked"}
+                  </Badge>
                   {canEdit && (
                     <Tooltip label="Remove association">
                       <ActionIcon
@@ -1893,7 +2103,11 @@ function AssociationIdentity({ person }) {
   const country = person.metadata?.country || "No country";
   return (
     <Group gap="sm" wrap="nowrap" miw={0}>
-      <ThemeIcon size={42} radius="xl" variant="light" color="gray"><IconUser size={22} /></ThemeIcon>
+      {person.representative_image ? (
+        <Image src={mediaUrl(person.representative_image)} alt={person.name} h={42} w={42} radius="xl" fit="cover" />
+      ) : (
+        <ThemeIcon size={42} radius="xl" variant="light" color="gray"><IconUser size={22} /></ThemeIcon>
+      )}
       <Box miw={0}>
         <Group gap="xs" wrap="nowrap">
           <Text fw={800} truncate>{person.name}</Text>
@@ -2041,6 +2255,139 @@ function ProfilePhoto({ path, name }) {
   );
 }
 
+function ProfileNoteSummary({ notes, associations, onOpen }) {
+  if (!notes.trim()) return <Text size="sm" c="dimmed">No notes added.</Text>;
+  const associationByName = new Map();
+  for (const association of associations || []) {
+    const name = association.person?.name?.trim();
+    if (!name) continue;
+    const key = name.toLocaleLowerCase();
+    const current = associationByName.get(key);
+    if (!current || association.association_origin === "automatic_mention") {
+      associationByName.set(key, association);
+    }
+  }
+  const names = [...associationByName.keys()].sort((left, right) => right.length - left.length);
+  const parts = names.length
+    ? notes.split(new RegExp(`(@(?:${names.map(escapeRegExp).join("|")}))(?!\\w)`, "gi"))
+    : [notes];
+  return (
+    <Box className="people-profile-note-summary">
+      {parts.map((part, index) => {
+        const association = part.startsWith("@")
+          ? associationByName.get(part.slice(1).toLocaleLowerCase())
+          : null;
+        return association ? (
+          <Badge
+            key={`${association.association_id}-${index}`}
+            component="button"
+            type="button"
+            variant="light"
+            color={association.association_origin === "automatic_mention" ? "violet" : "teal"}
+            className="people-note-person-chip"
+            onClick={() => onOpen(association.person.person_id, { archived: association.person.archived })}
+          >@{association.person.name}</Badge>
+        ) : <Text key={index} component="span" size="sm">{part}</Text>;
+      })}
+    </Box>
+  );
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function noteMentionQuery(notes) {
+  const match = String(notes || "").match(/(?:^|\s)@([^@,\n]*)$/);
+  return match ? match[1].trim() : "";
+}
+
+function replaceNoteMentionQuery(notes, personName) {
+  return String(notes || "").replace(/(^|\s)@([^@,\n]*)$/, (_, prefix) => `${prefix}@${personName}, `);
+}
+
+function newPlaceholderValues(name = "") {
+  const { date, time } = currentDateTimeParts();
+  return {
+    name,
+    rank: "",
+    country: "",
+    importance: NEW_PERSON_IMPORTANCE_OPTIONS[1],
+    date,
+    time,
+    placeSeen: "",
+    individualCount: "",
+    eventOccasion: "",
+    addedBy: "",
+    notes: "",
+    tags: [],
+    mentionedPersonIds: [],
+  };
+}
+
+function PlaceholderPersonFields({ values, onChange, people }) {
+  const mentionQuery = noteMentionQuery(values.notes);
+  const suggestions = useMemo(() => {
+    if (mentionQuery.length < 3) return [];
+    const normalized = mentionQuery.toLocaleLowerCase();
+    return people.filter((candidate) => (
+      !candidate.archived
+      && [candidate.name, candidate.person_id, candidate.metadata?.rank, candidate.metadata?.country]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase().includes(normalized))
+    )).slice(0, 6);
+  }, [mentionQuery, people]);
+  const update = (field, value) => onChange((current) => ({ ...current, [field]: value }));
+
+  return (
+    <Stack gap="md">
+      <Text fw={800}>Add New Person Details</Text>
+      <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        <TextInput required autoFocus label="Rank" value={values.rank} onChange={(event) => update("rank", event.currentTarget.value)} />
+        <TextInput required label="Name" value={values.name} onChange={(event) => update("name", event.currentTarget.value)} />
+        <TextInput required label="Country" value={values.country} onChange={(event) => update("country", event.currentTarget.value)} />
+        <Select required label="Importance" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => update("importance", value)} />
+        <TextInput required label="Date" type="date" leftSection={<IconCalendar size={18} />} value={values.date} onChange={(event) => update("date", event.currentTarget.value)} />
+        <TextInput required label="Time" type="time" leftSection={<IconCalendar size={18} />} value={values.time} onChange={(event) => update("time", event.currentTarget.value)} />
+        <TextInput required label="Place Seen" leftSection={<IconMapPin size={18} />} placeholder="e.g., Office, Gate A, Reception, Building C" value={values.placeSeen} onChange={(event) => update("placeSeen", event.currentTarget.value)} />
+        <NumberInput required min={0} step={1} label="With how many individuals" leftSection={<IconUsers size={18} />} placeholder="Select count" value={values.individualCount} onChange={(value) => update("individualCount", value)} />
+        <TextInput required label="Event/Occasion" leftSection={<IconCalendar size={18} />} placeholder="e.g., Meeting, Visit, Delivery, Staff Interaction, Security Check" value={values.eventOccasion} onChange={(event) => update("eventOccasion", event.currentTarget.value)} />
+        <TextInput required label="Added by" placeholder="Your Name" value={values.addedBy} onChange={(event) => update("addedBy", event.currentTarget.value)} />
+      </SimpleGrid>
+      <Textarea
+        autosize
+        minRows={3}
+        label="Person notes"
+        description="Saved on the new person’s profile. Type @ and at least three characters to mention an existing person."
+        value={values.notes || ""}
+        onChange={(event) => update("notes", event.currentTarget.value)}
+      />
+      {suggestions.length > 0 && (
+        <Stack gap={4} className="people-note-mention-suggestions">
+          {suggestions.map((candidate) => (
+            <Paper
+              key={candidate.person_id}
+              withBorder
+              radius="md"
+              p="xs"
+              component="button"
+              type="button"
+              className="mantine-click-card"
+              onClick={() => onChange((current) => ({
+                ...current,
+                notes: replaceNoteMentionQuery(current.notes, candidate.name),
+                mentionedPersonIds: [...new Set([...(current.mentionedPersonIds || []), candidate.person_id])],
+              }))}
+            >
+              <AssociationIdentity person={candidate} />
+            </Paper>
+          ))}
+        </Stack>
+      )}
+    </Stack>
+  );
+}
+
 function SightingImage({ detail, imageRecords, fallbackPath, size = 56 }) {
   const record = imageRecords.find((item) => item.embeddingId === detail.embedding_id);
   const path = record?.thumbPath || record?.path || fallbackPath;
@@ -2118,6 +2465,7 @@ function SightingSummary({ detail }) {
         ["Source", detail.event_occasion || "-"],
         ["Added by", detail.added_by || "System"],
       ]} />
+      {detail.notes && <Text size="xs" mt="xs" style={{ whiteSpace: "pre-wrap" }}>{detail.notes}</Text>}
     </Stack>
   );
 }

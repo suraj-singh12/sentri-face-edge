@@ -13,6 +13,7 @@ export function useRecognizeController({
   prepareImageFiles,
   showToast,
   uploadFile,
+  onExistingPersonEnrolled,
 }) {
   const [recognition, setRecognition] = usePersistentState("sentriface.recognize.result", null);
   const [selectedRecognitionFace, setSelectedRecognitionFace] = usePersistentState("sentriface.recognize.selectedFace", 1);
@@ -21,6 +22,7 @@ export function useRecognizeController({
   const [recognitionAcceptedFaces, setRecognitionAcceptedFaces] = usePersistentState("sentriface.recognize.acceptedFaces", []);
   const [recognitionFollowup, setRecognitionFollowup] = usePersistentState("sentriface.recognize.followup", null);
   const [recognitionFollowupDone, setRecognitionFollowupDone] = usePersistentState("sentriface.recognize.followupDone", false);
+  const [recognitionTargetPerson, setRecognitionTargetPerson] = usePersistentState("sentriface.recognize.targetPerson", null);
   const recognizeFileRef = useRef(null);
   const recognitionRequestRef = useRef(null);
 
@@ -67,12 +69,12 @@ export function useRecognizeController({
     setRecognitionGalleryImage(null);
     if (best.is_duplicate) {
       setRecognitionAcceptedFaces((current) => current.includes(faceIndex) ? current : [...current, faceIndex]);
-      openRecognitionFollowup({ name: best.name, personId: best.person_id, embeddingId: best.embedding_ids[0], decision: "duplicate", faceIndex, faceBox: face.box, forceBadQuality });
+      openRecognitionFollowup({ name: best.name, personId: best.person_id, embeddingId: best.embedding_ids[0], decision: "duplicate", faceIndex, faceBox: face.box, forceBadQuality, conflictAcknowledged: Boolean(best.conflict_acknowledged) });
       showToast(`Duplicate image of ${best.name}`);
       return;
     }
     setRecognitionAcceptedFaces((current) => current.includes(faceIndex) ? current : [...current, faceIndex]);
-    openRecognitionFollowup({ name: best.name, personId: best.person_id, decision: "existing", action: "existing", faceIndex, faceBox: face.box, forceBadQuality });
+    openRecognitionFollowup({ name: best.name, personId: best.person_id, decision: "existing", action: "existing", faceIndex, faceBox: face.box, forceBadQuality, conflictAcknowledged: Boolean(best.conflict_acknowledged) });
     showToast(`Fill details for ${best.name}`);
   };
 
@@ -120,6 +122,20 @@ export function useRecognizeController({
     setRecognitionFollowupDone(false);
   };
 
+  const startExistingPersonEnrollment = (person) => {
+    recognitionClear();
+    setRecognitionTargetPerson({
+      person_id: person.person_id,
+      name: person.name,
+      representative_image: person.representative_image || "",
+    });
+  };
+
+  const cancelExistingPersonEnrollment = () => {
+    recognitionClear();
+    setRecognitionTargetPerson(null);
+  };
+
   const updateRecognitionFollowup = (field, value) => {
     setRecognitionFollowup((current) => current ? { ...current, [field]: value } : current);
   };
@@ -137,6 +153,8 @@ export function useRecognizeController({
       country: "",
       importance: current.action === "new" ? NEW_PERSON_IMPORTANCE_OPTIONS[1] : "",
       addedBy: "",
+      notes: "",
+      mentionedPersonIds: [],
       name: current.action === "new" ? "" : current.name,
     } : current);
     setRecognitionFollowupDone(false);
@@ -150,7 +168,30 @@ export function useRecognizeController({
     let detailName = recognitionFollowup.name;
     let addedEmbedding = false;
     let createdPerson = false;
-    if (recognitionFollowup.action === "existing") {
+    const targetedPlaceholder = recognitionTargetPerson?.person_id === recognitionFollowup.personId;
+    if (targetedPlaceholder) {
+      const payload = await apiPost("/api/placeholder-enroll", {
+        path: recognition.inputPath,
+        person_id: recognitionFollowup.personId,
+        face_index: recognitionFollowup.faceIndex,
+        face_box: recognitionFollowup.faceBox,
+        force_bad_quality: recognitionFollowup.forceBadQuality,
+        conflict_acknowledged: recognitionFollowup.conflictAcknowledged,
+        image_id: recognitionFollowup.imageId,
+        date: recognitionFollowup.date,
+        time: recognitionFollowup.time,
+        place_seen: recognitionFollowup.placeSeen,
+        individual_count: Number(recognitionFollowup.individualCount),
+        event_occasion: recognitionFollowup.eventOccasion,
+        added_by: recognitionFollowup.addedBy,
+        notes: recognitionFollowup.notes,
+        mentioned_person_ids: recognitionFollowup.mentionedPersonIds || [],
+        operation_id: recognitionFollowup.identityOperationId,
+      });
+      embeddingId = payload.embedding_id;
+      detailName = payload.name || detailName;
+      addedEmbedding = true;
+    } else if (recognitionFollowup.action === "existing") {
       const payload = await apiPost("/api/recognition-accept-existing", {
         path: recognition.inputPath,
         person_id: recognitionFollowup.personId,
@@ -171,13 +212,15 @@ export function useRecognizeController({
         face_box: recognitionFollowup.faceBox,
         force_bad_quality: recognitionFollowup.forceBadQuality,
         operation_id: recognitionFollowup.identityOperationId,
+        notes: recognitionFollowup.notes,
+        mentioned_person_ids: recognitionFollowup.mentionedPersonIds || [],
       });
       personId = payload.person_id;
       embeddingId = payload.embedding_id;
       addedEmbedding = true;
       createdPerson = true;
     }
-    await apiPost("/api/recognition-followup", {
+    if (!targetedPlaceholder) await apiPost("/api/recognition-followup", {
       path: recognition.inputPath,
       name: detailName,
       person_id: personId,
@@ -194,6 +237,8 @@ export function useRecognizeController({
       individual_count: Number(recognitionFollowup.individualCount),
       event_occasion: recognitionFollowup.eventOccasion,
       added_by: recognitionFollowup.addedBy,
+      notes: recognitionFollowup.action === "new" ? "" : recognitionFollowup.notes,
+      mentioned_person_ids: recognitionFollowup.action === "new" ? [] : recognitionFollowup.mentionedPersonIds || [],
       operation_id: recognitionFollowup.followupOperationId,
     });
     setRecognitionFollowupDone(true);
@@ -208,6 +253,7 @@ export function useRecognizeController({
         representative_image: recognition.inputPath,
         favorite: false,
         tags: [],
+        notes: recognitionFollowup.notes?.trim() || "",
         created_at: new Date().toISOString(),
         metadata: {
           rank: recognitionFollowup.rank || "",
@@ -224,6 +270,10 @@ export function useRecognizeController({
         embedding_count: Number(person.embedding_count || 0) + 1,
         representative_image: person.representative_image || recognition.inputPath,
       }));
+    }
+    if (recognitionTargetPerson?.person_id === personId) {
+      setRecognitionTargetPerson(null);
+      await onExistingPersonEnrolled?.(personId);
     }
     showToast("Recognition details confirmed");
   };
@@ -244,7 +294,7 @@ export function useRecognizeController({
     setRecognitionGalleryImage(embedding?.source_image || path);
   };
 
-  function openRecognitionFollowup({ name, personId, embeddingId, decision, action, faceIndex, faceBox, forceBadQuality = false }) {
+  function openRecognitionFollowup({ name, personId, embeddingId, decision, action, faceIndex, faceBox, forceBadQuality = false, conflictAcknowledged = false }) {
     const { date, time } = currentDateTimeParts();
     setRecognitionFollowup({
       date,
@@ -256,6 +306,8 @@ export function useRecognizeController({
       country: "",
       importance: action === "new" ? NEW_PERSON_IMPORTANCE_OPTIONS[1] : "",
       addedBy: "",
+      notes: "",
+      mentionedPersonIds: [],
       name,
       personId,
       embeddingId,
@@ -263,6 +315,7 @@ export function useRecognizeController({
       faceIndex,
       faceBox,
       forceBadQuality,
+      conflictAcknowledged,
       decision,
       action,
       identityOperationId: crypto.randomUUID(),
@@ -280,6 +333,7 @@ export function useRecognizeController({
       recognitionAcceptedFaces,
       recognitionFollowup,
       recognitionFollowupDone,
+      recognitionTargetPerson,
     },
     refs: { recognizeFileRef },
     actions: {
@@ -287,6 +341,8 @@ export function useRecognizeController({
       recognitionAccept,
       recognitionNew,
       recognitionClear,
+      startExistingPersonEnrollment,
+      cancelExistingPersonEnrollment,
       selectRecognitionFace,
       loadRecognitionPeopleCandidates,
       openRecognitionGallery,

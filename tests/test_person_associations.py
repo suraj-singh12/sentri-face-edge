@@ -28,6 +28,7 @@ class PersonAssociationTest(unittest.TestCase):
             )
 
             self.assertEqual(association.relationship_type, "ASSOCIATED_WITH")
+            self.assertEqual(association.association_origin, "manual")
             self.assertEqual(
                 {association.source_person_id, association.target_person_id},
                 {person_a.person_id, person_b.person_id},

@@ -33,6 +33,13 @@ export function usePeopleController({
     setPeopleGalleryImage(null);
   };
 
+  const refreshPeopleProfile = async (personId) => {
+    const payload = await loadPerson(personId);
+    setPeopleGallery((current) => current?.person?.person_id === personId ? payload : current);
+    setPeopleGalleryImage(null);
+    return payload;
+  };
+
   const createPlaceholderPerson = async (values) => {
     const payload = await apiPost("/api/person-placeholder", {
       name: values.name,
@@ -40,6 +47,14 @@ export function usePeopleController({
       country: values.country,
       importance: values.importance,
       tags: values.tags || [],
+      notes: values.notes || "",
+      seen_date: values.date,
+      seen_time: values.time,
+      place_seen: values.placeSeen,
+      individual_count: Number(values.individualCount),
+      event_occasion: values.eventOccasion,
+      added_by: values.addedBy,
+      mentioned_person_ids: values.mentionedPersonIds || [],
       operation_id: operationId(),
     });
     upsertPerson(payload.person);
@@ -152,6 +167,28 @@ export function usePeopleController({
     } : current);
     showToast("Person details updated");
     return true;
+  };
+
+  const savePersonNotes = async (personId, notes, expectedPreviousNotes, mentionedPersonIds = []) => {
+    const payload = await apiPost("/api/person-notes", {
+      person_id: personId,
+      notes,
+      expected_previous_notes: expectedPreviousNotes,
+      mentioned_person_ids: mentionedPersonIds,
+      operation_id: operationId(),
+    });
+    if (!payload.updated) return { updated: false, notes: payload.notes };
+    updatePerson(personId, (person) => ({ ...person, notes: payload.notes }));
+    setPeopleGallery((current) => current?.person?.person_id === personId ? {
+      ...current,
+      person: { ...current.person, notes: payload.notes },
+      associations: payload.associations || current.associations,
+      changes: payload.change
+        ? [payload.change, ...(current.changes || []).filter((item) => item.change_id !== payload.change.change_id)]
+        : current.changes,
+    } : current);
+    showToast("Notes saved");
+    return { updated: true, notes: payload.notes };
   };
 
   const setFavorite = async (personId, favorite) => {
@@ -379,6 +416,7 @@ export function usePeopleController({
     state: { peopleGallery, peopleGalleryImage },
     actions: {
       peopleOpen,
+      refreshPeopleProfile,
       createPlaceholderPerson,
       createPersonAssociation,
       createPlaceholderAssociation,
@@ -386,6 +424,7 @@ export function usePeopleController({
       setPeopleGalleryImage,
       peopleBack,
       savePeopleProfile,
+      savePersonNotes,
       setPeopleFavorite: setFavorite,
       setRepresentativePhoto,
       archivePerson,

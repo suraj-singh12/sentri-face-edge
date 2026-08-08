@@ -58,6 +58,7 @@ from sentriface.models import (
     FaceBox,
     InitGroup,
     InitSession,
+    MatchDecision,
     PendingAddition,
     Person,
     PersonAssociation,
@@ -84,6 +85,7 @@ INFERENCE_ENDPOINTS = {
     "/api/recognize-batch",
     "/api/recognition-person-candidates",
     "/api/recognition-accept-existing",
+    "/api/placeholder-enroll",
     "/api/recognition-new",
     "/api/enroll",
     "/api/queue-add",
@@ -159,11 +161,12 @@ def _required_capability(method: str, path: str) -> str | None:
     }:
         return "recognize"
     if path in {
-        "/api/enroll", "/api/person-placeholder", "/api/person-update", "/api/person-preferences",
+        "/api/enroll", "/api/person-placeholder", "/api/person-update", "/api/person-notes", "/api/person-preferences",
         "/api/person-association", "/api/person-association-placeholder",
         "/api/person-association-remove",
         "/api/recognition-person-candidates",
         "/api/recognition-accept-existing", "/api/recognition-new",
+        "/api/placeholder-enroll",
         "/api/recognition-followup", "/api/queue-add", "/api/queue-cancel",
         "/api/queue-scan", "/api/queue-confirm-new", "/api/queue-confirm-existing",
         "/api/queue-refresh-suggestions", "/api/queue-discard", "/api/queue-skip",
@@ -1508,20 +1511,58 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 self._json({"updated": True, "change": _person_change(change)})
                 return
+            if parsed.path == "/api/person-notes":
+                mentioned_person_ids = payload.get("mentioned_person_ids", [])
+                if not isinstance(mentioned_person_ids, list):
+                    raise KeyError("mentioned_person_ids must be a list")
+                changed, person, change = self.server.engine.update_person_notes(
+                    person_id=_required(payload, "person_id"),
+                    notes=str(payload.get("notes") or ""),
+                    expected_previous_notes=str(payload.get("expected_previous_notes") or ""),
+                    editor_name=self.auth_user.display_name or self.auth_user.username,
+                    operation_id=_operation_id(payload),
+                    mentioned_person_ids=[str(item) for item in mentioned_person_ids],
+                )
+                associations = self.server.engine.list_person_associations(person.person_id)
+                person_summaries = {item.person.person_id: item for item in self.server.engine.list_persons()}
+                self.server.log_event("person-notes-update", person_id=person.person_id, changed=changed)
+                self._json({
+                    "updated": changed,
+                    "notes": person.notes,
+                    "change": _person_change(change) if change else None,
+                    "associations": [
+                        _person_association(item, person.person_id, person_summaries, self.server.engine)
+                        for item in associations
+                    ],
+                })
+                return
             if parsed.path == "/api/person-placeholder":
                 tags = payload.get("tags", [])
                 if not isinstance(tags, list):
                     raise KeyError("tags must be a list")
+                mentioned_person_ids = payload.get("mentioned_person_ids", [])
+                if not isinstance(mentioned_person_ids, list):
+                    raise KeyError("mentioned_person_ids must be a list")
                 person = self.server.engine.create_placeholder_person(
                     name=_required(payload, "name"),
                     metadata={
-                        "rank": str(payload.get("rank") or "").strip(),
-                        "country": str(payload.get("country") or "").strip(),
-                        "importance": str(payload.get("importance") or "").strip(),
+                        "rank": _required(payload, "rank").strip(),
+                        "country": _required(payload, "country").strip(),
+                        "importance": _required(payload, "importance").strip(),
                         "tags": [str(tag).strip() for tag in tags if str(tag).strip()],
+                        "added_by": _required(payload, "added_by"),
+                        "initial_observation": {
+                            "seen_date": _required(payload, "seen_date"),
+                            "seen_time": _required(payload, "seen_time"),
+                            "place_seen": _required(payload, "place_seen"),
+                            "individual_count": _safe_count(payload.get("individual_count"), "individual_count", allow_zero=True),
+                            "event_occasion": _required(payload, "event_occasion"),
+                        },
                     },
                     editor_name=self.auth_user.display_name or self.auth_user.username,
                     operation_id=_operation_id(payload),
+                    notes=str(payload.get("notes") or ""),
+                    mentioned_person_ids=[str(item) for item in mentioned_person_ids],
                 )
                 summary = next(
                     item for item in self.server.engine.list_persons()
@@ -1805,6 +1846,81 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self.server.log_event("recognition-accept-existing", path=str(image_path), person_id=person_id, face_index=face_index)
                 self._json({"embedding_id": embedding_id, "metrics": self.server.engine.metrics_snapshot()})
                 return
+            if parsed.path == "/api/placeholder-enroll":
+                image_path = require_local_path(Path(_required(payload, "path")))
+                person_id = _required(payload, "person_id")
+                operation_id = _optional_operation_id(payload)
+                existing_operation = self.server.engine.store.get_person_operation(
+                    operation_id, "confirm-pending-existing"
+                )
+                if existing_operation:
+                    existing_person = self.server.engine.get_person(existing_operation["person_id"])
+                    self._json({
+                        "embedding_id": existing_operation["embedding_id"],
+                        "person_id": existing_operation["person_id"],
+                        "name": existing_person.name if existing_person else existing_operation["person_id"],
+                        "metrics": self.server.engine.metrics_snapshot(),
+                    })
+                    return
+                person = self.server.engine.get_person(person_id)
+                if person is None:
+                    raise KeyError("This person no longer exists")
+                if person.enrollment_status != "placeholder":
+                    raise KeyError("This profile already has biometric data. Use the normal add-to-existing-person flow.")
+                face_index = _face_index(payload)
+                self.server.engine.reset_metrics()
+                addition = self.server.engine.prepare_face_addition(
+                    image_path,
+                    face_index,
+                    allow_bad_quality=bool(payload.get("force_bad_quality", False)),
+                    expected_box=_face_box(payload),
+                )
+                if addition is None:
+                    raise KeyError(f"Face {face_index} does not meet the enrollment quality requirements")
+                conflict = addition.matches[0] if addition.decision != MatchDecision.UNKNOWN and addition.matches else None
+                if conflict and conflict.person_id != person_id and not bool(payload.get("conflict_acknowledged", False)):
+                    journal = self.server.engine.cleanup.schedule(
+                        (addition.face.crop_path,),
+                        f"placeholder-conflict-crop-{addition.pending_id}",
+                    )
+                    self.server.engine.cleanup.run(journal, self.server.engine.store.list_all_file_references)
+                    raise KeyError("This face resembles another existing person. Review the conflict before adding it here.")
+                mentioned_person_ids = payload.get("mentioned_person_ids", [])
+                if not isinstance(mentioned_person_ids, list):
+                    raise KeyError("mentioned_person_ids must be a list")
+                embedding_id = self.server.engine.confirm_existing_person_with_detail(
+                    addition,
+                    person_id,
+                    {
+                        "image_id": _required(payload, "image_id"),
+                        "image_path": str(image_path),
+                        "name": person.name,
+                        "decision": "existing",
+                        "seen_date": _required(payload, "date"),
+                        "seen_time": _required(payload, "time"),
+                        "place_seen": _required(payload, "place_seen"),
+                        "individual_count": _safe_count(payload.get("individual_count"), "individual_count", allow_zero=True),
+                        "event_occasion": _required(payload, "event_occasion"),
+                        "added_by": _required(payload, "added_by"),
+                        "notes": str(payload.get("notes") or ""),
+                        "mentioned_person_ids": [str(item) for item in mentioned_person_ids],
+                    },
+                    operation_id=operation_id,
+                )
+                self.server.log_event(
+                    "placeholder-enrolled",
+                    path=str(image_path),
+                    person_id=person_id,
+                    embedding_id=embedding_id,
+                    face_index=face_index,
+                )
+                self._json({
+                    "embedding_id": embedding_id,
+                    "person_id": person_id,
+                    "name": person.name,
+                    "metrics": self.server.engine.metrics_snapshot(),
+                })
+                return
             if parsed.path == "/api/recognition-new":
                 image_path = require_local_path(Path(_required(payload, "path")))
                 name = _required(payload, "name")
@@ -1818,7 +1934,14 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 if addition is None:
                     raise KeyError(f"Face {face_index} does not meet the enrollment quality requirements")
-                person_id = self.server.engine.confirm_new_person(addition, name, operation_id=_optional_operation_id(payload))
+                mentioned_person_ids = payload.get("mentioned_person_ids", [])
+                if not isinstance(mentioned_person_ids, list):
+                    raise KeyError("mentioned_person_ids must be a list")
+                person_id = self.server.engine.confirm_new_person(
+                    addition, name, operation_id=_optional_operation_id(payload),
+                    notes=str(payload.get("notes") or ""),
+                    mentioned_person_ids=[str(item) for item in mentioned_person_ids],
+                )
                 embedding = self.server.engine.list_person_embeddings(person_id)[-1]
                 self.server.log_event("recognition-new", path=str(image_path), person_id=person_id, face_index=face_index)
                 self._json(
@@ -1830,6 +1953,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 return
             if parsed.path == "/api/recognition-followup":
+                mentioned_person_ids = payload.get("mentioned_person_ids", [])
+                if not isinstance(mentioned_person_ids, list):
+                    raise KeyError("mentioned_person_ids must be a list")
                 detail_id = self.server.engine.add_recognition_detail(
                     embedding_id=_required(payload, "embedding_id"),
                     person_id=_required(payload, "person_id"),
@@ -1846,6 +1972,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     country=payload.get("country"),
                     importance=payload.get("importance"),
                     added_by=payload.get("added_by"),
+                    notes=str(payload.get("notes") or ""),
+                    mentioned_person_ids=[str(item) for item in mentioned_person_ids],
                     operation_id=_optional_operation_id(payload),
                 )
                 self.server.log_event(
@@ -2032,12 +2160,17 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     self.server.finish_queue_job(job_id)
             if parsed.path == "/api/queue-confirm-new":
                 session_id = _required(payload, "session_id")
+                mentioned_person_ids = payload.get("mentioned_person_ids", [])
+                if not isinstance(mentioned_person_ids, list):
+                    raise KeyError("mentioned_person_ids must be a list")
                 person_id, accepted = self.server.engine.confirm_init_faces(
                     session_id,
                     _required(payload, "group_id"),
                     _queue_face_ids(self.server.engine, payload),
                     _required(payload, "name"),
                     _optional_operation_id(payload),
+                    notes=str(payload.get("notes") or ""),
+                    mentioned_person_ids=[str(item) for item in mentioned_person_ids],
                 )
                 try:
                     changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
@@ -3125,6 +3258,7 @@ def _person(person: Person) -> dict[str, Any]:
         "archived": person.deleted_at is not None,
         "enrollment_status": person.enrollment_status,
         "is_placeholder": person.enrollment_status == "placeholder",
+        "notes": person.notes,
     }
 
 
@@ -3180,6 +3314,7 @@ def _person_association(
         "created_at": association.created_at,
         "updated_at": association.updated_at,
         "created_by": association.created_by,
+        "association_origin": association.association_origin,
         "person": _person_summary(summary, engine),
     }
 
@@ -3239,6 +3374,7 @@ def _recognition_detail(detail: RecognitionDetail) -> dict[str, Any]:
         "country": detail.country,
         "importance": detail.importance,
         "added_by": detail.added_by,
+        "notes": detail.notes,
         "created_at": detail.created_at,
     }
 
@@ -3257,6 +3393,8 @@ def _person_change(change: PersonChange) -> dict[str, Any]:
         "new_importance": change.new_importance,
         "previous_status": change.previous_status,
         "new_status": change.new_status,
+        "previous_notes": change.previous_notes,
+        "new_notes": change.new_notes,
         "editor_name": change.editor_name,
         "created_at": change.created_at,
     }

@@ -269,6 +269,8 @@ class FaceEngine:
         metadata: dict | None,
         editor_name: str,
         operation_id: str,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
     ) -> Person:
         with self.metrics.timer("db_create_placeholder_person_ms"):
             return self.store.create_placeholder_person(
@@ -276,6 +278,8 @@ class FaceEngine:
                 metadata=metadata,
                 editor_name=editor_name,
                 operation_id=operation_id,
+                notes=notes,
+                mentioned_person_ids=mentioned_person_ids,
             )
 
     def list_person_embeddings(self, person_id: str, include_archived: bool = False):
@@ -323,6 +327,16 @@ class FaceEngine:
             raise KeyError(f"Unknown person: {person_id}")
         with self.metrics.timer("db_list_person_changes_ms"):
             return self.store.list_person_changes(person_id)
+
+    def update_person_notes(
+        self, person_id: str, notes: str, expected_previous_notes: str,
+        editor_name: str, operation_id: str, mentioned_person_ids: list[str] | None = None,
+    ) -> tuple[bool, Person, PersonChange | None]:
+        with self.metrics.timer("db_update_person_notes_ms"):
+            return self.store.update_person_notes(
+                person_id, notes, expected_previous_notes, editor_name, operation_id,
+                mentioned_person_ids,
+            )
 
     def list_person_operations(
         self,
@@ -538,6 +552,8 @@ class FaceEngine:
         country: str | None = None,
         importance: str | None = None,
         added_by: str | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
         operation_id: str | None = None,
     ) -> str:
         with self.metrics.timer("db_add_recognition_detail_ms"):
@@ -557,6 +573,8 @@ class FaceEngine:
                 country=country,
                 importance=importance,
                 added_by=added_by,
+                notes=notes,
+                mentioned_person_ids=mentioned_person_ids,
                 operation_id=operation_id,
             )
         return detail.detail_id
@@ -604,6 +622,8 @@ class FaceEngine:
         name: str,
         metadata: dict | None = None,
         operation_id: str | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
     ) -> str:
         with self.metrics.timer("db_save_pending_ms"):
             self.store.save_pending_addition(pending)
@@ -613,6 +633,8 @@ class FaceEngine:
                 operation_id or str(uuid.uuid4()),
                 name=name,
                 metadata=metadata,
+                notes=notes,
+                mentioned_person_ids=mentioned_person_ids,
             )
         self._rebuild_index()
         return person.person_id
@@ -623,16 +645,53 @@ class FaceEngine:
         person_id: str,
         operation_id: str | None = None,
     ) -> str:
-        with self.metrics.timer("db_save_pending_ms"):
-            self.store.save_pending_addition(pending)
-        with self.metrics.timer("db_confirm_pending_ms"):
-            _person, record = self.store.confirm_pending_addition(
-                pending.pending_id,
-                operation_id or str(uuid.uuid4()),
-                person_id=person_id,
-            )
+        try:
+            with self.metrics.timer("db_save_pending_ms"):
+                self.store.save_pending_addition(pending)
+            with self.metrics.timer("db_confirm_pending_ms"):
+                _person, record = self.store.confirm_pending_addition(
+                    pending.pending_id,
+                    operation_id or str(uuid.uuid4()),
+                    person_id=person_id,
+                )
+        except Exception:
+            self.discard_prepared_addition(pending)
+            raise
         self._rebuild_index()
         return record.embedding_id
+
+    def confirm_existing_person_with_detail(
+        self,
+        pending: PendingAddition,
+        person_id: str,
+        recognition_detail: dict,
+        operation_id: str | None = None,
+    ) -> str:
+        try:
+            with self.metrics.timer("db_save_pending_ms"):
+                self.store.save_pending_addition(pending)
+            with self.metrics.timer("db_confirm_pending_ms"):
+                _person, record = self.store.confirm_pending_addition(
+                    pending.pending_id,
+                    operation_id or str(uuid.uuid4()),
+                    person_id=person_id,
+                    recognition_detail=recognition_detail,
+                )
+        except Exception:
+            self.discard_prepared_addition(pending)
+            raise
+        self._rebuild_index()
+        return record.embedding_id
+
+    def discard_prepared_addition(self, pending: PendingAddition) -> None:
+        journal = self.cleanup.schedule(
+            (pending.source_image, pending.face.crop_path),
+            f"discard-prepared-{pending.pending_id}",
+        )
+        try:
+            self.store.delete_pending_addition(pending.pending_id)
+        finally:
+            self.cleanup.run(journal, self.store.list_all_file_references)
     def confirm_pending_as_new_person(self, pending_id: str, name: str) -> str:
         with self.metrics.timer("db_get_pending_ms"):
             pending = self.store.get_pending_addition(pending_id)
@@ -967,6 +1026,8 @@ class FaceEngine:
         init_face_ids: list[str],
         name: str,
         operation_id: str | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
     ) -> tuple[str, list[dict]]:
         operation_id = operation_id or str(uuid.uuid4())
         existing = self.store.get_person_operation(operation_id, "confirm-init-new")
@@ -983,6 +1044,8 @@ class FaceEngine:
             init_face_ids,
             operation_id,
             name=name,
+            notes=notes,
+            mentioned_person_ids=mentioned_person_ids,
         )
         self._rebuild_index()
         self.cleanup.run(journal, self.store.list_all_file_references)

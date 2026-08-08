@@ -2119,6 +2119,9 @@ button {
 }
 
 .people-profile-hero {
+  display: grid !important;
+  grid-template-columns: 164px minmax(240px, 1fr) minmax(300px, 420px);
+  gap: 26px;
   flex: 0 0 auto;
   padding: 16px 0 14px;
   border-bottom: 1px solid var(--sentriface-card-border);
@@ -2148,6 +2151,31 @@ button {
 
 .people-profile-heading {
   padding-top: 4px;
+}
+
+.people-profile-notes {
+  width: 100%;
+  align-self: start;
+  background: var(--sentriface-solid-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.people-profile-note-summary {
+  line-height: 1.65;
+  max-height: 3.3em;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.people-note-person-chip {
+  margin: 0 3px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.people-note-mention-suggestions {
+  max-height: 220px;
+  overflow-y: auto;
 }
 
 .people-profile-tabs {
@@ -3126,6 +3154,10 @@ button {
   .people-profile-topbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .people-profile-hero {
+    display: flex !important;
   }
 
   .people-pagination > .mantine-Group-root > .mantine-Group-root {
