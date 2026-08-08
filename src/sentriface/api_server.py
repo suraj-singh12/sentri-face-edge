@@ -151,7 +151,7 @@ def _required_capability(method: str, path: str) -> str | None:
         return "technical"
     if path in {
         "/api/person-archive", "/api/person-restore", "/api/person-merge", "/api/person-merge-undo", "/api/person-purge",
-        "/api/person-photo-move", "/api/person-photo-delete",
+        "/api/person-photo-move", "/api/observation-correct", "/api/person-photo-delete",
         "/api/person-photo-restore", "/api/person-photo-purge",
     }:
         return "destroy"
@@ -1276,12 +1276,22 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json(_photo_review(review))
                 return
             if parsed.path == "/api/photo-review-complete":
-                result = self.server.engine.complete_photo_review(
-                    _required(payload, "review_id"),
-                    _optional_operation_id(payload),
-                    actor=self._operation_actor(),
-                    source=str(payload.get("source") or "review-finalisation"),
-                )
+                target_person_id = str(payload.get("target_person_id") or "").strip()
+                if target_person_id:
+                    result = self.server.engine.add_face_to_person(
+                        _required(payload, "review_id"),
+                        target_person_id,
+                        _optional_operation_id(payload),
+                        actor=self._operation_actor(),
+                        source=str(payload.get("source") or "add-face-review"),
+                    )
+                else:
+                    result = self.server.engine.complete_photo_review(
+                        _required(payload, "review_id"),
+                        _optional_operation_id(payload),
+                        actor=self._operation_actor(),
+                        source=str(payload.get("source") or "review-finalisation"),
+                    )
                 self.server.log_event("photo-review-completed", **result)
                 self._json(result)
                 return
@@ -1299,9 +1309,28 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     "Per-face confirmation is unavailable; complete the whole review atomically"
                 )
             if parsed.path == "/api/person-photo-move":
-                raise DomainWorkflowUnavailableError(
-                    "Move Face is temporarily unavailable until P7 provides normalized correction provenance"
+                result = self.server.engine.move_embedding(
+                    _required(payload, "embedding_id"),
+                    _required(payload, "target_person_id"),
+                    _operation_id(payload),
+                    actor=self._operation_actor(),
+                    source=parsed.path,
                 )
+                self.server.log_event("person-photo-move", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/observation-correct":
+                result = self.server.engine.correct_observation_identity(
+                    _required(payload, "observation_id"),
+                    _required(payload, "from_person_id"),
+                    _required(payload, "to_person_id"),
+                    _operation_id(payload),
+                    actor=self._operation_actor(),
+                    source=parsed.path,
+                )
+                self.server.log_event("observation-identity-corrected", **result)
+                self._json(result)
+                return
             if parsed.path in {"/api/person-merge", "/api/person-merge-undo"}:
                 raise DomainWorkflowUnavailableError(
                     "Identity Merge is temporarily unavailable until P8 provides normalized merge support"

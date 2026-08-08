@@ -115,6 +115,31 @@ class ObservationParticipant:
 
 
 @dataclass(frozen=True)
+class IdentityCorrection:
+    correction_id: str
+    correction_type: str
+    from_person_id: str
+    to_person_id: str
+    operation_id: str
+    observation_id: str | None = None
+    face_assignment_id: str | None = None
+    embedding_id: str | None = None
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class ObservationFaceAssignment:
+    assignment_id: str
+    observation_id: str
+    review_id: str
+    face_id: str
+    embedding_id: str
+    original_person_id: str
+    created_operation_id: str
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
 class Note:
     note_id: str
     owner_person_id: str
@@ -148,6 +173,7 @@ class RelationshipEvidence:
     evidence_type: str
     source_entity_type: str
     source_entity_id: str
+    evidence_revision_id: str
     source_person_id: str
     target_person_id: str
     relationship_type: str = "ASSOCIATED_WITH"

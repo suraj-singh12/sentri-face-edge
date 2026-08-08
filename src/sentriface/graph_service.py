@@ -54,6 +54,30 @@ class GlobalIdentityGraphService:
     ) -> dict:
         return self.store.complete_photo_review(review_id, operation_id, **values)
 
+    def correct_observation_identity(
+        self, observation_id: str, from_person_id: str, to_person_id: str,
+        operation_id: str, **values,
+    ) -> dict:
+        return self.store.correct_observation_identity(
+            observation_id, from_person_id, to_person_id, operation_id, **values,
+        )
+
+    def move_face(
+        self, embedding_id: str, to_person_id: str, operation_id: str, **values,
+    ) -> dict:
+        return self.store.move_face(embedding_id, to_person_id, operation_id, **values)
+
+    def add_face_to_person(
+        self, review_id: str, person_id: str, operation_id: str, **values,
+    ) -> dict:
+        return self.store.add_face_to_person(review_id, person_id, operation_id, **values)
+
+    def list_corrections_for_observation(self, observation_id: str):
+        return self.store.list_corrections_for_observation(observation_id)
+
+    def list_corrections_for_embedding(self, embedding_id: str):
+        return self.store.list_corrections_for_embedding(embedding_id)
+
     def deactivate_evidence(
         self,
         evidence_id: str,

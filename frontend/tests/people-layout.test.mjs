@@ -61,6 +61,7 @@ test("placeholder photograph enrollment uses atomic review finalisation", async 
   const app = await readFile(new URL("../src/SentriFaceApp.jsx", import.meta.url), "utf8");
   const recognize = await readFile(new URL("../src/views/RecognizeView.jsx", import.meta.url), "utf8");
   const controller = await readFile(new URL("../src/hooks/useRecognizeController.js", import.meta.url), "utf8");
+  const peopleController = await readFile(new URL("../src/hooks/usePeopleController.js", import.meta.url), "utf8");
 
   assert.match(app, /actions\.startExistingPersonEnrollment\(person\)/);
   assert.match(recognize, /Adding a photograph to \$\{targetPerson\.name\}/);
@@ -71,8 +72,11 @@ test("placeholder photograph enrollment uses atomic review finalisation", async 
   assert.match(controller, /person_id: person\.person_id/);
   assert.match(controller, /apiPost\("\/api\/photo-review-decision"/);
   assert.match(controller, /apiPost\("\/api\/photo-review-complete"/);
+  assert.match(controller, /target_person_id: recognitionTargetPerson\?\.person_id/);
   assert.doesNotMatch(controller, /apiPost\("\/api\/placeholder-enroll"/);
   assert.match(controller, /result\.created_people/);
+  assert.match(peopleController, /apiPost\("\/api\/person-photo-move"/);
+  assert.doesNotMatch(peopleController, /Move Face is temporarily unavailable until P7/);
 });
 
 test("person profiles provide explicit @ association linking and safe removal", async () => {

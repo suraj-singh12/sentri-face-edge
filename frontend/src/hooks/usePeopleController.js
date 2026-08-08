@@ -246,7 +246,14 @@ export function usePeopleController({
   };
 
   const movePersonPhoto = async (personId, embeddingId, targetPersonId) => {
-    throw new Error("Move Face is temporarily unavailable until P7");
+    const result = await apiPost("/api/person-photo-move", {
+      embedding_id: embeddingId,
+      target_person_id: targetPersonId,
+      operation_id: operationId(),
+    });
+    await refreshPeopleProfile(personId);
+    showToast("Face ownership corrected");
+    return result;
   };
 
   const deletePersonPhoto = async (personId, embeddingId) => {

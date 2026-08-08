@@ -384,7 +384,6 @@ def main() -> int:
             "confirm-existing": "Pending faces can only be confirmed through atomic review finalisation",
             "init-confirm": "Queue faces can only be confirmed through atomic review finalisation",
             "init-confirm-existing": "Queue faces can only be confirmed through atomic review finalisation",
-            "move-embedding": "Move Face is temporarily unavailable until P7",
             "merge-persons": "Identity Merge is temporarily unavailable until P8",
         }
         if args.command in gated_commands:
@@ -562,6 +561,16 @@ def main() -> int:
                 actor=cli_actor, source="cli.delete-embedding",
             )
             return _emit_engine(args, engine, {**result, "backup_id": backup.backup_id})
+
+        if args.command == "move-embedding":
+            result = engine.move_embedding(
+                args.embedding_id,
+                args.person_id,
+                str(uuid.uuid4()),
+                actor=cli_actor,
+                source="cli.move-embedding",
+            )
+            return _emit_engine(args, engine, result)
 
         if args.command == "deleted-faces":
             return _emit_engine(

@@ -99,7 +99,7 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
 
             self.assertEqual(store.get_person("legacy").name, "Legacy")
             with sqlite3.connect(db_path) as conn:
-                self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 23)
+                self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
                 self.assertIsNotNone(conn.execute(
                     "SELECT name FROM sqlite_master WHERE name = 'photo_reviews'",
                 ).fetchone())

@@ -1714,7 +1714,7 @@ function PeopleGalleryView({
       >
         <Stack>
           <Text size="sm">
-            The selected photo and its {selectedDetails.length} linked sighting{selectedDetails.length === 1 ? "" : "s"} will move together.
+            Current face ownership will move to the selected identity. Original sightings and decisions remain in correction history; affected observation participants and graph evidence are recalculated.
           </Text>
           <Select
             label="Move to"

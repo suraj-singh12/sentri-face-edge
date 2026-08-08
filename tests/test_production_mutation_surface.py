@@ -107,10 +107,18 @@ class ProductionMutationSurfaceTest(unittest.TestCase):
         self.assertNotIn("identity_store.", rename_branch)
         self.assertNotIn("engine.store.", rename_branch)
 
-    def test_move_and_merge_remain_explicitly_gated(self) -> None:
+    def test_move_face_adapters_route_through_p7_service(self) -> None:
+        root = Path(__file__).parents[1]
+        api_source = (root / "src/sentriface/api_server.py").read_text()
+        cli_source = (root / "src/sentriface/cli.py").read_text()
+        self.assertIn("self.server.engine.move_embedding(", api_source)
+        self.assertIn("engine.move_embedding(", cli_source)
+        self.assertNotIn("Move Face is temporarily unavailable until P7", api_source)
+        self.assertTrue(hasattr(SQLiteIdentityStore, "_legacy_move_embedding"))
+        self.assertFalse(hasattr(IdentityStore, "_legacy_move_embedding"))
+
+    def test_merge_remains_explicitly_gated(self) -> None:
         engine = object.__new__(FaceEngine)
-        with self.assertRaisesRegex(DomainWorkflowUnavailableError, "P7"):
-            engine.move_embedding("embedding", "person", "move-op")
         with self.assertRaisesRegex(DomainWorkflowUnavailableError, "P8"):
             engine.merge_persons("source", "target", "merge-op")
         with self.assertRaisesRegex(DomainWorkflowUnavailableError, "P8"):

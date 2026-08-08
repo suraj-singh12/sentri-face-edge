@@ -11,6 +11,7 @@ from sentriface.components.image_ops import load_bgr_image, save_face_crop
 from sentriface.components.linear_index import LinearFaceIndex
 from sentriface.cleanup_service import CleanupService
 from sentriface.components.quality import FaceQualityEvaluator
+from sentriface.correction_service import IdentityCorrectionService
 from sentriface.config import RuntimeConfig
 from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, IdentityStore
 from sentriface.errors import InputImageError, QueueCancellationError
@@ -96,6 +97,7 @@ class FaceEngine:
         self.store = store
         self.graph = GlobalIdentityGraphService(store)
         self.identity = IdentityService(store)
+        self.corrections = IdentityCorrectionService(self.graph)
         self.index_degraded_reason: str | None = (
             "requested backend unavailable"
             if config.index_backend != self.index.backend_name
@@ -533,6 +535,23 @@ class FaceEngine:
         self._rebuild_index()
         return result
 
+    def correct_observation_identity(
+        self, observation_id: str, from_person_id: str, to_person_id: str,
+        operation_id: str, **values,
+    ) -> dict:
+        return self.corrections.correct_observation_identity(
+            observation_id, from_person_id, to_person_id, operation_id, **values,
+        )
+
+    def add_face_to_person(
+        self, review_id: str, person_id: str, operation_id: str, **values,
+    ) -> dict:
+        result = self.corrections.add_face_to_person(
+            review_id, person_id, operation_id, **values,
+        )
+        self._rebuild_index()
+        return result
+
     def list_observations_for_person(self, person_id: str) -> list[Observation]:
         return self.store.list_observations_for_person(person_id)
 
@@ -702,10 +721,23 @@ class FaceEngine:
         embedding_id: str,
         person_id: str,
         operation_id: str | None = None,
+        *, actor: dict | None = None, source: str | None = None,
     ) -> dict:
-        raise DomainWorkflowUnavailableError(
-            "Move Face is temporarily unavailable until P7 provides normalized correction provenance"
+        result = self.corrections.move_face(
+            embedding_id,
+            person_id,
+            operation_id or str(uuid.uuid4()),
+            actor=actor,
+            source=source,
         )
+        self._rebuild_index()
+        return result
+
+    def list_corrections_for_observation(self, observation_id: str):
+        return self.corrections.list_corrections_for_observation(observation_id)
+
+    def list_corrections_for_embedding(self, embedding_id: str):
+        return self.corrections.list_corrections_for_embedding(embedding_id)
 
     def merge_persons(
         self,

@@ -12,6 +12,7 @@ from sentriface.models import (
     InitFace,
     InitGroup,
     InitSession,
+    IdentityCorrection,
     Note,
     NoteRevision,
     Observation,
@@ -234,6 +235,32 @@ class IdentityStore(Protocol):
         self, review_id: str, operation_id: str, **values,
     ) -> dict:
         """Atomically commit the authoritative result of one complete review."""
+
+    def correct_observation_identity(
+        self, observation_id: str, from_person_id: str, to_person_id: str,
+        operation_id: str, **values,
+    ) -> dict:
+        """Record one post-finalisation participant correction atomically."""
+
+    def move_face(
+        self, embedding_id: str, to_person_id: str, operation_id: str, **values,
+    ) -> dict:
+        """Move current face ownership while retaining correction provenance."""
+
+    def add_face_to_person(
+        self, review_id: str, person_id: str, operation_id: str, **values,
+    ) -> dict:
+        """Complete an add-face-only review without creating an observation."""
+
+    def list_corrections_for_observation(
+        self, observation_id: str,
+    ) -> list[IdentityCorrection]:
+        """List immutable correction history for an observation."""
+
+    def list_corrections_for_embedding(
+        self, embedding_id: str,
+    ) -> list[IdentityCorrection]:
+        """List immutable ownership/correction history for a face."""
 
     def update_observation(
         self,

@@ -22,6 +22,7 @@ from sentriface.models import (
     InitFace,
     InitGroup,
     InitSession,
+    IdentityCorrection,
     MatchDecision,
     Note,
     NoteRevision,
@@ -45,7 +46,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
 PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
@@ -1769,6 +1770,24 @@ class SQLiteIdentityStore:
                 conn, observation_id, review["media_id"], review["media_path"],
                 str(review["source"]), operation_id,
             )
+            for face_id in sorted(assigned_by_face):
+                assignment_id = str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"sentriface:observation-face:{observation_id}:{face_id}",
+                ))
+                conn.execute(
+                    """
+                    INSERT INTO observation_face_assignments(
+                        assignment_id, observation_id, review_id, face_id,
+                        embedding_id, original_person_id, created_operation_id, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        assignment_id, observation_id, review_id, face_id,
+                        embedding_by_face[face_id], assigned_by_face[face_id],
+                        operation_id, now,
+                    ),
+                )
             primary_path = str(review["media_path"] or "")
             for media_path in sorted(staged_media_paths):
                 if media_path == primary_path:
@@ -1789,6 +1808,7 @@ class SQLiteIdentityStore:
                 """,
                 (finalized_at, finalized_at, observation_id),
             )
+            participant_ids = sorted(canonical_participants)
             detail_ids: list[str] = []
             for face_id, person_id, embedding_id, detail, detail_notes in detail_inputs:
                 detail_id = str(uuid.uuid4())
@@ -1823,7 +1843,6 @@ class SQLiteIdentityStore:
                     ),
                 )
                 detail_ids.append(detail_id)
-            participant_ids = sorted(canonical_participants)
             evidence_ids: list[str] = []
             for index, first_id in enumerate(participant_ids):
                 for second_id in participant_ids[index + 1:]:
@@ -1892,6 +1911,388 @@ class SQLiteIdentityStore:
             }
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
+
+    def correct_observation_identity(
+        self,
+        observation_id: str,
+        from_person_id: str,
+        to_person_id: str,
+        operation_id: str,
+        *,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
+        with self._connect() as conn:
+            existing = _existing_committed_operation_result(
+                conn, operation_id, "identity.observation.correct",
+            )
+            if existing is not None:
+                if existing.get("observation_id") != observation_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                return existing
+            observation = _require_observation(conn, observation_id)
+            if observation["status"] != "FINALIZED":
+                raise ValueError("Only a finalized observation can be corrected")
+            _require_active_review_person(conn, to_person_id)
+            if from_person_id == to_person_id:
+                raise ValueError("Correction source and target must be different")
+            effective_before = _effective_observation_person_ids(conn, observation_id)
+            if from_person_id not in effective_before:
+                raise KeyError(f"Person {from_person_id} is not an effective participant")
+            assignments = _effective_face_assignments(conn, observation_id)
+            matching = [item for item in assignments if item["current_person_id"] == from_person_id]
+            affected_entities = [
+                {"entity_type": "observation", "entity_id": observation_id},
+                {"entity_type": "person", "entity_id": from_person_id},
+                {"entity_type": "person", "entity_id": to_person_id},
+                *[
+                    {"entity_type": "embedding", "entity_id": item["embedding_id"]}
+                    for item in matching
+                ],
+            ]
+            _begin_journal_operation(
+                conn,
+                "identity.observation.correct",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "identity-correction-service",
+                affected_entities=affected_entities,
+                details={
+                    "observation_id": observation_id,
+                    "from_person_id": from_person_id,
+                    "to_person_id": to_person_id,
+                },
+            )
+            correction_ids: list[str] = []
+            for assignment in matching:
+                correction_ids.append(_insert_identity_correction(
+                    conn,
+                    correction_type="FACE_ASSIGNMENT",
+                    observation_id=observation_id,
+                    face_assignment_id=assignment["assignment_id"],
+                    embedding_id=assignment["embedding_id"],
+                    from_person_id=from_person_id,
+                    to_person_id=to_person_id,
+                    operation_id=operation_id,
+                ))
+            represented_original_ids = {item["original_person_id"] for item in assignments}
+            if from_person_id not in represented_original_ids or not matching:
+                correction_ids.append(_insert_identity_correction(
+                    conn,
+                    correction_type="OBSERVATION_IDENTITY",
+                    observation_id=observation_id,
+                    face_assignment_id=None,
+                    embedding_id=None,
+                    from_person_id=from_person_id,
+                    to_person_id=to_person_id,
+                    operation_id=operation_id,
+                ))
+            effective_after, evidence_ids = _recalculate_observation_evidence(
+                conn, observation_id, operation_id,
+                _optional_text(source) or "identity-correction-service",
+            )
+            result = {
+                "observation_id": observation_id,
+                "from_person_id": from_person_id,
+                "to_person_id": to_person_id,
+                "previous_participant_ids": effective_before,
+                "participant_ids": effective_after,
+                "correction_ids": correction_ids,
+                "graph_evidence_ids": evidence_ids,
+                "graph_evidence_count": len(evidence_ids),
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def move_face(
+        self,
+        embedding_id: str,
+        to_person_id: str,
+        operation_id: str,
+        *,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
+        with self._connect() as conn:
+            existing = _existing_committed_operation_result(
+                conn, operation_id, "identity.face.move",
+            )
+            if existing is not None:
+                if existing.get("embedding_id") != embedding_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                return existing
+            target_person_id = _require_active_review_person(conn, to_person_id)
+            embedding = conn.execute(
+                """
+                SELECT e.person_id, e.deleted_at, source.metadata AS source_metadata
+                FROM embeddings e
+                JOIN persons source ON source.person_id = e.person_id
+                WHERE e.embedding_id = ?
+                  AND e.deleted_at IS NULL
+                  AND source.lifecycle_status = 'ACTIVE' AND source.deleted_at IS NULL
+                """,
+                (embedding_id,),
+            ).fetchone()
+            if embedding is None:
+                raise KeyError(f"Unknown active embedding: {embedding_id}")
+            from_person_id = str(embedding["person_id"])
+            if from_person_id == target_person_id:
+                raise ValueError("Face already belongs to the selected person")
+            assignments = conn.execute(
+                """
+                SELECT observation_id FROM observation_face_assignments
+                WHERE embedding_id = ? ORDER BY observation_id
+                """,
+                (embedding_id,),
+            ).fetchall()
+            affected_observation_ids = sorted({str(row["observation_id"]) for row in assignments})
+            _begin_journal_operation(
+                conn,
+                "identity.face.move",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "identity-correction-service",
+                affected_entities=[
+                    {"entity_type": "embedding", "entity_id": embedding_id},
+                    {"entity_type": "person", "entity_id": from_person_id},
+                    {"entity_type": "person", "entity_id": target_person_id},
+                    *[
+                        {"entity_type": "observation", "entity_id": item}
+                        for item in affected_observation_ids
+                    ],
+                ],
+                details={
+                    "from_person_id": from_person_id,
+                    "to_person_id": target_person_id,
+                },
+            )
+            correction_ids = [_insert_identity_correction(
+                conn,
+                correction_type="FACE_OWNERSHIP",
+                observation_id=None,
+                face_assignment_id=None,
+                embedding_id=embedding_id,
+                from_person_id=from_person_id,
+                to_person_id=target_person_id,
+                operation_id=operation_id,
+            )]
+            conn.execute(
+                "UPDATE embeddings SET person_id = ? WHERE embedding_id = ?",
+                (target_person_id, embedding_id),
+            )
+            for observation_id in affected_observation_ids:
+                for assignment in _effective_face_assignments(conn, observation_id):
+                    if (
+                        assignment["embedding_id"] == embedding_id
+                        and assignment["current_person_id"] == from_person_id
+                    ):
+                        correction_ids.append(_insert_identity_correction(
+                            conn,
+                            correction_type="FACE_ASSIGNMENT",
+                            observation_id=observation_id,
+                            face_assignment_id=assignment["assignment_id"],
+                            embedding_id=embedding_id,
+                            from_person_id=from_person_id,
+                            to_person_id=target_person_id,
+                            operation_id=operation_id,
+                        ))
+            source_metadata = json.loads(embedding["source_metadata"] or "{}")
+            if source_metadata.get("representative_embedding_id") == embedding_id:
+                source_metadata.pop("representative_embedding_id", None)
+                conn.execute(
+                    "UPDATE persons SET metadata = ? WHERE person_id = ?",
+                    (json.dumps(source_metadata, separators=(",", ":")), from_person_id),
+                )
+            remaining = conn.execute(
+                "SELECT 1 FROM embeddings WHERE person_id = ? AND deleted_at IS NULL LIMIT 1",
+                (from_person_id,),
+            ).fetchone()
+            if remaining is None:
+                conn.execute(
+                    """
+                    UPDATE persons
+                    SET biometric_status = 'NO_FACE', enrollment_status = 'placeholder'
+                    WHERE person_id = ?
+                    """,
+                    (from_person_id,),
+                )
+            _mark_person_enrolled(conn, target_person_id)
+            graph_evidence_ids: list[str] = []
+            participants_by_observation: dict[str, list[str]] = {}
+            for observation_id in affected_observation_ids:
+                participants, evidence_ids = _recalculate_observation_evidence(
+                    conn, observation_id, operation_id,
+                    _optional_text(source) or "identity-correction-service",
+                )
+                participants_by_observation[observation_id] = participants
+                graph_evidence_ids.extend(evidence_ids)
+            if not affected_observation_ids:
+                _replace_graph_projection(conn)
+            validation = _validate_graph_projection(conn)
+            if not validation["valid"]:
+                raise RuntimeError(
+                    "Graph projection validation failed: " + "; ".join(validation["errors"])
+                )
+            result = {
+                "embedding_id": embedding_id,
+                "source_person_id": from_person_id,
+                "target_person_id": target_person_id,
+                "moved": True,
+                "changed": True,
+                "affected_observation_ids": affected_observation_ids,
+                "participants_by_observation": participants_by_observation,
+                "correction_ids": correction_ids,
+                "graph_evidence_ids": graph_evidence_ids,
+                "graph_evidence_count": len(graph_evidence_ids),
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def add_face_to_person(
+        self,
+        review_id: str,
+        person_id: str,
+        operation_id: str,
+        *,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
+        with self._connect() as conn:
+            existing = _existing_committed_operation_result(
+                conn, operation_id, "identity.face.add",
+            )
+            if existing is not None:
+                if existing.get("review_id") != review_id or existing.get("person_id") != person_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                return existing
+            person_id = _require_active_review_person(conn, person_id)
+            review = conn.execute(
+                "SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,),
+            ).fetchone()
+            if review is None:
+                raise KeyError(f"Unknown photo review: {review_id}")
+            if review["status"] != "IN_PROGRESS":
+                raise ValueError("Only an in-progress review can add a face")
+            faces = conn.execute(
+                "SELECT * FROM photo_review_faces WHERE review_id = ? ORDER BY face_id",
+                (review_id,),
+            ).fetchall()
+            if not faces or any(row["decision"] is None for row in faces):
+                raise ValueError("Every detected face requires a final decision before completion")
+            accepted = [row for row in faces if row["decision"] == "ACCEPT_EXISTING_PERSON"]
+            if not accepted:
+                raise ValueError("Add Face requires at least one accepted face")
+            if any(str(row["person_id"] or "") != person_id for row in accepted):
+                raise ValueError("Every accepted face must target the selected existing person")
+            if any(row["decision"] == "ACCEPT_NEW_PERSON" for row in faces):
+                raise ValueError("Add Face cannot create another identity")
+            _begin_journal_operation(
+                conn,
+                "identity.face.add",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "identity-correction-service",
+                affected_entities=[
+                    {"entity_type": "review", "entity_id": review_id},
+                    {"entity_type": "person", "entity_id": person_id},
+                    *[
+                        {"entity_type": "review_face", "entity_id": str(row["face_id"])}
+                        for row in accepted
+                    ],
+                ],
+                details={"person_id": person_id, "accepted_face_count": len(accepted)},
+            )
+            embedding_ids: list[str] = []
+            created_embedding_ids: list[str] = []
+            for row in accepted:
+                staged = _staged_review_face_row(
+                    conn, row["staged_face_type"], row["staged_face_id"],
+                )
+                duplicate = conn.execute(
+                    """
+                    SELECT embedding_id FROM embeddings
+                    WHERE person_id = ? AND vector = ? AND deleted_at IS NULL
+                    """,
+                    (person_id, staged["vector"]),
+                ).fetchone()
+                if duplicate is None:
+                    embedding_id = str(uuid.uuid4())
+                    conn.execute(
+                        """
+                        INSERT INTO embeddings(
+                            embedding_id, person_id, vector, quality_score,
+                            source_image, crop_path, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            embedding_id, person_id, staged["vector"], staged["quality_score"],
+                            staged["source_image"], staged["crop_path"], utc_now(),
+                        ),
+                    )
+                    created_embedding_ids.append(embedding_id)
+                else:
+                    embedding_id = str(duplicate["embedding_id"])
+                embedding_ids.append(embedding_id)
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO biometric_enrollment_history(
+                        enrollment_id, embedding_id, person_id, review_id, operation_id, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:enrollment:{operation_id}:{embedding_id}")),
+                        embedding_id, person_id, review_id, operation_id, utc_now(),
+                    ),
+                )
+            _mark_person_enrolled(conn, person_id)
+            completed_at = utc_now()
+            conn.execute(
+                """
+                UPDATE photo_reviews
+                SET status = 'COMPLETED', completed_operation_id = ?, completed_at = ?
+                WHERE review_id = ? AND status = 'IN_PROGRESS'
+                """,
+                (operation_id, completed_at, review_id),
+            )
+            _remove_review_staging(conn, review_id)
+            result = {
+                "review_id": review_id,
+                "person_id": person_id,
+                "embedding_ids": embedding_ids,
+                "created_embedding_ids": created_embedding_ids,
+                "created_person_ids": [],
+                "observation_id": None,
+                "graph_evidence_ids": [],
+                "graph_evidence_count": 0,
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def list_corrections_for_observation(
+        self, observation_id: str,
+    ) -> list[IdentityCorrection]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM identity_corrections
+                WHERE observation_id = ? ORDER BY created_at, correction_id
+                """,
+                (observation_id,),
+            ).fetchall()
+        return [_identity_correction_from_row(row) for row in rows]
+
+    def list_corrections_for_embedding(
+        self, embedding_id: str,
+    ) -> list[IdentityCorrection]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM identity_corrections
+                WHERE embedding_id = ? ORDER BY created_at, correction_id
+                """,
+                (embedding_id,),
+            ).fetchall()
+        return [_identity_correction_from_row(row) for row in rows]
 
     def get_observation(self, observation_id: str) -> Observation | None:
         with self._connect() as conn:
@@ -2188,16 +2589,15 @@ class SQLiteIdentityStore:
                 "SELECT 1 FROM persons WHERE person_id = ?", (person_id,),
             ).fetchone() is None:
                 raise KeyError(f"Unknown person: {person_id}")
-            rows = conn.execute(
-                """
-                SELECT o.*
-                FROM observations o
-                JOIN observation_participants p ON p.observation_id = o.observation_id
-                WHERE p.person_id = ?
-                ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
-                """,
-                (person_id,),
-            ).fetchall()
+            rows = [
+                row for row in conn.execute(
+                    """
+                    SELECT o.* FROM observations o
+                    ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
+                    """
+                ).fetchall()
+                if person_id in _effective_observation_person_ids(conn, str(row["observation_id"]))
+            ]
         return [_observation_from_row(row) for row in rows]
 
     def list_observations_for_media(self, media_id: str) -> list[Observation]:
@@ -5831,6 +6231,224 @@ def _migrate_22_to_23(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_23_to_24(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(
+        conn,
+        """
+        CREATE TABLE observation_face_assignments (
+            assignment_id TEXT PRIMARY KEY,
+            observation_id TEXT NOT NULL,
+            review_id TEXT NOT NULL,
+            face_id TEXT NOT NULL,
+            embedding_id TEXT NOT NULL,
+            original_person_id TEXT NOT NULL,
+            created_operation_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(observation_id, face_id),
+            FOREIGN KEY(observation_id) REFERENCES observations(observation_id) ON DELETE RESTRICT,
+            FOREIGN KEY(review_id) REFERENCES photo_reviews(review_id) ON DELETE RESTRICT,
+            FOREIGN KEY(embedding_id) REFERENCES embeddings(embedding_id) ON DELETE RESTRICT,
+            FOREIGN KEY(original_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(created_operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX idx_observation_face_assignments_embedding
+        ON observation_face_assignments(embedding_id, observation_id);
+
+        CREATE TABLE identity_corrections (
+            correction_id TEXT PRIMARY KEY,
+            correction_type TEXT NOT NULL CHECK(correction_type IN (
+                'OBSERVATION_IDENTITY', 'FACE_ASSIGNMENT', 'FACE_OWNERSHIP'
+            )),
+            observation_id TEXT,
+            face_assignment_id TEXT,
+            embedding_id TEXT,
+            from_person_id TEXT NOT NULL,
+            to_person_id TEXT NOT NULL,
+            operation_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            CHECK(from_person_id <> to_person_id),
+            FOREIGN KEY(observation_id) REFERENCES observations(observation_id) ON DELETE RESTRICT,
+            FOREIGN KEY(face_assignment_id) REFERENCES observation_face_assignments(assignment_id) ON DELETE RESTRICT,
+            FOREIGN KEY(embedding_id) REFERENCES embeddings(embedding_id) ON DELETE RESTRICT,
+            FOREIGN KEY(from_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(to_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX idx_identity_corrections_observation
+        ON identity_corrections(observation_id, created_at, correction_id);
+
+        CREATE INDEX idx_identity_corrections_embedding
+        ON identity_corrections(embedding_id, created_at, correction_id);
+
+        CREATE TABLE biometric_enrollment_history (
+            enrollment_id TEXT PRIMARY KEY,
+            embedding_id TEXT NOT NULL,
+            person_id TEXT NOT NULL,
+            review_id TEXT NOT NULL,
+            operation_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(operation_id, embedding_id),
+            FOREIGN KEY(embedding_id) REFERENCES embeddings(embedding_id) ON DELETE RESTRICT,
+            FOREIGN KEY(person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(review_id) REFERENCES photo_reviews(review_id) ON DELETE RESTRICT,
+            FOREIGN KEY(operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT
+        );
+
+        CREATE TRIGGER observation_face_assignments_no_update
+        BEFORE UPDATE ON observation_face_assignments
+        BEGIN
+            SELECT RAISE(ABORT, 'observation face assignments are immutable');
+        END;
+
+        CREATE TRIGGER observation_face_assignments_no_delete
+        BEFORE DELETE ON observation_face_assignments
+        BEGIN
+            SELECT RAISE(ABORT, 'observation face assignments cannot be deleted');
+        END;
+
+        CREATE TRIGGER identity_corrections_no_update
+        BEFORE UPDATE ON identity_corrections
+        BEGIN
+            SELECT RAISE(ABORT, 'identity corrections are immutable');
+        END;
+
+        CREATE TRIGGER identity_corrections_no_delete
+        BEFORE DELETE ON identity_corrections
+        BEGIN
+            SELECT RAISE(ABORT, 'identity corrections cannot be deleted');
+        END;
+
+        CREATE TRIGGER biometric_enrollment_history_no_update
+        BEFORE UPDATE ON biometric_enrollment_history
+        BEGIN
+            SELECT RAISE(ABORT, 'biometric enrollment history is immutable');
+        END;
+
+        CREATE TRIGGER biometric_enrollment_history_no_delete
+        BEFORE DELETE ON biometric_enrollment_history
+        BEGIN
+            SELECT RAISE(ABORT, 'biometric enrollment history cannot be deleted');
+        END;
+        """,
+    )
+
+    completed_reviews = conn.execute(
+        """
+        SELECT r.review_id, r.observation_id, r.completed_operation_id, h.details, r.completed_at
+        FROM photo_reviews r
+        JOIN operation_journal_status_history h
+          ON h.operation_id = r.completed_operation_id AND h.to_status = 'COMMITTED'
+        WHERE r.status = 'COMPLETED' AND r.observation_id IS NOT NULL
+        ORDER BY r.review_id
+        """
+    ).fetchall()
+    for review in completed_reviews:
+        result = json.loads(review["details"] or "{}")
+        face_assignments = result.get("face_assignments") or {}
+        embedding_assignments = result.get("embedding_assignments") or {}
+        for face_id in sorted(set(face_assignments) & set(embedding_assignments)):
+            assignment_id = str(uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"sentriface:observation-face:{review['observation_id']}:{face_id}",
+            ))
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO observation_face_assignments(
+                    assignment_id, observation_id, review_id, face_id, embedding_id,
+                    original_person_id, created_operation_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    assignment_id, review["observation_id"], review["review_id"], face_id,
+                    embedding_assignments[face_id], face_assignments[face_id],
+                    review["completed_operation_id"], review["completed_at"] or utc_now(),
+                ),
+            )
+
+    _execute_migration_script(
+        conn,
+        """
+        DROP TRIGGER relationship_evidence_no_delete;
+        DROP TRIGGER relationship_evidence_identity_immutable;
+        DROP TRIGGER relationship_evidence_deactivation_only;
+        DROP TRIGGER relationship_evidence_undirected_order_insert;
+        DROP INDEX idx_relationship_evidence_source;
+        DROP INDEX idx_relationship_evidence_people;
+        ALTER TABLE relationship_evidence RENAME TO relationship_evidence_v23;
+
+        CREATE TABLE relationship_evidence (
+            evidence_id TEXT PRIMARY KEY,
+            evidence_type TEXT NOT NULL CHECK(evidence_type IN ('CO_OBSERVED', 'NOTE_REFERENCE', 'MANUAL_ASSOCIATION')),
+            source_entity_type TEXT NOT NULL CHECK(source_entity_type IN ('OBSERVATION', 'NOTE', 'MANUAL_ASSERTION')),
+            source_entity_id TEXT NOT NULL,
+            evidence_revision_id TEXT NOT NULL,
+            source_person_id TEXT NOT NULL,
+            target_person_id TEXT NOT NULL,
+            relationship_type TEXT NOT NULL DEFAULT 'ASSOCIATED_WITH',
+            directionality TEXT NOT NULL DEFAULT 'UNDIRECTED' CHECK(directionality IN ('UNDIRECTED', 'DIRECTED')),
+            active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+            source TEXT,
+            created_operation_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            deactivated_operation_id TEXT,
+            deactivated_at TEXT,
+            FOREIGN KEY(source_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(target_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(created_operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            FOREIGN KEY(deactivated_operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            UNIQUE(evidence_type, source_entity_type, source_entity_id, evidence_revision_id,
+                   source_person_id, target_person_id, relationship_type, directionality),
+            CHECK(source_person_id <> target_person_id),
+            CHECK((active = 1 AND deactivated_operation_id IS NULL AND deactivated_at IS NULL)
+               OR (active = 0 AND deactivated_operation_id IS NOT NULL AND deactivated_at IS NOT NULL)),
+            CHECK((evidence_type = 'CO_OBSERVED' AND source_entity_type = 'OBSERVATION')
+               OR (evidence_type = 'NOTE_REFERENCE' AND source_entity_type = 'NOTE')
+               OR (evidence_type = 'MANUAL_ASSOCIATION' AND source_entity_type = 'MANUAL_ASSERTION'))
+        );
+
+        INSERT INTO relationship_evidence(
+            evidence_id, evidence_type, source_entity_type, source_entity_id,
+            evidence_revision_id, source_person_id, target_person_id, relationship_type,
+            directionality, active, source, created_operation_id, created_at,
+            deactivated_operation_id, deactivated_at
+        )
+        SELECT evidence_id, evidence_type, source_entity_type, source_entity_id,
+               source_entity_id, source_person_id, target_person_id, relationship_type,
+               directionality, active, source, created_operation_id, created_at,
+               deactivated_operation_id, deactivated_at
+        FROM relationship_evidence_v23;
+        DROP TABLE relationship_evidence_v23;
+
+        CREATE INDEX idx_relationship_evidence_source
+        ON relationship_evidence(evidence_type, source_entity_id, active);
+        CREATE INDEX idx_relationship_evidence_people
+        ON relationship_evidence(source_person_id, target_person_id, active);
+
+        CREATE TRIGGER relationship_evidence_no_delete
+        BEFORE DELETE ON relationship_evidence
+        BEGIN SELECT RAISE(ABORT, 'relationship evidence cannot be deleted'); END;
+        CREATE TRIGGER relationship_evidence_identity_immutable
+        BEFORE UPDATE OF evidence_id, evidence_type, source_entity_type, source_entity_id,
+                         evidence_revision_id, source_person_id, target_person_id,
+                         relationship_type, directionality, source, created_operation_id, created_at
+        ON relationship_evidence
+        BEGIN SELECT RAISE(ABORT, 'relationship evidence provenance is immutable'); END;
+        CREATE TRIGGER relationship_evidence_deactivation_only
+        BEFORE UPDATE OF active, deactivated_operation_id, deactivated_at ON relationship_evidence
+        WHEN OLD.active = 0 OR NEW.active <> 0
+        BEGIN SELECT RAISE(ABORT, 'relationship evidence can only transition from active to inactive'); END;
+        CREATE TRIGGER relationship_evidence_undirected_order_insert
+        BEFORE INSERT ON relationship_evidence
+        WHEN NEW.directionality = 'UNDIRECTED' AND NEW.source_person_id >= NEW.target_person_id
+        BEGIN SELECT RAISE(ABORT, 'undirected evidence endpoints must be ordered'); END;
+
+        PRAGMA user_version = 24;
+        """,
+    )
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -5862,6 +6480,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(20, 21, _migrate_20_to_21),
         SchemaMigration(21, 22, _migrate_21_to_22),
         SchemaMigration(22, 23, _migrate_22_to_23),
+        SchemaMigration(23, 24, _migrate_23_to_24),
     )
 
 
@@ -6555,6 +7174,7 @@ def _insert_relationship_evidence(
     source: str | None,
     created_operation_id: str,
     created_at: str,
+    evidence_revision_id: str | None = None,
 ) -> str:
     normalized_source, normalized_target = _normalize_evidence_endpoints(
         source_person_id, target_person_id, directionality,
@@ -6565,6 +7185,7 @@ def _insert_relationship_evidence(
             "sentriface",
             evidence_type,
             source_entity_id,
+            evidence_revision_id or source_entity_id,
             normalized_source,
             normalized_target,
             relationship_type,
@@ -6575,15 +7196,16 @@ def _insert_relationship_evidence(
         """
         INSERT OR IGNORE INTO relationship_evidence(
             evidence_id, evidence_type, source_entity_type, source_entity_id,
-            source_person_id, target_person_id, relationship_type,
+            evidence_revision_id, source_person_id, target_person_id, relationship_type,
             directionality, active, source, created_operation_id, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
         """,
         (
             evidence_id,
             evidence_type,
             source_entity_type,
             source_entity_id,
+            evidence_revision_id or source_entity_id,
             normalized_source,
             normalized_target,
             relationship_type,
@@ -6602,6 +7224,7 @@ def _relationship_evidence_from_row(row: sqlite3.Row) -> RelationshipEvidence:
         evidence_type=row["evidence_type"],
         source_entity_type=row["source_entity_type"],
         source_entity_id=row["source_entity_id"],
+        evidence_revision_id=row["evidence_revision_id"],
         source_person_id=row["source_person_id"],
         target_person_id=row["target_person_id"],
         relationship_type=row["relationship_type"],
@@ -6664,12 +7287,15 @@ def _expected_graph_connections(
             elif observation["status"] != "FINALIZED":
                 errors.append(f"Evidence {evidence_id} references a non-finalized observation")
             participant_ids = {
-                str(item[0])
+                str(item["person_id"])
                 for item in conn.execute(
                     "SELECT person_id FROM observation_participants WHERE observation_id = ?",
                     (row["source_entity_id"],),
                 ).fetchall()
             }
+            participant_ids.update(_effective_observation_person_ids(
+                conn, str(row["source_entity_id"]),
+            ))
             if (
                 row["source_person_id"] not in participant_ids
                 or row["target_person_id"] not in participant_ids
@@ -7011,9 +7637,195 @@ def _list_observation_media(
     return [_observation_media_from_row(row) for row in rows]
 
 
+def _insert_identity_correction(
+    conn: sqlite3.Connection,
+    *,
+    correction_type: str,
+    observation_id: str | None,
+    face_assignment_id: str | None,
+    embedding_id: str | None,
+    from_person_id: str,
+    to_person_id: str,
+    operation_id: str,
+) -> str:
+    correction_id = str(uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        "|".join((
+            "sentriface-correction", operation_id, correction_type,
+            observation_id or "", face_assignment_id or "", embedding_id or "",
+            from_person_id, to_person_id,
+        )),
+    ))
+    conn.execute(
+        """
+        INSERT INTO identity_corrections(
+            correction_id, correction_type, observation_id, face_assignment_id,
+            embedding_id, from_person_id, to_person_id, operation_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            correction_id, correction_type, observation_id, face_assignment_id,
+            embedding_id, from_person_id, to_person_id, operation_id, utc_now(),
+        ),
+    )
+    return correction_id
+
+
+def _identity_correction_from_row(row: sqlite3.Row) -> IdentityCorrection:
+    return IdentityCorrection(
+        correction_id=str(row["correction_id"]),
+        correction_type=str(row["correction_type"]),
+        observation_id=row["observation_id"],
+        face_assignment_id=row["face_assignment_id"],
+        embedding_id=row["embedding_id"],
+        from_person_id=str(row["from_person_id"]),
+        to_person_id=str(row["to_person_id"]),
+        operation_id=str(row["operation_id"]),
+        created_at=str(row["created_at"]),
+    )
+
+
+def _effective_face_assignments(
+    conn: sqlite3.Connection, observation_id: str,
+) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT assignment_id, observation_id, face_id, embedding_id, original_person_id
+        FROM observation_face_assignments
+        WHERE observation_id = ? ORDER BY face_id, assignment_id
+        """,
+        (observation_id,),
+    ).fetchall()
+    result: list[dict] = []
+    for row in rows:
+        correction = conn.execute(
+            """
+            SELECT to_person_id FROM identity_corrections
+            WHERE face_assignment_id = ? AND correction_type = 'FACE_ASSIGNMENT'
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
+            """,
+            (row["assignment_id"],),
+        ).fetchone()
+        result.append({
+            "assignment_id": str(row["assignment_id"]),
+            "observation_id": str(row["observation_id"]),
+            "face_id": str(row["face_id"]),
+            "embedding_id": str(row["embedding_id"]),
+            "original_person_id": str(row["original_person_id"]),
+            "current_person_id": str(
+                correction["to_person_id"] if correction else row["original_person_id"]
+            ),
+        })
+    return result
+
+
+def _effective_observation_person_ids(
+    conn: sqlite3.Connection, observation_id: str,
+) -> list[str]:
+    base_ids = {
+        str(row["person_id"])
+        for row in conn.execute(
+            "SELECT person_id FROM observation_participants WHERE observation_id = ?",
+            (observation_id,),
+        ).fetchall()
+    }
+    assignments = _effective_face_assignments(conn, observation_id)
+    represented_original_ids = {item["original_person_id"] for item in assignments}
+    effective_ids = base_ids - represented_original_ids
+    effective_ids.update(item["current_person_id"] for item in assignments)
+    participant_corrections = conn.execute(
+        """
+        SELECT from_person_id, to_person_id
+        FROM identity_corrections
+        WHERE observation_id = ? AND correction_type = 'OBSERVATION_IDENTITY'
+        ORDER BY created_at, rowid
+        """,
+        (observation_id,),
+    ).fetchall()
+    for correction in participant_corrections:
+        from_person_id = str(correction["from_person_id"])
+        if from_person_id in effective_ids:
+            effective_ids.remove(from_person_id)
+            effective_ids.add(str(correction["to_person_id"]))
+    canonical_participants: dict[str, str] = {}
+    for raw_person_id in sorted(effective_ids):
+        canonical_participants.setdefault(
+            _resolve_canonical_person_id(conn, raw_person_id), raw_person_id,
+        )
+    return [canonical_participants[key] for key in sorted(canonical_participants)]
+
+
+def _recalculate_observation_evidence(
+    conn: sqlite3.Connection,
+    observation_id: str,
+    operation_id: str,
+    source: str,
+) -> tuple[list[str], list[str]]:
+    deactivated_at = utc_now()
+    conn.execute(
+        """
+        UPDATE relationship_evidence
+        SET active = 0, deactivated_operation_id = ?, deactivated_at = ?
+        WHERE evidence_type = 'CO_OBSERVED'
+          AND source_entity_type = 'OBSERVATION'
+          AND source_entity_id = ? AND active = 1
+        """,
+        (operation_id, deactivated_at, observation_id),
+    )
+    participant_ids = _effective_observation_person_ids(conn, observation_id)
+    evidence_ids: list[str] = []
+    created_at = utc_now()
+    for index, first_person_id in enumerate(participant_ids):
+        for second_person_id in participant_ids[index + 1:]:
+            evidence_ids.append(_insert_relationship_evidence(
+                conn,
+                evidence_type="CO_OBSERVED",
+                source_entity_type="OBSERVATION",
+                source_entity_id=observation_id,
+                evidence_revision_id=operation_id,
+                source_person_id=first_person_id,
+                target_person_id=second_person_id,
+                relationship_type="ASSOCIATED_WITH",
+                directionality="UNDIRECTED",
+                source=source,
+                created_operation_id=operation_id,
+                created_at=created_at,
+            ))
+    _replace_graph_projection(conn)
+    validation = _validate_graph_projection(conn)
+    if not validation["valid"]:
+        raise RuntimeError(
+            "Graph projection validation failed: " + "; ".join(validation["errors"])
+        )
+    return participant_ids, evidence_ids
+
+
 def _list_observation_participants(
     conn: sqlite3.Connection, observation_id: str,
 ) -> list[ObservationParticipant]:
+    correction = conn.execute(
+        """
+        SELECT operation_id, created_at FROM identity_corrections
+        WHERE observation_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1
+        """,
+        (observation_id,),
+    ).fetchone()
+    if correction is not None:
+        participants: list[ObservationParticipant] = []
+        for person_id in _effective_observation_person_ids(conn, observation_id):
+            person = conn.execute(
+                "SELECT lifecycle_status FROM persons WHERE person_id = ?", (person_id,),
+            ).fetchone()
+            participants.append(ObservationParticipant(
+                observation_id=observation_id,
+                person_id=person_id,
+                canonical_person_id=_resolve_canonical_person_id(conn, person_id),
+                person_lifecycle_status=str(person["lifecycle_status"]),
+                source="identity-correction",
+                operation_id=str(correction["operation_id"]),
+                created_at=str(correction["created_at"]),
+            ))
+        return participants
     rows = conn.execute(
         """
         SELECT p.observation_id, p.person_id, p.source, p.operation_id, p.created_at,

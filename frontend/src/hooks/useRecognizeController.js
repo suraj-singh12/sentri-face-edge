@@ -225,7 +225,8 @@ export function useRecognizeController({
     const result = await apiPost("/api/photo-review-complete", {
       review_id: recognition.reviewId,
       operation_id: recognition.completionOperationId,
-      source: "check-photo",
+      source: recognitionTargetPerson ? "add-face-review" : "check-photo",
+      target_person_id: recognitionTargetPerson?.person_id,
     });
     for (const person of result.created_people || []) upsertPerson(person);
     showToast("Review completed");
