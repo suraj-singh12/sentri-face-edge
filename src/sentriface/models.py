@@ -38,6 +38,7 @@ class Person:
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now)
     deleted_at: str | None = None
+    enrollment_status: str = "enrolled"
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,8 @@ class PersonChange:
     new_country: str | None = None
     previous_importance: str | None = None
     new_importance: str | None = None
+    previous_status: str | None = None
+    new_status: str | None = None
     editor_name: str = ""
     created_at: str = field(default_factory=utc_now)
 

@@ -55,6 +55,7 @@ import {
   IconShield,
   IconTag,
   IconUser,
+  IconUserPlus,
 } from "@tabler/icons-react";
 
 import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
@@ -76,6 +77,7 @@ export function PeopleView({
   peopleGalleryImage,
   onRefresh,
   onOpen,
+  onCreatePlaceholder,
   onImage,
   onBack,
   onSave,
@@ -101,6 +103,11 @@ export function PeopleView({
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [placeholderOpen, setPlaceholderOpen] = useState(false);
+  const [placeholderBusy, setPlaceholderBusy] = useState(false);
+  const [placeholderValues, setPlaceholderValues] = useState({
+    name: "", rank: "", country: "", importance: "", tags: [],
+  });
   const resultsRef = useRef(null);
   const normalizedQuery = query.trim().toLowerCase();
   const statsCollection = filter === "archived" ? archivedPeople : people;
@@ -234,18 +241,25 @@ export function PeopleView({
                     <Button variant="default" leftSection={<IconRefresh size={16} />} onClick={onRefresh}>Refresh</Button>
                   </Group>
                 ) : (
-                  <PeopleToolbar
-                    query={query}
-                    filter={filter}
-                    groupBy={groupBy}
-                    sort={sort}
-                    viewMode={viewMode}
-                    onQuery={setQuery}
-                    onFilter={setFilter}
-                    onGroupBy={setGroupBy}
-                    onSort={setSort}
-                    onViewMode={setViewMode}
-                  />
+                  <Group gap="sm" align="flex-start">
+                    <PeopleToolbar
+                      query={query}
+                      filter={filter}
+                      groupBy={groupBy}
+                      sort={sort}
+                      viewMode={viewMode}
+                      onQuery={setQuery}
+                      onFilter={setFilter}
+                      onGroupBy={setGroupBy}
+                      onSort={setSort}
+                      onViewMode={setViewMode}
+                    />
+                    {canEdit && filter !== "archived" && (
+                      <Button leftSection={<IconUserPlus size={16} />} onClick={() => setPlaceholderOpen(true)}>
+                        Add without photo
+                      </Button>
+                    )}
+                  </Group>
                 )}
               </Group>
               {filter === "deleted" ? (
@@ -298,6 +312,38 @@ export function PeopleView({
           </Grid.Col>
         </Grid>
       )}
+      <Modal
+        opened={placeholderOpen}
+        onClose={() => !placeholderBusy && setPlaceholderOpen(false)}
+        title="Add person without a photograph"
+        centered
+      >
+        <form onSubmit={async (event) => {
+          event.preventDefault();
+          if (placeholderBusy || !placeholderValues.name.trim()) return;
+          setPlaceholderBusy(true);
+          try {
+            await onCreatePlaceholder(placeholderValues);
+            setPlaceholderValues({ name: "", rank: "", country: "", importance: "", tags: [] });
+            setPlaceholderOpen(false);
+          } finally {
+            setPlaceholderBusy(false);
+          }
+        }}>
+          <Stack>
+            <Text size="sm" c="dimmed">Create an identity-only profile now. A photograph and biometric data can be added later.</Text>
+            <TextInput required autoFocus label="Name" value={placeholderValues.name} onChange={(event) => setPlaceholderValues((current) => ({ ...current, name: event.currentTarget.value }))} />
+            <TextInput label="Rank or role" value={placeholderValues.rank} onChange={(event) => setPlaceholderValues((current) => ({ ...current, rank: event.currentTarget.value }))} />
+            <TextInput label="Country" value={placeholderValues.country} onChange={(event) => setPlaceholderValues((current) => ({ ...current, country: event.currentTarget.value }))} />
+            <Select clearable label="Importance" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={placeholderValues.importance || null} onChange={(value) => setPlaceholderValues((current) => ({ ...current, importance: value || "" }))} />
+            <TagsInput label="Tags" value={placeholderValues.tags} onChange={(tags) => setPlaceholderValues((current) => ({ ...current, tags }))} />
+            <Group justify="flex-end">
+              <Button type="button" variant="default" disabled={placeholderBusy} onClick={() => setPlaceholderOpen(false)}>Cancel</Button>
+              <Button type="submit" loading={placeholderBusy} disabled={!placeholderValues.name.trim()}>Create person</Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
       <Modal
         opened={Boolean(deleteTarget)}
         onClose={() => {
@@ -777,7 +823,7 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
               <Badge color={priority.color} variant="light" size="xs">{priority.label}</Badge>
             </Group>
             <Text size="xs" c="dimmed" mt={5}>
-              {photoCount} {photoCount === 1 ? "photo" : "photos"} <Text span mx={5}>·</Text> {sightings} {sightings === 1 ? "sighting" : "sightings"}
+              {person.is_placeholder ? "No photograph · No biometric data" : <>{photoCount} {photoCount === 1 ? "photo" : "photos"} <Text span mx={5}>·</Text> {sightings} {sightings === 1 ? "sighting" : "sightings"}</>}
             </Text>
             <Text size="xs" c={person.last_seen_at ? "teal.4" : "dimmed"} mt={3}>{lastSeenLabelForCard(person.last_seen_at)}</Text>
           </Box>
@@ -1211,6 +1257,7 @@ function PeopleGalleryView({
               {imageRecords.length} {imageRecords.length === 1 ? "Photo" : "Photos"}
             </Badge>
             <Badge variant="outline">{latestSightingLabel}</Badge>
+            {payload.person.is_placeholder && <Badge color="gray" variant="light">No biometric data</Badge>}
           </Group>
           <Text size="xs" c="dimmed" mt="sm">ID: {payload.person.person_id}</Text>
         </Box>
@@ -1560,7 +1607,7 @@ function PeopleProfilePhotos({
         <Paper withBorder radius="md" className="people-profile-selected-photo">
           {selectedPath
             ? <img src={mediaUrl(selectedPath)} alt={payload.person.name} className="people-profile-selected-photo-image" />
-            : <Text c="dimmed">No photo selected</Text>}
+            : <Stack align="center" gap={4}><ThemeIcon size={54} radius="xl" variant="light" color="gray"><IconUser size={30} /></ThemeIcon><Text c="dimmed">No photograph</Text><Text size="xs" c="dimmed">No biometric data is stored for this person.</Text></Stack>}
         </Paper>
       </Grid.Col>
       <Grid.Col span={{ base: 12, lg: 4 }}>
@@ -1929,6 +1976,7 @@ function normalizeChange(change) {
     ["rank", "Rank", change.previous_rank, change.new_rank],
     ["country", "Country", change.previous_country, change.new_country],
     ["importance", "Importance", change.previous_importance, change.new_importance],
+    ["status", "Biometric status", change.previous_status, change.new_status],
     ["tags", "Tags", change.previous_tags, change.new_tags],
     ["notes", "Notes", change.previous_notes, change.new_notes],
   ]
@@ -1958,7 +2006,7 @@ function normalizeManagementChange(event) {
 
 function historyChangeMatchesFilter(change, filter) {
   if (filter === "all") return true;
-  if (filter === "identity") return change.kind === "profile" && change.fields.some((field) => field.key === "name");
+  if (filter === "identity") return change.kind === "profile" && change.fields.some((field) => ["name", "status"].includes(field.key));
   if (filter === "metadata") return change.kind === "profile" && change.fields.some((field) => field.key !== "name");
   if (filter === "photos") return ["person-preferences", "move-embedding", "delete-embedding"].includes(change.operationType);
   if (filter === "management") return change.kind === "management"
@@ -1984,6 +2032,7 @@ function iconForChangeField(key) {
     importance: IconFlag,
     tags: IconTag,
     notes: IconNotes,
+    status: IconPhoto,
   }[key] || IconEdit;
 }
 

@@ -12,6 +12,52 @@ from sentriface.storage.sqlite_store import SCHEMA_VERSION, SQLiteIdentityStore
 
 
 class StorageMigrationTest(unittest.TestCase):
+    def test_v12_migration_preserves_existing_people_as_enrolled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "sentriface.db"
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                conn.executescript(
+                    """
+                    CREATE TABLE persons (
+                        person_id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        metadata TEXT NOT NULL DEFAULT '{}',
+                        created_at TEXT NOT NULL,
+                        deleted_at TEXT
+                    );
+                    CREATE TABLE person_change_history (
+                        change_id TEXT PRIMARY KEY,
+                        person_id TEXT NOT NULL,
+                        previous_name TEXT NOT NULL,
+                        new_name TEXT NOT NULL,
+                        previous_rank TEXT,
+                        new_rank TEXT,
+                        previous_country TEXT,
+                        new_country TEXT,
+                        previous_importance TEXT,
+                        new_importance TEXT,
+                        editor_name TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    INSERT INTO persons(person_id, name, metadata, created_at)
+                    VALUES ('existing', 'Existing Person', '{}', '2026-08-01T00:00:00+00:00');
+                    PRAGMA user_version = 12;
+                    """
+                )
+
+            store = SQLiteIdentityStore(db_path)
+            store.initialize()
+
+            person = store.get_person("existing")
+            self.assertEqual(person.enrollment_status, "enrolled")
+            with closing(sqlite3.connect(db_path)) as conn:
+                history_columns = {
+                    row[1] for row in conn.execute("PRAGMA table_info(person_change_history)")
+                }
+            self.assertIn("previous_status", history_columns)
+            self.assertIn("new_status", history_columns)
+
     def test_initialize_sets_schema_version(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             db_path = Path(temp) / "sentriface.db"

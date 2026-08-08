@@ -31,7 +31,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 DELETED_FACE_RETENTION_DAYS = 30
 
 
@@ -106,6 +106,9 @@ class SQLiteIdentityStore:
             if version == 11:
                 _migrate_11_to_12(conn)
                 version = 12
+            if version == 12:
+                _migrate_12_to_13(conn)
+                version = 13
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -156,11 +159,94 @@ class SQLiteIdentityStore:
             )
         return person
 
+    def create_placeholder_person(
+        self,
+        name: str,
+        metadata: dict | None,
+        editor_name: str,
+        operation_id: str,
+    ) -> Person:
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise KeyError("Person name is required")
+        if not editor_name.strip():
+            raise KeyError("Created by is required")
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, "create-placeholder")
+            if existing:
+                row = conn.execute(
+                    """
+                    SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status
+                    FROM persons WHERE person_id = ?
+                    """,
+                    (existing["person_id"],),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("Stored placeholder creation result is no longer available")
+                return _person_from_row(row)
+            placeholder_metadata = dict(metadata or {})
+            placeholder_metadata["tags"] = _normalize_tags(
+                placeholder_metadata.get("tags", [])
+            )
+            person = Person(
+                person_id=str(uuid.uuid4()),
+                name=normalized_name,
+                metadata=placeholder_metadata,
+                enrollment_status="placeholder",
+            )
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO persons(
+                        person_id, name, metadata, created_at, enrollment_status
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        person.person_id,
+                        person.name,
+                        json.dumps(person.metadata, separators=(",", ":")),
+                        person.created_at,
+                        person.enrollment_status,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                if "placeholder" in str(exc).lower() or "persons.name" in str(exc).lower():
+                    raise KeyError(
+                        "A placeholder with this name already exists. Add a photograph to that profile or choose a different name."
+                    ) from exc
+                raise
+            _insert_person_change(
+                conn,
+                PersonChange(
+                    change_id=str(uuid.uuid4()),
+                    person_id=person.person_id,
+                    previous_name="",
+                    new_name=person.name,
+                    previous_rank="",
+                    new_rank=str(person.metadata.get("rank") or ""),
+                    previous_country="",
+                    new_country=str(person.metadata.get("country") or ""),
+                    previous_importance="",
+                    new_importance=str(person.metadata.get("importance") or ""),
+                    previous_status=None,
+                    new_status="placeholder",
+                    editor_name=editor_name.strip(),
+                    created_at=person.created_at,
+                ),
+            )
+            _record_person_operation(
+                conn,
+                operation_id,
+                "create-placeholder",
+                {"person_id": person.person_id, "enrollment_status": "placeholder"},
+            )
+        return person
+
     def get_person(self, person_id: str, include_archived: bool = False) -> Person | None:
         with self._connect() as conn:
             row = conn.execute(
                 f"""
-                SELECT person_id, name, metadata, created_at, deleted_at
+                SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status
                 FROM persons
                 WHERE person_id = ? {" " if include_archived else "AND deleted_at IS NULL"}
                 """,
@@ -168,19 +254,14 @@ class SQLiteIdentityStore:
             ).fetchone()
         if row is None:
             return None
-        return Person(
-            person_id=row["person_id"],
-            name=row["name"],
-            metadata=json.loads(row["metadata"]),
-            created_at=row["created_at"],
-            deleted_at=row["deleted_at"],
-        )
+        return _person_from_row(row)
 
     def list_persons(self, archived: bool = False) -> list[PersonSummary]:
         with self._connect() as conn:
             rows = conn.execute(
                 f"""
                 SELECT p.person_id, p.name, p.metadata, p.created_at, p.deleted_at,
+                       p.enrollment_status,
                        (
                            SELECT COUNT(*)
                            FROM embeddings e
@@ -217,6 +298,7 @@ class SQLiteIdentityStore:
                     metadata=json.loads(row["metadata"]),
                     created_at=row["created_at"],
                     deleted_at=row["deleted_at"],
+                    enrollment_status=row["enrollment_status"],
                 ),
                 embedding_count=row["embedding_count"],
                 sighting_count=row["sighting_count"],
@@ -248,10 +330,13 @@ class SQLiteIdentityStore:
 
     def rename_person(self, person_id: str, name: str) -> None:
         with self._connect() as conn:
-            cursor = conn.execute(
-                "UPDATE persons SET name = ? WHERE person_id = ? AND deleted_at IS NULL",
-                (name, person_id),
-            )
+            try:
+                cursor = conn.execute(
+                    "UPDATE persons SET name = ? WHERE person_id = ? AND deleted_at IS NULL",
+                    (name, person_id),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise _placeholder_name_conflict(exc) from exc
         if cursor.rowcount == 0:
             raise KeyError(f"Unknown person: {person_id}")
 
@@ -274,7 +359,8 @@ class SQLiteIdentityStore:
                         """
                         SELECT change_id, person_id, previous_name, new_name,
                                previous_rank, new_rank, previous_country, new_country,
-                               previous_importance, new_importance, editor_name, created_at
+                               previous_importance, new_importance,
+                               previous_status, new_status, editor_name, created_at
                         FROM person_change_history
                         WHERE change_id = ?
                         """,
@@ -285,7 +371,7 @@ class SQLiteIdentityStore:
                     return _person_change_from_row(change_row)
             row = conn.execute(
                 """
-                SELECT person_id, name, metadata
+                SELECT person_id, name, metadata, enrollment_status
                 FROM persons
                 WHERE person_id = ? AND deleted_at IS NULL
                 """,
@@ -313,45 +399,27 @@ class SQLiteIdentityStore:
                 new_country=country or "",
                 previous_importance=previous_metadata.get("importance") or "",
                 new_importance=importance or "",
+                previous_status=row["enrollment_status"],
+                new_status=row["enrollment_status"],
                 editor_name=editor_name,
                 created_at=utc_now(),
             )
-            conn.execute(
-                """
-                UPDATE persons
-                SET name = ?, metadata = ?
-                WHERE person_id = ? AND deleted_at IS NULL
-                """,
-                (
-                    name,
-                    json.dumps(next_metadata, separators=(",", ":")),
-                    person_id,
-                ),
-            )
-            conn.execute(
-                """
-                INSERT INTO person_change_history(
-                    change_id, person_id, previous_name, new_name,
-                    previous_rank, new_rank, previous_country, new_country,
-                    previous_importance, new_importance, editor_name, created_at
+            try:
+                conn.execute(
+                    """
+                    UPDATE persons
+                    SET name = ?, metadata = ?
+                    WHERE person_id = ? AND deleted_at IS NULL
+                    """,
+                    (
+                        name,
+                        json.dumps(next_metadata, separators=(",", ":")),
+                        person_id,
+                    ),
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    change.change_id,
-                    change.person_id,
-                    change.previous_name,
-                    change.new_name,
-                    change.previous_rank,
-                    change.new_rank,
-                    change.previous_country,
-                    change.new_country,
-                    change.previous_importance,
-                    change.new_importance,
-                    change.editor_name,
-                    change.created_at,
-                ),
-            )
+            except sqlite3.IntegrityError as exc:
+                raise _placeholder_name_conflict(exc) from exc
+            _insert_person_change(conn, change)
             if operation_id:
                 _record_person_operation(
                     conn,
@@ -367,7 +435,8 @@ class SQLiteIdentityStore:
                 """
                 SELECT change_id, person_id, previous_name, new_name,
                        previous_rank, new_rank, previous_country, new_country,
-                       previous_importance, new_importance, editor_name, created_at
+                       previous_importance, new_importance,
+                       previous_status, new_status, editor_name, created_at
                 FROM person_change_history
                 WHERE person_id = ?
                 ORDER BY created_at DESC
@@ -465,10 +534,13 @@ class SQLiteIdentityStore:
                 raise KeyError(
                     f"Merged person records cannot be restored; merged into {metadata['merged_into']}"
                 )
-            cursor = conn.execute(
-                "UPDATE persons SET deleted_at = NULL WHERE person_id = ? AND deleted_at IS NOT NULL",
-                (person_id,),
-            )
+            try:
+                cursor = conn.execute(
+                    "UPDATE persons SET deleted_at = NULL WHERE person_id = ? AND deleted_at IS NOT NULL",
+                    (person_id,),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise _placeholder_name_conflict(exc) from exc
             result = {"person_id": person_id, "restored": True, "changed": bool(cursor.rowcount)}
             _record_person_operation(conn, operation_id, "restore-person", result)
             return result
@@ -833,6 +905,7 @@ class SQLiteIdentityStore:
                 "UPDATE embeddings SET person_id = ? WHERE embedding_id = ?",
                 (person_id, embedding_id),
             )
+            _mark_person_enrolled(conn, person_id)
             detail_cursor = conn.execute(
                 """
                 UPDATE recognition_details
@@ -874,11 +947,11 @@ class SQLiteIdentityStore:
             if source_person_id == target_person_id:
                 raise KeyError("Source and target person must be different")
             source = conn.execute(
-                "SELECT name, metadata, deleted_at FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                "SELECT name, metadata, deleted_at, enrollment_status FROM persons WHERE person_id = ? AND deleted_at IS NULL",
                 (source_person_id,),
             ).fetchone()
             target = conn.execute(
-                "SELECT name, metadata, deleted_at FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+                "SELECT name, metadata, deleted_at, enrollment_status FROM persons WHERE person_id = ? AND deleted_at IS NULL",
                 (target_person_id,),
             ).fetchone()
             if source is None:
@@ -910,6 +983,8 @@ class SQLiteIdentityStore:
                 "UPDATE embeddings SET person_id = ? WHERE person_id = ?",
                 (target_person_id, source_person_id),
             )
+            if embedding_rows:
+                _mark_person_enrolled(conn, target_person_id)
             conn.execute(
                 """
                 UPDATE recognition_details
@@ -979,6 +1054,8 @@ class SQLiteIdentityStore:
                     "target_name": target["name"],
                     "source_metadata": original_source_metadata,
                     "target_metadata": original_target_metadata,
+                    "source_status": source["enrollment_status"],
+                    "target_status": target["enrollment_status"],
                     "merged_source_metadata": source_metadata,
                     "merged_target_metadata": target_metadata,
                     "embedding_ids": [row["embedding_id"] for row in embedding_rows],
@@ -1079,12 +1156,20 @@ class SQLiteIdentityStore:
                 if cursor.rowcount != 1:
                     raise KeyError("A merged sighting changed after the merge; undo was not applied")
             conn.execute(
-                "UPDATE persons SET metadata = ?, deleted_at = NULL WHERE person_id = ?",
-                (json.dumps(snapshot["source_metadata"], separators=(",", ":")), source_person_id),
+                "UPDATE persons SET metadata = ?, deleted_at = NULL, enrollment_status = ? WHERE person_id = ?",
+                (
+                    json.dumps(snapshot["source_metadata"], separators=(",", ":")),
+                    snapshot.get("source_status", "enrolled"),
+                    source_person_id,
+                ),
             )
             conn.execute(
-                "UPDATE persons SET metadata = ? WHERE person_id = ?",
-                (json.dumps(snapshot["target_metadata"], separators=(",", ":")), target_person_id),
+                "UPDATE persons SET metadata = ?, enrollment_status = ? WHERE person_id = ?",
+                (
+                    json.dumps(snapshot["target_metadata"], separators=(",", ":")),
+                    snapshot.get("target_status", "enrolled"),
+                    target_person_id,
+                ),
             )
             source_exclusions = snapshot.get("source_exclusions") or []
             target_exclusions = snapshot.get("target_exclusions") or []
@@ -1390,6 +1475,7 @@ class SQLiteIdentityStore:
                     record.created_at,
                 ),
             )
+            _mark_person_enrolled(conn, person_id)
         return record
 
     def list_embeddings(self) -> list[EmbeddingRecord]:
@@ -1561,6 +1647,7 @@ class SQLiteIdentityStore:
                     utc_now(),
                 ),
             )
+            _mark_person_enrolled(conn, person_id)
             conn.execute("DELETE FROM pending_additions WHERE pending_id = ?", (pending_id,))
             _record_person_operation(
                 conn,
@@ -1577,7 +1664,7 @@ class SQLiteIdentityStore:
         embedding_id: str,
     ) -> tuple[Person, EmbeddingRecord]:
         person_row = conn.execute(
-            "SELECT person_id, name, metadata, created_at, deleted_at FROM persons WHERE person_id = ?",
+            "SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status FROM persons WHERE person_id = ?",
             (person_id,),
         ).fetchone()
         embedding_row = conn.execute(
@@ -1590,13 +1677,7 @@ class SQLiteIdentityStore:
         ).fetchone()
         if person_row is None or embedding_row is None:
             raise RuntimeError("Confirmed identity operation is missing durable records")
-        person = Person(
-            person_id=person_row["person_id"],
-            name=person_row["name"],
-            metadata=json.loads(person_row["metadata"]),
-            created_at=person_row["created_at"],
-            deleted_at=person_row["deleted_at"],
-        )
+        person = _person_from_row(person_row)
         return person, _embedding_from_row(embedding_row)
     def delete_pending_addition(self, pending_id: str) -> None:
         with self._connect() as conn:
@@ -1846,6 +1927,7 @@ class SQLiteIdentityStore:
                         "duplicate": duplicate,
                     }
                 )
+            _mark_person_enrolled(conn, person_id)
             conn.execute(
                 f"DELETE FROM init_faces WHERE init_face_id IN ({placeholders})",
                 selected_ids,
@@ -2278,6 +2360,146 @@ def _migrate_11_to_12(conn: sqlite3.Connection) -> None:
         """
     )
 
+
+def _migrate_12_to_13(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS persons (
+            person_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            metadata TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            deleted_at TEXT,
+            enrollment_status TEXT NOT NULL DEFAULT 'enrolled'
+        );
+
+        CREATE TABLE IF NOT EXISTS person_change_history (
+            change_id TEXT PRIMARY KEY,
+            person_id TEXT NOT NULL,
+            previous_name TEXT NOT NULL,
+            new_name TEXT NOT NULL,
+            previous_rank TEXT,
+            new_rank TEXT,
+            previous_country TEXT,
+            new_country TEXT,
+            previous_importance TEXT,
+            new_importance TEXT,
+            previous_status TEXT,
+            new_status TEXT,
+            editor_name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(person_id) REFERENCES persons(person_id)
+        );
+        """
+    )
+    person_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(persons)").fetchall()
+    }
+    if "enrollment_status" not in person_columns:
+        conn.execute(
+            "ALTER TABLE persons ADD COLUMN enrollment_status TEXT NOT NULL DEFAULT 'enrolled'"
+        )
+    history_columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(person_change_history)").fetchall()
+    }
+    if "previous_status" not in history_columns:
+        conn.execute("ALTER TABLE person_change_history ADD COLUMN previous_status TEXT")
+    if "new_status" not in history_columns:
+        conn.execute("ALTER TABLE person_change_history ADD COLUMN new_status TEXT")
+    conn.executescript(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_active_placeholder_name
+        ON persons(lower(trim(name)))
+        WHERE enrollment_status = 'placeholder' AND deleted_at IS NULL;
+
+        PRAGMA user_version = 13;
+        """
+    )
+
+
+def _person_from_row(row: sqlite3.Row) -> Person:
+    return Person(
+        person_id=row["person_id"],
+        name=row["name"],
+        metadata=json.loads(row["metadata"]),
+        created_at=row["created_at"],
+        deleted_at=row["deleted_at"],
+        enrollment_status=row["enrollment_status"],
+    )
+
+
+def _insert_person_change(conn: sqlite3.Connection, change: PersonChange) -> None:
+    conn.execute(
+        """
+        INSERT INTO person_change_history(
+            change_id, person_id, previous_name, new_name,
+            previous_rank, new_rank, previous_country, new_country,
+            previous_importance, new_importance, previous_status, new_status,
+            editor_name, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            change.change_id,
+            change.person_id,
+            change.previous_name,
+            change.new_name,
+            change.previous_rank,
+            change.new_rank,
+            change.previous_country,
+            change.new_country,
+            change.previous_importance,
+            change.new_importance,
+            change.previous_status,
+            change.new_status,
+            change.editor_name,
+            change.created_at,
+        ),
+    )
+
+
+def _mark_person_enrolled(conn: sqlite3.Connection, person_id: str) -> None:
+    row = conn.execute(
+        """
+        SELECT name, metadata, enrollment_status
+        FROM persons WHERE person_id = ? AND deleted_at IS NULL
+        """,
+        (person_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"Unknown person: {person_id}")
+    if row["enrollment_status"] != "placeholder":
+        return
+    conn.execute(
+        "UPDATE persons SET enrollment_status = 'enrolled' WHERE person_id = ?",
+        (person_id,),
+    )
+    metadata = json.loads(row["metadata"])
+    _insert_person_change(
+        conn,
+        PersonChange(
+            change_id=str(uuid.uuid4()),
+            person_id=person_id,
+            previous_name=row["name"],
+            new_name=row["name"],
+            previous_rank=metadata.get("rank") or "",
+            new_rank=metadata.get("rank") or "",
+            previous_country=metadata.get("country") or "",
+            new_country=metadata.get("country") or "",
+            previous_importance=metadata.get("importance") or "",
+            new_importance=metadata.get("importance") or "",
+            previous_status="placeholder",
+            new_status="enrolled",
+            editor_name="SentriFace",
+        ),
+    )
+
+
+def _placeholder_name_conflict(exc: sqlite3.IntegrityError) -> KeyError:
+    return KeyError(
+        "A placeholder with this name already exists. Add a photograph to that profile or choose a different name."
+    )
+
 def _existing_person_operation(
     conn: sqlite3.Connection,
     operation_id: str,
@@ -2434,6 +2656,8 @@ def _person_change_from_row(row: sqlite3.Row) -> PersonChange:
         new_country=row["new_country"],
         previous_importance=row["previous_importance"],
         new_importance=row["new_importance"],
+        previous_status=row["previous_status"],
+        new_status=row["new_status"],
         editor_name=row["editor_name"],
         created_at=row["created_at"],
     )

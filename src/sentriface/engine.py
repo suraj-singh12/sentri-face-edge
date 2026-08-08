@@ -262,6 +262,21 @@ class FaceEngine:
         with self.metrics.timer("db_list_persons_ms"):
             return self.store.list_persons(archived=archived)
 
+    def create_placeholder_person(
+        self,
+        name: str,
+        metadata: dict | None,
+        editor_name: str,
+        operation_id: str,
+    ) -> Person:
+        with self.metrics.timer("db_create_placeholder_person_ms"):
+            return self.store.create_placeholder_person(
+                name=name,
+                metadata=metadata,
+                editor_name=editor_name,
+                operation_id=operation_id,
+            )
+
     def list_person_embeddings(self, person_id: str, include_archived: bool = False):
         if self.store.get_person(person_id, include_archived=include_archived) is None:
             raise KeyError(f"Unknown person: {person_id}")

@@ -158,7 +158,7 @@ def _required_capability(method: str, path: str) -> str | None:
     }:
         return "recognize"
     if path in {
-        "/api/enroll", "/api/person-update", "/api/person-preferences",
+        "/api/enroll", "/api/person-placeholder", "/api/person-update", "/api/person-preferences",
         "/api/recognition-person-candidates",
         "/api/recognition-accept-existing", "/api/recognition-new",
         "/api/recognition-followup", "/api/queue-add", "/api/queue-cancel",
@@ -1484,6 +1484,29 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     editor_name=change.editor_name,
                 )
                 self._json({"updated": True, "change": _person_change(change)})
+                return
+            if parsed.path == "/api/person-placeholder":
+                tags = payload.get("tags", [])
+                if not isinstance(tags, list):
+                    raise KeyError("tags must be a list")
+                person = self.server.engine.create_placeholder_person(
+                    name=_required(payload, "name"),
+                    metadata={
+                        "rank": str(payload.get("rank") or "").strip(),
+                        "country": str(payload.get("country") or "").strip(),
+                        "importance": str(payload.get("importance") or "").strip(),
+                        "tags": [str(tag).strip() for tag in tags if str(tag).strip()],
+                    },
+                    editor_name=self.auth_user.display_name or self.auth_user.username,
+                    operation_id=_operation_id(payload),
+                )
+                summary = next(
+                    item for item in self.server.engine.list_persons()
+                    if item.person.person_id == person.person_id
+                )
+                result = _person_summary(summary, self.server.engine)
+                self.server.log_event("person-placeholder-created", person_id=person.person_id)
+                self._json({"person": result})
                 return
             if parsed.path == "/api/person-preferences":
                 favorite = payload.get("favorite")
@@ -3015,6 +3038,8 @@ def _person(person: Person) -> dict[str, Any]:
         "created_at": person.created_at,
         "deleted_at": person.deleted_at,
         "archived": person.deleted_at is not None,
+        "enrollment_status": person.enrollment_status,
+        "is_placeholder": person.enrollment_status == "placeholder",
     }
 
 
@@ -3119,6 +3144,8 @@ def _person_change(change: PersonChange) -> dict[str, Any]:
         "new_country": change.new_country,
         "previous_importance": change.previous_importance,
         "new_importance": change.new_importance,
+        "previous_status": change.previous_status,
+        "new_status": change.new_status,
         "editor_name": change.editor_name,
         "created_at": change.created_at,
     }

@@ -42,3 +42,15 @@ test("profile and management history share the horizontal card flow", async () =
   assert.match(css, /\.people-change-timeline\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;/s);
   assert.doesNotMatch(view, />Management Activity</);
 });
+
+test("placeholder people use the existing neutral avatar and clear biometric labels", async () => {
+  const view = await readFile(new URL("../src/views/PeopleView.jsx", import.meta.url), "utf8");
+  const controller = await readFile(new URL("../src/hooks/usePeopleController.js", import.meta.url), "utf8");
+
+  assert.match(view, /Add without photo/);
+  assert.match(view, /No photograph · No biometric data/);
+  assert.match(view, /No biometric data is stored for this person\./);
+  assert.match(view, /\["status", "Biometric status", change\.previous_status, change\.new_status\]/);
+  assert.match(view, /<IconUser size=\{44\}/);
+  assert.match(controller, /apiPost\("\/api\/person-placeholder"/);
+});

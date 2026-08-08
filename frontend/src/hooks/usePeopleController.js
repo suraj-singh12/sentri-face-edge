@@ -33,6 +33,20 @@ export function usePeopleController({
     setPeopleGalleryImage(null);
   };
 
+  const createPlaceholderPerson = async (values) => {
+    const payload = await apiPost("/api/person-placeholder", {
+      name: values.name,
+      rank: values.rank,
+      country: values.country,
+      importance: values.importance,
+      tags: values.tags || [],
+      operation_id: operationId(),
+    });
+    upsertPerson(payload.person);
+    showToast("Placeholder person created");
+    return payload.person;
+  };
+
   const savePeopleProfile = async (values) => {
     const payload = await apiPost("/api/person-update", {
       person_id: values.personId,
@@ -214,6 +228,8 @@ export function usePeopleController({
     }));
     updatePerson(targetPersonId, (person) => ({
       ...person,
+      enrollment_status: "enrolled",
+      is_placeholder: false,
       embedding_count: Number(person.embedding_count || 0) + 1,
       representative_image: person.representative_image || moved?.crop_path || moved?.source_image,
     }));
@@ -295,6 +311,7 @@ export function usePeopleController({
     state: { peopleGallery, peopleGalleryImage },
     actions: {
       peopleOpen,
+      createPlaceholderPerson,
       setPeopleGalleryImage,
       peopleBack,
       savePeopleProfile,

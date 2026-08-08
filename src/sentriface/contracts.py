@@ -46,6 +46,15 @@ class IdentityStore(Protocol):
     def create_person(self, name: str, metadata: dict | None = None) -> Person:
         """Create a person record."""
 
+    def create_placeholder_person(
+        self,
+        name: str,
+        metadata: dict | None,
+        editor_name: str,
+        operation_id: str,
+    ) -> Person:
+        """Create an identity-only person with no biometric data."""
+
     def add_embedding(
         self,
         person_id: str,

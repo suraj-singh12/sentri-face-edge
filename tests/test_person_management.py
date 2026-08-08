@@ -13,6 +13,99 @@ from sentriface.cli import build_dev_engine
 
 
 class PersonManagementTest(unittest.TestCase):
+    def test_placeholder_creation_duplicate_names_and_zero_embedding_search(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            engine = build_dev_engine(Path(temp) / "data")
+            engine.initialize()
+
+            placeholder = engine.create_placeholder_person(
+                "  Alex Morgan  ",
+                {"rank": "Visitor", "tags": ["expected"]},
+                "Operator",
+                "placeholder-create-1",
+            )
+
+            self.assertEqual(placeholder.name, "Alex Morgan")
+            self.assertEqual(placeholder.enrollment_status, "placeholder")
+            self.assertEqual(engine.list_person_embeddings(placeholder.person_id), [])
+            summary = next(
+                item for item in engine.list_persons()
+                if item.person.person_id == placeholder.person_id
+            )
+            self.assertEqual(summary.embedding_count, 0)
+            self.assertEqual(engine.index.search(tuple([0.0] * 512), 5), [])
+            with self.assertRaisesRegex(KeyError, "placeholder with this name"):
+                engine.create_placeholder_person(
+                    "alex morgan",
+                    {},
+                    "Operator",
+                    "placeholder-create-2",
+                )
+
+            enrolled_same_name = engine.store.create_person("Alex Morgan")
+            self.assertNotEqual(enrolled_same_name.person_id, placeholder.person_id)
+            changes = engine.list_person_changes(placeholder.person_id)
+            self.assertEqual(changes[0].new_status, "placeholder")
+            self.assertEqual(changes[0].editor_name, "Operator")
+
+    def test_placeholder_becomes_enrolled_and_releases_name_after_photo(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            image = temp_path / "face.jpg"
+            self._write_image(image)
+            engine = build_dev_engine(temp_path / "data")
+            engine.initialize()
+            placeholder = engine.create_placeholder_person(
+                "Future Visitor",
+                {},
+                "Operator",
+                "placeholder-enroll-1",
+            )
+
+            engine.confirm_existing_person(
+                engine.prepare_additions(image)[0],
+                placeholder.person_id,
+            )
+
+            enrolled = engine.get_person(placeholder.person_id)
+            self.assertEqual(enrolled.enrollment_status, "enrolled")
+            self.assertEqual(len(engine.list_person_embeddings(placeholder.person_id)), 1)
+            self.assertEqual(engine.recognize(image)[0].matches[0].person_id, placeholder.person_id)
+            changes = engine.list_person_changes(placeholder.person_id)
+            self.assertTrue(any(
+                change.previous_status == "placeholder" and change.new_status == "enrolled"
+                for change in changes
+            ))
+            replacement = engine.create_placeholder_person(
+                "future visitor",
+                {},
+                "Operator",
+                "placeholder-enroll-2",
+            )
+            self.assertEqual(replacement.enrollment_status, "placeholder")
+
+    def test_placeholder_archive_and_permanent_deletion_use_existing_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            engine = build_dev_engine(Path(temp) / "data")
+            engine.initialize()
+            placeholder = engine.create_placeholder_person(
+                "Temporary Identity",
+                {},
+                "Operator",
+                "placeholder-delete-1",
+            )
+
+            archived = engine.archive_person(placeholder.person_id, "placeholder-archive-1")
+            self.assertTrue(archived["archived"])
+            self.assertIsNone(engine.get_person(placeholder.person_id))
+            deleted = engine.permanently_delete_person(
+                placeholder.person_id,
+                "placeholder-purge-1",
+            )
+            self.assertTrue(deleted["deleted"])
+            self.assertEqual(deleted["deleted_embeddings"], 0)
+            self.assertIsNone(engine.get_person(placeholder.person_id, include_archived=True))
+
     def test_unique_person_ranking_collapses_embedding_matches(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)

@@ -563,6 +563,8 @@ export function useQueueController({
       upsertPerson({
         person_id: personId,
         name: queueFollowup.name,
+        enrollment_status: "enrolled",
+        is_placeholder: false,
         embedding_count: entries.length,
         representative_image: entries[0]?.image_path || "",
         favorite: false,
@@ -578,6 +580,8 @@ export function useQueueController({
     } else {
       updatePerson(personId, (person) => ({
         ...person,
+        enrollment_status: "enrolled",
+        is_placeholder: false,
         embedding_count: Number(person.embedding_count || 0) + entries.length,
         representative_image: person.representative_image || entries[0]?.image_path || "",
       }));

@@ -202,6 +202,8 @@ export function useRecognizeController({
       upsertPerson({
         person_id: personId,
         name: detailName,
+        enrollment_status: "enrolled",
+        is_placeholder: false,
         embedding_count: 1,
         representative_image: recognition.inputPath,
         favorite: false,
@@ -217,6 +219,8 @@ export function useRecognizeController({
     } else if (addedEmbedding) {
       updatePerson(personId, (person) => ({
         ...person,
+        enrollment_status: "enrolled",
+        is_placeholder: false,
         embedding_count: Number(person.embedding_count || 0) + 1,
         representative_image: person.representative_image || recognition.inputPath,
       }));
