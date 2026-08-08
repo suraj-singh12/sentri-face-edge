@@ -42,7 +42,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
 PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
@@ -1159,7 +1159,7 @@ class SQLiteIdentityStore:
             _require_observation(conn, observation_id)
             return _list_observation_media(conn, observation_id)
 
-    def finalize_observation(
+    def _finalize_observation_without_graph_evidence(
         self,
         observation_id: str,
         operation_id: str,
@@ -1167,6 +1167,7 @@ class SQLiteIdentityStore:
         source: str | None = None,
         actor: dict | None = None,
     ) -> Observation:
+        """Low-level P3 primitive reserved for fixtures and future atomic P6 work."""
         with self._connect() as conn:
             existing_result = _existing_committed_operation_result(
                 conn, operation_id, "observation.finalize",
@@ -1283,15 +1284,7 @@ class SQLiteIdentityStore:
                 """,
                 (normalized_observation_id,),
             ).fetchall()
-            canonical_representatives: dict[str, str] = {}
-            for participant in participants:
-                raw_person_id = str(participant["person_id"])
-                canonical_person_id = _resolve_canonical_person_id(conn, raw_person_id)
-                canonical_representatives.setdefault(canonical_person_id, raw_person_id)
-            representatives = [
-                canonical_representatives[key]
-                for key in sorted(canonical_representatives)
-            ]
+            raw_person_ids = [str(participant["person_id"]) for participant in participants]
             _begin_journal_operation(
                 conn,
                 "graph.observation-evidence.record",
@@ -1302,47 +1295,26 @@ class SQLiteIdentityStore:
                     {"entity_type": "observation", "entity_id": normalized_observation_id},
                     *[
                         {"entity_type": "person", "entity_id": person_id}
-                        for person_id in representatives
+                        for person_id in raw_person_ids
                     ],
                 ],
                 details={"evidence_type": "CO_OBSERVED"},
             )
             created_at = utc_now()
-            for index, first_person_id in enumerate(representatives):
-                for second_person_id in representatives[index + 1:]:
-                    source_person_id, target_person_id = _canonical_person_pair(
-                        first_person_id, second_person_id,
-                    )
-                    evidence_id = str(uuid.uuid5(
-                        uuid.NAMESPACE_URL,
-                        "|".join((
-                            "sentriface",
-                            "CO_OBSERVED",
-                            normalized_observation_id,
-                            source_person_id,
-                            target_person_id,
-                            "ASSOCIATED_WITH",
-                            "UNDIRECTED",
-                        )),
-                    ))
-                    conn.execute(
-                        """
-                        INSERT OR IGNORE INTO relationship_evidence(
-                            evidence_id, evidence_type, source_entity_type, source_entity_id,
-                            source_person_id, target_person_id, relationship_type,
-                            directionality, active, source, created_operation_id, created_at
-                        ) VALUES (?, 'CO_OBSERVED', 'OBSERVATION', ?, ?, ?,
-                                  'ASSOCIATED_WITH', 'UNDIRECTED', 1, ?, ?, ?)
-                        """,
-                        (
-                            evidence_id,
-                            normalized_observation_id,
-                            source_person_id,
-                            target_person_id,
-                            _optional_text(source),
-                            operation_id,
-                            created_at,
-                        ),
+            for index, first_person_id in enumerate(raw_person_ids):
+                for second_person_id in raw_person_ids[index + 1:]:
+                    _insert_relationship_evidence(
+                        conn,
+                        evidence_type="CO_OBSERVED",
+                        source_entity_type="OBSERVATION",
+                        source_entity_id=normalized_observation_id,
+                        source_person_id=first_person_id,
+                        target_person_id=second_person_id,
+                        relationship_type="ASSOCIATED_WITH",
+                        directionality="UNDIRECTED",
+                        source=_optional_text(source),
+                        created_operation_id=operation_id,
+                        created_at=created_at,
                     )
             evidence = _list_relationship_evidence_for_source(
                 conn, "CO_OBSERVED", normalized_observation_id,
@@ -1551,7 +1523,6 @@ class SQLiteIdentityStore:
             canonical_target = _resolve_canonical_person_id(conn, target_person_id)
             if canonical_source == canonical_target:
                 return []
-            requested_pair = tuple(sorted((canonical_source, canonical_target)))
             rows = conn.execute(
                 f"SELECT * FROM relationship_evidence "
                 f"{' ' if include_inactive else 'WHERE active = 1 '}"
@@ -1559,11 +1530,22 @@ class SQLiteIdentityStore:
             ).fetchall()
             evidence: list[RelationshipEvidence] = []
             for row in rows:
-                resolved_pair = tuple(sorted((
-                    _resolve_canonical_person_id(conn, row["source_person_id"]),
-                    _resolve_canonical_person_id(conn, row["target_person_id"]),
-                )))
-                if resolved_pair == requested_pair:
+                resolved_source = _resolve_canonical_person_id(
+                    conn, row["source_person_id"],
+                )
+                resolved_target = _resolve_canonical_person_id(
+                    conn, row["target_person_id"],
+                )
+                if row["directionality"] == "UNDIRECTED":
+                    matches = tuple(sorted((resolved_source, resolved_target))) == tuple(
+                        sorted((canonical_source, canonical_target))
+                    )
+                else:
+                    matches = (
+                        resolved_source == canonical_source
+                        and resolved_target == canonical_target
+                    )
+                if matches:
                     evidence.append(_relationship_evidence_from_row(row))
             return evidence
 
@@ -2315,7 +2297,10 @@ class SQLiteIdentityStore:
             _record_person_operation(conn, operation_id, "move-embedding", result)
             return result
 
-    def merge_persons(self, source_person_id: str, target_person_id: str, operation_id: str) -> dict:
+    def _legacy_merge_persons(
+        self, source_person_id: str, target_person_id: str, operation_id: str,
+    ) -> dict:
+        """Retained only to read/test legacy merge history until normalized P8 merge."""
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "merge-persons")
             if existing:
@@ -2453,7 +2438,10 @@ class SQLiteIdentityStore:
             _record_person_operation(conn, operation_id, "merge-persons", result)
             return result
 
-    def undo_merge_persons(self, merge_operation_id: str, operation_id: str) -> dict:
+    def _legacy_undo_merge_persons(
+        self, merge_operation_id: str, operation_id: str,
+    ) -> dict:
+        """Retained only to read/test legacy merge history until normalized P8 merge."""
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "undo-merge-persons")
             if existing:
@@ -4058,11 +4046,39 @@ def _migrate_17_to_18(conn: sqlite3.Connection) -> None:
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'embeddings'"
     ).fetchone() is not None
     person_ids = {str(row["person_id"]) for row in rows}
+    legacy_canonical_mappings: dict[str, str] = {}
     for row in rows:
+        if not row["deleted_at"]:
+            continue
         person_id = str(row["person_id"])
         metadata = json.loads(row["metadata"] or "{}")
         legacy_target = str(metadata.get("merged_into") or "").strip()
-        if row["deleted_at"] and legacy_target in person_ids and legacy_target != person_id:
+        if not legacy_target:
+            continue
+        if legacy_target == person_id:
+            raise SchemaMigrationError(
+                f"Invalid legacy canonical mapping for {person_id}: self-reference"
+            )
+        if legacy_target not in person_ids:
+            raise SchemaMigrationError(
+                f"Invalid legacy canonical mapping for {person_id}: "
+                f"target {legacy_target} does not exist"
+            )
+        legacy_canonical_mappings[person_id] = legacy_target
+    for source_person_id in sorted(legacy_canonical_mappings):
+        visited: set[str] = set()
+        current_person_id = source_person_id
+        while current_person_id in legacy_canonical_mappings:
+            if current_person_id in visited:
+                raise SchemaMigrationError(
+                    f"Invalid legacy canonical mapping for {source_person_id}: cycle detected"
+                )
+            visited.add(current_person_id)
+            current_person_id = legacy_canonical_mappings[current_person_id]
+    for row in rows:
+        person_id = str(row["person_id"])
+        legacy_target = legacy_canonical_mappings.get(person_id)
+        if legacy_target is not None:
             lifecycle_status = "MERGED"
             canonical_person_id = legacy_target
         elif row["deleted_at"]:
@@ -4433,6 +4449,37 @@ def _migrate_19_to_20(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_20_to_21(conn: sqlite3.Connection) -> None:
+    invalid = conn.execute(
+        """
+        SELECT evidence_id
+        FROM relationship_evidence
+        WHERE directionality = 'UNDIRECTED'
+          AND source_person_id >= target_person_id
+        LIMIT 1
+        """
+    ).fetchone()
+    if invalid is not None:
+        raise SchemaMigrationError(
+            "Cannot enforce undirected evidence ordering: "
+            f"evidence {invalid['evidence_id']} has non-canonical raw endpoint order"
+        )
+    _execute_migration_script(
+        conn,
+        """
+        CREATE TRIGGER relationship_evidence_undirected_order_insert
+        BEFORE INSERT ON relationship_evidence
+        WHEN NEW.directionality = 'UNDIRECTED'
+         AND NEW.source_person_id >= NEW.target_person_id
+        BEGIN
+            SELECT RAISE(ABORT, 'undirected evidence endpoints must be ordered');
+        END;
+
+        PRAGMA user_version = 21;
+        """,
+    )
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -4461,6 +4508,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(17, 18, _migrate_17_to_18),
         SchemaMigration(18, 19, _migrate_18_to_19),
         SchemaMigration(19, 20, _migrate_19_to_20),
+        SchemaMigration(20, 21, _migrate_20_to_21),
     )
 
 
@@ -4611,6 +4659,78 @@ def _optional_text(value: object | None) -> str | None:
         return None
     normalized = str(value).strip()
     return normalized or None
+
+
+def _normalize_evidence_endpoints(
+    source_person_id: str,
+    target_person_id: str,
+    directionality: str,
+) -> tuple[str, str]:
+    source = str(source_person_id).strip()
+    target = str(target_person_id).strip()
+    if not source or not target:
+        raise ValueError("Relationship evidence requires two person IDs")
+    if source == target:
+        raise ValueError("Relationship evidence cannot reference the same raw person twice")
+    if directionality == "UNDIRECTED":
+        return tuple(sorted((source, target)))
+    if directionality == "DIRECTED":
+        return source, target
+    raise ValueError(f"Unsupported evidence directionality: {directionality}")
+
+
+def _insert_relationship_evidence(
+    conn: sqlite3.Connection,
+    *,
+    evidence_type: str,
+    source_entity_type: str,
+    source_entity_id: str,
+    source_person_id: str,
+    target_person_id: str,
+    relationship_type: str,
+    directionality: str,
+    source: str | None,
+    created_operation_id: str,
+    created_at: str,
+) -> str:
+    normalized_source, normalized_target = _normalize_evidence_endpoints(
+        source_person_id, target_person_id, directionality,
+    )
+    evidence_id = str(uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        "|".join((
+            "sentriface",
+            evidence_type,
+            source_entity_id,
+            normalized_source,
+            normalized_target,
+            relationship_type,
+            directionality,
+        )),
+    ))
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO relationship_evidence(
+            evidence_id, evidence_type, source_entity_type, source_entity_id,
+            source_person_id, target_person_id, relationship_type,
+            directionality, active, source, created_operation_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+        """,
+        (
+            evidence_id,
+            evidence_type,
+            source_entity_type,
+            source_entity_id,
+            normalized_source,
+            normalized_target,
+            relationship_type,
+            directionality,
+            source,
+            created_operation_id,
+            created_at,
+        ),
+    )
+    return evidence_id
 
 
 def _relationship_evidence_from_row(row: sqlite3.Row) -> RelationshipEvidence:

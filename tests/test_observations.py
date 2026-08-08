@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from sentriface.engine import FaceEngine
 from sentriface.storage.sqlite_store import (
     SCHEMA_VERSION,
     SQLiteIdentityStore,
@@ -42,6 +43,34 @@ class ObservationStorageTest(unittest.TestCase):
             image_path=f"/managed/{media_id}",
         )
         return f"/managed/{media_id}"
+
+    def test_domain_finalization_is_gated_until_atomic_p6_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            engine = object.__new__(FaceEngine)
+            engine.store = store
+            person = store.create_person("Review Person")
+            observation = store.create_observation(
+                "gated-finalize-create", participant_ids=[person.person_id],
+            )
+
+            with self.assertRaisesRegex(
+                RuntimeError, "temporarily unavailable.*P6",
+            ):
+                engine.finalize_observation(
+                    observation.observation_id, "gated-finalize",
+                )
+
+            self.assertEqual(
+                store.get_observation(observation.observation_id).status,
+                "DRAFT",
+            )
+            self.assertIsNone(store.get_operation("gated-finalize"))
+            with sqlite3.connect(store.db_path) as conn:
+                self.assertEqual(
+                    conn.execute("SELECT COUNT(*) FROM relationship_evidence").fetchone()[0],
+                    0,
+                )
 
     def test_fresh_database_has_v19_observation_schema_and_empty_draft_is_valid(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -89,11 +118,15 @@ class ObservationStorageTest(unittest.TestCase):
             self.assertEqual(len(store.list_observation_participants(single.observation_id)), 1)
             self.assertEqual(len(store.list_observation_participants(multi.observation_id)), 2)
             self.assertEqual(
-                store.finalize_observation(single.observation_id, "single-finalize").status,
+                store._finalize_observation_without_graph_evidence(
+                    single.observation_id, "single-finalize",
+                ).status,
                 "FINALIZED",
             )
             self.assertEqual(
-                store.finalize_observation(multi.observation_id, "multi-finalize").status,
+                store._finalize_observation_without_graph_evidence(
+                    multi.observation_id, "multi-finalize",
+                ).status,
                 "FINALIZED",
             )
 
@@ -211,11 +244,15 @@ class ObservationStorageTest(unittest.TestCase):
             )
             self.assertTrue(removed["removed"])
             with self.assertRaisesRegex(ValueError, "requires at least one"):
-                store.finalize_observation(observation.observation_id, "empty-finalize")
+                store._finalize_observation_without_graph_evidence(
+                    observation.observation_id, "empty-finalize",
+                )
             store.add_observation_participant(
                 observation.observation_id, person.person_id, "readd-participant",
             )
-            store.finalize_observation(observation.observation_id, "finalize-lookup")
+            store._finalize_observation_without_graph_evidence(
+                observation.observation_id, "finalize-lookup",
+            )
             with self.assertRaisesRegex(ValueError, "cannot be changed"):
                 store.remove_observation_participant(
                     observation.observation_id, person.person_id, "remove-finalized",
@@ -280,7 +317,7 @@ class ObservationStorageTest(unittest.TestCase):
                 media_path=media_path,
                 actor=actor,
             )
-            store.finalize_observation(
+            store._finalize_observation_without_graph_evidence(
                 observation.observation_id, "journal-observation-finalize", actor=actor,
             )
 

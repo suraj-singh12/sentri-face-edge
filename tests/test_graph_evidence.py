@@ -7,7 +7,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sentriface.graph_service import GlobalIdentityGraphService
-from sentriface.storage.sqlite_store import SCHEMA_VERSION, SQLiteIdentityStore, _schema_migrations
+from sentriface.models import utc_now
+from sentriface.storage.sqlite_store import (
+    SCHEMA_VERSION,
+    SQLiteIdentityStore,
+    _insert_relationship_evidence,
+    _replace_graph_projection,
+    _schema_migrations,
+)
 
 
 class GlobalGraphEvidenceTest(unittest.TestCase):
@@ -25,7 +32,7 @@ class GlobalGraphEvidenceTest(unittest.TestCase):
         observation = store.create_observation(
             f"{operation_prefix}-create", participant_ids=person_ids,
         )
-        store.finalize_observation(
+        store._finalize_observation_without_graph_evidence(
             observation.observation_id, f"{operation_prefix}-finalize",
         )
         return observation.observation_id
@@ -168,6 +175,153 @@ class GlobalGraphEvidenceTest(unittest.TestCase):
                 source.person_id, survivor.person_id, include_inactive=True,
             )), 0)
             self.assertTrue(graph.validate_projection()["valid"])
+
+    def test_raw_participant_pairs_survive_canonicalization_before_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            graph = GlobalIdentityGraphService(store)
+            first = store.create_person("A")
+            survivor = store.create_person("B")
+            third = store.create_person("C")
+            observation_id = self._finalized_observation(
+                store,
+                "raw-provenance",
+                [first.person_id, survivor.person_id, third.person_id],
+            )
+            store.set_canonical_person_id(
+                first.person_id, survivor.person_id, "raw-provenance-map",
+            )
+
+            evidence = graph.record_observation_evidence(
+                observation_id, "raw-provenance-evidence",
+            )
+
+            self.assertEqual(len(evidence), 3)
+            self.assertEqual(
+                {
+                    tuple(sorted((item.source_person_id, item.target_person_id)))
+                    for item in evidence
+                },
+                {
+                    tuple(sorted((first.person_id, survivor.person_id))),
+                    tuple(sorted((first.person_id, third.person_id))),
+                    tuple(sorted((survivor.person_id, third.person_id))),
+                },
+            )
+            connections = graph.get_global_projection().connections
+            self.assertEqual(len(connections), 1)
+            self.assertEqual(connections[0].evidence_count, 2)
+            expected = connections
+            graph.rebuild_projection("raw-provenance-rebuild")
+            self.assertEqual(graph.get_global_projection().connections, expected)
+
+    def test_directed_lookup_preserves_direction_and_undirected_insert_normalizes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            graph = GlobalIdentityGraphService(store)
+            first = store.create_person("A")
+            second = store.create_person("B")
+            operation_id = "evidence-direction-fixture"
+            store.begin_operation("test.evidence-direction", operation_id=operation_id)
+            store.mark_operation_committed(operation_id)
+            created_at = utc_now()
+            with store._connect() as conn:
+                _insert_relationship_evidence(
+                    conn,
+                    evidence_type="NOTE_REFERENCE",
+                    source_entity_type="NOTE",
+                    source_entity_id="note-a-to-b",
+                    source_person_id=first.person_id,
+                    target_person_id=second.person_id,
+                    relationship_type="REFERENCES",
+                    directionality="DIRECTED",
+                    source="test",
+                    created_operation_id=operation_id,
+                    created_at=created_at,
+                )
+                _insert_relationship_evidence(
+                    conn,
+                    evidence_type="NOTE_REFERENCE",
+                    source_entity_type="NOTE",
+                    source_entity_id="note-b-to-a",
+                    source_person_id=second.person_id,
+                    target_person_id=first.person_id,
+                    relationship_type="REFERENCES",
+                    directionality="DIRECTED",
+                    source="test",
+                    created_operation_id=operation_id,
+                    created_at=created_at,
+                )
+                first_undirected_id = _insert_relationship_evidence(
+                    conn,
+                    evidence_type="MANUAL_ASSOCIATION",
+                    source_entity_type="MANUAL_ASSERTION",
+                    source_entity_id="manual-pair",
+                    source_person_id=first.person_id,
+                    target_person_id=second.person_id,
+                    relationship_type="ASSOCIATED_WITH",
+                    directionality="UNDIRECTED",
+                    source="test",
+                    created_operation_id=operation_id,
+                    created_at=created_at,
+                )
+                reversed_undirected_id = _insert_relationship_evidence(
+                    conn,
+                    evidence_type="MANUAL_ASSOCIATION",
+                    source_entity_type="MANUAL_ASSERTION",
+                    source_entity_id="manual-pair",
+                    source_person_id=second.person_id,
+                    target_person_id=first.person_id,
+                    relationship_type="ASSOCIATED_WITH",
+                    directionality="UNDIRECTED",
+                    source="test",
+                    created_operation_id=operation_id,
+                    created_at=created_at,
+                )
+                _replace_graph_projection(conn)
+
+            self.assertEqual(first_undirected_id, reversed_undirected_id)
+            forward = graph.get_connection_evidence(first.person_id, second.person_id)
+            reverse = graph.get_connection_evidence(second.person_id, first.person_id)
+            self.assertEqual(
+                [item.source_entity_id for item in forward if item.directionality == "DIRECTED"],
+                ["note-a-to-b"],
+            )
+            self.assertEqual(
+                [item.source_entity_id for item in reverse if item.directionality == "DIRECTED"],
+                ["note-b-to-a"],
+            )
+            self.assertEqual(
+                len([item for item in forward if item.directionality == "UNDIRECTED"]),
+                1,
+            )
+
+    def test_database_rejects_reversed_undirected_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            first = store.create_person("A")
+            second = store.create_person("B")
+            low_person_id, high_person_id = sorted((first.person_id, second.person_id))
+            operation_id = "evidence-order-fixture"
+            store.begin_operation("test.evidence-order", operation_id=operation_id)
+            store.mark_operation_committed(operation_id)
+
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "must be ordered"):
+                with store._connect() as conn:
+                    conn.execute(
+                        """
+                        INSERT INTO relationship_evidence(
+                            evidence_id, evidence_type, source_entity_type, source_entity_id,
+                            source_person_id, target_person_id, relationship_type,
+                            directionality, active, created_operation_id, created_at
+                        ) VALUES (
+                            'reversed-evidence', 'MANUAL_ASSOCIATION', 'MANUAL_ASSERTION',
+                            'manual-reversed', ?, ?, 'ASSOCIATED_WITH', 'UNDIRECTED',
+                            1, ?, ?
+                        )
+                        """,
+                        (high_person_id, low_person_id, operation_id, utc_now()),
+                    )
 
     def test_archived_and_deleted_people_remain_graph_resolvable(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -324,6 +478,33 @@ class GlobalGraphEvidenceTest(unittest.TestCase):
                 }
             self.assertEqual(version, SCHEMA_VERSION)
             self.assertTrue({"relationship_evidence", "graph_connections"} <= tables)
+
+    def test_v20_database_adds_undirected_evidence_order_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            db_path = Path(temp) / "sentriface.db"
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA foreign_keys=ON")
+                conn.execute("BEGIN")
+                for migration in _schema_migrations():
+                    if migration.to_version > 20:
+                        break
+                    migration.apply(conn)
+                conn.commit()
+
+            SQLiteIdentityStore(db_path, embedding_dim=2).initialize()
+
+            with sqlite3.connect(db_path) as conn:
+                version = conn.execute("PRAGMA user_version").fetchone()[0]
+                trigger = conn.execute(
+                    """
+                    SELECT name FROM sqlite_master
+                    WHERE type = 'trigger'
+                      AND name = 'relationship_evidence_undirected_order_insert'
+                    """
+                ).fetchone()
+            self.assertEqual(version, SCHEMA_VERSION)
+            self.assertEqual(trigger[0], "relationship_evidence_undirected_order_insert")
 
 
 if __name__ == "__main__":

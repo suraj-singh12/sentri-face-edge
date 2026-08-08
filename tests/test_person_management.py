@@ -13,6 +13,26 @@ from sentriface.cli import build_dev_engine
 
 
 class PersonManagementTest(unittest.TestCase):
+    def test_public_merge_and_undo_are_gated_until_p8(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            engine = build_dev_engine(Path(temp) / "data")
+            engine.initialize()
+            source = engine.store.create_person("Source")
+            target = engine.store.create_person("Target")
+
+            with self.assertRaisesRegex(RuntimeError, "temporarily unavailable.*P8"):
+                engine.merge_persons(source.person_id, target.person_id, "gated-merge")
+            with self.assertRaisesRegex(RuntimeError, "temporarily unavailable.*P8"):
+                engine.undo_merge_persons("legacy-merge", "gated-undo")
+
+            self.assertEqual(
+                engine.store.get_person(source.person_id).lifecycle_status,
+                "ACTIVE",
+            )
+            self.assertIsNone(
+                engine.store.get_person_operation("gated-merge", "merge-persons")
+            )
+
     def test_placeholder_creation_duplicate_names_and_zero_embedding_search(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             engine = build_dev_engine(Path(temp) / "data")
@@ -195,7 +215,7 @@ class PersonManagementTest(unittest.TestCase):
             source = engine.confirm_new_person(engine.prepare_additions(image_a)[0], "Source")
             target = engine.confirm_new_person(engine.prepare_additions(image_b)[0], "Target")
 
-            result = engine.merge_persons(source, target)
+            result = engine._legacy_merge_persons_for_compatibility(source, target)
 
             self.assertEqual(result["moved_embeddings"], 1)
             self.assertIsNone(engine.get_person(source))
@@ -359,7 +379,9 @@ class PersonManagementTest(unittest.TestCase):
             )
 
             operation_id = "55555555-5555-4555-8555-555555555555"
-            result = engine.merge_persons(source, target, operation_id)
+            result = engine._legacy_merge_persons_for_compatibility(
+                source, target, operation_id,
+            )
 
             self.assertEqual(result["moved_embeddings"], 1)
             self.assertEqual(result["moved_sightings"], 1)
@@ -369,7 +391,12 @@ class PersonManagementTest(unittest.TestCase):
             self.assertEqual(metadata["tags"], ["vip", "staff"])
             archived_source = engine.get_person(source, include_archived=True)
             self.assertEqual(archived_source.metadata["merged_into"], target)
-            self.assertEqual(engine.merge_persons(source, target, operation_id), result)
+            self.assertEqual(
+                engine._legacy_merge_persons_for_compatibility(
+                    source, target, operation_id,
+                ),
+                result,
+            )
             with self.assertRaises(KeyError):
                 engine.restore_person(
                     source,
@@ -415,10 +442,14 @@ class PersonManagementTest(unittest.TestCase):
 
             merge_operation_id = "10101010-1010-4010-8010-101010101010"
             undo_operation_id = "20202020-2020-4020-8020-202020202020"
-            merge_result = engine.merge_persons(source, target, merge_operation_id)
+            merge_result = engine._legacy_merge_persons_for_compatibility(
+                source, target, merge_operation_id,
+            )
             self.assertTrue(merge_result["undo_supported"])
 
-            undo_result = engine.undo_merge_persons(merge_operation_id, undo_operation_id)
+            undo_result = engine._legacy_undo_merge_persons_for_compatibility(
+                merge_operation_id, undo_operation_id,
+            )
 
             self.assertTrue(undo_result["undone"])
             self.assertEqual(undo_result["restored_embeddings"], 1)
@@ -437,7 +468,9 @@ class PersonManagementTest(unittest.TestCase):
             self.assertEqual(restored_detail.person_id, source)
             self.assertEqual(restored_detail.name, "Source")
             self.assertEqual(
-                engine.undo_merge_persons(merge_operation_id, undo_operation_id),
+                engine._legacy_undo_merge_persons_for_compatibility(
+                    merge_operation_id, undo_operation_id,
+                ),
                 undo_result,
             )
 
@@ -453,7 +486,9 @@ class PersonManagementTest(unittest.TestCase):
             source = engine.confirm_new_person(engine.prepare_additions(image_a)[0], "Source")
             target = engine.confirm_new_person(engine.prepare_additions(image_b)[0], "Target")
             merge_operation_id = "30303030-3030-4030-8030-303030303030"
-            engine.merge_persons(source, target, merge_operation_id)
+            engine._legacy_merge_persons_for_compatibility(
+                source, target, merge_operation_id,
+            )
             engine.update_person_profile(
                 person_id=target,
                 name="Edited after merge",
@@ -466,7 +501,7 @@ class PersonManagementTest(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(KeyError, "changed after the merge"):
-                engine.undo_merge_persons(
+                engine._legacy_undo_merge_persons_for_compatibility(
                     merge_operation_id,
                     "50505050-5050-4050-8050-505050505050",
                 )
@@ -485,7 +520,7 @@ class PersonManagementTest(unittest.TestCase):
             before = engine.list_person_embeddings(source)
 
             with self.assertRaises(KeyError):
-                engine.merge_persons(
+                engine._legacy_merge_persons_for_compatibility(
                     source,
                     "missing-target",
                     "66666666-6666-4666-8666-666666666666",
@@ -638,7 +673,7 @@ class PersonManagementTest(unittest.TestCase):
                 "22222222-2222-4222-8222-222222222221",
             )
 
-            result = engine.merge_persons(
+            result = engine._legacy_merge_persons_for_compatibility(
                 source,
                 target,
                 "23232323-2323-4323-8323-232323232323",
@@ -760,7 +795,7 @@ class PersonManagementTest(unittest.TestCase):
             person_id = engine.confirm_new_person(engine.prepare_additions(image)[0], "Person A")
 
             with self.assertRaises(KeyError):
-                engine.merge_persons(person_id, person_id)
+                engine._legacy_merge_persons_for_compatibility(person_id, person_id)
 
     def test_move_embedding_rejects_unknown_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

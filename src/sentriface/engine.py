@@ -44,6 +44,10 @@ QUEUE_POSSIBLE_MATCH_THRESHOLD = 0.40
 MAX_QUEUE_IMAGES = 10_000
 
 
+class DomainWorkflowUnavailableError(RuntimeError):
+    """Raised when a legacy workflow is gated pending its normalized phase."""
+
+
 class _SynchronizedFaceIndex:
     """Serializes reads and atomically swaps complete index generations."""
 
@@ -478,7 +482,10 @@ class FaceEngine:
     def finalize_observation(
         self, observation_id: str, operation_id: str, **values,
     ) -> Observation:
-        return self.store.finalize_observation(observation_id, operation_id, **values)
+        raise DomainWorkflowUnavailableError(
+            "Observation finalisation is temporarily unavailable until P6 provides "
+            "atomic review finalisation and graph evidence recording"
+        )
 
     def list_observations_for_person(self, person_id: str) -> list[Observation]:
         return self.store.list_observations_for_person(person_id)
@@ -700,16 +707,31 @@ class FaceEngine:
         target_person_id: str,
         operation_id: str | None = None,
     ) -> dict:
-        result = self.store.merge_persons(
-            source_person_id,
-            target_person_id,
-            operation_id or str(uuid.uuid4()),
+        raise DomainWorkflowUnavailableError(
+            "Merge is temporarily unavailable pending normalized identity merge support in P8"
+        )
+
+    def undo_merge_persons(self, merge_operation_id: str, operation_id: str) -> dict:
+        raise DomainWorkflowUnavailableError(
+            "Merge undo is temporarily unavailable pending normalized identity merge support in P8"
+        )
+
+    def _legacy_merge_persons_for_compatibility(
+        self,
+        source_person_id: str,
+        target_person_id: str,
+        operation_id: str | None = None,
+    ) -> dict:
+        result = self.store._legacy_merge_persons(
+            source_person_id, target_person_id, operation_id or str(uuid.uuid4()),
         )
         self._rebuild_index()
         return result
 
-    def undo_merge_persons(self, merge_operation_id: str, operation_id: str) -> dict:
-        result = self.store.undo_merge_persons(merge_operation_id, operation_id)
+    def _legacy_undo_merge_persons_for_compatibility(
+        self, merge_operation_id: str, operation_id: str,
+    ) -> dict:
+        result = self.store._legacy_undo_merge_persons(merge_operation_id, operation_id)
         self._rebuild_index()
         return result
 

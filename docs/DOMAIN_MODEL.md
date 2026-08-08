@@ -38,7 +38,7 @@ A projected relationship exists while at least one active evidence record suppor
 
 Identity corrections (move face, add face, change a participant decision) are first-class historical operations; they do not silently rewrite provenance. Every important write has an immutable operation-journal entry with operation/idempotency ID, type, actor, timestamp, affected entities, before/after or inverse data, and status. A graph-affecting write and its journal entry commit in the same SQLite transaction.
 
-## Current repository map (schema version 20)
+## Current repository map (schema version 21)
 
 | Concern | Current implementation |
 | --- | --- |
@@ -60,16 +60,16 @@ Identity corrections (move face, add face, change a participant decision) are fi
 
 - `persons` now has explicit `lifecycle_status`, `canonical_person_id`, `identity_status`, `biometric_status`, and `lifecycle_changed_at`. Existing live rows migrate to `ACTIVE`; legacy archived rows remain historical, and valid `metadata.merged_into` sources migrate to `MERGED` mappings.
 - Ordinary archive, restore, and delete paths now use atomic lifecycle transitions plus the global operation journal. The compatibility `permanently_delete_person()` entry point tombstones as `DELETED` and retains linked history; the former destructive implementation remains isolated as the storage-only `physically_purge_person()` exceptional capability.
-- `observations`, `observation_media`, and `observation_participants` now provide draft/finalized events, existing-media membership, and canonical-aware participant deduplication while retaining original person IDs. Finalized observations require at least one participant and are immutable through P3 APIs.
+- `observations`, `observation_media`, and `observation_participants` now provide draft events, existing-media membership, and canonical-aware participant deduplication while retaining original person IDs. Standalone domain finalisation is gated; the low-level P3 primitive remains private until P6 supplies atomic review finalisation plus evidence recording.
 - Existing `recognition_details` rows remain unchanged and accessible. Their nullable `observation_id` is the compatibility bridge for later atomic P6 workflow integration; P3 does not invent or backfill events from ambiguous legacy rows.
 - Queue identity confirmation is atomic per selected group subset in `confirm_init_faces_atomic()`, but `useQueueController.js::confirmQueueFollowup()` then creates one `/api/recognition-followup` write per accepted face. There is no explicit all-faces-final event completion transaction, so identity, sighting, mention, and future graph writes can partially commit.
 - Check Photo similarly performs identity confirmation and recognition follow-up as separate API operations in `useRecognizeController.js`.
-- `relationship_evidence` now retains immutable original endpoints and source provenance for `CO_OBSERVED`, `NOTE_REFERENCE`, and `MANUAL_ASSOCIATION`; only finalized-observation evidence is produced in P4. `graph_connections` is a canonicalized, replaceable projection with counts, types, and latest evidence time.
+- `relationship_evidence` now retains every immutable raw participant pair and source provenance for `CO_OBSERVED`, `NOTE_REFERENCE`, and `MANUAL_ASSOCIATION`; only finalized-observation evidence is produced in P4. Canonical resolution and self-edge suppression happen only in the replaceable `graph_connections` projection.
 - Legacy `person_associations` remains unchanged for compatibility with the current UI. Its manual/automatic rows are not speculatively copied into normalized evidence before P5 and the later manual-association owning phase can establish accurate provenance.
 - `_create_note_associations()` creates an association when saved notes contain a mention, but it does not reconcile removed mentions. A manual link can overwrite an automatic mention's origin, losing independent provenance.
 - Removing a current association deletes the whole row even if multiple underlying reasons should support the relationship.
 - The current Relationship Graph UI still reads legacy `person_associations`, but the backend global graph now has explainable evidence queries, canonical neighbor/global projection reads, deterministic rebuild, and projection validation. Person Graph/World UI adoption remains P10.
-- The P2 canonical resolver and constrained `MERGED` mapping are present, but the existing full merge path still moves embeddings and `recognition_details` and stores its undo snapshot in JSON. P8 must replace that transfer/reconciliation behavior with normalized merge history and complete journal/provenance handling.
+- The P2 canonical resolver and constrained `MERGED` mapping are present. Public merge and undo-merge workflows are gated until P8; the private legacy implementation remains only for compatibility with existing merge history and tests.
 - Face move similarly rewrites embedding and sighting ownership; it journals a result but does not preserve a normalized correction history/provenance chain.
 - `person_operations` remains unchanged as the legacy idempotency/result table because its rows lack reliable actor and lifecycle data. New work uses the global `operation_journal` API; existing writes are not speculatively backfilled or automatically bridged, so important legacy paths remain unjournaled until their owning phase adopts the API.
 - Storage methods are generally transaction-scoped through `_connect()`, which is a useful foundation, but workflows spanning several engine/API calls are not atomic.

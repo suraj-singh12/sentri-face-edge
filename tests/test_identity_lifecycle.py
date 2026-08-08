@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import struct
 import tempfile
@@ -10,6 +11,7 @@ from unittest.mock import patch
 from sentriface.storage.sqlite_store import (
     SCHEMA_VERSION,
     SQLiteIdentityStore,
+    SchemaMigrationError,
     _schema_migrations,
 )
 
@@ -19,6 +21,87 @@ class IdentityLifecycleTest(unittest.TestCase):
         store = SQLiteIdentityStore(root / "sentriface.db", embedding_dim=2)
         store.initialize()
         return store
+
+    def _create_v17_people(self, db_path: Path, people: list[dict]) -> None:
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("BEGIN")
+            for migration in _schema_migrations():
+                if migration.to_version > 17:
+                    break
+                migration.apply(conn)
+            for person in people:
+                conn.execute(
+                    """
+                    INSERT INTO persons(
+                        person_id, name, metadata, created_at, deleted_at,
+                        enrollment_status, notes
+                    ) VALUES (?, ?, ?, ?, ?, 'enrolled', '')
+                    """,
+                    (
+                        person["person_id"],
+                        person["person_id"],
+                        json.dumps(person.get("metadata", {}), separators=(",", ":")),
+                        "2026-08-08T00:00:00+00:00",
+                        person.get("deleted_at"),
+                    ),
+                )
+            conn.commit()
+
+    def _assert_invalid_v17_mapping_rolls_back(
+        self, people: list[dict], message: str,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            db_path = Path(temp) / "sentriface.db"
+            self._create_v17_people(db_path, people)
+
+            with self.assertRaisesRegex(SchemaMigrationError, message):
+                SQLiteIdentityStore(db_path, embedding_dim=2).initialize()
+
+            with sqlite3.connect(db_path) as conn:
+                self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 17)
+                columns = {
+                    row[1] for row in conn.execute("PRAGMA table_info(persons)")
+                }
+            self.assertNotIn("canonical_person_id", columns)
+
+    def test_v17_migration_rejects_self_canonical_mapping(self) -> None:
+        self._assert_invalid_v17_mapping_rolls_back(
+            [{
+                "person_id": "person-a",
+                "metadata": {"merged_into": "person-a"},
+                "deleted_at": "2026-08-08T01:00:00+00:00",
+            }],
+            "self-reference",
+        )
+
+    def test_v17_migration_rejects_canonical_cycle(self) -> None:
+        self._assert_invalid_v17_mapping_rolls_back(
+            [
+                {
+                    "person_id": "person-a",
+                    "metadata": {"merged_into": "person-b"},
+                    "deleted_at": "2026-08-08T01:00:00+00:00",
+                },
+                {
+                    "person_id": "person-b",
+                    "metadata": {"merged_into": "person-a"},
+                    "deleted_at": "2026-08-08T01:00:00+00:00",
+                },
+            ],
+            "cycle detected",
+        )
+
+    def test_v17_migration_rejects_dangling_canonical_target(self) -> None:
+        self._assert_invalid_v17_mapping_rolls_back(
+            [{
+                "person_id": "person-a",
+                "metadata": {"merged_into": "missing-person"},
+                "deleted_at": "2026-08-08T01:00:00+00:00",
+            }],
+            "target missing-person does not exist",
+        )
 
     def test_v17_existing_enrolled_person_migrates_active_without_behavior_change(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

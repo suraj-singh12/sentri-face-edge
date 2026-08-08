@@ -265,16 +265,6 @@ class IdentityStore(Protocol):
     def list_observation_media(self, observation_id: str) -> list[ObservationMedia]:
         """List durable media memberships for one observation."""
 
-    def finalize_observation(
-        self,
-        observation_id: str,
-        operation_id: str,
-        *,
-        source: str | None = None,
-        actor: dict | None = None,
-    ) -> Observation:
-        """Finalize a valid draft observation."""
-
     def list_observations_for_person(self, person_id: str) -> list[Observation]:
         """List observations retaining this exact historical participant identity."""
 
@@ -413,9 +403,6 @@ class IdentityStore(Protocol):
 
     def move_embedding(self, embedding_id: str, person_id: str, operation_id: str) -> dict:
         """Atomically move one embedding and its recognition details."""
-
-    def merge_persons(self, source_person_id: str, target_person_id: str, operation_id: str) -> dict:
-        """Atomically merge one active person into another."""
 
     def update_person_preferences(
         self,
