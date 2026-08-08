@@ -300,6 +300,10 @@ class FaceEngine:
         with self.metrics.timer("db_get_person_ms"):
             return self.store.get_person(person_id, include_archived=include_archived)
 
+    def get_effective_person(self, person_id: str) -> Person | None:
+        with self.metrics.timer("db_get_person_ms"):
+            return self.store.get_effective_person(person_id)
+
     def list_persons(self, archived: bool = False) -> list[PersonSummary]:
         with self.metrics.timer("db_list_persons_ms"):
             return self.store.list_persons(archived=archived)
@@ -318,10 +322,18 @@ class FaceEngine:
                 name, metadata, operation_id, actor=actor, source=source,
             )
 
-    def list_person_embeddings(self, person_id: str, include_archived: bool = False):
-        if self.store.get_person(person_id, include_archived=include_archived) is None:
+    def list_person_embeddings(
+        self, person_id: str, include_archived: bool = False, *, raw: bool = False,
+    ):
+        person = (
+            self.store.get_person(person_id, include_archived=True)
+            if raw else self.store.get_effective_person(person_id)
+        )
+        if person is None:
             raise KeyError(f"Unknown person: {person_id}")
         with self.metrics.timer("db_list_person_embeddings_ms"):
+            if raw:
+                return self.store.list_raw_embeddings_for_person(person_id)
             return self.store.list_embeddings_for_person(
                 person_id,
                 include_archived=include_archived,
@@ -375,11 +387,20 @@ class FaceEngine:
         self,
         person_id: str,
         include_archived: bool = False,
+        *,
+        raw: bool = False,
     ) -> list[PersonChange]:
-        if self.store.get_person(person_id, include_archived=include_archived) is None:
+        person = (
+            self.store.get_person(person_id, include_archived=True)
+            if raw else self.store.get_effective_person(person_id)
+        )
+        if person is None:
             raise KeyError(f"Unknown person: {person_id}")
         with self.metrics.timer("db_list_person_changes_ms"):
-            return self.store.list_person_changes(person_id)
+            return (
+                self.store.list_raw_person_changes(person_id)
+                if raw else self.store.list_person_changes(person_id)
+            )
 
     def update_person_notes(
         self, person_id: str, notes: str, expected_previous_notes: str,
@@ -410,6 +431,13 @@ class FaceEngine:
     ) -> Note | None:
         return self.graph.get_person_note(person_id, include_retired)
 
+    def list_person_notes(
+        self, person_id: str, *, raw: bool = False, include_retired: bool = False,
+    ) -> list[Note]:
+        return self.store.list_person_notes(
+            person_id, raw=raw, include_retired=include_retired,
+        )
+
     def list_note_revisions(self, note_id: str) -> list[NoteRevision]:
         return self.graph.list_note_revisions(note_id)
 
@@ -420,11 +448,20 @@ class FaceEngine:
         self,
         person_id: str,
         include_archived: bool = False,
+        *,
+        raw: bool = False,
     ) -> list[dict]:
-        if self.store.get_person(person_id, include_archived=include_archived) is None:
+        person = (
+            self.store.get_person(person_id, include_archived=True)
+            if raw else self.store.get_effective_person(person_id)
+        )
+        if person is None:
             raise KeyError(f"Unknown person: {person_id}")
         with self.metrics.timer("db_list_person_operations_ms"):
-            return self.store.list_person_operations(person_id)
+            return (
+                self.store.list_raw_person_operations(person_id)
+                if raw else self.store.list_person_operations(person_id)
+            )
 
     def list_person_associations(
         self,
@@ -500,6 +537,16 @@ class FaceEngine:
     ) -> list[ObservationParticipant]:
         return self.store.list_observation_participants(observation_id)
 
+    def list_raw_observation_participants(
+        self, observation_id: str,
+    ) -> list[ObservationParticipant]:
+        return self.store.list_raw_observation_participants(observation_id)
+
+    def list_effective_observation_participants(
+        self, observation_id: str,
+    ) -> list[ObservationParticipant]:
+        return self.store.list_effective_observation_participants(observation_id)
+
     def list_observation_media(self, observation_id: str) -> list[ObservationMedia]:
         return self.store.list_observation_media(observation_id)
 
@@ -555,6 +602,9 @@ class FaceEngine:
     def list_observations_for_person(self, person_id: str) -> list[Observation]:
         return self.store.list_observations_for_person(person_id)
 
+    def list_raw_observations_for_person(self, person_id: str) -> list[Observation]:
+        return self.store.list_raw_observations_for_person(person_id)
+
     def list_observations_for_media(self, media_id: str) -> list[Observation]:
         return self.store.list_observations_for_media(media_id)
 
@@ -574,11 +624,20 @@ class FaceEngine:
         self,
         person_id: str,
         include_archived: bool = False,
+        *,
+        raw: bool = False,
     ):
-        if self.store.get_person(person_id, include_archived=include_archived) is None:
+        person = (
+            self.store.get_person(person_id, include_archived=True)
+            if raw else self.store.get_effective_person(person_id)
+        )
+        if person is None:
             raise KeyError(f"Unknown person: {person_id}")
         with self.metrics.timer("db_list_recognition_details_for_person_ms"):
-            return self.store.list_recognition_details_for_person(person_id)
+            return (
+                self.store.list_raw_recognition_details_for_person(person_id)
+                if raw else self.store.list_recognition_details_for_person(person_id)
+            )
 
     def archive_person(
         self, person_id: str, operation_id: str,
@@ -1425,8 +1484,9 @@ class FaceEngine:
             embeddings = self.store.list_embeddings()
         embeddings_by_person: dict[str, list] = {}
         for record in embeddings:
-            if record.person_id not in excluded_person_ids:
-                embeddings_by_person.setdefault(record.person_id, []).append(record)
+            effective_person_id = record.canonical_person_id or record.person_id
+            if effective_person_id not in excluded_person_ids:
+                embeddings_by_person.setdefault(effective_person_id, []).append(record)
 
         candidates: list[RankedPersonCandidate] = []
         with self.metrics.timer("rank_people_candidates_ms"):
@@ -1437,7 +1497,7 @@ class FaceEngine:
                 scored = sorted(
                     (
                         Match(
-                            person_id=record.person_id,
+                            person_id=summary.person.person_id,
                             score=_cosine(representative, record.vector),
                             embedding_id=record.embedding_id,
                         )

@@ -27,6 +27,7 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from sentriface import __version__
+from sentriface.api_serializers import embedding_record_payload
 from sentriface.auth import (
     AUTH_COOKIE_NAME,
     RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION,
@@ -59,6 +60,8 @@ from sentriface.models import (
     InitGroup,
     InitSession,
     MatchDecision,
+    Note,
+    Observation,
     PendingAddition,
     PhotoReview,
     Person,
@@ -970,31 +973,41 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/person":
                 person_id = _query_value(parsed.query, "person_id")
                 include_archived = _query_bool(parsed.query, "include_archived")
-                person = self.server.engine.get_person(
-                    person_id,
-                    include_archived=include_archived,
+                raw_view = include_archived or _query_value(parsed.query, "view") == "raw"
+                person = (
+                    self.server.engine.get_person(person_id, include_archived=True)
+                    if raw_view else self.server.engine.get_effective_person(person_id)
                 )
                 if person is None:
                     raise KeyError(f"Unknown person: {person_id}")
                 embeddings = self.server.engine.list_person_embeddings(
                     person_id,
                     include_archived=include_archived,
+                    raw=raw_view,
                 )
                 details = self.server.engine.list_recognition_details_for_person(
                     person_id,
                     include_archived=include_archived,
+                    raw=raw_view,
                 )
                 changes = self.server.engine.list_person_changes(
                     person_id,
                     include_archived=include_archived,
+                    raw=raw_view,
                 )
                 management_events = self.server.engine.list_person_operations(
                     person_id,
                     include_archived=include_archived,
+                    raw=raw_view,
+                )
+                notes = self.server.engine.list_person_notes(person_id, raw=raw_view)
+                observations = (
+                    self.server.engine.list_raw_observations_for_person(person_id)
+                    if raw_view else self.server.engine.list_observations_for_person(person_id)
                 )
                 associations = self.server.engine.list_person_associations(
-                    person_id,
-                    include_archived=include_archived,
+                    person_id if raw_view else person.person_id,
+                    include_archived=include_archived or raw_view,
                 )
                 person_summaries = {
                     item.person.person_id: item
@@ -1014,14 +1027,26 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                                 person.metadata.get("representative_embedding_id"),
                             ),
                         },
+                        "requested_person_id": person_id,
+                        "view": "raw" if raw_view else "effective",
                         "embeddings": [_embedding(record) for record in embeddings],
-                        "details": [_recognition_detail(detail) for detail in details],
+                        "details": [
+                            _recognition_detail(
+                                detail,
+                                self.server.engine.resolve_canonical_person_id(
+                                    detail.person_id,
+                                ),
+                            )
+                            for detail in details
+                        ],
+                        "notes_records": [_note_record(note) for note in notes],
+                        "observations": [_observation_record(item) for item in observations],
                         "changes": [_person_change(change) for change in changes],
                         "management_events": management_events,
                         "associations": [
                             _person_association(
                                 association,
-                                person_id,
+                                person_id if raw_view else person.person_id,
                                 person_summaries,
                                 self.server.engine,
                             )
@@ -3211,13 +3236,29 @@ def _person_association(
 
 
 def _embedding(record: EmbeddingRecord) -> dict[str, Any]:
+    return embedding_record_payload(record)
+
+
+def _note_record(note: Note) -> dict[str, Any]:
     return {
-        "embedding_id": record.embedding_id,
-        "person_id": record.person_id,
-        "quality_score": record.quality_score,
-        "source_image": record.source_image,
-        "crop_path": record.crop_path,
-        "created_at": record.created_at,
+        "note_id": note.note_id,
+        "raw_owner_person_id": note.owner_person_id,
+        "canonical_owner_person_id": note.canonical_owner_person_id or note.owner_person_id,
+        "content": note.content,
+        "revision_number": note.revision_number,
+        "raw_mentioned_person_ids": list(note.mentioned_person_ids),
+        "effective_mentioned_person_ids": list(note.effective_mentioned_person_ids),
+        "status": note.status,
+    }
+
+
+def _observation_record(observation: Observation) -> dict[str, Any]:
+    return {
+        "observation_id": observation.observation_id,
+        "status": observation.status,
+        "observed_at": observation.observed_at,
+        "location": observation.location,
+        "source": observation.source,
     }
 
 
@@ -3251,11 +3292,16 @@ def _deleted_embedding(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _recognition_detail(detail: RecognitionDetail) -> dict[str, Any]:
+def _recognition_detail(
+    detail: RecognitionDetail,
+    canonical_person_id: str | None = None,
+) -> dict[str, Any]:
     return {
         "detail_id": detail.detail_id,
         "embedding_id": detail.embedding_id,
         "person_id": detail.person_id,
+        "raw_person_id": detail.person_id,
+        "canonical_person_id": canonical_person_id or detail.person_id,
         "image_id": detail.image_id,
         "image_path": detail.image_path,
         "name": detail.name,

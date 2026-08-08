@@ -55,6 +55,7 @@ class EmbeddingRecord:
     source_image: str | None = None
     crop_path: str | None = None
     created_at: str = field(default_factory=utc_now)
+    canonical_person_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -152,6 +153,8 @@ class Note:
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
     retired_at: str | None = None
+    canonical_owner_person_id: str | None = None
+    effective_mentioned_person_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -165,6 +168,71 @@ class NoteRevision:
     author_name: str = ""
     operation_id: str | None = None
     created_at: str = field(default_factory=utc_now)
+    effective_mentioned_person_ids: tuple[str, ...] = ()
+
+
+class MergeAffectedAction(str, Enum):
+    PRESERVE = "PRESERVE"
+    REINTERPRET_CANONICAL_OWNER = "REINTERPRET_CANONICAL_OWNER"
+    UNION_IN_CURRENT_VIEW = "UNION_IN_CURRENT_VIEW"
+    SELECT_VALUE = "SELECT_VALUE"
+
+
+class MergeConflictStrategy(str, Enum):
+    KEEP_SOURCE = "KEEP_SOURCE"
+    KEEP_TARGET = "KEEP_TARGET"
+    COMBINE = "COMBINE"
+    USER_SELECTED = "USER_SELECTED"
+
+
+@dataclass(frozen=True)
+class MergeAffectedItem:
+    item_type: str
+    item_id: str
+    raw_owner_person_id: str | None
+    effective_owner_person_id: str | None
+    action: MergeAffectedAction
+    before_state: dict[str, Any] = field(default_factory=dict)
+    after_state: dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def previous_person_id(self) -> str | None:
+        return self.raw_owner_person_id
+
+    @property
+    def effective_person_id(self) -> str | None:
+        return self.effective_owner_person_id
+
+
+@dataclass(frozen=True)
+class MergeConflictResolution:
+    conflict_id: str
+    category: str
+    field_name: str
+    source_value: Any
+    target_value: Any
+    strategy: MergeConflictStrategy
+    selected_value: Any
+    inverse_data: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class MergeOperation:
+    merge_operation_id: str
+    source_person_id: str
+    target_person_id: str
+    actor: dict[str, Any]
+    created_at: str
+    previous_source_lifecycle_status: str
+    previous_target_lifecycle_status: str
+    previous_source_canonical_person_id: str | None
+    previous_target_canonical_person_id: str | None
+    reason: str | None
+    context: dict[str, Any]
+    operation_journal_id: str
+    affected_items: tuple[MergeAffectedItem, ...] = ()
+    conflicts: tuple[MergeConflictResolution, ...] = ()
 
 
 @dataclass(frozen=True)

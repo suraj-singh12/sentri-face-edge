@@ -24,6 +24,11 @@ from sentriface.models import (
     InitSession,
     IdentityCorrection,
     MatchDecision,
+    MergeAffectedAction,
+    MergeAffectedItem,
+    MergeConflictResolution,
+    MergeConflictStrategy,
+    MergeOperation,
     Note,
     NoteRevision,
     Observation,
@@ -46,7 +51,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 26
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
 PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
@@ -64,6 +69,10 @@ OPERATION_STATUS_TRANSITIONS = {
 }
 REVIEW_DECISIONS = frozenset({
     "ACCEPT_EXISTING_PERSON", "ACCEPT_NEW_PERSON", "EXCLUDE", "SKIP",
+})
+MERGE_COLLECTION_ITEM_TYPES = frozenset({
+    "EMBEDDING", "PHOTO", "OBSERVATION", "OBSERVATION_PARTICIPANT",
+    "NOTE", "NOTE_MENTION", "HISTORY", "GRAPH_EVIDENCE",
 })
 
 
@@ -310,6 +319,21 @@ class SQLiteIdentityStore:
             return None
         return _person_from_row(row)
 
+    def get_effective_person(self, person_id: str) -> Person | None:
+        with self._connect() as conn:
+            try:
+                canonical_person_id = _resolve_canonical_person_id(conn, person_id)
+            except KeyError:
+                return None
+            row = conn.execute(
+                """
+                SELECT * FROM persons
+                WHERE person_id = ? AND lifecycle_status = 'ACTIVE' AND deleted_at IS NULL
+                """,
+                (canonical_person_id,),
+            ).fetchone()
+        return _person_from_row(row) if row is not None else None
+
     def list_persons(self, archived: bool = False) -> list[PersonSummary]:
         with self._connect() as conn:
             rows = conn.execute(
@@ -343,6 +367,40 @@ class SQLiteIdentityStore:
                 ORDER BY p.name COLLATE NOCASE
                 """
             ).fetchall()
+            effective_embedding_counts: dict[str, int] = {}
+            effective_sighting_counts: dict[str, int] = {}
+            effective_last_seen: dict[str, str] = {}
+            if not archived:
+                for embedding_row in conn.execute(
+                    "SELECT person_id FROM embeddings WHERE deleted_at IS NULL"
+                ).fetchall():
+                    canonical_id = _resolve_canonical_person_id(
+                        conn, str(embedding_row["person_id"]),
+                    )
+                    effective_embedding_counts[canonical_id] = (
+                        effective_embedding_counts.get(canonical_id, 0) + 1
+                    )
+                detail_rows = conn.execute(
+                    """
+                    SELECT d.person_id, d.seen_date, d.seen_time, d.created_at
+                    FROM recognition_details d
+                    JOIN embeddings e ON e.embedding_id = d.embedding_id
+                    WHERE e.deleted_at IS NULL
+                    """
+                ).fetchall()
+                for detail in detail_rows:
+                    canonical_id = _resolve_canonical_person_id(conn, str(detail["person_id"]))
+                    effective_sighting_counts[canonical_id] = (
+                        effective_sighting_counts.get(canonical_id, 0) + 1
+                    )
+                    seen_at = (
+                        f"{detail['seen_date']}T{detail['seen_time'] or '00:00:00'}"
+                        if str(detail["seen_date"] or "").strip()
+                        else str(detail["created_at"])
+                    )
+                    effective_last_seen[canonical_id] = max(
+                        effective_last_seen.get(canonical_id, seen_at), seen_at,
+                    )
         return [
             PersonSummary(
                 person=Person(
@@ -358,9 +416,18 @@ class SQLiteIdentityStore:
                     identity_status=row["identity_status"],
                     biometric_status=row["biometric_status"],
                 ),
-                embedding_count=row["embedding_count"],
-                sighting_count=row["sighting_count"],
-                last_seen_at=row["last_seen_at"],
+                embedding_count=(
+                    row["embedding_count"] if archived
+                    else effective_embedding_counts.get(str(row["person_id"]), 0)
+                ),
+                sighting_count=(
+                    row["sighting_count"] if archived
+                    else effective_sighting_counts.get(str(row["person_id"]), 0)
+                ),
+                last_seen_at=(
+                    row["last_seen_at"] if archived
+                    else effective_last_seen.get(str(row["person_id"]))
+                ),
             )
             for row in rows
         ]
@@ -371,20 +438,57 @@ class SQLiteIdentityStore:
         include_archived: bool = False,
     ) -> list[EmbeddingRecord]:
         with self._connect() as conn:
+            requested_canonical_id = _resolve_canonical_person_id(conn, person_id)
             rows = conn.execute(
-                f"""
+                """
                 SELECT e.embedding_id, e.person_id, e.vector, e.quality_score,
                        e.source_image, e.crop_path, e.created_at
                 FROM embeddings e
-                JOIN persons p ON p.person_id = e.person_id
-                WHERE e.person_id = ?
-                  AND e.deleted_at IS NULL
-                  {" " if include_archived else "AND p.lifecycle_status = 'ACTIVE' AND p.deleted_at IS NULL"}
+                WHERE e.deleted_at IS NULL
                 ORDER BY e.created_at ASC
+                """
+            ).fetchall()
+            result = [
+                _embedding_from_row(
+                    row,
+                    canonical_person_id=_resolve_canonical_person_id(conn, row["person_id"]),
+                )
+                for row in rows
+                if _resolve_canonical_person_id(conn, row["person_id"])
+                == requested_canonical_id
+            ]
+            if not include_archived:
+                canonical = conn.execute(
+                    "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
+                    (requested_canonical_id,),
+                ).fetchone()
+                if canonical is None or canonical["lifecycle_status"] != "ACTIVE" or canonical["deleted_at"]:
+                    return []
+            return result
+
+    def list_raw_embeddings_for_person(
+        self, person_id: str, include_deleted: bool = False,
+    ) -> list[EmbeddingRecord]:
+        with self._connect() as conn:
+            if conn.execute(
+                "SELECT 1 FROM persons WHERE person_id = ?", (person_id,),
+            ).fetchone() is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            rows = conn.execute(
+                f"""
+                SELECT embedding_id, person_id, vector, quality_score,
+                       source_image, crop_path, created_at
+                FROM embeddings WHERE person_id = ?
+                {"" if include_deleted else "AND deleted_at IS NULL"}
+                ORDER BY created_at ASC
                 """,
                 (person_id,),
             ).fetchall()
-        return [_embedding_from_row(row) for row in rows]
+            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
+            return [
+                _embedding_from_row(row, canonical_person_id=canonical_person_id)
+                for row in rows
+            ]
 
     def _legacy_rename_person(self, person_id: str, name: str) -> None:
         with self._connect() as conn:
@@ -637,7 +741,10 @@ class SQLiteIdentityStore:
             ):
                 raise KeyError("The note was changed elsewhere. Reload it and try again.")
             mentions = _normalize_note_mentions(
-                conn, current.owner_person_id, mentioned_person_ids,
+                conn,
+                current.owner_person_id,
+                mentioned_person_ids,
+                historical_person_ids=set(current.mentioned_person_ids),
             )
             desired_mention_ids = tuple(person_id for person_id, _ in mentions)
             changed = (
@@ -737,6 +844,36 @@ class SQLiteIdentityStore:
             note_row = _note_row(conn, str(row["note_id"]))
             return _note_from_row(conn, note_row)
 
+    def list_person_notes(
+        self,
+        person_id: str,
+        *,
+        raw: bool = False,
+        include_retired: bool = False,
+    ) -> list[Note]:
+        with self._connect() as conn:
+            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
+            rows = conn.execute(
+                f"""
+                SELECT note_id, owner_person_id FROM notes
+                {' ' if include_retired else "WHERE status = 'ACTIVE'"}
+                ORDER BY updated_at DESC, note_id
+                """
+            ).fetchall()
+            notes: list[Note] = []
+            for item in rows:
+                owner_id = str(item["owner_person_id"])
+                matches = (
+                    owner_id == str(person_id)
+                    if raw
+                    else _resolve_canonical_person_id(conn, owner_id) == canonical_person_id
+                )
+                if matches:
+                    notes.append(_note_from_row(
+                        conn, _note_row(conn, str(item["note_id"])),
+                    ))
+            return notes
+
     def list_note_revisions(self, note_id: str) -> list[NoteRevision]:
         with self._connect() as conn:
             if conn.execute(
@@ -769,6 +906,10 @@ class SQLiteIdentityStore:
                     author_name=str(row["author_name"]),
                     operation_id=row["operation_id"],
                     created_at=str(row["created_at"]),
+                    effective_mentioned_person_ids=tuple(sorted({
+                        _resolve_canonical_person_id(conn, str(item[0]))
+                        for item in mention_rows
+                    })),
                 ))
             return revisions
 
@@ -933,8 +1074,6 @@ class SQLiteIdentityStore:
             current_notes = row["notes"] or ""
             if current_notes != expected_previous_notes:
                 raise KeyError("Notes were changed elsewhere. Reopen this profile and try again.")
-            mentions = _normalize_note_mentions(conn, person_id, mentioned_person_ids)
-            desired_ids = tuple(person_id for person_id, _ in mentions)
             active_note_row = conn.execute(
                 """
                 SELECT note_id FROM notes
@@ -947,6 +1086,15 @@ class SQLiteIdentityStore:
                 if active_note_row is not None else None
             )
             current_note = _note_from_row(conn, note_row) if note_row is not None else None
+            mentions = _normalize_note_mentions(
+                conn,
+                person_id,
+                mentioned_person_ids,
+                historical_person_ids=(
+                    set(current_note.mentioned_person_ids) if current_note is not None else set()
+                ),
+            )
+            desired_ids = tuple(person_id for person_id, _ in mentions)
             mentions_changed = (
                 current_note is None or current_note.mentioned_person_ids != desired_ids
             )
@@ -1069,6 +1217,26 @@ class SQLiteIdentityStore:
 
     def list_person_changes(self, person_id: str) -> list[PersonChange]:
         with self._connect() as conn:
+            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
+            rows = conn.execute(
+                """
+                SELECT change_id, person_id, previous_name, new_name,
+                       previous_rank, new_rank, previous_country, new_country,
+                       previous_importance, new_importance,
+                       previous_status, new_status, previous_notes, new_notes,
+                       editor_name, created_at
+                FROM person_change_history
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+            return [
+                _person_change_from_row(row) for row in rows
+                if _resolve_canonical_person_id(conn, str(row["person_id"]))
+                == canonical_person_id
+            ]
+
+    def list_raw_person_changes(self, person_id: str) -> list[PersonChange]:
+        with self._connect() as conn:
             rows = conn.execute(
                 """
                 SELECT change_id, person_id, previous_name, new_name,
@@ -1086,13 +1254,33 @@ class SQLiteIdentityStore:
 
     def list_person_operations(self, person_id: str) -> list[dict]:
         with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT operation_id, operation_type, result, created_at
-                FROM person_operations
-                ORDER BY created_at DESC
-                """
-            ).fetchall()
+            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
+            return self._list_person_operations(
+                conn, person_id, canonical_person_id=canonical_person_id,
+            )
+
+    def list_raw_person_operations(self, person_id: str) -> list[dict]:
+        with self._connect() as conn:
+            if conn.execute(
+                "SELECT 1 FROM persons WHERE person_id = ?", (person_id,),
+            ).fetchone() is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            return self._list_person_operations(conn, person_id, canonical_person_id=None)
+
+    def _list_person_operations(
+        self,
+        conn: sqlite3.Connection,
+        person_id: str,
+        *,
+        canonical_person_id: str | None,
+    ) -> list[dict]:
+        rows = conn.execute(
+            """
+            SELECT operation_id, operation_type, result, created_at
+            FROM person_operations
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
         operations: list[dict] = []
         for row in rows:
             result = json.loads(row["result"])
@@ -1102,7 +1290,19 @@ class SQLiteIdentityStore:
                 result.get("target_person_id"),
             }
             involved_ids.update(result.get("person_ids") or [])
-            if person_id not in involved_ids:
+            involved_ids.discard(None)
+            if canonical_person_id is None:
+                matches = person_id in involved_ids
+            else:
+                matches = any(
+                    _resolve_canonical_person_id(conn, str(involved_id))
+                    == canonical_person_id
+                    for involved_id in involved_ids
+                    if conn.execute(
+                        "SELECT 1 FROM persons WHERE person_id = ?", (involved_id,),
+                    ).fetchone() is not None
+                )
+            if not matches:
                 continue
             operations.append(
                 {
@@ -1364,6 +1564,49 @@ class SQLiteIdentityStore:
 
     def mark_operation_reverted(self, operation_id: str, details: dict | None = None) -> dict:
         return self._mark_operation_status(operation_id, "REVERTED", details)
+
+    def record_merge_attempt_failed(
+        self,
+        operation_id: str,
+        *,
+        actor: dict | None = None,
+        source: str | None = None,
+        context: dict | None = None,
+        affected_entities: list[dict] | None = None,
+        details: dict | None = None,
+    ) -> dict:
+        """Record failure only after the merge transaction has rolled back."""
+        with self._connect() as conn:
+            if conn.execute(
+                "SELECT 1 FROM merge_operations WHERE operation_journal_id = ?",
+                (operation_id,),
+            ).fetchone() is not None:
+                raise RuntimeError("Cannot mark a merge failed while partial manifest state exists")
+            existing = _get_journal_operation(conn, operation_id)
+            if existing is not None:
+                if existing["operation_type"] != "identity.merge":
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                if existing["status"] in {"FAILED", "ROLLED_BACK"}:
+                    return existing
+                if existing["status"] != "STARTED":
+                    raise ValueError("Only a started merge attempt can fail")
+            else:
+                _begin_journal_operation(
+                    conn,
+                    "identity.merge",
+                    operation_id=operation_id,
+                    actor=actor,
+                    source=_optional_text(source) or "identity-merge",
+                    context=context,
+                    affected_entities=affected_entities,
+                    details={"transaction_rolled_back": True},
+                )
+            return _transition_journal_operation(
+                conn,
+                operation_id,
+                "FAILED",
+                {"transaction_rolled_back": True, **(details or {})},
+            )
 
     def _mark_operation_status(
         self,
@@ -1933,18 +2176,32 @@ class SQLiteIdentityStore:
             observation = _require_observation(conn, observation_id)
             if observation["status"] != "FINALIZED":
                 raise ValueError("Only a finalized observation can be corrected")
-            _require_active_review_person(conn, to_person_id)
-            if from_person_id == to_person_id:
+            canonical_from_person_id = _resolve_canonical_person_id(conn, from_person_id)
+            canonical_to_person_id = _resolve_canonical_person_id(conn, to_person_id)
+            _require_active_review_person(conn, canonical_to_person_id)
+            if canonical_from_person_id == canonical_to_person_id:
                 raise ValueError("Correction source and target must be different")
             effective_before = _effective_observation_person_ids(conn, observation_id)
-            if from_person_id not in effective_before:
-                raise KeyError(f"Person {from_person_id} is not an effective participant")
+            if canonical_from_person_id not in effective_before:
+                raise KeyError(
+                    f"Person {canonical_from_person_id} is not an effective participant"
+                )
+            corrected_raw_before = _corrected_observation_person_ids(conn, observation_id)
+            matching_raw_ids = {
+                raw_person_id for raw_person_id in corrected_raw_before
+                if _resolve_canonical_person_id(conn, raw_person_id)
+                == canonical_from_person_id
+            }
             assignments = _effective_face_assignments(conn, observation_id)
-            matching = [item for item in assignments if item["current_person_id"] == from_person_id]
+            matching = [
+                item for item in assignments
+                if _resolve_canonical_person_id(conn, item["current_person_id"])
+                == canonical_from_person_id
+            ]
             affected_entities = [
                 {"entity_type": "observation", "entity_id": observation_id},
-                {"entity_type": "person", "entity_id": from_person_id},
-                {"entity_type": "person", "entity_id": to_person_id},
+                {"entity_type": "person", "entity_id": canonical_from_person_id},
+                {"entity_type": "person", "entity_id": canonical_to_person_id},
                 *[
                     {"entity_type": "embedding", "entity_id": item["embedding_id"]}
                     for item in matching
@@ -1959,8 +2216,9 @@ class SQLiteIdentityStore:
                 affected_entities=affected_entities,
                 details={
                     "observation_id": observation_id,
-                    "from_person_id": from_person_id,
-                    "to_person_id": to_person_id,
+                    "from_person_id": canonical_from_person_id,
+                    "to_person_id": canonical_to_person_id,
+                    "raw_from_person_ids": sorted(matching_raw_ids),
                 },
             )
             correction_ids: list[str] = []
@@ -1971,20 +2229,22 @@ class SQLiteIdentityStore:
                     observation_id=observation_id,
                     face_assignment_id=assignment["assignment_id"],
                     embedding_id=assignment["embedding_id"],
-                    from_person_id=from_person_id,
-                    to_person_id=to_person_id,
+                    from_person_id=str(assignment["current_person_id"]),
+                    to_person_id=canonical_to_person_id,
                     operation_id=operation_id,
                 ))
-            represented_original_ids = {item["original_person_id"] for item in assignments}
-            if from_person_id not in represented_original_ids or not matching:
+            assignment_current_ids = {
+                str(item["current_person_id"]) for item in matching
+            }
+            for raw_from_person_id in sorted(matching_raw_ids - assignment_current_ids):
                 correction_ids.append(_insert_identity_correction(
                     conn,
                     correction_type="OBSERVATION_IDENTITY",
                     observation_id=observation_id,
                     face_assignment_id=None,
                     embedding_id=None,
-                    from_person_id=from_person_id,
-                    to_person_id=to_person_id,
+                    from_person_id=raw_from_person_id,
+                    to_person_id=canonical_to_person_id,
                     operation_id=operation_id,
                 ))
             effective_after, evidence_ids = _recalculate_observation_evidence(
@@ -1993,8 +2253,9 @@ class SQLiteIdentityStore:
             )
             result = {
                 "observation_id": observation_id,
-                "from_person_id": from_person_id,
-                "to_person_id": to_person_id,
+                "from_person_id": canonical_from_person_id,
+                "to_person_id": canonical_to_person_id,
+                "raw_from_person_ids": sorted(matching_raw_ids),
                 "previous_participant_ids": effective_before,
                 "participant_ids": effective_after,
                 "correction_ids": correction_ids,
@@ -2021,7 +2282,9 @@ class SQLiteIdentityStore:
                 if existing.get("embedding_id") != embedding_id:
                     raise KeyError(f"Operation ID already exists: {operation_id}")
                 return existing
-            target_person_id = _require_active_review_person(conn, to_person_id)
+            target_person_id = _require_active_review_person(
+                conn, _resolve_canonical_person_id(conn, to_person_id),
+            )
             embedding = conn.execute(
                 """
                 SELECT e.person_id, e.deleted_at, source.metadata AS source_metadata
@@ -2165,7 +2428,9 @@ class SQLiteIdentityStore:
                 if existing.get("review_id") != review_id or existing.get("person_id") != person_id:
                     raise KeyError(f"Operation ID already exists: {operation_id}")
                 return existing
-            person_id = _require_active_review_person(conn, person_id)
+            person_id = _require_active_review_person(
+                conn, _resolve_canonical_person_id(conn, person_id),
+            )
             review = conn.execute(
                 "SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,),
             ).fetchone()
@@ -2427,7 +2692,7 @@ class SQLiteIdentityStore:
             if existing_result is not None:
                 if existing_result.get("observation_id") != observation_id:
                     raise KeyError(f"Operation ID already exists: {operation_id}")
-                participants = _list_observation_participants(conn, observation_id)
+                participants = _list_raw_observation_participants(conn, observation_id)
                 for participant in participants:
                     if participant.person_id == existing_result.get("person_id"):
                         return participant
@@ -2517,6 +2782,18 @@ class SQLiteIdentityStore:
     def list_observation_participants(
         self, observation_id: str,
     ) -> list[ObservationParticipant]:
+        return self.list_effective_observation_participants(observation_id)
+
+    def list_raw_observation_participants(
+        self, observation_id: str,
+    ) -> list[ObservationParticipant]:
+        with self._connect() as conn:
+            _require_observation(conn, observation_id)
+            return _list_raw_observation_participants(conn, observation_id)
+
+    def list_effective_observation_participants(
+        self, observation_id: str,
+    ) -> list[ObservationParticipant]:
         with self._connect() as conn:
             _require_observation(conn, observation_id)
             return _list_observation_participants(conn, observation_id)
@@ -2585,10 +2862,7 @@ class SQLiteIdentityStore:
 
     def list_observations_for_person(self, person_id: str) -> list[Observation]:
         with self._connect() as conn:
-            if conn.execute(
-                "SELECT 1 FROM persons WHERE person_id = ?", (person_id,),
-            ).fetchone() is None:
-                raise KeyError(f"Unknown person: {person_id}")
+            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
             rows = [
                 row for row in conn.execute(
                     """
@@ -2596,8 +2870,26 @@ class SQLiteIdentityStore:
                     ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
                     """
                 ).fetchall()
-                if person_id in _effective_observation_person_ids(conn, str(row["observation_id"]))
+                if canonical_person_id
+                in _effective_observation_person_ids(conn, str(row["observation_id"]))
             ]
+        return [_observation_from_row(row) for row in rows]
+
+    def list_raw_observations_for_person(self, person_id: str) -> list[Observation]:
+        with self._connect() as conn:
+            if conn.execute(
+                "SELECT 1 FROM persons WHERE person_id = ?", (person_id,),
+            ).fetchone() is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            rows = conn.execute(
+                """
+                SELECT o.* FROM observations o
+                JOIN observation_participants p ON p.observation_id = o.observation_id
+                WHERE p.person_id = ?
+                ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
+                """,
+                (person_id,),
+            ).fetchall()
         return [_observation_from_row(row) for row in rows]
 
     def list_observations_for_media(self, media_id: str) -> list[Observation]:
@@ -2989,7 +3281,14 @@ class SQLiteIdentityStore:
                 """,
                 (embedding_id,),
             ).fetchone()
-        return dict(row) if row else None
+            if row is None:
+                return None
+            result = dict(row)
+            result["raw_person_id"] = str(row["person_id"])
+            result["canonical_person_id"] = _resolve_canonical_person_id(
+                conn, str(row["person_id"]),
+            )
+            return result
 
     def get_person_lifecycle(self, person_id: str) -> dict | None:
         with self._connect() as conn:
@@ -3010,6 +3309,10 @@ class SQLiteIdentityStore:
     def resolve_canonical_person_id(self, person_id: str) -> str:
         with self._connect() as conn:
             return _resolve_canonical_person_id(conn, person_id)
+
+    def get_merge_operation(self, merge_operation_id: str) -> MergeOperation | None:
+        with self._connect() as conn:
+            return _get_merge_operation(conn, merge_operation_id)
 
     def list_historical_persons(self) -> list[PersonSummary]:
         return self.list_persons(archived=True)
@@ -3200,26 +3503,8 @@ class SQLiteIdentityStore:
         actor: dict | None = None,
         source: str | None = None,
     ) -> dict:
+        """Compatibility harness; the connection-scoped helper is the P8 primitive."""
         with self._connect() as conn:
-            source_row = conn.execute(
-                "SELECT lifecycle_status FROM persons WHERE person_id = ?",
-                (person_id,),
-            ).fetchone()
-            if source_row is None:
-                raise KeyError(f"Unknown person: {person_id}")
-            if source_row["lifecycle_status"] not in {"ACTIVE", "ARCHIVED"}:
-                raise KeyError("Only active or archived identities can receive a canonical mapping")
-            resolved_target = _resolve_canonical_person_id(conn, canonical_person_id)
-            if resolved_target == person_id:
-                raise ValueError("Canonical identity cannot reference itself or create a cycle")
-            target_row = conn.execute(
-                "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
-                (resolved_target,),
-            ).fetchone()
-            if target_row is None:
-                raise KeyError(f"Unknown canonical person: {canonical_person_id}")
-            if target_row["lifecycle_status"] != "ACTIVE" or target_row["deleted_at"] is not None:
-                raise KeyError("Canonical identity must resolve to an active person")
             _begin_journal_operation(
                 conn,
                 "identity.canonical-map",
@@ -3228,30 +3513,17 @@ class SQLiteIdentityStore:
                 source=source or "identity-lifecycle",
                 affected_entities=[
                     {"entity_type": "person", "entity_id": person_id},
-                    {"entity_type": "person", "entity_id": resolved_target},
+                    {"entity_type": "person", "entity_id": canonical_person_id},
                 ],
                 details={"requested_canonical_person_id": canonical_person_id},
             )
-            changed_at = utc_now()
-            conn.execute(
-                """
-                UPDATE persons
-                SET lifecycle_status = 'MERGED', canonical_person_id = ?,
-                    deleted_at = COALESCE(deleted_at, ?), lifecycle_changed_at = ?
-                WHERE person_id = ?
-                """,
-                (resolved_target, changed_at, changed_at, person_id),
+            result = _set_canonical_person_id_in_transaction(
+                conn, person_id, canonical_person_id,
             )
             if conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'graph_connections'"
             ).fetchone() is not None:
                 _replace_graph_projection(conn)
-            result = {
-                "person_id": person_id,
-                "canonical_person_id": resolved_target,
-                "lifecycle_status": "MERGED",
-                "mapped": True,
-            }
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
@@ -4211,6 +4483,29 @@ class SQLiteIdentityStore:
 
     def list_recognition_details_for_person(self, person_id: str) -> list[RecognitionDetail]:
         with self._connect() as conn:
+            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
+            rows = conn.execute(
+                """
+                SELECT d.detail_id, d.embedding_id, d.person_id, d.image_id, d.image_path,
+                       d.name, d.decision, d.seen_date, d.seen_time, d.place_seen,
+                       d.individual_count, d.event_occasion, d.rank, d.country,
+                       d.importance, d.added_by, d.notes, d.created_at
+                FROM recognition_details d
+                JOIN embeddings e ON e.embedding_id = d.embedding_id
+                WHERE e.deleted_at IS NULL
+                ORDER BY d.seen_date DESC, d.seen_time DESC, d.created_at DESC
+                """
+            ).fetchall()
+            return [
+                _recognition_detail_from_row(row) for row in rows
+                if _resolve_canonical_person_id(conn, str(row["person_id"]))
+                == canonical_person_id
+            ]
+
+    def list_raw_recognition_details_for_person(
+        self, person_id: str,
+    ) -> list[RecognitionDetail]:
+        with self._connect() as conn:
             rows = conn.execute(
                 """
                 SELECT d.detail_id, d.embedding_id, d.person_id, d.image_id, d.image_path,
@@ -4287,13 +4582,25 @@ class SQLiteIdentityStore:
                 SELECT e.embedding_id, e.person_id, e.vector, e.quality_score,
                        e.source_image, e.crop_path, e.created_at
                 FROM embeddings e
-                JOIN persons p ON p.person_id = e.person_id
-                WHERE p.lifecycle_status = 'ACTIVE'
-                  AND p.deleted_at IS NULL
-                  AND e.deleted_at IS NULL
+                WHERE e.deleted_at IS NULL
                 """
             ).fetchall()
-        return [_embedding_from_row(row) for row in rows]
+            records: list[EmbeddingRecord] = []
+            for row in rows:
+                canonical_person_id = _resolve_canonical_person_id(conn, row["person_id"])
+                canonical = conn.execute(
+                    "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
+                    (canonical_person_id,),
+                ).fetchone()
+                if (
+                    canonical is not None
+                    and canonical["lifecycle_status"] == "ACTIVE"
+                    and canonical["deleted_at"] is None
+                ):
+                    records.append(_embedding_from_row(
+                        row, canonical_person_id=canonical_person_id,
+                    ))
+            return records
 
     def current_embedding_person_ids(self, embedding_ids: list[str]) -> dict[str, str]:
         normalized_ids = list(dict.fromkeys(
@@ -4308,15 +4615,25 @@ class SQLiteIdentityStore:
                 f"""
                 SELECT e.embedding_id, e.person_id
                 FROM embeddings e
-                JOIN persons p ON p.person_id = e.person_id
                 WHERE e.embedding_id IN ({placeholders})
                   AND e.deleted_at IS NULL
-                  AND p.lifecycle_status = 'ACTIVE'
-                  AND p.deleted_at IS NULL
                 """,
                 normalized_ids,
             ).fetchall()
-        return {str(row["embedding_id"]): str(row["person_id"]) for row in rows}
+            result: dict[str, str] = {}
+            for row in rows:
+                canonical_person_id = _resolve_canonical_person_id(conn, row["person_id"])
+                canonical = conn.execute(
+                    "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
+                    (canonical_person_id,),
+                ).fetchone()
+                if (
+                    canonical is not None
+                    and canonical["lifecycle_status"] == "ACTIVE"
+                    and canonical["deleted_at"] is None
+                ):
+                    result[str(row["embedding_id"])] = canonical_person_id
+            return result
 
     def save_pending_addition(self, pending: PendingAddition) -> None:
         if len(pending.vector) != self.embedding_dim:
@@ -4894,10 +5211,12 @@ class SQLiteIdentityStore:
                 """,
                 (session_id, *init_face_ids),
             ).fetchall()
-        exclusions: dict[str, set[str]] = {}
-        for row in rows:
-            exclusions.setdefault(row["init_face_id"], set()).add(row["person_id"])
-        return exclusions
+            exclusions: dict[str, set[str]] = {}
+            for row in rows:
+                exclusions.setdefault(row["init_face_id"], set()).add(
+                    _resolve_canonical_person_id(conn, row["person_id"]),
+                )
+            return exclusions
 
     @contextmanager
     def _connect(self):
@@ -6334,6 +6653,7 @@ def _migrate_23_to_24(conn: sqlite3.Connection) -> None:
         """,
     )
 
+
     completed_reviews = conn.execute(
         """
         SELECT r.review_id, r.observation_id, r.completed_operation_id, h.details, r.completed_at
@@ -6449,6 +6769,158 @@ def _migrate_23_to_24(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_24_to_25(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(
+        conn,
+        """
+        CREATE TABLE merge_operations (
+            merge_operation_id TEXT PRIMARY KEY,
+            source_person_id TEXT NOT NULL,
+            target_person_id TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            previous_source_lifecycle_status TEXT NOT NULL,
+            previous_target_lifecycle_status TEXT NOT NULL,
+            previous_source_canonical_person_id TEXT,
+            previous_target_canonical_person_id TEXT,
+            reason TEXT,
+            context TEXT NOT NULL DEFAULT '{}',
+            operation_journal_id TEXT NOT NULL UNIQUE,
+            CHECK(source_person_id <> target_person_id),
+            FOREIGN KEY(source_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(target_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(previous_source_canonical_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(previous_target_canonical_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(operation_journal_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE merge_affected_items (
+            merge_operation_id TEXT NOT NULL,
+            item_type TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            previous_person_id TEXT,
+            effective_person_id TEXT,
+            context TEXT NOT NULL DEFAULT '{}',
+            PRIMARY KEY(merge_operation_id, item_type, item_id),
+            FOREIGN KEY(merge_operation_id) REFERENCES merge_operations(merge_operation_id) ON DELETE RESTRICT,
+            FOREIGN KEY(previous_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(effective_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX idx_merge_operations_people
+        ON merge_operations(source_person_id, target_person_id, created_at);
+        CREATE INDEX idx_merge_affected_items_lookup
+        ON merge_affected_items(item_type, item_id);
+
+        CREATE TRIGGER merge_operations_no_update
+        BEFORE UPDATE ON merge_operations
+        BEGIN SELECT RAISE(ABORT, 'merge operations are immutable'); END;
+        CREATE TRIGGER merge_operations_no_delete
+        BEFORE DELETE ON merge_operations
+        BEGIN SELECT RAISE(ABORT, 'merge operations cannot be deleted'); END;
+        CREATE TRIGGER merge_affected_items_no_update
+        BEFORE UPDATE ON merge_affected_items
+        BEGIN SELECT RAISE(ABORT, 'merge affected items are immutable'); END;
+        CREATE TRIGGER merge_affected_items_no_delete
+        BEFORE DELETE ON merge_affected_items
+        BEGIN SELECT RAISE(ABORT, 'merge affected items cannot be deleted'); END;
+
+        PRAGMA user_version = 25;
+        """,
+    )
+
+
+def _migrate_25_to_26(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(
+        conn,
+        """
+        DROP TRIGGER merge_affected_items_no_update;
+        ALTER TABLE merge_affected_items ADD COLUMN raw_owner_person_id TEXT REFERENCES persons(person_id) ON DELETE RESTRICT;
+        ALTER TABLE merge_affected_items ADD COLUMN effective_owner_person_id TEXT REFERENCES persons(person_id) ON DELETE RESTRICT;
+        ALTER TABLE merge_affected_items ADD COLUMN action TEXT NOT NULL DEFAULT 'PRESERVE'
+            CHECK(action IN ('PRESERVE', 'REINTERPRET_CANONICAL_OWNER', 'UNION_IN_CURRENT_VIEW', 'SELECT_VALUE'));
+        ALTER TABLE merge_affected_items ADD COLUMN before_state TEXT NOT NULL DEFAULT '{}';
+        ALTER TABLE merge_affected_items ADD COLUMN after_state TEXT NOT NULL DEFAULT '{}';
+        UPDATE merge_affected_items
+        SET raw_owner_person_id = previous_person_id,
+            effective_owner_person_id = effective_person_id;
+
+        CREATE TRIGGER merge_affected_items_no_update
+        BEFORE UPDATE ON merge_affected_items
+        BEGIN SELECT RAISE(ABORT, 'merge affected items are immutable'); END;
+
+        CREATE TABLE merge_conflict_resolutions (
+            conflict_id TEXT PRIMARY KEY,
+            merge_operation_id TEXT NOT NULL,
+            category TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            source_value TEXT NOT NULL,
+            target_value TEXT NOT NULL,
+            strategy TEXT NOT NULL CHECK(strategy IN (
+                'KEEP_SOURCE', 'KEEP_TARGET', 'COMBINE', 'USER_SELECTED'
+            )),
+            selected_value TEXT NOT NULL,
+            inverse_data TEXT NOT NULL,
+            UNIQUE(merge_operation_id, category, field_name),
+            FOREIGN KEY(merge_operation_id) REFERENCES merge_operations(merge_operation_id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX idx_merge_conflicts_operation
+        ON merge_conflict_resolutions(merge_operation_id, category, field_name);
+
+        CREATE TRIGGER merge_conflicts_no_update
+        BEFORE UPDATE ON merge_conflict_resolutions
+        BEGIN SELECT RAISE(ABORT, 'merge conflict resolutions are immutable'); END;
+        CREATE TRIGGER merge_conflicts_no_delete
+        BEFORE DELETE ON merge_conflict_resolutions
+        BEGIN SELECT RAISE(ABORT, 'merge conflict resolutions cannot be deleted'); END;
+
+        CREATE TRIGGER merge_operations_require_terminal_survivor
+        BEFORE INSERT ON merge_operations
+        WHEN NOT EXISTS (
+            SELECT 1 FROM persons p
+            WHERE p.person_id = NEW.target_person_id
+              AND p.lifecycle_status = 'ACTIVE'
+              AND p.deleted_at IS NULL
+              AND p.canonical_person_id IS NULL
+        )
+        BEGIN SELECT RAISE(ABORT, 'merge survivor must be the terminal active canonical identity'); END;
+
+        CREATE TRIGGER merge_operations_require_journal_identity
+        BEFORE INSERT ON merge_operations
+        WHEN NEW.merge_operation_id <> NEW.operation_journal_id
+          OR NOT EXISTS (
+              SELECT 1 FROM operation_journal j
+              WHERE j.operation_id = NEW.operation_journal_id
+                AND j.operation_type = 'identity.merge'
+                AND j.status = 'STARTED'
+                AND j.actor = NEW.actor
+          )
+        BEGIN SELECT RAISE(ABORT, 'merge manifest must match its started journal identity and actor'); END;
+
+        CREATE TRIGGER merge_affected_items_require_started_journal
+        BEFORE INSERT ON merge_affected_items
+        WHEN NOT EXISTS (
+            SELECT 1 FROM merge_operations m
+            JOIN operation_journal j ON j.operation_id = m.operation_journal_id
+            WHERE m.merge_operation_id = NEW.merge_operation_id AND j.status = 'STARTED'
+        )
+        BEGIN SELECT RAISE(ABORT, 'merge manifest is closed'); END;
+
+        CREATE TRIGGER merge_conflicts_require_started_journal
+        BEFORE INSERT ON merge_conflict_resolutions
+        WHEN NOT EXISTS (
+            SELECT 1 FROM merge_operations m
+            JOIN operation_journal j ON j.operation_id = m.operation_journal_id
+            WHERE m.merge_operation_id = NEW.merge_operation_id AND j.status = 'STARTED'
+        )
+        BEGIN SELECT RAISE(ABORT, 'merge manifest is closed'); END;
+
+        PRAGMA user_version = 26;
+        """,
+    )
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -6481,6 +6953,8 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(21, 22, _migrate_21_to_22),
         SchemaMigration(22, 23, _migrate_22_to_23),
         SchemaMigration(23, 24, _migrate_23_to_24),
+        SchemaMigration(24, 25, _migrate_24_to_25),
+        SchemaMigration(25, 26, _migrate_25_to_26),
     )
 
 
@@ -6909,6 +7383,7 @@ def _normalize_note_mentions(
     conn: sqlite3.Connection,
     owner_person_id: str,
     mentioned_person_ids: list[str] | None,
+    historical_person_ids: set[str] | None = None,
 ) -> list[tuple[str, str]]:
     normalized_ids = sorted({
         str(person_id).strip()
@@ -6926,7 +7401,7 @@ def _normalize_note_mentions(
         ).fetchone()
         if row is None:
             raise KeyError(f"Unknown mentioned person: {person_id}")
-        if person_id != owner_person_id and (
+        if person_id != owner_person_id and person_id not in (historical_person_ids or set()) and (
             row["lifecycle_status"] != "ACTIVE" or row["deleted_at"] is not None
         ):
             raise KeyError(f"Mentioned person is not active: {person_id}")
@@ -6962,18 +7437,25 @@ def _note_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> Note:
         """,
         (row["revision_id"],),
     ).fetchall()
+    raw_mentioned_person_ids = tuple(str(item[0]) for item in mention_rows)
+    effective_mentioned_person_ids = tuple(sorted({
+        _resolve_canonical_person_id(conn, person_id)
+        for person_id in raw_mentioned_person_ids
+    }))
     return Note(
         note_id=str(row["note_id"]),
         owner_person_id=str(row["owner_person_id"]),
         status=str(row["status"]),
         content=str(row["content"]),
         revision_number=int(row["revision_number"]),
-        mentioned_person_ids=tuple(str(item[0]) for item in mention_rows),
+        mentioned_person_ids=raw_mentioned_person_ids,
         subject_type=str(row["subject_type"]),
         subject_id=str(row["subject_id"]),
         created_at=str(row["created_at"]),
         updated_at=str(row["updated_at"]),
         retired_at=row["retired_at"],
+        canonical_owner_person_id=_resolve_canonical_person_id(conn, row["owner_person_id"]),
+        effective_mentioned_person_ids=effective_mentioned_person_ids,
     )
 
 
@@ -7286,20 +7768,29 @@ def _expected_graph_connections(
                 errors.append(f"Evidence {evidence_id} has a missing observation source")
             elif observation["status"] != "FINALIZED":
                 errors.append(f"Evidence {evidence_id} references a non-finalized observation")
-            participant_ids = {
+            raw_participant_ids = {
                 str(item["person_id"])
                 for item in conn.execute(
                     "SELECT person_id FROM observation_participants WHERE observation_id = ?",
                     (row["source_entity_id"],),
                 ).fetchall()
             }
-            participant_ids.update(_effective_observation_person_ids(
+            effective_participant_ids = set(_effective_observation_person_ids(
                 conn, str(row["source_entity_id"]),
             ))
-            if (
-                row["source_person_id"] not in participant_ids
-                or row["target_person_id"] not in participant_ids
-            ):
+            endpoints_valid = True
+            for endpoint in (row["source_person_id"], row["target_person_id"]):
+                if endpoint in raw_participant_ids:
+                    continue
+                try:
+                    endpoint = _resolve_canonical_person_id(conn, str(endpoint))
+                except (KeyError, RuntimeError, ValueError):
+                    endpoints_valid = False
+                    break
+                if endpoint not in effective_participant_ids:
+                    endpoints_valid = False
+                    break
+            if not endpoints_valid:
                 errors.append(f"Evidence {evidence_id} endpoints are not observation participants")
         elif row["evidence_type"] == "NOTE_REFERENCE":
             mention = conn.execute(
@@ -7719,7 +8210,7 @@ def _effective_face_assignments(
     return result
 
 
-def _effective_observation_person_ids(
+def _corrected_observation_person_ids(
     conn: sqlite3.Connection, observation_id: str,
 ) -> list[str]:
     base_ids = {
@@ -7747,12 +8238,17 @@ def _effective_observation_person_ids(
         if from_person_id in effective_ids:
             effective_ids.remove(from_person_id)
             effective_ids.add(str(correction["to_person_id"]))
-    canonical_participants: dict[str, str] = {}
-    for raw_person_id in sorted(effective_ids):
-        canonical_participants.setdefault(
-            _resolve_canonical_person_id(conn, raw_person_id), raw_person_id,
-        )
-    return [canonical_participants[key] for key in sorted(canonical_participants)]
+    return sorted(effective_ids)
+
+
+def _effective_observation_person_ids(
+    conn: sqlite3.Connection, observation_id: str,
+) -> list[str]:
+    corrected_ids = _corrected_observation_person_ids(conn, observation_id)
+    return sorted({
+        _resolve_canonical_person_id(conn, raw_person_id)
+        for raw_person_id in corrected_ids
+    })
 
 
 def _recalculate_observation_evidence(
@@ -7810,22 +8306,26 @@ def _list_observation_participants(
         """,
         (observation_id,),
     ).fetchone()
-    if correction is not None:
-        participants: list[ObservationParticipant] = []
-        for person_id in _effective_observation_person_ids(conn, observation_id):
-            person = conn.execute(
-                "SELECT lifecycle_status FROM persons WHERE person_id = ?", (person_id,),
-            ).fetchone()
-            participants.append(ObservationParticipant(
-                observation_id=observation_id,
-                person_id=person_id,
-                canonical_person_id=_resolve_canonical_person_id(conn, person_id),
-                person_lifecycle_status=str(person["lifecycle_status"]),
-                source="identity-correction",
-                operation_id=str(correction["operation_id"]),
-                created_at=str(correction["created_at"]),
-            ))
-        return participants
+    participants: list[ObservationParticipant] = []
+    for person_id in _effective_observation_person_ids(conn, observation_id):
+        person = conn.execute(
+            "SELECT lifecycle_status FROM persons WHERE person_id = ?", (person_id,),
+        ).fetchone()
+        participants.append(ObservationParticipant(
+            observation_id=observation_id,
+            person_id=person_id,
+            canonical_person_id=person_id,
+            person_lifecycle_status=str(person["lifecycle_status"]),
+            source="identity-correction" if correction is not None else "canonical-resolution",
+            operation_id=str(correction["operation_id"]) if correction is not None else "",
+            created_at=str(correction["created_at"]) if correction is not None else "",
+        ))
+    return participants
+
+
+def _list_raw_observation_participants(
+    conn: sqlite3.Connection, observation_id: str,
+) -> list[ObservationParticipant]:
     rows = conn.execute(
         """
         SELECT p.observation_id, p.person_id, p.source, p.operation_id, p.created_at,
@@ -7884,6 +8384,278 @@ def _has_meaningful_identity_context(name: str, metadata: dict, notes: str) -> b
     if name.strip() or notes.strip():
         return True
     return any(value not in (None, "", [], {}, ()) for value in metadata.values())
+
+
+def _set_canonical_person_id_in_transaction(
+    conn: sqlite3.Connection,
+    person_id: str,
+    canonical_person_id: str,
+) -> dict:
+    """Update canonical state on the caller's connection without journaling or committing."""
+    normalized_person_id = str(person_id).strip()
+    normalized_target_id = str(canonical_person_id).strip()
+    if not normalized_person_id or not normalized_target_id:
+        raise ValueError("Source and canonical person IDs are required")
+    source_row = conn.execute(
+        "SELECT lifecycle_status FROM persons WHERE person_id = ?",
+        (normalized_person_id,),
+    ).fetchone()
+    if source_row is None:
+        raise KeyError(f"Unknown person: {normalized_person_id}")
+    if source_row["lifecycle_status"] not in {"ACTIVE", "ARCHIVED"}:
+        raise KeyError("Only active or archived identities can receive a canonical mapping")
+    resolved_target = _resolve_canonical_person_id(conn, normalized_target_id)
+    if resolved_target == normalized_person_id:
+        raise ValueError("Canonical identity cannot reference itself or create a cycle")
+    target_row = conn.execute(
+        "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
+        (resolved_target,),
+    ).fetchone()
+    if target_row is None:
+        raise KeyError(f"Unknown canonical person: {normalized_target_id}")
+    if target_row["lifecycle_status"] != "ACTIVE" or target_row["deleted_at"] is not None:
+        raise KeyError("Canonical identity must resolve to an active person")
+    changed_at = utc_now()
+    try:
+        conn.execute(
+            """
+            UPDATE persons
+            SET lifecycle_status = 'MERGED', canonical_person_id = ?,
+                deleted_at = COALESCE(deleted_at, ?), lifecycle_changed_at = ?
+            WHERE person_id = ?
+            """,
+            (resolved_target, changed_at, changed_at, normalized_person_id),
+        )
+    except sqlite3.IntegrityError as exc:
+        if "cycle" in str(exc).lower() or "check constraint" in str(exc).lower():
+            raise ValueError(
+                "Canonical identity cannot reference itself or create a cycle"
+            ) from exc
+        raise
+    return {
+        "person_id": normalized_person_id,
+        "canonical_person_id": resolved_target,
+        "lifecycle_status": "MERGED",
+        "mapped": True,
+    }
+
+
+def _insert_merge_manifest_in_transaction(
+    conn: sqlite3.Connection,
+    *,
+    merge_operation_id: str,
+    source_person_id: str,
+    target_person_id: str,
+    operation_journal_id: str,
+    actor: dict | None = None,
+    reason: str | None = None,
+    context: dict | None = None,
+    affected_items: list[dict] | None = None,
+    conflicts: list[dict] | None = None,
+    created_at: str | None = None,
+) -> MergeOperation:
+    """Persist immutable merge provenance on the caller-owned transaction."""
+    normalized_merge_id = str(merge_operation_id).strip()
+    normalized_source_id = str(source_person_id).strip()
+    normalized_target_id = str(target_person_id).strip()
+    normalized_journal_id = str(operation_journal_id).strip()
+    if not all((normalized_merge_id, normalized_source_id, normalized_target_id,
+                normalized_journal_id)):
+        raise ValueError("Merge, source, target, and journal IDs are required")
+    if normalized_merge_id != normalized_journal_id:
+        raise ValueError("Merge operation ID must match its journal operation ID")
+    terminal_target_id = _resolve_canonical_person_id(conn, normalized_target_id)
+    if normalized_source_id == terminal_target_id:
+        raise ValueError("Merge source and survivor must be different")
+    source_row = conn.execute(
+        "SELECT lifecycle_status, canonical_person_id FROM persons WHERE person_id = ?",
+        (normalized_source_id,),
+    ).fetchone()
+    target_row = conn.execute(
+        "SELECT lifecycle_status, canonical_person_id FROM persons WHERE person_id = ?",
+        (terminal_target_id,),
+    ).fetchone()
+    if source_row is None or target_row is None:
+        raise KeyError("Merge source and target must both exist")
+    journal = conn.execute(
+        "SELECT operation_type, status, actor FROM operation_journal WHERE operation_id = ?",
+        (normalized_journal_id,),
+    ).fetchone()
+    if journal is None:
+        raise KeyError(f"Unknown operation journal entry: {normalized_journal_id}")
+    if journal["status"] != "STARTED":
+        raise ValueError("Merge manifest must be recorded while its journal is STARTED")
+    if journal["operation_type"] != "identity.merge":
+        raise ValueError("Merge manifest requires an identity.merge journal operation")
+    _, actor_payload, _ = _operation_actor_snapshot(actor)
+    if actor_payload != journal["actor"]:
+        raise ValueError("Merge manifest actor must match its operation journal actor")
+    if target_row["lifecycle_status"] != "ACTIVE" or target_row["canonical_person_id"] is not None:
+        raise ValueError("Merge survivor must be the terminal active canonical identity")
+    target_deleted = conn.execute(
+        "SELECT deleted_at FROM persons WHERE person_id = ?", (terminal_target_id,),
+    ).fetchone()[0]
+    if target_deleted is not None:
+        raise ValueError("Merge survivor must be the terminal active canonical identity")
+    _, context_payload = _journal_json_object(context, "merge context")
+    timestamp = created_at or utc_now()
+    conn.execute(
+        """
+        INSERT INTO merge_operations(
+            merge_operation_id, source_person_id, target_person_id, actor, created_at,
+            previous_source_lifecycle_status, previous_target_lifecycle_status,
+            previous_source_canonical_person_id, previous_target_canonical_person_id,
+            reason, context, operation_journal_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            normalized_merge_id, normalized_source_id, terminal_target_id,
+            actor_payload, timestamp, source_row["lifecycle_status"],
+            target_row["lifecycle_status"], source_row["canonical_person_id"],
+            target_row["canonical_person_id"], _optional_text(reason),
+            context_payload, normalized_journal_id,
+        ),
+    )
+    for item in affected_items or []:
+        item_type = str(item.get("item_type") or "").strip().upper()
+        item_id = str(item.get("item_id") or "").strip()
+        if not item_type or not item_id:
+            raise ValueError("Affected merge items require item_type and item_id")
+        raw_owner_person_id = _optional_text(
+            item.get("raw_owner_person_id", item.get("previous_person_id")),
+        )
+        effective_owner_person_id = _optional_text(
+            item.get("effective_owner_person_id", item.get("effective_person_id")),
+        )
+        default_action = (
+            MergeAffectedAction.UNION_IN_CURRENT_VIEW.value
+            if item_type in MERGE_COLLECTION_ITEM_TYPES
+            else MergeAffectedAction.REINTERPRET_CANONICAL_OWNER.value
+        )
+        action = str(item.get("action") or default_action).strip().upper()
+        try:
+            MergeAffectedAction(action)
+        except ValueError as exc:
+            raise ValueError(f"Unsupported merge affected-item action: {action}") from exc
+        _, item_context = _journal_json_object(item.get("context"), "affected item context")
+        _, before_state = _journal_json_object(item.get("before_state"), "affected item before state")
+        _, after_state = _journal_json_object(item.get("after_state"), "affected item after state")
+        conn.execute(
+            """
+            INSERT INTO merge_affected_items(
+                merge_operation_id, item_type, item_id, previous_person_id,
+                effective_person_id, context, raw_owner_person_id,
+                effective_owner_person_id, action, before_state, after_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                normalized_merge_id, item_type, item_id,
+                raw_owner_person_id, effective_owner_person_id, item_context,
+                raw_owner_person_id, effective_owner_person_id, action,
+                before_state, after_state,
+            ),
+        )
+    for conflict in conflicts or []:
+        category = str(conflict.get("category") or "").strip().upper()
+        field_name = str(conflict.get("field_name") or conflict.get("field") or "").strip()
+        if not category or not field_name:
+            raise ValueError("Merge conflicts require category and field_name")
+        strategy_value = str(conflict.get("strategy") or "").strip().upper()
+        try:
+            strategy = MergeConflictStrategy(strategy_value)
+        except ValueError as exc:
+            raise ValueError(f"Unsupported merge conflict strategy: {strategy_value}") from exc
+        source_value = conflict.get("source_value")
+        target_value = conflict.get("target_value")
+        selected_value = conflict.get("selected_value")
+        if strategy is MergeConflictStrategy.KEEP_SOURCE and selected_value != source_value:
+            raise ValueError("KEEP_SOURCE must select the source value")
+        if strategy is MergeConflictStrategy.KEEP_TARGET and selected_value != target_value:
+            raise ValueError("KEEP_TARGET must select the target value")
+        inverse_data = conflict.get("inverse_data")
+        if inverse_data is None:
+            inverse_data = {
+                "source_value": source_value,
+                "target_value": target_value,
+            }
+        _, inverse_payload = _journal_json_object(inverse_data, "merge conflict inverse data")
+        conn.execute(
+            """
+            INSERT INTO merge_conflict_resolutions(
+                conflict_id, merge_operation_id, category, field_name,
+                source_value, target_value, strategy, selected_value, inverse_data
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(conflict.get("conflict_id") or uuid.uuid4()), normalized_merge_id,
+                category, field_name, _json_value_payload(source_value, "source value"),
+                _json_value_payload(target_value, "target value"), strategy.value,
+                _json_value_payload(selected_value, "selected value"), inverse_payload,
+            ),
+        )
+    operation = _get_merge_operation(conn, normalized_merge_id)
+    if operation is None:
+        raise RuntimeError("Stored merge manifest could not be read")
+    return operation
+
+
+def _get_merge_operation(
+    conn: sqlite3.Connection, merge_operation_id: str,
+) -> MergeOperation | None:
+    row = conn.execute(
+        "SELECT * FROM merge_operations WHERE merge_operation_id = ?",
+        (str(merge_operation_id).strip(),),
+    ).fetchone()
+    if row is None:
+        return None
+    item_rows = conn.execute(
+        """
+        SELECT * FROM merge_affected_items
+        WHERE merge_operation_id = ? ORDER BY item_type, item_id
+        """,
+        (row["merge_operation_id"],),
+    ).fetchall()
+    conflict_rows = conn.execute(
+        """
+        SELECT * FROM merge_conflict_resolutions
+        WHERE merge_operation_id = ? ORDER BY category, field_name, conflict_id
+        """,
+        (row["merge_operation_id"],),
+    ).fetchall()
+    return MergeOperation(
+        merge_operation_id=str(row["merge_operation_id"]),
+        source_person_id=str(row["source_person_id"]),
+        target_person_id=str(row["target_person_id"]),
+        actor=json.loads(row["actor"]),
+        created_at=str(row["created_at"]),
+        previous_source_lifecycle_status=str(row["previous_source_lifecycle_status"]),
+        previous_target_lifecycle_status=str(row["previous_target_lifecycle_status"]),
+        previous_source_canonical_person_id=row["previous_source_canonical_person_id"],
+        previous_target_canonical_person_id=row["previous_target_canonical_person_id"],
+        reason=row["reason"],
+        context=json.loads(row["context"]),
+        operation_journal_id=str(row["operation_journal_id"]),
+        affected_items=tuple(MergeAffectedItem(
+            item_type=str(item["item_type"]),
+            item_id=str(item["item_id"]),
+            raw_owner_person_id=item["raw_owner_person_id"],
+            effective_owner_person_id=item["effective_owner_person_id"],
+            action=MergeAffectedAction(str(item["action"])),
+            before_state=json.loads(item["before_state"]),
+            after_state=json.loads(item["after_state"]),
+            context=json.loads(item["context"]),
+        ) for item in item_rows),
+        conflicts=tuple(MergeConflictResolution(
+            conflict_id=str(item["conflict_id"]),
+            category=str(item["category"]),
+            field_name=str(item["field_name"]),
+            source_value=json.loads(item["source_value"]),
+            target_value=json.loads(item["target_value"]),
+            strategy=MergeConflictStrategy(str(item["strategy"])),
+            selected_value=json.loads(item["selected_value"]),
+            inverse_data=json.loads(item["inverse_data"]),
+        ) for item in conflict_rows),
+    )
 
 
 def _resolve_canonical_person_id(conn: sqlite3.Connection, person_id: str) -> str:
@@ -8172,6 +8944,13 @@ def _journal_json_array(value: list[dict] | None, label: str) -> tuple[list[dict
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Operation {label} must contain JSON-compatible values") from exc
     return normalized, payload
+
+
+def _json_value_payload(value, label: str) -> str:
+    try:
+        return json.dumps(value, separators=(",", ":"), sort_keys=True, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Merge {label} must be JSON-compatible") from exc
 
 
 def _operation_actor_snapshot(actor: dict | None) -> tuple[dict, str, str | None]:
@@ -8476,7 +9255,9 @@ def _person_match_from_json(item: dict) -> PersonMatch:
     )
 
 
-def _embedding_from_row(row: sqlite3.Row) -> EmbeddingRecord:
+def _embedding_from_row(
+    row: sqlite3.Row, *, canonical_person_id: str | None = None,
+) -> EmbeddingRecord:
     return EmbeddingRecord(
         embedding_id=row["embedding_id"],
         person_id=row["person_id"],
@@ -8485,6 +9266,7 @@ def _embedding_from_row(row: sqlite3.Row) -> EmbeddingRecord:
         source_image=row["source_image"],
         crop_path=row["crop_path"],
         created_at=row["created_at"],
+        canonical_person_id=canonical_person_id,
     )
 
 

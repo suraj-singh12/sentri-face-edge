@@ -18,6 +18,7 @@ from sentriface.models import (
     Observation,
     ObservationMedia,
     ObservationParticipant,
+    MergeOperation,
     PendingAddition,
     PhotoReview,
     Person,
@@ -66,10 +67,18 @@ class IdentityStore(Protocol):
         """Create one journaled identified person with no biometric data."""
 
     def list_embeddings(self) -> list[EmbeddingRecord]:
-        """Load all embedding records."""
+        """Load current embeddings with raw and canonical ownership."""
+
+    def list_raw_embeddings_for_person(
+        self, person_id: str, include_deleted: bool = False,
+    ) -> list[EmbeddingRecord]:
+        """Load embeddings retaining exact historical ownership."""
 
     def get_person(self, person_id: str, include_archived: bool = False) -> Person | None:
         """Load one person by id."""
+
+    def get_effective_person(self, person_id: str) -> Person | None:
+        """Resolve an identity and load its current canonical person."""
 
     def list_persons(self, archived: bool = False) -> list[PersonSummary]:
         """List active or archived people with summary counts."""
@@ -137,6 +146,11 @@ class IdentityStore(Protocol):
     ) -> Note | None:
         """Load the current revisioned profile note for one person."""
 
+    def list_person_notes(
+        self, person_id: str, *, raw: bool = False, include_retired: bool = False,
+    ) -> list[Note]:
+        """List current-view or exact-owner notes without rewriting provenance."""
+
     def list_note_revisions(self, note_id: str) -> list[NoteRevision]:
         """List immutable note revisions oldest first."""
 
@@ -153,8 +167,14 @@ class IdentityStore(Protocol):
     def list_person_changes(self, person_id: str) -> list[PersonChange]:
         """List profile changes for one person, newest first."""
 
+    def list_raw_person_changes(self, person_id: str) -> list[PersonChange]:
+        """List profile changes retaining exact historical ownership."""
+
     def list_person_operations(self, person_id: str) -> list[dict]:
         """List lifecycle operations involving one person, newest first."""
+
+    def list_raw_person_operations(self, person_id: str) -> list[dict]:
+        """List lifecycle operations involving the exact historical identity."""
 
     def list_person_associations(
         self,
@@ -191,6 +211,13 @@ class IdentityStore(Protocol):
 
     def mark_operation_reverted(self, operation_id: str, details: dict | None = None) -> dict:
         """Mark a committed operation reverted by a later operation."""
+
+    def record_merge_attempt_failed(
+        self, operation_id: str, *, actor: dict | None = None,
+        source: str | None = None, context: dict | None = None,
+        affected_entities: list[dict] | None = None, details: dict | None = None,
+    ) -> dict:
+        """Durably record a rolled-back merge attempt without merge state."""
 
     def get_operation(self, operation_id: str) -> dict | None:
         """Load one global operation and its append-only status history."""
@@ -314,10 +341,23 @@ class IdentityStore(Protocol):
     ) -> list[ObservationParticipant]:
         """List participants with original and current canonical identity."""
 
+    def list_raw_observation_participants(
+        self, observation_id: str,
+    ) -> list[ObservationParticipant]:
+        """List immutable originally accepted participant identities."""
+
+    def list_effective_observation_participants(
+        self, observation_id: str,
+    ) -> list[ObservationParticipant]:
+        """List corrected participants collapsed by current canonical identity."""
+
     def list_observation_media(self, observation_id: str) -> list[ObservationMedia]:
         """List durable media memberships for one observation."""
 
     def list_observations_for_person(self, person_id: str) -> list[Observation]:
+        """List observations for a person's current canonical identity."""
+
+    def list_raw_observations_for_person(self, person_id: str) -> list[Observation]:
         """List observations retaining this exact historical participant identity."""
 
     def list_observations_for_media(self, media_id: str) -> list[Observation]:
@@ -389,6 +429,9 @@ class IdentityStore(Protocol):
 
     def resolve_canonical_person_id(self, person_id: str) -> str:
         """Resolve a person through any canonical identity chain."""
+
+    def get_merge_operation(self, merge_operation_id: str) -> MergeOperation | None:
+        """Load immutable normalized merge provenance, when present."""
 
     def list_historical_persons(self) -> list[PersonSummary]:
         """List archived, deleted, and merged historical identities."""
@@ -466,7 +509,12 @@ class IdentityStore(Protocol):
         """Persist favorite and representative-photo preferences."""
 
     def list_recognition_details_for_person(self, person_id: str) -> list[RecognitionDetail]:
-        """Load recognition details for all embeddings of one person."""
+        """Load recognition details for one current canonical identity."""
+
+    def list_raw_recognition_details_for_person(
+        self, person_id: str,
+    ) -> list[RecognitionDetail]:
+        """Load recognition details retaining exact historical ownership."""
 
     def current_embedding_person_ids(self, embedding_ids: list[str]) -> dict[str, str]:
         """Resolve indexed embeddings to their current active identity owners."""

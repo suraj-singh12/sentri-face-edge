@@ -54,7 +54,10 @@ class HnswFaceIndex:
             labels, distances = self._index.knn_query(vector, k=count)
             return [
                 Match(
-                    person_id=self._records[int(label)].person_id,
+                    person_id=(
+                        self._records[int(label)].canonical_person_id
+                        or self._records[int(label)].person_id
+                    ),
                     embedding_id=self._records[int(label)].embedding_id,
                     score=max(-1.0, min(1.0, 1.0 - float(distance))),
                 )

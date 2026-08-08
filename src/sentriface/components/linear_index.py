@@ -23,7 +23,7 @@ class LinearFaceIndex:
     def search(self, vector: Embedding, top_k: int) -> list[Match]:
         scored = [
             Match(
-                person_id=record.person_id,
+                person_id=record.canonical_person_id or record.person_id,
                 embedding_id=record.embedding_id,
                 score=_cosine(vector, record.vector),
             )
