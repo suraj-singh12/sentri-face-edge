@@ -319,3 +319,40 @@ class InitGroup:
     session_id: str
     faces: list[InitFace]
     status: str = "pending"
+
+
+class ReviewDecision(str, Enum):
+    ACCEPT_EXISTING_PERSON = "ACCEPT_EXISTING_PERSON"
+    ACCEPT_NEW_PERSON = "ACCEPT_NEW_PERSON"
+    EXCLUDE = "EXCLUDE"
+    SKIP = "SKIP"
+
+
+@dataclass(frozen=True)
+class ReviewFaceDecision:
+    review_id: str
+    face_id: str
+    staged_face_type: str
+    staged_face_id: str
+    decision: str | None = None
+    person_id: str | None = None
+    new_person_key: str | None = None
+    new_person_name: str | None = None
+    new_person_metadata: dict = field(default_factory=dict)
+    notes: str = ""
+    mentioned_person_ids: tuple[str, ...] = ()
+    recognition_detail: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PhotoReview:
+    review_id: str
+    media_id: str
+    media_path: str | None
+    source: str
+    status: str
+    faces: tuple[ReviewFaceDecision, ...]
+    created_at: str
+    observation_id: str | None = None
+    completed_operation_id: str | None = None
+    completed_at: str | None = None

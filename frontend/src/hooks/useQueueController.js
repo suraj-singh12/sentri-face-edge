@@ -508,30 +508,7 @@ export function useQueueController({
         name: queueFollowup.name,
         notes: queueFollowup.notes,
         mentioned_person_ids: queueFollowup.mentionedPersonIds || [],
-      })
-      : await apiPost("/api/queue-confirm-existing", {
-        session_id: queueSelectedGroup.session_id,
-        group_id: queueSelectedGroup.group_id,
-        face_ids: queueFollowup.faceIds,
-        person_id: queueFollowup.personId,
-      });
-    const personId = payload.person_id || queueFollowup.personId;
-    const entries = payload.accepted || [];
-    if (payload.session_closed) removeClosedQueueSession(confirmedSessionId);
-    else {
-      setQueueGroups(payload.groups || []);
-      setQueueSessions((current) => current.map((session) => session.session_id === confirmedSessionId
-        ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
-        : session));
-    }
-    for (const entry of entries) {
-      await apiPost("/api/recognition-followup", {
-        path: entry.image_path,
-        name: queueFollowup.name,
-        person_id: personId,
-        embedding_id: entry.embedding_id,
-        image_id: entry.image_id,
-        image_path: entry.image_path,
+        operation_id: queueFollowup.identityOperationId,
         decision: queueFollowup.decision,
         date: queueFollowup.date,
         time: queueFollowup.time,
@@ -542,10 +519,35 @@ export function useQueueController({
         individual_count: Number(queueFollowup.individualCount),
         event_occasion: queueFollowup.eventOccasion,
         added_by: queueFollowup.addedBy,
-        notes: queueFollowup.action === "new" ? "" : queueFollowup.notes,
-        mentioned_person_ids: queueFollowup.action === "new" ? [] : queueFollowup.mentionedPersonIds || [],
-        operation_id: queueFollowup.followupOperationIds?.[entry.face_id] || crypto.randomUUID(),
+      })
+      : await apiPost("/api/queue-confirm-existing", {
+        session_id: queueSelectedGroup.session_id,
+        group_id: queueSelectedGroup.group_id,
+        face_ids: queueFollowup.faceIds,
+        person_id: queueFollowup.personId,
+        operation_id: queueFollowup.identityOperationId,
+        notes: queueFollowup.notes,
+        mentioned_person_ids: queueFollowup.mentionedPersonIds || [],
+        name: queueFollowup.name,
+        decision: queueFollowup.decision,
+        date: queueFollowup.date,
+        time: queueFollowup.time,
+        rank: queueFollowup.rank,
+        country: queueFollowup.country,
+        importance: queueFollowup.importance,
+        place_seen: queueFollowup.placeSeen,
+        individual_count: Number(queueFollowup.individualCount),
+        event_occasion: queueFollowup.eventOccasion,
+        added_by: queueFollowup.addedBy,
       });
+    const personId = payload.person_id || queueFollowup.personId;
+    const entries = payload.accepted || [];
+    if (payload.session_closed) removeClosedQueueSession(confirmedSessionId);
+    else {
+      setQueueGroups(payload.groups || []);
+      setQueueSessions((current) => current.map((session) => session.session_id === confirmedSessionId
+        ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
+        : session));
     }
     setQueueFollowupDone(true);
     setQueueSelectedFaces([]);

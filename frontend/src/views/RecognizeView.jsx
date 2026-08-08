@@ -56,6 +56,8 @@ export function RecognizeView({
   onSelectFace,
   onAccept,
   onNew,
+  onSkip,
+  onComplete,
   onClear,
   onGallery,
   onGalleryImage,
@@ -317,11 +319,29 @@ export function RecognizeView({
               {selectedIsBad ? "New Person Anyway" : "New Person"}
               <Text component="span" size="xs" fw={400}>{selectedFace ? (selectedIsBad ? "Review the quality warning first" : `Create a person from Face ${faceNumber(selectedFace.index)}`) : "Select a face first"}</Text>
             </Button>
+            <Button
+              className="recognize-action"
+              variant="light"
+              onClick={() => onSkip(selectedFace?.index)}
+              disabled={!canAdd || !selectedFace || selectedAccepted}
+            >
+              Skip Face
+              <Text component="span" size="xs" fw={400}>Exclude this face from the observation</Text>
+            </Button>
             <Button className="recognize-action recognize-action--clear" color="red" variant="light" leftSection={<IconTrash size={20} />} onClick={onClear} disabled={!recognition}>
               Clear
               <Text component="span" size="xs" fw={400}>Reset and try another photo</Text>
             </Button>
           </Group>}
+          {recognition && !targetPerson ? (
+            <Button
+              leftSection={<IconCheck size={20} />}
+              onClick={onComplete}
+              disabled={!faces.length || recognitionAcceptedFaces.length !== faces.length}
+            >
+              Complete Review
+            </Button>
+          ) : null}
         </Stack>
       </Paper>
       <Modal

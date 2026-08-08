@@ -8,6 +8,7 @@ from sentriface.models import (
     NoteRevision,
     Person,
     PersonChange,
+    PhotoReview,
     RelationshipEvidence,
 )
 
@@ -29,6 +30,29 @@ class GlobalIdentityGraphService:
         return self.store.record_observation_evidence(
             observation_id, operation_id, source=source, actor=actor,
         )
+
+    def create_photo_review(
+        self, review_id: str, media_id: str, faces: list[dict], **values,
+    ) -> PhotoReview:
+        return self.store.create_photo_review(review_id, media_id, faces, **values)
+
+    def set_photo_review_face_decision(
+        self, review_id: str, face_id: str, decision: str, **values,
+    ) -> PhotoReview:
+        return self.store.set_photo_review_face_decision(
+            review_id, face_id, decision, **values,
+        )
+
+    def get_photo_review(self, review_id: str) -> PhotoReview | None:
+        return self.store.get_photo_review(review_id)
+
+    def cancel_photo_review(self, review_id: str) -> PhotoReview:
+        return self.store.cancel_photo_review(review_id)
+
+    def complete_photo_review(
+        self, review_id: str, operation_id: str, **values,
+    ) -> dict:
+        return self.store.complete_photo_review(review_id, operation_id, **values)
 
     def deactivate_evidence(
         self,

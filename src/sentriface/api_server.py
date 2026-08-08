@@ -38,7 +38,7 @@ from sentriface.auth import (
 from sentriface.backup_service import BackupError, BackupRecord, BackupService
 from sentriface.cli import build_dev_engine, build_onnx_engine
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
-from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
+from sentriface.engine import DomainWorkflowUnavailableError, IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import InputImageError, InputValidationError, ModelSetupError, QueueCancellationError, SentriFaceError
 from sentriface.hardware import assess_hardware
 from sentriface.paths import default_data_dir, default_log_dir
@@ -60,6 +60,7 @@ from sentriface.models import (
     InitSession,
     MatchDecision,
     PendingAddition,
+    PhotoReview,
     Person,
     PersonAssociation,
     PersonChange,
@@ -168,6 +169,8 @@ def _required_capability(method: str, path: str) -> str | None:
         "/api/recognition-accept-existing", "/api/recognition-new",
         "/api/placeholder-enroll",
         "/api/recognition-followup", "/api/queue-add", "/api/queue-cancel",
+        "/api/photo-review", "/api/photo-review-decision",
+        "/api/photo-review-complete", "/api/photo-review-cancel",
         "/api/queue-scan", "/api/queue-confirm-new", "/api/queue-confirm-existing",
         "/api/queue-refresh-suggestions", "/api/queue-discard", "/api/queue-skip",
         "/api/queue-resume-skipped", "/api/queue-reject-match",
@@ -1240,6 +1243,56 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             payload = self._read_json()
+            if parsed.path == "/api/photo-review":
+                faces = payload.get("faces")
+                if not isinstance(faces, list):
+                    raise KeyError("faces must be a list")
+                review = self.server.engine.create_photo_review(
+                    _required(payload, "review_id"),
+                    _required(payload, "media_id"),
+                    faces,
+                    media_path=payload.get("media_path"),
+                    source=str(payload.get("source") or "check-photo"),
+                )
+                self._json(_photo_review(review), status=HTTPStatus.CREATED)
+                return
+            if parsed.path == "/api/photo-review-decision":
+                review = self.server.engine.set_photo_review_face_decision(
+                    _required(payload, "review_id"),
+                    _required(payload, "face_id"),
+                    _required(payload, "decision"),
+                    person_id=payload.get("person_id"),
+                    new_person_key=payload.get("new_person_key"),
+                    new_person_name=payload.get("new_person_name"),
+                    new_person_metadata=payload.get("new_person_metadata"),
+                    notes=str(payload.get("notes") or ""),
+                    mentioned_person_ids=list(payload.get("mentioned_person_ids") or []),
+                    recognition_detail=payload.get("recognition_detail"),
+                )
+                self._json(_photo_review(review))
+                return
+            if parsed.path == "/api/photo-review-complete":
+                result = self.server.engine.complete_photo_review(
+                    _required(payload, "review_id"),
+                    _optional_operation_id(payload),
+                    actor=self._operation_actor(),
+                    source=str(payload.get("source") or "review-finalisation"),
+                )
+                self.server.log_event("photo-review-completed", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/photo-review-cancel":
+                review = self.server.engine.cancel_photo_review(_required(payload, "review_id"))
+                self._json(_photo_review(review))
+                return
+            if parsed.path in {
+                "/api/recognition-accept-existing", "/api/recognition-new",
+                "/api/placeholder-enroll", "/api/recognition-followup",
+                "/api/confirm-new", "/api/confirm-existing",
+            }:
+                raise DomainWorkflowUnavailableError(
+                    "Per-face confirmation is unavailable; complete the whole review atomically"
+                )
             if parsed.path == "/api/auth/signup":
                 user, token = self.server.auth.signup_initial(_required(payload, "username"), str(payload.get("display_name") or ""), _required(payload, "password"))
                 self._set_auth_cookie(token)
@@ -1492,11 +1545,18 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/recognize":
                 image_path = require_local_path(Path(_required(payload, "path")))
                 self.server.engine.reset_metrics()
-                results = self.server.engine.recognize(image_path)
-                self.server.log_event("recognize", path=str(image_path), faces=len(results))
+                review, pending_faces = self.server.engine.prepare_photo_review(image_path)
+                self.server.log_event("recognize", path=str(image_path), faces=len(pending_faces))
                 self._json(
                     {
-                        "faces": [_recognition(self.server.engine, result, index) for index, result in enumerate(results, 1)],
+                        "review_id": review.review_id if review else None,
+                        "faces": [
+                            {
+                                **_pending_recognition(self.server.engine, pending, index),
+                                "staged_face_id": pending.pending_id,
+                            }
+                            for index, pending in enumerate(pending_faces, 1)
+                        ],
                         "metrics": self.server.engine.metrics_snapshot(),
                     }
                 )
@@ -2232,6 +2292,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _optional_operation_id(payload),
                     notes=str(payload.get("notes") or ""),
                     mentioned_person_ids=[str(item) for item in mentioned_person_ids],
+                    recognition_detail=_review_detail_payload(payload),
                 )
                 try:
                     changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
@@ -2265,6 +2326,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _queue_face_ids(self.server.engine, payload),
                     person_id,
                     _optional_operation_id(payload),
+                    notes=str(payload.get("notes") or ""),
+                    mentioned_person_ids=[str(item) for item in payload.get("mentioned_person_ids", [])],
+                    recognition_detail=_review_detail_payload(payload),
                 )
                 try:
                     changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
@@ -2908,6 +2972,18 @@ def _required(payload: dict[str, Any], key: str) -> str:
     return str(value)
 
 
+def _review_detail_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: payload.get(key)
+        for key in (
+            "name", "decision", "date", "time", "rank", "country",
+            "importance", "place_seen", "individual_count",
+            "event_occasion", "added_by",
+        )
+        if payload.get(key) is not None
+    }
+
+
 def _safe_count(value: Any, field: str, allow_zero: bool = False) -> int:
     try:
         count = int(value)
@@ -3297,6 +3373,51 @@ def _pending(engine: FaceEngine, pending: PendingAddition) -> dict[str, Any]:
         "quality": _quality(pending.quality),
         "matches": [_match(engine, match, rank) for rank, match in enumerate(pending.matches, 1)],
         "created_at": pending.created_at,
+    }
+
+
+def _pending_recognition(
+    engine: FaceEngine, pending: PendingAddition, index: int,
+) -> dict[str, Any]:
+    return {
+        "index": index,
+        "decision": pending.decision.value,
+        "box": _box(pending.face),
+        "quality": _quality(pending.quality),
+        "matches": [
+            _match(engine, match, rank)
+            for rank, match in enumerate(pending.matches, 1)
+        ],
+    }
+
+
+def _photo_review(review: PhotoReview) -> dict[str, Any]:
+    return {
+        "review_id": review.review_id,
+        "media_id": review.media_id,
+        "media_path": review.media_path,
+        "source": review.source,
+        "status": review.status,
+        "observation_id": review.observation_id,
+        "completed_operation_id": review.completed_operation_id,
+        "created_at": review.created_at,
+        "completed_at": review.completed_at,
+        "faces": [
+            {
+                "face_id": face.face_id,
+                "staged_face_type": face.staged_face_type,
+                "staged_face_id": face.staged_face_id,
+                "decision": face.decision,
+                "person_id": face.person_id,
+                "new_person_key": face.new_person_key,
+                "new_person_name": face.new_person_name,
+                "new_person_metadata": face.new_person_metadata,
+                "notes": face.notes,
+                "mentioned_person_ids": list(face.mentioned_person_ids),
+                "recognition_detail": face.recognition_detail,
+            }
+            for face in review.faces
+        ],
     }
 
 

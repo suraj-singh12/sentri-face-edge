@@ -38,7 +38,7 @@ A projected relationship exists while at least one active evidence record suppor
 
 Identity corrections (move face, add face, change a participant decision) are first-class historical operations; they do not silently rewrite provenance. Every important write has an immutable operation-journal entry with operation/idempotency ID, type, actor, timestamp, affected entities, before/after or inverse data, and status. A graph-affecting write and its journal entry commit in the same SQLite transaction.
 
-## Current repository map (schema version 22)
+## Current repository map (schema version 23)
 
 | Concern | Current implementation |
 | --- | --- |
@@ -60,8 +60,9 @@ Identity corrections (move face, add face, change a participant decision) are fi
 
 - `persons` now has explicit `lifecycle_status`, `canonical_person_id`, `identity_status`, `biometric_status`, and `lifecycle_changed_at`. Existing live rows migrate to `ACTIVE`; legacy archived rows remain historical, and valid `metadata.merged_into` sources migrate to `MERGED` mappings.
 - Ordinary archive, restore, and delete paths now use atomic lifecycle transitions plus the global operation journal. The compatibility `permanently_delete_person()` entry point tombstones as `DELETED` and retains linked history; the former destructive implementation remains isolated as the storage-only `physically_purge_person()` exceptional capability.
-- `observations`, `observation_media`, and `observation_participants` now provide draft events, existing-media membership, and canonical-aware participant deduplication while retaining original person IDs. Standalone domain finalisation is gated; the low-level P3 primitive remains private until P6 supplies atomic review finalisation plus evidence recording.
-- Existing `recognition_details` rows remain unchanged and accessible. Their nullable `observation_id` is the compatibility bridge for later atomic P6 workflow integration; P3 does not invent or backfill events from ambiguous legacy rows.
+- `observations`, `observation_media`, and `observation_participants` provide draft events, existing-media membership, and canonical-aware participant deduplication while retaining original person IDs. Standalone domain finalisation remains gated; P6 review completion is the exposed atomic finalisation path.
+- Existing `recognition_details` rows remain unchanged and accessible. Their nullable `observation_id` remains the compatibility bridge; migration does not invent or backfill events from ambiguous legacy rows.
+- `photo_reviews` and `photo_review_faces` hold non-authoritative staged face decisions. `SQLiteIdentityStore.complete_photo_review()` is the single P6 transaction that creates accepted identities/embeddings, finalizes the observation and media/participants, saves review notes, records co-observation evidence, rebuilds/validates the projection, commits one `review.complete` journal operation, and only then marks the review complete. `FaceEngine` gates the legacy per-face pending/Queue confirmation paths.
 - Profile notes now retain immutable revisions and explicit person-ID mention snapshots. Active mention occurrences own directed `NOTE_REFERENCE` evidence; edit or retirement deactivates only evidence from that occurrence. `persons.notes` remains a compatibility projection for the existing API/UI.
 - Legacy profile and recognition-detail note text migrates into revision history without parsing `@` text or fabricating mention records/evidence. Existing legacy `automatic_mention` associations are not promoted when their exact note provenance cannot be established.
 - Queue identity confirmation is atomic per selected group subset in `confirm_init_faces_atomic()`, but `useQueueController.js::confirmQueueFollowup()` then creates one `/api/recognition-followup` write per accepted face. There is no explicit all-faces-final event completion transaction, so identity, sighting, mention, and future graph writes can partially commit.

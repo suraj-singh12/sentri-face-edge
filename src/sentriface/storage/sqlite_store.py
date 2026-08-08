@@ -36,6 +36,8 @@ from sentriface.models import (
     PersonSummary,
     QualityReport,
     QualityStatus,
+    PhotoReview,
+    ReviewFaceDecision,
     RecognitionDetail,
     RelationshipEvidence,
     utc_now,
@@ -43,7 +45,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
 PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
@@ -59,6 +61,9 @@ OPERATION_STATUS_TRANSITIONS = {
     "ROLLED_BACK": frozenset(),
     "REVERTED": frozenset(),
 }
+REVIEW_DECISIONS = frozenset({
+    "ACCEPT_EXISTING_PERSON", "ACCEPT_NEW_PERSON", "EXCLUDE", "SKIP",
+})
 
 
 class SchemaMigrationError(RuntimeError):
@@ -1407,6 +1412,417 @@ class SQLiteIdentityStore:
                 (observation_id,),
             ).fetchone()
             return _observation_from_row(row)
+
+    def create_photo_review(
+        self,
+        review_id: str,
+        media_id: str,
+        faces: list[dict],
+        *,
+        media_path: str | None = None,
+        source: str = "check-photo",
+    ) -> PhotoReview:
+        normalized_review_id = str(review_id).strip()
+        normalized_media_id = str(media_id).strip()
+        if not normalized_review_id or not normalized_media_id:
+            raise ValueError("Review ID and media ID are required")
+        if not faces:
+            raise ValueError("A review requires at least one detected face")
+        with self._connect() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM photo_reviews WHERE review_id = ?", (normalized_review_id,),
+            ).fetchone()
+            if existing is not None:
+                return _photo_review_from_conn(conn, normalized_review_id)
+            _require_existing_media(conn, normalized_media_id, media_path)
+            created_at = utc_now()
+            conn.execute(
+                """
+                INSERT INTO photo_reviews(
+                    review_id, media_id, media_path, source, status, created_at
+                ) VALUES (?, ?, ?, ?, 'IN_PROGRESS', ?)
+                """,
+                (
+                    normalized_review_id, normalized_media_id, _optional_text(media_path),
+                    str(source).strip() or "check-photo", created_at,
+                ),
+            )
+            seen_face_ids: set[str] = set()
+            for face in faces:
+                face_id = str(face.get("face_id") or "").strip()
+                staged_type = str(face.get("staged_face_type") or "").strip().upper()
+                staged_id = str(face.get("staged_face_id") or "").strip()
+                if not face_id or face_id in seen_face_ids:
+                    raise ValueError("Review face IDs must be non-empty and unique")
+                _require_staged_review_face(conn, staged_type, staged_id)
+                seen_face_ids.add(face_id)
+                conn.execute(
+                    """
+                    INSERT INTO photo_review_faces(
+                        review_id, face_id, staged_face_type, staged_face_id,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (normalized_review_id, face_id, staged_type, staged_id, created_at, created_at),
+                )
+            return _photo_review_from_conn(conn, normalized_review_id)
+
+    def set_photo_review_face_decision(
+        self,
+        review_id: str,
+        face_id: str,
+        decision: str,
+        *,
+        person_id: str | None = None,
+        new_person_key: str | None = None,
+        new_person_name: str | None = None,
+        new_person_metadata: dict | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
+        recognition_detail: dict | None = None,
+    ) -> PhotoReview:
+        normalized_decision = str(decision).strip().upper()
+        if normalized_decision not in REVIEW_DECISIONS:
+            raise ValueError(f"Unsupported review decision: {decision}")
+        metadata, metadata_payload = _journal_json_object(
+            new_person_metadata, "new person metadata",
+        )
+        del metadata
+        _, recognition_detail_payload = _journal_json_object(
+            recognition_detail, "recognition detail",
+        )
+        mention_ids = sorted({str(item).strip() for item in (mentioned_person_ids or []) if str(item).strip()})
+        with self._connect() as conn:
+            review = conn.execute(
+                "SELECT status FROM photo_reviews WHERE review_id = ?", (review_id,),
+            ).fetchone()
+            if review is None:
+                raise KeyError(f"Unknown photo review: {review_id}")
+            if review["status"] != "IN_PROGRESS":
+                raise ValueError("Only an in-progress review can be changed")
+            if normalized_decision == "ACCEPT_EXISTING_PERSON":
+                _require_active_review_person(conn, person_id)
+                new_person_key = new_person_name = None
+            elif normalized_decision == "ACCEPT_NEW_PERSON":
+                if not str(new_person_name or "").strip():
+                    raise ValueError("A name is required for a new person decision")
+                person_id = None
+                new_person_key = str(new_person_key or face_id).strip()
+            else:
+                person_id = new_person_key = new_person_name = None
+                metadata_payload = "{}"
+                notes = ""
+                mention_ids = []
+                recognition_detail_payload = "{}"
+            cursor = conn.execute(
+                """
+                UPDATE photo_review_faces
+                SET decision = ?, person_id = ?, new_person_key = ?, new_person_name = ?,
+                    new_person_metadata = ?, notes = ?, mentioned_person_ids = ?,
+                    recognition_detail = ?, updated_at = ?
+                WHERE review_id = ? AND face_id = ?
+                """,
+                (
+                    normalized_decision, person_id, new_person_key,
+                    _optional_text(new_person_name), metadata_payload, str(notes or "").strip(),
+                    json.dumps(mention_ids, separators=(",", ":")),
+                    recognition_detail_payload, utc_now(), review_id, face_id,
+                ),
+            )
+            if not cursor.rowcount:
+                raise KeyError(f"Unknown review face: {face_id}")
+            return _photo_review_from_conn(conn, review_id)
+
+    def get_photo_review(self, review_id: str) -> PhotoReview | None:
+        with self._connect() as conn:
+            if conn.execute(
+                "SELECT 1 FROM photo_reviews WHERE review_id = ?", (review_id,),
+            ).fetchone() is None:
+                return None
+            return _photo_review_from_conn(conn, review_id)
+
+    def cancel_photo_review(self, review_id: str) -> PhotoReview:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT status FROM photo_reviews WHERE review_id = ?", (review_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown photo review: {review_id}")
+            if row["status"] == "COMPLETED":
+                raise ValueError("A completed review cannot be cancelled")
+            conn.execute(
+                "UPDATE photo_reviews SET status = 'CANCELLED' WHERE review_id = ?",
+                (review_id,),
+            )
+            _remove_review_staging(conn, review_id)
+            return _photo_review_from_conn(conn, review_id)
+
+    def complete_photo_review(
+        self,
+        review_id: str,
+        operation_id: str,
+        *,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
+        """Commit a complete review and all authoritative consequences atomically."""
+        with self._connect() as conn:
+            existing = _existing_committed_operation_result(
+                conn, operation_id, "review.complete",
+            )
+            if existing is not None:
+                if existing.get("review_id") != review_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                return existing
+            review = conn.execute(
+                "SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,),
+            ).fetchone()
+            if review is None:
+                raise KeyError(f"Unknown photo review: {review_id}")
+            if review["status"] != "IN_PROGRESS":
+                raise ValueError("Only an in-progress review can be completed")
+            face_rows = conn.execute(
+                "SELECT * FROM photo_review_faces WHERE review_id = ? ORDER BY face_id",
+                (review_id,),
+            ).fetchall()
+            if not face_rows or any(row["decision"] is None for row in face_rows):
+                raise ValueError("Every detected face requires a final decision before completion")
+            _begin_journal_operation(
+                conn,
+                "review.complete",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or str(review["source"]),
+                affected_entities=[
+                    {"entity_type": "review", "entity_id": review_id},
+                    {"entity_type": "media", "entity_id": review["media_id"]},
+                ],
+                details={"face_count": len(face_rows)},
+            )
+            assigned_by_face: dict[str, str] = {}
+            created_by_key: dict[str, str] = {}
+            created_person_ids: list[str] = []
+            embedding_ids: list[str] = []
+            embedding_by_face: dict[str, str] = {}
+            note_ids: list[str] = []
+            created_note_keys: set[tuple[str, str, tuple[str, ...]]] = set()
+            staged_media_paths: set[str] = set()
+            media_by_face: dict[str, str] = {}
+            detail_inputs: list[tuple[str, str, str, dict, str]] = []
+            for row in face_rows:
+                decision = str(row["decision"])
+                if decision in {"EXCLUDE", "SKIP"}:
+                    continue
+                staged = _staged_review_face_row(conn, row["staged_face_type"], row["staged_face_id"])
+                staged_media_paths.add(str(staged["source_image"]))
+                media_by_face[str(row["face_id"])] = str(staged["source_image"])
+                if decision == "ACCEPT_EXISTING_PERSON":
+                    person_id = _require_active_review_person(conn, row["person_id"])
+                else:
+                    key = str(row["new_person_key"] or row["face_id"])
+                    person_id = created_by_key.get(key)
+                    if person_id is None:
+                        name = str(row["new_person_name"] or "").strip()
+                        metadata = json.loads(row["new_person_metadata"] or "{}")
+                        if not _has_meaningful_identity_context(name, metadata, str(row["notes"] or "")):
+                            raise ValueError("A new person requires meaningful identity or context")
+                        person_id = str(uuid.uuid4())
+                        now = utc_now()
+                        conn.execute(
+                            """
+                            INSERT INTO persons(
+                                person_id, name, metadata, created_at, notes,
+                                lifecycle_status, identity_status, biometric_status,
+                                lifecycle_changed_at
+                            ) VALUES (?, ?, ?, ?, '', 'ACTIVE', 'IDENTIFIED', 'NO_FACE', ?)
+                            """,
+                            (person_id, name, json.dumps(metadata, separators=(",", ":")), now, now),
+                        )
+                        created_by_key[key] = person_id
+                        created_person_ids.append(person_id)
+                assigned_by_face[str(row["face_id"])] = person_id
+                duplicate = conn.execute(
+                    "SELECT embedding_id FROM embeddings WHERE person_id = ? AND vector = ? AND deleted_at IS NULL",
+                    (person_id, staged["vector"]),
+                ).fetchone()
+                if duplicate is None:
+                    embedding_id = str(uuid.uuid4())
+                    conn.execute(
+                        """
+                        INSERT INTO embeddings(
+                            embedding_id, person_id, vector, quality_score,
+                            source_image, crop_path, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            embedding_id, person_id, staged["vector"], staged["quality_score"],
+                            staged["source_image"], staged["crop_path"], utc_now(),
+                        ),
+                    )
+                    embedding_ids.append(embedding_id)
+                else:
+                    embedding_id = str(duplicate["embedding_id"])
+                _mark_person_enrolled(conn, person_id)
+                embedding_by_face[str(row["face_id"])] = embedding_id
+                content = str(row["notes"] or "").strip()
+                mention_ids = json.loads(row["mentioned_person_ids"] or "[]")
+                note_key = (person_id, content, tuple(sorted(mention_ids)))
+                if (content or mention_ids) and note_key not in created_note_keys:
+                    note_ids.append(_create_review_person_note(
+                        conn, person_id, content, mention_ids, operation_id, actor,
+                        _optional_text(source) or str(review["source"]),
+                    ))
+                    created_note_keys.add(note_key)
+                detail_payload = json.loads(row["recognition_detail"] or "{}")
+                if detail_payload:
+                    detail_inputs.append((
+                        str(row["face_id"]), person_id, embedding_id,
+                        detail_payload, content,
+                    ))
+            if not assigned_by_face:
+                raise ValueError("A completed review requires at least one accepted person")
+            canonical_participants: dict[str, str] = {}
+            for face_id in sorted(assigned_by_face):
+                raw_id = assigned_by_face[face_id]
+                canonical_participants.setdefault(_resolve_canonical_person_id(conn, raw_id), raw_id)
+            observation_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:review:{review_id}"))
+            now = utc_now()
+            conn.execute(
+                """
+                INSERT INTO observations(
+                    observation_id, status, source, created_operation_id,
+                    created_at, updated_at
+                ) VALUES (?, 'DRAFT', ?, ?, ?, ?)
+                """,
+                (observation_id, str(review["source"]), operation_id, now, now),
+            )
+            _attach_observation_media(
+                conn, observation_id, review["media_id"], review["media_path"],
+                str(review["source"]), operation_id,
+            )
+            primary_path = str(review["media_path"] or "")
+            for media_path in sorted(staged_media_paths):
+                if media_path == primary_path:
+                    continue
+                _attach_observation_media(
+                    conn, observation_id, media_path, media_path,
+                    str(review["source"]), operation_id,
+                )
+            for canonical_id in sorted(canonical_participants):
+                _add_observation_participant(
+                    conn, observation_id, canonical_id, str(review["source"]), operation_id,
+                )
+            finalized_at = utc_now()
+            conn.execute(
+                """
+                UPDATE observations SET status = 'FINALIZED', finalized_at = ?, updated_at = ?
+                WHERE observation_id = ?
+                """,
+                (finalized_at, finalized_at, observation_id),
+            )
+            detail_ids: list[str] = []
+            for face_id, person_id, embedding_id, detail, detail_notes in detail_inputs:
+                detail_id = str(uuid.uuid4())
+                person_name = str(conn.execute(
+                    "SELECT name FROM persons WHERE person_id = ?", (person_id,),
+                ).fetchone()[0])
+                conn.execute(
+                    """
+                    INSERT INTO recognition_details(
+                        detail_id, embedding_id, person_id, image_id, image_path,
+                        name, decision, seen_date, seen_time, place_seen,
+                        individual_count, event_occasion, rank, country,
+                        importance, added_by, notes, created_at, observation_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        detail_id, embedding_id, person_id,
+                        str(detail.get("image_id") or f"{review['media_id']}#{face_id}"),
+                        str(detail.get("image_path") or review["media_path"] or ""),
+                        str(detail.get("name") or person_name),
+                        str(detail.get("decision") or "accepted"),
+                        str(detail.get("date") or detail.get("seen_date") or ""),
+                        str(detail.get("time") or detail.get("seen_time") or ""),
+                        str(detail.get("place_seen") or ""),
+                        int(detail.get("individual_count") or len(participant_ids)),
+                        str(detail.get("event_occasion") or ""),
+                        _optional_text(detail.get("rank")),
+                        _optional_text(detail.get("country")),
+                        _optional_text(detail.get("importance")),
+                        _optional_text(detail.get("added_by")),
+                        detail_notes, utc_now(), observation_id,
+                    ),
+                )
+                detail_ids.append(detail_id)
+            participant_ids = sorted(canonical_participants)
+            evidence_ids: list[str] = []
+            for index, first_id in enumerate(participant_ids):
+                for second_id in participant_ids[index + 1:]:
+                    evidence_ids.append(_insert_relationship_evidence(
+                        conn,
+                        evidence_type="CO_OBSERVED",
+                        source_entity_type="OBSERVATION",
+                        source_entity_id=observation_id,
+                        source_person_id=first_id,
+                        target_person_id=second_id,
+                        relationship_type="ASSOCIATED_WITH",
+                        directionality="UNDIRECTED",
+                        source=_optional_text(source) or str(review["source"]),
+                        created_operation_id=operation_id,
+                        created_at=finalized_at,
+                    ))
+            _replace_graph_projection(conn)
+            validation = _validate_graph_projection(conn)
+            if not validation["valid"]:
+                raise RuntimeError(
+                    "Graph projection validation failed: " + "; ".join(validation["errors"])
+                )
+            conn.execute(
+                """
+                UPDATE photo_reviews
+                SET status = 'COMPLETED', observation_id = ?,
+                    completed_operation_id = ?, completed_at = ?
+                WHERE review_id = ? AND status = 'IN_PROGRESS'
+                """,
+                (observation_id, operation_id, finalized_at, review_id),
+            )
+            _remove_review_staging(conn, review_id)
+            result = {
+                "review_id": review_id,
+                "media_id": str(review["media_id"]),
+                "media_ids": [
+                    item.media_id for item in _list_observation_media(conn, observation_id)
+                ],
+                "observation_id": observation_id,
+                "accepted_existing_person_ids": sorted({
+                    str(row["person_id"]) for row in face_rows
+                    if row["decision"] == "ACCEPT_EXISTING_PERSON"
+                }),
+                "created_person_ids": created_person_ids,
+                "created_people": [
+                    {
+                        "person_id": person_id,
+                        "name": str(conn.execute(
+                            "SELECT name FROM persons WHERE person_id = ?", (person_id,),
+                        ).fetchone()[0]),
+                    }
+                    for person_id in created_person_ids
+                ],
+                "excluded_count": sum(
+                    row["decision"] in {"EXCLUDE", "SKIP"} for row in face_rows
+                ),
+                "participant_ids": participant_ids,
+                "embedding_ids": embedding_ids,
+                "embedding_assignments": embedding_by_face,
+                "face_media": media_by_face,
+                "note_ids": note_ids,
+                "recognition_detail_ids": detail_ids,
+                "graph_evidence_ids": evidence_ids,
+                "graph_evidence_count": len(evidence_ids),
+                "face_assignments": assigned_by_face,
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
 
     def get_observation(self, observation_id: str) -> Observation | None:
         with self._connect() as conn:
@@ -5191,6 +5607,75 @@ def _migrate_21_to_22(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA user_version = 22")
 
 
+def _migrate_22_to_23(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(
+        conn,
+        """
+        CREATE TABLE photo_reviews (
+            review_id TEXT PRIMARY KEY,
+            media_id TEXT NOT NULL,
+            media_path TEXT,
+            source TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'IN_PROGRESS'
+                CHECK(status IN ('IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
+            observation_id TEXT,
+            completed_operation_id TEXT,
+            created_at TEXT NOT NULL,
+            completed_at TEXT,
+            FOREIGN KEY(observation_id) REFERENCES observations(observation_id),
+            FOREIGN KEY(completed_operation_id) REFERENCES operation_journal(operation_id)
+        );
+
+        CREATE TABLE photo_review_faces (
+            review_id TEXT NOT NULL,
+            face_id TEXT NOT NULL,
+            staged_face_type TEXT NOT NULL
+                CHECK(staged_face_type IN ('PENDING_ADDITION', 'INIT_FACE')),
+            staged_face_id TEXT NOT NULL,
+            decision TEXT
+                CHECK(decision IS NULL OR decision IN (
+                    'ACCEPT_EXISTING_PERSON', 'ACCEPT_NEW_PERSON', 'EXCLUDE', 'SKIP'
+                )),
+            person_id TEXT,
+            new_person_key TEXT,
+            new_person_name TEXT,
+            new_person_metadata TEXT NOT NULL DEFAULT '{}',
+            notes TEXT NOT NULL DEFAULT '',
+            mentioned_person_ids TEXT NOT NULL DEFAULT '[]',
+            recognition_detail TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(review_id, face_id),
+            UNIQUE(staged_face_type, staged_face_id),
+            FOREIGN KEY(review_id) REFERENCES photo_reviews(review_id),
+            FOREIGN KEY(person_id) REFERENCES persons(person_id)
+        );
+
+        CREATE INDEX idx_photo_reviews_status_created
+        ON photo_reviews(status, created_at);
+
+        CREATE TRIGGER completed_photo_reviews_immutable
+        BEFORE UPDATE ON photo_reviews
+        WHEN OLD.status = 'COMPLETED'
+        BEGIN
+            SELECT RAISE(ABORT, 'completed reviews are immutable');
+        END;
+
+        CREATE TRIGGER completed_photo_review_faces_immutable
+        BEFORE UPDATE ON photo_review_faces
+        WHEN EXISTS (
+            SELECT 1 FROM photo_reviews r
+            WHERE r.review_id = OLD.review_id AND r.status = 'COMPLETED'
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'completed review decisions are immutable');
+        END;
+
+        PRAGMA user_version = 23;
+        """,
+    )
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -5221,6 +5706,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(19, 20, _migrate_19_to_20),
         SchemaMigration(20, 21, _migrate_20_to_21),
         SchemaMigration(21, 22, _migrate_21_to_22),
+        SchemaMigration(22, 23, _migrate_22_to_23),
     )
 
 
@@ -5374,6 +5860,159 @@ def _optional_text(value: object | None) -> str | None:
         return None
     normalized = str(value).strip()
     return normalized or None
+
+
+def _require_staged_review_face(
+    conn: sqlite3.Connection, staged_type: str, staged_id: str,
+) -> None:
+    _staged_review_face_row(conn, staged_type, staged_id)
+
+
+def _staged_review_face_row(
+    conn: sqlite3.Connection, staged_type: str, staged_id: str,
+) -> sqlite3.Row:
+    normalized_type = str(staged_type).strip().upper()
+    normalized_id = str(staged_id).strip()
+    if normalized_type == "PENDING_ADDITION":
+        row = conn.execute(
+            """
+            SELECT pending_id AS staged_face_id, vector, quality_score,
+                   source_image, crop_path
+            FROM pending_additions WHERE pending_id = ?
+            """,
+            (normalized_id,),
+        ).fetchone()
+    elif normalized_type == "INIT_FACE":
+        row = conn.execute(
+            """
+            SELECT init_face_id AS staged_face_id, vector, quality_score,
+                   source_image, crop_path
+            FROM init_faces WHERE init_face_id = ?
+            """,
+            (normalized_id,),
+        ).fetchone()
+    else:
+        raise ValueError(f"Unsupported staged face type: {staged_type}")
+    if row is None:
+        raise KeyError(f"Unknown staged review face: {normalized_id}")
+    return row
+
+
+def _require_active_review_person(
+    conn: sqlite3.Connection, person_id: object | None,
+) -> str:
+    normalized_id = str(person_id or "").strip()
+    row = conn.execute(
+        """
+        SELECT 1 FROM persons
+        WHERE person_id = ? AND lifecycle_status = 'ACTIVE' AND deleted_at IS NULL
+        """,
+        (normalized_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"Unknown active person: {normalized_id}")
+    return normalized_id
+
+
+def _photo_review_from_conn(conn: sqlite3.Connection, review_id: str) -> PhotoReview:
+    row = conn.execute(
+        "SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"Unknown photo review: {review_id}")
+    face_rows = conn.execute(
+        "SELECT * FROM photo_review_faces WHERE review_id = ? ORDER BY face_id",
+        (review_id,),
+    ).fetchall()
+    faces = tuple(
+        ReviewFaceDecision(
+            review_id=str(item["review_id"]),
+            face_id=str(item["face_id"]),
+            staged_face_type=str(item["staged_face_type"]),
+            staged_face_id=str(item["staged_face_id"]),
+            decision=item["decision"],
+            person_id=item["person_id"],
+            new_person_key=item["new_person_key"],
+            new_person_name=item["new_person_name"],
+            new_person_metadata=json.loads(item["new_person_metadata"] or "{}"),
+            notes=str(item["notes"] or ""),
+            mentioned_person_ids=tuple(json.loads(item["mentioned_person_ids"] or "[]")),
+            recognition_detail=json.loads(item["recognition_detail"] or "{}"),
+        )
+        for item in face_rows
+    )
+    return PhotoReview(
+        review_id=str(row["review_id"]),
+        media_id=str(row["media_id"]),
+        media_path=row["media_path"],
+        source=str(row["source"]),
+        status=str(row["status"]),
+        faces=faces,
+        created_at=str(row["created_at"]),
+        observation_id=row["observation_id"],
+        completed_operation_id=row["completed_operation_id"],
+        completed_at=row["completed_at"],
+    )
+
+
+def _remove_review_staging(conn: sqlite3.Connection, review_id: str) -> None:
+    rows = conn.execute(
+        "SELECT staged_face_type, staged_face_id FROM photo_review_faces WHERE review_id = ?",
+        (review_id,),
+    ).fetchall()
+    conn.executemany(
+        "DELETE FROM pending_additions WHERE pending_id = ?",
+        [(row["staged_face_id"],) for row in rows if row["staged_face_type"] == "PENDING_ADDITION"],
+    )
+    conn.executemany(
+        "DELETE FROM init_faces WHERE init_face_id = ?",
+        [(row["staged_face_id"],) for row in rows if row["staged_face_type"] == "INIT_FACE"],
+    )
+
+
+def _create_review_person_note(
+    conn: sqlite3.Connection,
+    owner_person_id: str,
+    content: str,
+    mentioned_person_ids: list[str],
+    operation_id: str,
+    actor: dict | None,
+    source: str,
+) -> str:
+    mentions = _normalize_note_mentions(conn, owner_person_id, mentioned_person_ids)
+    note_id = str(uuid.uuid4())
+    created_at = utc_now()
+    conn.execute(
+        """
+        INSERT INTO notes(
+            note_id, owner_person_id, subject_type, subject_id,
+            is_profile_note, status, created_operation_id, created_at, updated_at
+        ) VALUES (?, ?, 'PERSON', ?, 0, 'ACTIVE', ?, ?, ?)
+        """,
+        (note_id, owner_person_id, owner_person_id, operation_id, created_at, created_at),
+    )
+    revision_id = _insert_note_revision(
+        conn,
+        note_id=note_id,
+        revision_number=1,
+        content=content,
+        mentions=mentions,
+        actor=actor,
+        author_name="",
+        operation_id=operation_id,
+        created_at=created_at,
+    )
+    _sync_note_reference_evidence(
+        conn,
+        note_id=note_id,
+        owner_person_id=owner_person_id,
+        revision_id=revision_id,
+        mentions=mentions,
+        operation_id=operation_id,
+        source=source,
+        created_at=created_at,
+    )
+    return note_id
 
 
 def _normalize_note_mentions(

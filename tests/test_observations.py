@@ -55,7 +55,7 @@ class ObservationStorageTest(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(
-                RuntimeError, "temporarily unavailable.*P6",
+                RuntimeError, "only available through complete_photo_review",
             ):
                 engine.finalize_observation(
                     observation.observation_id, "gated-finalize",

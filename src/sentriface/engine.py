@@ -29,6 +29,7 @@ from sentriface.models import (
     ObservationMedia,
     ObservationParticipant,
     PendingAddition,
+    PhotoReview,
     Person,
     PersonAssociation,
     PersonChange,
@@ -261,6 +262,31 @@ class FaceEngine:
             with self.metrics.timer("db_save_pending_ms"):
                 self.store.save_pending_addition(pending)
         return prepared
+
+    def prepare_photo_review(self, image_path: Path) -> tuple[PhotoReview | None, list[PendingAddition]]:
+        """Stage all detected faces without creating authoritative identity state."""
+        prepared = self.prepare_additions_with_rejections(image_path, allow_bad_quality=True)
+        if not prepared.accepted:
+            return None, []
+        for pending in prepared.accepted:
+            self.store.save_pending_addition(pending)
+        review_id = str(uuid.uuid4())
+        media_path = prepared.accepted[0].source_image
+        review = self.graph.create_photo_review(
+            review_id,
+            Path(media_path).name,
+            [
+                {
+                    "face_id": f"face-{index}",
+                    "staged_face_type": "PENDING_ADDITION",
+                    "staged_face_id": pending.pending_id,
+                }
+                for index, pending in enumerate(prepared.accepted, 1)
+            ],
+            media_path=media_path,
+            source="check-photo",
+        )
+        return review, prepared.accepted
 
     def list_pending_additions(self) -> list[PendingAddition]:
         with self.metrics.timer("db_list_pending_ms"):
@@ -510,9 +536,33 @@ class FaceEngine:
         self, observation_id: str, operation_id: str, **values,
     ) -> Observation:
         raise DomainWorkflowUnavailableError(
-            "Observation finalisation is temporarily unavailable until P6 provides "
-            "atomic review finalisation and graph evidence recording"
+            "Observation finalisation is only available through complete_photo_review"
         )
+
+    def create_photo_review(
+        self, review_id: str, media_id: str, faces: list[dict], **values,
+    ) -> PhotoReview:
+        return self.graph.create_photo_review(review_id, media_id, faces, **values)
+
+    def set_photo_review_face_decision(
+        self, review_id: str, face_id: str, decision: str, **values,
+    ) -> PhotoReview:
+        return self.graph.set_photo_review_face_decision(
+            review_id, face_id, decision, **values,
+        )
+
+    def get_photo_review(self, review_id: str) -> PhotoReview | None:
+        return self.graph.get_photo_review(review_id)
+
+    def cancel_photo_review(self, review_id: str) -> PhotoReview:
+        return self.graph.cancel_photo_review(review_id)
+
+    def complete_photo_review(
+        self, review_id: str, operation_id: str, **values,
+    ) -> dict:
+        result = self.graph.complete_photo_review(review_id, operation_id, **values)
+        self._rebuild_index()
+        return result
 
     def list_observations_for_person(self, person_id: str) -> list[Observation]:
         return self.store.list_observations_for_person(person_id)
@@ -857,20 +907,14 @@ class FaceEngine:
         finally:
             self.cleanup.run(journal, self.store.list_all_file_references)
     def confirm_pending_as_new_person(self, pending_id: str, name: str) -> str:
-        with self.metrics.timer("db_get_pending_ms"):
-            pending = self.store.get_pending_addition(pending_id)
-        if pending is None:
-            raise KeyError(f"Unknown pending addition: {pending_id}")
-        return self.confirm_new_person(pending, name)
+        raise DomainWorkflowUnavailableError(
+            "Per-face confirmation is unavailable; complete the whole review atomically"
+        )
 
     def confirm_pending_as_existing_person(self, pending_id: str, person_id: str) -> str:
-        with self.metrics.timer("db_get_pending_ms"):
-            pending = self.store.get_pending_addition(pending_id)
-        if pending is None:
-            raise KeyError(f"Unknown pending addition: {pending_id}")
-        if self.store.get_person(person_id) is None:
-            raise KeyError(f"Unknown person: {person_id}")
-        return self.confirm_existing_person(pending, person_id)
+        raise DomainWorkflowUnavailableError(
+            "Per-face confirmation is unavailable; complete the whole review atomically"
+        )
 
     def reject_pending_addition(self, pending_id: str) -> None:
         pending = self.store.get_pending_addition(pending_id)
@@ -1142,46 +1186,14 @@ class FaceEngine:
         return self.list_init_groups(session_id)
 
     def confirm_init_group(self, session_id: str, group_id: str, name: str) -> str:
-        group = self._get_init_group(session_id, group_id)
-        if group.status != "pending":
-            raise KeyError(f"Init group is not pending: {group_id}")
-        with self.metrics.timer("db_create_person_ms"):
-            person = self.store.create_person(name=name)
-        for face in group.faces:
-            with self.metrics.timer("db_add_embedding_ms"):
-                record = self.store.add_embedding(
-                    person_id=person.person_id,
-                    vector=face.vector,
-                    quality_score=face.quality.score,
-                    source_image=face.source_image,
-                    crop_path=face.face.crop_path,
-                )
-            with self.metrics.timer("index_add_ms"):
-                self.index.add(record)
-        with self.metrics.timer("db_mark_init_group_ms"):
-            self.store.mark_init_group_status(session_id, group_id, "confirmed")
-        return person.person_id
+        raise DomainWorkflowUnavailableError(
+            "Queue groups must be committed through complete_photo_review"
+        )
 
     def confirm_init_group_existing(self, session_id: str, group_id: str, person_id: str) -> int:
-        group = self._get_init_group(session_id, group_id)
-        if group.status != "pending":
-            raise KeyError(f"Init group is not pending: {group_id}")
-        if self.store.get_person(person_id) is None:
-            raise KeyError(f"Unknown person: {person_id}")
-        for face in group.faces:
-            with self.metrics.timer("db_add_embedding_ms"):
-                record = self.store.add_embedding(
-                    person_id=person_id,
-                    vector=face.vector,
-                    quality_score=face.quality.score,
-                    source_image=face.source_image,
-                    crop_path=face.face.crop_path,
-                )
-            with self.metrics.timer("index_add_ms"):
-                self.index.add(record)
-        with self.metrics.timer("db_mark_init_group_ms"):
-            self.store.mark_init_group_status(session_id, group_id, "confirmed")
-        return len(group.faces)
+        raise DomainWorkflowUnavailableError(
+            "Queue groups must be committed through complete_photo_review"
+        )
 
     def confirm_init_faces(
         self,
@@ -1192,29 +1204,14 @@ class FaceEngine:
         operation_id: str | None = None,
         notes: str = "",
         mentioned_person_ids: list[str] | None = None,
+        recognition_detail: dict | None = None,
     ) -> tuple[str, list[dict]]:
-        operation_id = operation_id or str(uuid.uuid4())
-        existing = self.store.get_person_operation(operation_id, "confirm-init-new")
-        if existing:
-            return str(existing["person_id"]), list(existing["accepted"])
-        faces = self._selected_init_faces(session_id, group_id, init_face_ids)
-        journal = self.cleanup.schedule(
-            (path for face in faces for path in (face.source_image, face.face.crop_path)),
-            f"confirm-init-{operation_id}",
+        result = self._complete_queue_face_review(
+            session_id, group_id, init_face_ids, operation_id or str(uuid.uuid4()),
+            name=name, notes=notes, mentioned_person_ids=mentioned_person_ids,
+            recognition_detail=recognition_detail,
         )
-        result = self.store.confirm_init_faces_atomic(
-            session_id,
-            group_id,
-            init_face_ids,
-            operation_id,
-            name=name,
-            notes=notes,
-            mentioned_person_ids=mentioned_person_ids,
-        )
-        self._rebuild_index()
-        self.cleanup.run(journal, self.store.list_all_file_references)
-        self._regroup_pending_init_session(session_id)
-        return str(result["person_id"]), list(result["accepted"])
+        return str(result["created_person_ids"][0]), list(result["accepted"])
 
     def confirm_init_faces_existing(
         self,
@@ -1223,27 +1220,104 @@ class FaceEngine:
         init_face_ids: list[str],
         person_id: str,
         operation_id: str | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
+        recognition_detail: dict | None = None,
     ) -> list[dict]:
-        operation_id = operation_id or str(uuid.uuid4())
-        existing = self.store.get_person_operation(operation_id, "confirm-init-existing")
-        if existing:
-            return list(existing["accepted"])
-        faces = self._selected_init_faces(session_id, group_id, init_face_ids)
-        journal = self.cleanup.schedule(
-            (path for face in faces for path in (face.source_image, face.face.crop_path)),
-            f"confirm-init-{operation_id}",
+        result = self._complete_queue_face_review(
+            session_id, group_id, init_face_ids, operation_id or str(uuid.uuid4()),
+            person_id=person_id, notes=notes,
+            mentioned_person_ids=mentioned_person_ids,
+            recognition_detail=recognition_detail,
         )
-        result = self.store.confirm_init_faces_atomic(
-            session_id,
-            group_id,
-            init_face_ids,
-            operation_id,
-            person_id=person_id,
-        )
-        self._rebuild_index()
-        self.cleanup.run(journal, self.store.list_all_file_references)
-        self._regroup_pending_init_session(session_id)
         return list(result["accepted"])
+
+    def _complete_queue_face_review(
+        self,
+        session_id: str,
+        group_id: str,
+        init_face_ids: list[str],
+        operation_id: str,
+        *,
+        person_id: str | None = None,
+        name: str | None = None,
+        notes: str = "",
+        mentioned_person_ids: list[str] | None = None,
+        recognition_detail: dict | None = None,
+    ) -> dict:
+        existing = self.store.get_operation(operation_id)
+        if existing and existing.get("operation_type") == "review.complete" and existing.get("status") == "COMMITTED":
+            result = dict(existing.get("result") or {})
+        else:
+            faces = self._selected_init_faces(session_id, group_id, init_face_ids)
+            review_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:queue-review:{operation_id}"))
+            review = self.graph.get_photo_review(review_id)
+            if review is None:
+                first_path = faces[0].source_image
+                self.graph.create_photo_review(
+                    review_id,
+                    Path(first_path).name,
+                    [
+                        {
+                            "face_id": face.init_face_id,
+                            "staged_face_type": "INIT_FACE",
+                            "staged_face_id": face.init_face_id,
+                        }
+                        for face in faces
+                    ],
+                    media_path=first_path,
+                    source="queue",
+                )
+                for face in faces:
+                    self.graph.set_photo_review_face_decision(
+                        review_id,
+                        face.init_face_id,
+                        "ACCEPT_EXISTING_PERSON" if person_id else "ACCEPT_NEW_PERSON",
+                        person_id=person_id,
+                        new_person_key="queue-group-person" if not person_id else None,
+                        new_person_name=name,
+                        notes=notes,
+                        mentioned_person_ids=mentioned_person_ids,
+                        recognition_detail={
+                            **(recognition_detail or {}),
+                            "image_id": Path(face.source_image).name,
+                            "image_path": face.source_image,
+                        },
+                    )
+            result = self.graph.complete_photo_review(
+                review_id, operation_id, source="queue",
+            )
+        result["accepted"] = [
+            {
+                "face_id": face_id,
+                "embedding_id": embedding_id,
+                "duplicate": embedding_id not in result.get("embedding_ids", []),
+                "image_id": Path(result.get("face_media", {}).get(face_id, "")).name,
+                "image_path": result.get("face_media", {}).get(face_id, ""),
+            }
+            for face_id, embedding_id in result.get("embedding_assignments", {}).items()
+        ]
+        confirmed_person_ids = list(result.get("participant_ids") or [])
+        if confirmed_person_ids:
+            try:
+                remaining_group = next(
+                    group for group in self.store.list_init_groups(session_id)
+                    if group.group_id == group_id
+                )
+            except (KeyError, StopIteration):
+                remaining_group = None
+            if remaining_group is not None:
+                self.store.add_init_face_person_exclusions(
+                    session_id,
+                    [face.init_face_id for face in remaining_group.faces],
+                    confirmed_person_ids[0],
+                )
+        self._rebuild_index()
+        try:
+            self._regroup_pending_init_session(session_id)
+        except KeyError:
+            pass
+        return result
     def discard_init_faces(self, session_id: str, group_id: str, init_face_ids: list[str]) -> None:
         self._selected_init_faces(session_id, group_id, init_face_ids)
         self._remove_reviewed_init_faces(session_id, group_id, init_face_ids, empty_status="rejected")

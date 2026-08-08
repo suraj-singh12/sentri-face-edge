@@ -18,6 +18,7 @@ from sentriface.models import (
     ObservationMedia,
     ObservationParticipant,
     PendingAddition,
+    PhotoReview,
     Person,
     PersonAssociation,
     PersonChange,
@@ -258,6 +259,27 @@ class IdentityStore(Protocol):
 
     def get_observation(self, observation_id: str) -> Observation | None:
         """Load one observation."""
+
+    def create_photo_review(
+        self, review_id: str, media_id: str, faces: list[dict], **values,
+    ) -> PhotoReview:
+        """Create non-authoritative staged review state."""
+
+    def set_photo_review_face_decision(
+        self, review_id: str, face_id: str, decision: str, **values,
+    ) -> PhotoReview:
+        """Persist a non-authoritative final decision for one staged face."""
+
+    def get_photo_review(self, review_id: str) -> PhotoReview | None:
+        """Load staged review state and face decisions."""
+
+    def cancel_photo_review(self, review_id: str) -> PhotoReview:
+        """Abandon staged state without creating authoritative records."""
+
+    def complete_photo_review(
+        self, review_id: str, operation_id: str, **values,
+    ) -> dict:
+        """Atomically commit the authoritative result of one complete review."""
 
     def update_observation(
         self,

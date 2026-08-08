@@ -203,6 +203,8 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onSelectFace={actions.selectRecognitionFace}
               onAccept={guarded(actions.recognitionAccept)}
               onNew={guarded(actions.recognitionNew)}
+              onSkip={guarded(actions.skipRecognitionFace)}
+              onComplete={guarded(actions.completeRecognitionReview)}
               onClear={actions.recognitionClear}
               onGallery={guarded(actions.openRecognitionGallery)}
               onGalleryImage={actions.setRecognitionGalleryImage}
@@ -275,6 +277,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onCreateAssociation={guarded(actions.createPersonAssociation)}
               onCreatePlaceholderAssociation={guarded(actions.createPlaceholderAssociation)}
               onRemoveAssociation={guarded(actions.removePersonAssociation)}
+              onLoadGraphPerson={guarded(actions.loadRelationshipGraphPerson)}
               onImage={actions.setPeopleGalleryImage}
               onBack={actions.peopleBack}
               onSave={actions.savePeopleProfile}
