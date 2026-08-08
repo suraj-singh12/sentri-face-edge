@@ -12,6 +12,7 @@ from sentriface.models import (
     InitSession,
     PendingAddition,
     Person,
+    PersonAssociation,
     PersonChange,
     PersonSummary,
     RecognitionDetail,
@@ -102,6 +103,40 @@ class IdentityStore(Protocol):
 
     def list_person_operations(self, person_id: str) -> list[dict]:
         """List lifecycle operations involving one person, newest first."""
+
+    def create_person_association(
+        self,
+        source_person_id: str,
+        target_person_id: str,
+        actor_name: str,
+        operation_id: str,
+    ) -> PersonAssociation:
+        """Create one undirected human-entered association."""
+
+    def create_placeholder_association(
+        self,
+        source_person_id: str,
+        name: str,
+        metadata: dict | None,
+        actor_name: str,
+        operation_id: str,
+    ) -> tuple[Person, PersonAssociation]:
+        """Atomically create a placeholder and associate it with a person."""
+
+    def list_person_associations(
+        self,
+        person_id: str,
+        include_archived: bool = False,
+    ) -> list[PersonAssociation]:
+        """List undirected associations involving a person."""
+
+    def remove_person_association(
+        self,
+        association_id: str,
+        actor_name: str,
+        operation_id: str,
+    ) -> dict:
+        """Remove an association without deleting either person."""
 
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         """Load a prior idempotent operation result, if one exists."""

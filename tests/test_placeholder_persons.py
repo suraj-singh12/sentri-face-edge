@@ -87,12 +87,26 @@ class PlaceholderPersonTest(unittest.TestCase):
 
             store.archive_person(person.person_id, "placeholder-archive-1")
             self.assertIsNone(store.get_person(person.person_id))
+            with self.assertRaisesRegex(KeyError, "placeholder with this name"):
+                store.create_placeholder_person(
+                    "temporary identity",
+                    {},
+                    "Operator",
+                    "placeholder-archive-duplicate",
+                )
             result = store.permanently_delete_person(
                 person.person_id,
                 "placeholder-purge-1",
             )
             self.assertEqual(result["deleted_embeddings"], 0)
             self.assertIsNone(store.get_person(person.person_id, include_archived=True))
+            replacement = store.create_placeholder_person(
+                "temporary identity",
+                {},
+                "Operator",
+                "placeholder-after-purge",
+            )
+            self.assertEqual(replacement.enrollment_status, "placeholder")
 
 
 if __name__ == "__main__":

@@ -60,6 +60,7 @@ from sentriface.models import (
     InitSession,
     PendingAddition,
     Person,
+    PersonAssociation,
     PersonChange,
     PersonMatch,
     PersonSummary,
@@ -159,6 +160,8 @@ def _required_capability(method: str, path: str) -> str | None:
         return "recognize"
     if path in {
         "/api/enroll", "/api/person-placeholder", "/api/person-update", "/api/person-preferences",
+        "/api/person-association", "/api/person-association-placeholder",
+        "/api/person-association-remove",
         "/api/recognition-person-candidates",
         "/api/recognition-accept-existing", "/api/recognition-new",
         "/api/recognition-followup", "/api/queue-add", "/api/queue-cancel",
@@ -973,6 +976,17 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     person_id,
                     include_archived=include_archived,
                 )
+                associations = self.server.engine.list_person_associations(
+                    person_id,
+                    include_archived=include_archived,
+                )
+                person_summaries = {
+                    item.person.person_id: item
+                    for item in [
+                        *self.server.engine.list_persons(),
+                        *self.server.engine.list_persons(archived=True),
+                    ]
+                }
                 self._json(
                     {
                         "person": {
@@ -988,6 +1002,15 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         "details": [_recognition_detail(detail) for detail in details],
                         "changes": [_person_change(change) for change in changes],
                         "management_events": management_events,
+                        "associations": [
+                            _person_association(
+                                association,
+                                person_id,
+                                person_summaries,
+                                self.server.engine,
+                            )
+                            for association in associations
+                        ],
                     }
                 )
                 return
@@ -1507,6 +1530,68 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 result = _person_summary(summary, self.server.engine)
                 self.server.log_event("person-placeholder-created", person_id=person.person_id)
                 self._json({"person": result})
+                return
+            if parsed.path == "/api/person-association":
+                source_person_id = _required(payload, "source_person_id")
+                association = self.server.engine.create_person_association(
+                    source_person_id=source_person_id,
+                    target_person_id=_required(payload, "target_person_id"),
+                    actor_name=self.auth_user.display_name or self.auth_user.username,
+                    operation_id=_operation_id(payload),
+                )
+                person_summaries = {
+                    item.person.person_id: item
+                    for item in self.server.engine.list_persons()
+                }
+                result = _person_association(
+                    association,
+                    source_person_id,
+                    person_summaries,
+                    self.server.engine,
+                )
+                self.server.log_event(
+                    "person-association-created",
+                    association_id=association.association_id,
+                    source_person_id=source_person_id,
+                    target_person_id=_required(payload, "target_person_id"),
+                )
+                self._json({"association": result})
+                return
+            if parsed.path == "/api/person-association-placeholder":
+                source_person_id = _required(payload, "source_person_id")
+                person, association = self.server.engine.create_placeholder_association(
+                    source_person_id=source_person_id,
+                    name=_required(payload, "name"),
+                    metadata={},
+                    actor_name=self.auth_user.display_name or self.auth_user.username,
+                    operation_id=_operation_id(payload),
+                )
+                summary = next(
+                    item for item in self.server.engine.list_persons()
+                    if item.person.person_id == person.person_id
+                )
+                result = _person_association(
+                    association,
+                    source_person_id,
+                    {person.person_id: summary},
+                    self.server.engine,
+                )
+                self.server.log_event(
+                    "person-association-placeholder-created",
+                    association_id=association.association_id,
+                    source_person_id=source_person_id,
+                    target_person_id=person.person_id,
+                )
+                self._json({"association": result, "person": _person_summary(summary, self.server.engine)})
+                return
+            if parsed.path == "/api/person-association-remove":
+                result = self.server.engine.remove_person_association(
+                    association_id=_required(payload, "association_id"),
+                    actor_name=self.auth_user.display_name or self.auth_user.username,
+                    operation_id=_operation_id(payload),
+                )
+                self.server.log_event("person-association-removed", **result)
+                self._json(result)
                 return
             if parsed.path == "/api/person-preferences":
                 favorite = payload.get("favorite")
@@ -3070,6 +3155,32 @@ def _person_summary_from_embeddings(
             embeddings,
             summary.person.metadata.get("representative_embedding_id"),
         ),
+    }
+
+
+def _person_association(
+    association: PersonAssociation,
+    current_person_id: str,
+    person_summaries: dict[str, PersonSummary],
+    engine: FaceEngine,
+) -> dict[str, Any]:
+    associated_person_id = (
+        association.target_person_id
+        if association.source_person_id == current_person_id
+        else association.source_person_id
+    )
+    summary = person_summaries.get(associated_person_id)
+    if summary is None:
+        raise RuntimeError("An associated person record is unavailable")
+    return {
+        "association_id": association.association_id,
+        "source_person_id": association.source_person_id,
+        "target_person_id": association.target_person_id,
+        "relationship_type": association.relationship_type,
+        "created_at": association.created_at,
+        "updated_at": association.updated_at,
+        "created_by": association.created_by,
+        "person": _person_summary(summary, engine),
     }
 
 

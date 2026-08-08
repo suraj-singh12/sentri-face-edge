@@ -12,6 +12,48 @@ from sentriface.storage.sqlite_store import SCHEMA_VERSION, SQLiteIdentityStore
 
 
 class StorageMigrationTest(unittest.TestCase):
+    def test_v13_migration_adds_person_associations_without_changing_people(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "sentriface.db"
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                conn.executescript(
+                    """
+                    CREATE TABLE persons (
+                        person_id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        metadata TEXT NOT NULL DEFAULT '{}',
+                        created_at TEXT NOT NULL,
+                        deleted_at TEXT,
+                        enrollment_status TEXT NOT NULL DEFAULT 'enrolled'
+                    );
+                    INSERT INTO persons(
+                        person_id, name, metadata, created_at, enrollment_status
+                    ) VALUES (
+                        'existing', 'Existing Person', '{}',
+                        '2026-08-01T00:00:00+00:00', 'enrolled'
+                    );
+                    PRAGMA user_version = 13;
+                    """
+                )
+
+            store = SQLiteIdentityStore(db_path)
+            store.initialize()
+
+            self.assertEqual(store.get_person("existing").name, "Existing Person")
+            with closing(sqlite3.connect(db_path)) as conn:
+                table = conn.execute(
+                    """
+                    SELECT name FROM sqlite_master
+                    WHERE type = 'table' AND name = 'person_associations'
+                    """
+                ).fetchone()
+                foreign_keys = conn.execute(
+                    "PRAGMA foreign_key_list(person_associations)"
+                ).fetchall()
+            self.assertEqual(table[0], "person_associations")
+            self.assertEqual({row[6] for row in foreign_keys}, {"RESTRICT"})
+
     def test_v12_migration_preserves_existing_people_as_enrolled(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

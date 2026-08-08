@@ -29,6 +29,7 @@ import {
 } from "@mantine/core";
 import {
   IconArrowLeft,
+  IconAt,
   IconArchive,
   IconChevronDown,
   IconCopy,
@@ -41,6 +42,7 @@ import {
   IconGridDots,
   IconImageInPicture,
   IconLayoutList,
+  IconLink,
   IconMapPin,
   IconNotes,
   IconPhoto,
@@ -56,6 +58,7 @@ import {
   IconTag,
   IconUser,
   IconUserPlus,
+  IconUnlink,
 } from "@tabler/icons-react";
 
 import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
@@ -78,6 +81,9 @@ export function PeopleView({
   onRefresh,
   onOpen,
   onCreatePlaceholder,
+  onCreateAssociation,
+  onCreatePlaceholderAssociation,
+  onRemoveAssociation,
   onImage,
   onBack,
   onSave,
@@ -188,6 +194,9 @@ export function PeopleView({
           canEdit={canEdit}
           canDestroy={canDestroy}
           onSave={onSave}
+          onCreateAssociation={onCreateAssociation}
+          onCreatePlaceholderAssociation={onCreatePlaceholderAssociation}
+          onRemoveAssociation={onRemoveAssociation}
           onFavorite={onFavorite}
           onSetRepresentative={onSetRepresentative}
           onArchive={onArchive}
@@ -356,7 +365,7 @@ export function PeopleView({
       >
         <Stack>
           <Alert color="red" icon={<IconShield size={18} />} title="This removes the live profile">
-            {deleteTarget?.name} and all linked photos, deleted faces, sightings, and profile history will be removed from the live library. A verified safety backup is created first.
+            {deleteTarget?.name} and all linked photos, deleted faces, sightings, associations, and profile history will be removed from the live library. Associated people themselves are not deleted. A verified safety backup is created first.
           </Alert>
           <TextInput
             label="Type DELETE to confirm"
@@ -1020,6 +1029,9 @@ function PeopleGalleryView({
   onOpen,
   onBack,
   onSave,
+  onCreateAssociation,
+  onCreatePlaceholderAssociation,
+  onRemoveAssociation,
   onFavorite,
   onSetRepresentative,
   onArchive,
@@ -1053,6 +1065,7 @@ function PeopleGalleryView({
   const latestSightingLabel = lastSeenLabel(latestSightings[0]);
   const changes = payload.changes || [];
   const managementEvents = payload.management_events || [];
+  const associations = payload.associations || [];
   const mergeEvent = managementEvents.find((event) => (
     event.operation_type === "merge-persons"
     && event.result?.source_person_id === payload.person.person_id
@@ -1268,6 +1281,7 @@ function PeopleGalleryView({
           <Tabs.Tab value="overview">Overview</Tabs.Tab>
           <Tabs.Tab value="photos">Photos ({imageRecords.length})</Tabs.Tab>
           <Tabs.Tab value="sightings">Sightings ({latestSightings.length})</Tabs.Tab>
+          <Tabs.Tab value="associations">Associations ({associations.length})</Tabs.Tab>
           <Tabs.Tab value="changes">Activity ({changes.length + managementEvents.length})</Tabs.Tab>
         </Tabs.List>
         <Box ref={tabContentRef} className="people-profile-tab-content">
@@ -1304,6 +1318,18 @@ function PeopleGalleryView({
         <Tabs.Panel value="sightings">
           <PeopleProfileSightings details={latestSightings} imageRecords={imageRecords} onSighting={selectSightingPhoto} />
         </Tabs.Panel>
+        <Tabs.Panel value="associations">
+          <PeopleProfileAssociations
+            person={payload.person}
+            people={people}
+            associations={associations}
+            canEdit={canEdit && !archived}
+            onOpen={onOpen}
+            onCreate={onCreateAssociation}
+            onCreatePlaceholder={onCreatePlaceholderAssociation}
+            onRemove={onRemoveAssociation}
+          />
+        </Tabs.Panel>
         <Tabs.Panel value="changes">
           <PeopleProfileChanges changes={changes} managementEvents={managementEvents} currentProfile={summaryProfile} />
         </Tabs.Panel>
@@ -1330,7 +1356,7 @@ function PeopleGalleryView({
       >
         <Stack>
           <Text size="sm">
-            {payload.person.name} will stop appearing in recognition results. Their {imageRecords.length} photos and {latestSightings.length} sightings will be retained and can be restored later.
+            {payload.person.name} will stop appearing in recognition results. Their {imageRecords.length} photos, {latestSightings.length} sightings, and {associations.length} associations will be retained and can be restored later.
           </Text>
           <Text size="xs" c="dimmed">A named database backup is created and verified before archiving.</Text>
           <Group justify="flex-end">
@@ -1369,7 +1395,7 @@ function PeopleGalleryView({
       >
         <Stack>
           <Alert color="red" icon={<IconShield size={18} />} title="This cannot be undone in the live library">
-            <strong>{payload.person.name}</strong>, {imageRecords.length} photo record{imageRecords.length === 1 ? "" : "s"}, {latestSightings.length} sighting{latestSightings.length === 1 ? "" : "s"}, deleted faces, and profile history will be removed. A verified safety backup is created first.
+            <strong>{payload.person.name}</strong>, {imageRecords.length} photo record{imageRecords.length === 1 ? "" : "s"}, {latestSightings.length} sighting{latestSightings.length === 1 ? "" : "s"}, {associations.length} association{associations.length === 1 ? "" : "s"}, deleted faces, and profile history will be removed. Associated people themselves are preserved. A verified safety backup is created first.
           </Alert>
           <TextInput
             label="Type DELETE to confirm"
@@ -1663,6 +1689,223 @@ function PeopleProfileSightings({ details, imageRecords, onSighting }) {
   );
 }
 
+function PeopleProfileAssociations({
+  person,
+  people,
+  associations,
+  canEdit,
+  onOpen,
+  onCreate,
+  onCreatePlaceholder,
+  onRemove,
+}) {
+  const [query, setQuery] = useState("@");
+  const [selectedPersonId, setSelectedPersonId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState(null);
+  const searchText = query.replace(/^@/, "").trim();
+  const normalizedSearch = searchText.toLowerCase();
+  const associatedIds = new Set(associations.map((item) => item.person?.person_id));
+  const allMatches = normalizedSearch ? people.filter((candidate) => [
+    candidate.name,
+    candidate.person_id,
+    candidate.metadata?.rank,
+    candidate.metadata?.country,
+  ].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedSearch))) : [];
+  const availableMatches = allMatches
+    .filter((candidate) => candidate.person_id !== person.person_id && !associatedIds.has(candidate.person_id))
+    .slice(0, 8);
+  const selectedPerson = people.find((candidate) => candidate.person_id === selectedPersonId) || null;
+  const clearSearch = () => {
+    setQuery("@");
+    setSelectedPersonId("");
+  };
+  const run = async (action) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await action();
+      clearSearch();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Stack mt="md" gap="md" className="people-associations-panel">
+      <Card withBorder radius="md" className="people-profile-panel">
+        <Group gap="sm" mb="xs">
+          <ThemeIcon variant="light"><IconAt size={18} /></ThemeIcon>
+          <Box>
+            <Text fw={800}>Link another person</Text>
+            <Text size="xs" c="dimmed">Type @ followed by a name, role, country, or person ID. A link is created only after you confirm it.</Text>
+          </Box>
+        </Group>
+        <TextInput
+          disabled={!canEdit || busy}
+          value={query}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            setQuery(value.startsWith("@") ? value : `@${value}`);
+            setSelectedPersonId("");
+          }}
+          leftSection={<IconAt size={16} />}
+          placeholder="@Name"
+          aria-label="Search people to associate"
+        />
+        {selectedPerson ? (
+          <Group justify="space-between" mt="sm">
+            <AssociationIdentity person={selectedPerson} />
+            <Button
+              loading={busy}
+              leftSection={<IconLink size={16} />}
+              onClick={() => run(() => onCreate(person.person_id, selectedPerson.person_id))}
+            >
+              Link person
+            </Button>
+          </Group>
+        ) : normalizedSearch ? (
+          <Stack gap="xs" mt="sm">
+            {availableMatches.map((candidate) => (
+              <Paper
+                key={candidate.person_id}
+                withBorder
+                radius="md"
+                p="sm"
+                component="button"
+                type="button"
+                className="mantine-click-card association-search-result"
+                onClick={() => {
+                  setSelectedPersonId(candidate.person_id);
+                  setQuery(`@${candidate.name}`);
+                }}
+              >
+                <AssociationIdentity person={candidate} />
+              </Paper>
+            ))}
+            {!availableMatches.length && allMatches.length > 0 && (
+              <Text size="sm" c="dimmed">Matching people are already linked or refer to this profile.</Text>
+            )}
+            {!allMatches.length && (
+              <Paper withBorder radius="md" p="sm">
+                <Group justify="space-between" gap="md">
+                  <Box>
+                    <Text fw={700}>No existing person matches “{searchText}”</Text>
+                    <Text size="xs" c="dimmed">Create an identity-only profile, then link it to {person.name}.</Text>
+                  </Box>
+                  <Button
+                    variant="light"
+                    loading={busy}
+                    leftSection={<IconUserPlus size={16} />}
+                    onClick={() => run(() => onCreatePlaceholder(person.person_id, searchText))}
+                  >
+                    Create placeholder “{searchText}”
+                  </Button>
+                </Group>
+              </Paper>
+            )}
+          </Stack>
+        ) : null}
+      </Card>
+
+      <Card withBorder radius="md" className="people-profile-panel">
+        <Text fw={800} mb="md">Associated people ({associations.length})</Text>
+        <Stack gap="xs">
+          {associations.length ? associations.map((association) => (
+            <Paper
+              key={association.association_id}
+              withBorder
+              radius="md"
+              p="sm"
+              component="div"
+              role="button"
+              tabIndex={0}
+              className="mantine-click-card association-person-row"
+              onClick={() => onOpen(association.person.person_id, { archived: Boolean(association.person.archived) })}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpen(association.person.person_id, { archived: Boolean(association.person.archived) });
+                }
+              }}
+            >
+              <Group justify="space-between" wrap="nowrap">
+                <AssociationIdentity person={association.person} />
+                <Group gap="xs" wrap="nowrap">
+                  <Badge variant="light" color="gray">Associated with</Badge>
+                  {canEdit && (
+                    <Tooltip label="Remove association">
+                      <ActionIcon
+                        color="red"
+                        variant="subtle"
+                        aria-label={`Remove association with ${association.person.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setRemoveTarget(association);
+                        }}
+                      >
+                        <IconUnlink size={17} />
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+                </Group>
+              </Group>
+            </Paper>
+          )) : <EmptyCard text="No person associations recorded yet." />}
+        </Stack>
+      </Card>
+
+      <Modal
+        opened={Boolean(removeTarget)}
+        onClose={() => !busy && setRemoveTarget(null)}
+        title="Remove this association?"
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            Remove the association between <strong>{person.name}</strong> and <strong>{removeTarget?.person?.name}</strong>?
+          </Text>
+          <Alert color="blue" title="Profiles are preserved">
+            This removes only the association. Neither person nor their photos, biometric data, or history will be deleted.
+          </Alert>
+          <Group justify="flex-end">
+            <Button variant="default" disabled={busy} onClick={() => setRemoveTarget(null)}>Cancel</Button>
+            <Button
+              color="red"
+              loading={busy}
+              leftSection={<IconUnlink size={16} />}
+              onClick={async () => {
+                if (!removeTarget) return;
+                await run(() => onRemove(person.person_id, removeTarget.association_id));
+                setRemoveTarget(null);
+              }}
+            >
+              Remove association
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </Stack>
+  );
+}
+
+function AssociationIdentity({ person }) {
+  const rank = person.metadata?.rank || "No role";
+  const country = person.metadata?.country || "No country";
+  return (
+    <Group gap="sm" wrap="nowrap" miw={0}>
+      <ThemeIcon size={42} radius="xl" variant="light" color="gray"><IconUser size={22} /></ThemeIcon>
+      <Box miw={0}>
+        <Group gap="xs" wrap="nowrap">
+          <Text fw={800} truncate>{person.name}</Text>
+          {person.is_placeholder && <Badge size="xs" color="gray" variant="light">No photo</Badge>}
+          {person.archived && <Badge size="xs" color="gray">Archived</Badge>}
+        </Group>
+        <Text size="xs" c="dimmed" truncate>{rank} · {country} · ID {String(person.person_id || "").slice(0, 8)} · {person.embedding_count || 0} photos</Text>
+      </Box>
+    </Group>
+  );
+}
+
 function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
   const changeCards = changes.map(normalizeChange).filter((change) => change.fields.length);
   const historyCards = [
@@ -1943,6 +2186,9 @@ function managementEventLabel(event) {
     "move-embedding": "Photo moved",
     "delete-embedding": "Photo removed",
     "update-profile": "Profile updated",
+    "create-person-association": "Person association added",
+    "create-placeholder-association": "Placeholder created and associated",
+    "remove-person-association": "Person association removed",
   }[event.operation_type] || "People record updated";
 }
 
@@ -1966,6 +2212,15 @@ function managementEventDetail(event) {
     if (changed.includes("representative_photo")) return "The representative photo shown for this person was changed";
     if (changed.includes("favorite")) return result.favorite ? "This person was added to Favorites" : "This person was removed from Favorites";
     return "An older audit record changed either the representative photo or favorite status";
+  }
+  if (event.operation_type === "create-person-association") {
+    return "A human-entered association was added between these person records";
+  }
+  if (event.operation_type === "create-placeholder-association") {
+    return "A placeholder person was created and linked from the Associations section";
+  }
+  if (event.operation_type === "remove-person-association") {
+    return "Only the association was removed; both person records were preserved";
   }
   return "Completed successfully";
 }

@@ -115,6 +115,17 @@ class PersonSummary:
 
 
 @dataclass(frozen=True)
+class PersonAssociation:
+    association_id: str
+    source_person_id: str
+    target_person_id: str
+    relationship_type: str = "ASSOCIATED_WITH"
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+    created_by: str = ""
+
+
+@dataclass(frozen=True)
 class RankedPersonCandidate:
     summary: PersonSummary
     match: PersonMatch | None

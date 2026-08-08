@@ -20,6 +20,7 @@ from sentriface.models import (
     MatchDecision,
     PendingAddition,
     Person,
+    PersonAssociation,
     PersonChange,
     PersonMatch,
     PersonSummary,
@@ -31,7 +32,7 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 DELETED_FACE_RETENTION_DAYS = 30
 
 
@@ -109,6 +110,9 @@ class SQLiteIdentityStore:
             if version == 12:
                 _migrate_12_to_13(conn)
                 version = 13
+            if version == 13:
+                _migrate_13_to_14(conn)
+                version = 14
             if version != SCHEMA_VERSION:
                 raise RuntimeError(f"Unsupported database schema version: {version}")
 
@@ -184,55 +188,11 @@ class SQLiteIdentityStore:
                 if row is None:
                     raise RuntimeError("Stored placeholder creation result is no longer available")
                 return _person_from_row(row)
-            placeholder_metadata = dict(metadata or {})
-            placeholder_metadata["tags"] = _normalize_tags(
-                placeholder_metadata.get("tags", [])
-            )
-            person = Person(
-                person_id=str(uuid.uuid4()),
-                name=normalized_name,
-                metadata=placeholder_metadata,
-                enrollment_status="placeholder",
-            )
-            try:
-                conn.execute(
-                    """
-                    INSERT INTO persons(
-                        person_id, name, metadata, created_at, enrollment_status
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        person.person_id,
-                        person.name,
-                        json.dumps(person.metadata, separators=(",", ":")),
-                        person.created_at,
-                        person.enrollment_status,
-                    ),
-                )
-            except sqlite3.IntegrityError as exc:
-                if "placeholder" in str(exc).lower() or "persons.name" in str(exc).lower():
-                    raise KeyError(
-                        "A placeholder with this name already exists. Add a photograph to that profile or choose a different name."
-                    ) from exc
-                raise
-            _insert_person_change(
+            person = _create_placeholder_record(
                 conn,
-                PersonChange(
-                    change_id=str(uuid.uuid4()),
-                    person_id=person.person_id,
-                    previous_name="",
-                    new_name=person.name,
-                    previous_rank="",
-                    new_rank=str(person.metadata.get("rank") or ""),
-                    previous_country="",
-                    new_country=str(person.metadata.get("country") or ""),
-                    previous_importance="",
-                    new_importance=str(person.metadata.get("importance") or ""),
-                    previous_status=None,
-                    new_status="placeholder",
-                    editor_name=editor_name.strip(),
-                    created_at=person.created_at,
-                ),
+                normalized_name,
+                metadata,
+                editor_name.strip(),
             )
             _record_person_operation(
                 conn,
@@ -475,6 +435,193 @@ class SQLiteIdentityStore:
             )
         return operations
 
+    def create_person_association(
+        self,
+        source_person_id: str,
+        target_person_id: str,
+        actor_name: str,
+        operation_id: str,
+    ) -> PersonAssociation:
+        actor = actor_name.strip()
+        if not actor:
+            raise KeyError("Created by is required")
+        person_a_id, person_b_id = _canonical_person_pair(
+            source_person_id,
+            target_person_id,
+        )
+        with self._connect() as conn:
+            existing = _begin_person_operation(
+                conn,
+                operation_id,
+                "create-person-association",
+            )
+            if existing:
+                row = conn.execute(
+                    "SELECT * FROM person_associations WHERE association_id = ?",
+                    (existing["association_id"],),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("Stored association result is no longer available")
+                return _person_association_from_row(row)
+            _require_active_people(conn, person_a_id, person_b_id)
+            association = _new_person_association(person_a_id, person_b_id, actor)
+            try:
+                _insert_person_association(conn, association)
+            except sqlite3.IntegrityError as exc:
+                if "person_associations" in str(exc):
+                    raise KeyError("These people are already associated") from exc
+                raise
+            _record_person_operation(
+                conn,
+                operation_id,
+                "create-person-association",
+                {
+                    "association_id": association.association_id,
+                    "source_person_id": source_person_id,
+                    "target_person_id": target_person_id,
+                    "relationship_type": association.relationship_type,
+                    "actor_name": actor,
+                },
+            )
+            return association
+
+    def create_placeholder_association(
+        self,
+        source_person_id: str,
+        name: str,
+        metadata: dict | None,
+        actor_name: str,
+        operation_id: str,
+    ) -> tuple[Person, PersonAssociation]:
+        actor = actor_name.strip()
+        normalized_name = name.strip().lstrip("@").strip()
+        if not normalized_name:
+            raise KeyError("Person name is required")
+        if not actor:
+            raise KeyError("Created by is required")
+        with self._connect() as conn:
+            existing = _begin_person_operation(
+                conn,
+                operation_id,
+                "create-placeholder-association",
+            )
+            if existing:
+                person_row = conn.execute(
+                    """
+                    SELECT person_id, name, metadata, created_at, deleted_at,
+                           enrollment_status
+                    FROM persons WHERE person_id = ?
+                    """,
+                    (existing["target_person_id"],),
+                ).fetchone()
+                association_row = conn.execute(
+                    "SELECT * FROM person_associations WHERE association_id = ?",
+                    (existing["association_id"],),
+                ).fetchone()
+                if person_row is None or association_row is None:
+                    raise RuntimeError("Stored placeholder association is no longer available")
+                return (
+                    _person_from_row(person_row),
+                    _person_association_from_row(association_row),
+                )
+            _require_active_people(conn, source_person_id)
+            person = _create_placeholder_record(
+                conn,
+                normalized_name,
+                metadata,
+                actor,
+            )
+            person_a_id, person_b_id = _canonical_person_pair(
+                source_person_id,
+                person.person_id,
+            )
+            association = _new_person_association(person_a_id, person_b_id, actor)
+            _insert_person_association(conn, association)
+            _record_person_operation(
+                conn,
+                operation_id,
+                "create-placeholder-association",
+                {
+                    "association_id": association.association_id,
+                    "source_person_id": source_person_id,
+                    "target_person_id": person.person_id,
+                    "relationship_type": association.relationship_type,
+                    "actor_name": actor,
+                },
+            )
+            return person, association
+
+    def list_person_associations(
+        self,
+        person_id: str,
+        include_archived: bool = False,
+    ) -> list[PersonAssociation]:
+        with self._connect() as conn:
+            person = conn.execute(
+                f"""
+                SELECT 1 FROM persons
+                WHERE person_id = ? {" " if include_archived else "AND deleted_at IS NULL"}
+                """,
+                (person_id,),
+            ).fetchone()
+            if person is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            rows = conn.execute(
+                """
+                SELECT association_id, source_person_id, target_person_id,
+                       relationship_type, created_at, updated_at, created_by
+                FROM person_associations
+                WHERE source_person_id = ? OR target_person_id = ?
+                ORDER BY updated_at DESC, association_id
+                """,
+                (person_id, person_id),
+            ).fetchall()
+        return [_person_association_from_row(row) for row in rows]
+
+    def remove_person_association(
+        self,
+        association_id: str,
+        actor_name: str,
+        operation_id: str,
+    ) -> dict:
+        actor = actor_name.strip()
+        if not actor:
+            raise KeyError("Removed by is required")
+        with self._connect() as conn:
+            existing = _begin_person_operation(
+                conn,
+                operation_id,
+                "remove-person-association",
+            )
+            if existing:
+                return existing
+            row = conn.execute(
+                "SELECT * FROM person_associations WHERE association_id = ?",
+                (association_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError("This association no longer exists")
+            association = _person_association_from_row(row)
+            conn.execute(
+                "DELETE FROM person_associations WHERE association_id = ?",
+                (association_id,),
+            )
+            result = {
+                "association_id": association_id,
+                "source_person_id": association.source_person_id,
+                "target_person_id": association.target_person_id,
+                "relationship_type": association.relationship_type,
+                "removed": True,
+                "actor_name": actor,
+            }
+            _record_person_operation(
+                conn,
+                operation_id,
+                "remove-person-association",
+                result,
+            )
+            return result
+
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         with self._connect() as conn:
             return _existing_person_operation(conn, operation_id, operation_type)
@@ -589,8 +736,20 @@ class SQLiteIdentityStore:
                 "SELECT COUNT(*) FROM init_face_person_exclusions WHERE person_id = ?",
                 (person_id,),
             ).fetchone()[0])
+            association_rows = conn.execute(
+                """
+                SELECT association_id FROM person_associations
+                WHERE source_person_id = ? OR target_person_id = ?
+                ORDER BY association_id
+                """,
+                (person_id, person_id),
+            ).fetchall()
             conn.execute("DELETE FROM recognition_details WHERE person_id = ?", (person_id,))
             conn.execute("DELETE FROM init_face_person_exclusions WHERE person_id = ?", (person_id,))
+            conn.execute(
+                "DELETE FROM person_associations WHERE source_person_id = ? OR target_person_id = ?",
+                (person_id, person_id),
+            )
             conn.execute("DELETE FROM person_change_history WHERE person_id = ?", (person_id,))
             conn.execute("DELETE FROM embeddings WHERE person_id = ?", (person_id,))
             conn.execute("DELETE FROM persons WHERE person_id = ?", (person_id,))
@@ -604,6 +763,8 @@ class SQLiteIdentityStore:
                 "deleted_sightings": sighting_count,
                 "deleted_profile_changes": change_count,
                 "deleted_queue_exclusions": exclusion_count,
+                "deleted_associations": len(association_rows),
+                "deleted_association_ids": [row["association_id"] for row in association_rows],
             }
             _record_person_operation(conn, operation_id, "purge-person", result)
             return result
@@ -2415,6 +2576,176 @@ def _migrate_12_to_13(conn: sqlite3.Connection) -> None:
 
         PRAGMA user_version = 13;
         """
+    )
+
+
+def _migrate_13_to_14(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS person_associations (
+            association_id TEXT PRIMARY KEY,
+            source_person_id TEXT NOT NULL,
+            target_person_id TEXT NOT NULL,
+            relationship_type TEXT NOT NULL DEFAULT 'ASSOCIATED_WITH',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            CHECK(source_person_id < target_person_id),
+            CHECK(relationship_type = 'ASSOCIATED_WITH'),
+            UNIQUE(source_person_id, target_person_id, relationship_type),
+            FOREIGN KEY(source_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(target_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_person_associations_source
+        ON person_associations(source_person_id, updated_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_person_associations_target
+        ON person_associations(target_person_id, updated_at DESC);
+
+        PRAGMA user_version = 14;
+        """
+    )
+
+
+def _create_placeholder_record(
+    conn: sqlite3.Connection,
+    name: str,
+    metadata: dict | None,
+    editor_name: str,
+) -> Person:
+    duplicate = conn.execute(
+        """
+        SELECT 1 FROM persons
+        WHERE enrollment_status = 'placeholder'
+          AND lower(trim(name)) = lower(trim(?))
+        LIMIT 1
+        """,
+        (name,),
+    ).fetchone()
+    if duplicate is not None:
+        raise _placeholder_name_conflict(
+            sqlite3.IntegrityError("duplicate placeholder name")
+        )
+    placeholder_metadata = dict(metadata or {})
+    placeholder_metadata["tags"] = _normalize_tags(
+        placeholder_metadata.get("tags", [])
+    )
+    person = Person(
+        person_id=str(uuid.uuid4()),
+        name=name,
+        metadata=placeholder_metadata,
+        enrollment_status="placeholder",
+    )
+    try:
+        conn.execute(
+            """
+            INSERT INTO persons(
+                person_id, name, metadata, created_at, enrollment_status
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                person.person_id,
+                person.name,
+                json.dumps(person.metadata, separators=(",", ":")),
+                person.created_at,
+                person.enrollment_status,
+            ),
+        )
+    except sqlite3.IntegrityError as exc:
+        if "placeholder" in str(exc).lower() or "persons.name" in str(exc).lower():
+            raise _placeholder_name_conflict(exc) from exc
+        raise
+    _insert_person_change(
+        conn,
+        PersonChange(
+            change_id=str(uuid.uuid4()),
+            person_id=person.person_id,
+            previous_name="",
+            new_name=person.name,
+            previous_rank="",
+            new_rank=str(person.metadata.get("rank") or ""),
+            previous_country="",
+            new_country=str(person.metadata.get("country") or ""),
+            previous_importance="",
+            new_importance=str(person.metadata.get("importance") or ""),
+            previous_status=None,
+            new_status="placeholder",
+            editor_name=editor_name,
+            created_at=person.created_at,
+        ),
+    )
+    return person
+
+
+def _canonical_person_pair(source_person_id: str, target_person_id: str) -> tuple[str, str]:
+    source = source_person_id.strip()
+    target = target_person_id.strip()
+    if not source or not target:
+        raise KeyError("Choose two people to associate")
+    if source == target:
+        raise KeyError("A person cannot be associated with themselves")
+    return tuple(sorted((source, target)))
+
+
+def _require_active_people(conn: sqlite3.Connection, *person_ids: str) -> None:
+    for person_id in person_ids:
+        row = conn.execute(
+            "SELECT 1 FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+            (person_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"Unknown active person: {person_id}")
+
+
+def _new_person_association(
+    person_a_id: str,
+    person_b_id: str,
+    actor_name: str,
+) -> PersonAssociation:
+    created_at = utc_now()
+    return PersonAssociation(
+        association_id=str(uuid.uuid4()),
+        source_person_id=person_a_id,
+        target_person_id=person_b_id,
+        created_at=created_at,
+        updated_at=created_at,
+        created_by=actor_name,
+    )
+
+
+def _insert_person_association(
+    conn: sqlite3.Connection,
+    association: PersonAssociation,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO person_associations(
+            association_id, source_person_id, target_person_id,
+            relationship_type, created_at, updated_at, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            association.association_id,
+            association.source_person_id,
+            association.target_person_id,
+            association.relationship_type,
+            association.created_at,
+            association.updated_at,
+            association.created_by,
+        ),
+    )
+
+
+def _person_association_from_row(row: sqlite3.Row) -> PersonAssociation:
+    return PersonAssociation(
+        association_id=row["association_id"],
+        source_person_id=row["source_person_id"],
+        target_person_id=row["target_person_id"],
+        relationship_type=row["relationship_type"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        created_by=row["created_by"],
     )
 
 

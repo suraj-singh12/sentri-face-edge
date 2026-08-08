@@ -54,3 +54,19 @@ test("placeholder people use the existing neutral avatar and clear biometric lab
   assert.match(view, /<IconUser size=\{44\}/);
   assert.match(controller, /apiPost\("\/api\/person-placeholder"/);
 });
+
+test("person profiles provide explicit @ association linking and safe removal", async () => {
+  const view = await readFile(new URL("../src/views/PeopleView.jsx", import.meta.url), "utf8");
+  const controller = await readFile(new URL("../src/hooks/usePeopleController.js", import.meta.url), "utf8");
+
+  assert.match(view, /<Tabs\.Tab value="associations">Associations \(\{associations\.length\}\)<\/Tabs\.Tab>/);
+  assert.match(view, /placeholder="@Name"/);
+  assert.match(view, />\s*Link person\s*</);
+  assert.match(view, /Create placeholder “\{searchText\}”/);
+  assert.match(view, /Matching people are already linked or refer to this profile\./);
+  assert.match(view, /This removes only the association\. Neither person nor their photos, biometric data, or history will be deleted\./);
+  assert.match(view, /onOpen\(association\.person\.person_id, \{ archived: Boolean\(association\.person\.archived\) \}\)/);
+  assert.match(controller, /apiPost\("\/api\/person-association"/);
+  assert.match(controller, /apiPost\("\/api\/person-association-placeholder"/);
+  assert.match(controller, /apiPost\("\/api\/person-association-remove"/);
+});

@@ -24,6 +24,7 @@ from sentriface.models import (
     InitSession,
     PendingAddition,
     Person,
+    PersonAssociation,
     PersonChange,
     PersonMatch,
     PersonSummary,
@@ -332,6 +333,62 @@ class FaceEngine:
             raise KeyError(f"Unknown person: {person_id}")
         with self.metrics.timer("db_list_person_operations_ms"):
             return self.store.list_person_operations(person_id)
+
+    def create_person_association(
+        self,
+        source_person_id: str,
+        target_person_id: str,
+        actor_name: str,
+        operation_id: str,
+    ) -> PersonAssociation:
+        with self.metrics.timer("db_create_person_association_ms"):
+            return self.store.create_person_association(
+                source_person_id,
+                target_person_id,
+                actor_name,
+                operation_id,
+            )
+
+    def create_placeholder_association(
+        self,
+        source_person_id: str,
+        name: str,
+        metadata: dict | None,
+        actor_name: str,
+        operation_id: str,
+    ) -> tuple[Person, PersonAssociation]:
+        with self.metrics.timer("db_create_placeholder_association_ms"):
+            return self.store.create_placeholder_association(
+                source_person_id,
+                name,
+                metadata,
+                actor_name,
+                operation_id,
+            )
+
+    def list_person_associations(
+        self,
+        person_id: str,
+        include_archived: bool = False,
+    ) -> list[PersonAssociation]:
+        with self.metrics.timer("db_list_person_associations_ms"):
+            return self.store.list_person_associations(
+                person_id,
+                include_archived=include_archived,
+            )
+
+    def remove_person_association(
+        self,
+        association_id: str,
+        actor_name: str,
+        operation_id: str,
+    ) -> dict:
+        with self.metrics.timer("db_remove_person_association_ms"):
+            return self.store.remove_person_association(
+                association_id,
+                actor_name,
+                operation_id,
+            )
 
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         return self.store.get_person_operation(operation_id, operation_type)

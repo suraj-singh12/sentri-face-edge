@@ -47,6 +47,74 @@ export function usePeopleController({
     return payload.person;
   };
 
+  const createPersonAssociation = async (sourcePersonId, targetPersonId) => {
+    const requestId = operationId();
+    const payload = await apiPost("/api/person-association", {
+      source_person_id: sourcePersonId,
+      target_person_id: targetPersonId,
+      operation_id: requestId,
+    });
+    setPeopleGallery((current) => current?.person?.person_id === sourcePersonId ? {
+      ...current,
+      associations: [
+        payload.association,
+        ...(current.associations || []).filter((item) => item.association_id !== payload.association.association_id),
+      ],
+      management_events: [
+        localManagementEvent(requestId, "create-person-association", {
+          association_id: payload.association.association_id,
+          source_person_id: sourcePersonId,
+          target_person_id: targetPersonId,
+        }),
+        ...(current.management_events || []),
+      ],
+    } : current);
+    showToast("Person association added");
+    return payload.association;
+  };
+
+  const createPlaceholderAssociation = async (sourcePersonId, name) => {
+    const requestId = operationId();
+    const payload = await apiPost("/api/person-association-placeholder", {
+      source_person_id: sourcePersonId,
+      name,
+      operation_id: requestId,
+    });
+    upsertPerson(payload.person);
+    setPeopleGallery((current) => current?.person?.person_id === sourcePersonId ? {
+      ...current,
+      associations: [payload.association, ...(current.associations || [])],
+      management_events: [
+        localManagementEvent(requestId, "create-placeholder-association", {
+          association_id: payload.association.association_id,
+          source_person_id: sourcePersonId,
+          target_person_id: payload.person.person_id,
+        }),
+        ...(current.management_events || []),
+      ],
+    } : current);
+    showToast(`Placeholder “${payload.person.name}” created and associated`);
+    return payload.association;
+  };
+
+  const removePersonAssociation = async (sourcePersonId, associationId) => {
+    const requestId = operationId();
+    const result = await apiPost("/api/person-association-remove", {
+      association_id: associationId,
+      operation_id: requestId,
+    });
+    setPeopleGallery((current) => current?.person?.person_id === sourcePersonId ? {
+      ...current,
+      associations: (current.associations || []).filter((item) => item.association_id !== associationId),
+      management_events: [
+        localManagementEvent(requestId, "remove-person-association", result),
+        ...(current.management_events || []),
+      ],
+    } : current);
+    showToast("Person association removed", "yellow");
+    return result;
+  };
+
   const savePeopleProfile = async (values) => {
     const payload = await apiPost("/api/person-update", {
       person_id: values.personId,
@@ -169,7 +237,7 @@ export function usePeopleController({
     setPeopleGalleryImage(null);
     removePersonLocally(personId);
     showToast(
-      `${result.deleted_embeddings || 0} photo record${result.deleted_embeddings === 1 ? "" : "s"} and ${result.deleted_sightings || 0} sighting${result.deleted_sightings === 1 ? "" : "s"} removed. Safety backup ${result.backup?.backup_id || "created"} retains a recovery copy.`,
+      `${result.deleted_embeddings || 0} photo record${result.deleted_embeddings === 1 ? "" : "s"}, ${result.deleted_sightings || 0} sighting${result.deleted_sightings === 1 ? "" : "s"}, and ${result.deleted_associations || 0} association${result.deleted_associations === 1 ? "" : "s"} removed. Safety backup ${result.backup?.backup_id || "created"} retains a recovery copy.`,
       "red",
       { title: "Profile permanently deleted", autoClose: 9000 },
     );
@@ -312,6 +380,9 @@ export function usePeopleController({
     actions: {
       peopleOpen,
       createPlaceholderPerson,
+      createPersonAssociation,
+      createPlaceholderAssociation,
+      removePersonAssociation,
       setPeopleGalleryImage,
       peopleBack,
       savePeopleProfile,

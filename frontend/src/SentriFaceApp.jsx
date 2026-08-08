@@ -263,6 +263,9 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onRefresh={guarded(actions.refreshAll)}
               onOpen={guarded(actions.peopleOpen)}
               onCreatePlaceholder={guarded(actions.createPlaceholderPerson)}
+              onCreateAssociation={guarded(actions.createPersonAssociation)}
+              onCreatePlaceholderAssociation={guarded(actions.createPlaceholderAssociation)}
+              onRemoveAssociation={guarded(actions.removePersonAssociation)}
               onImage={actions.setPeopleGalleryImage}
               onBack={actions.peopleBack}
               onSave={actions.savePeopleProfile}
