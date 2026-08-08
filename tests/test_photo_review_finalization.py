@@ -17,7 +17,7 @@ from sentriface.models import (
 )
 from sentriface.storage.sqlite_store import SCHEMA_VERSION, SQLiteIdentityStore
 from sentriface.storage.sqlite_store import _schema_migrations
-from sentriface.engine import DomainWorkflowUnavailableError, FaceEngine
+from sentriface.engine import FaceEngine
 
 
 class PhotoReviewFinalizationTest(unittest.TestCase):
@@ -320,17 +320,15 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM relationship_evidence").fetchone()[0], 0)
 
     def test_old_pending_and_queue_domain_confirmation_paths_are_gated(self) -> None:
-        engine = object.__new__(FaceEngine)
-        for call in (
-            lambda: engine.confirm_pending_as_new_person("pending", "Name"),
-            lambda: engine.confirm_pending_as_existing_person("pending", "person"),
-            lambda: engine.confirm_init_group("session", "group", "Name"),
-            lambda: engine.confirm_init_group_existing("session", "group", "person"),
+        for method_name in (
+            "confirm_pending_as_new_person",
+            "confirm_pending_as_existing_person",
+            "confirm_init_group",
+            "confirm_init_group_existing",
+            "confirm_new_person",
+            "confirm_existing_person",
         ):
-            with self.assertRaisesRegex(
-                DomainWorkflowUnavailableError, "complete.*review|complete_photo_review",
-            ):
-                call()
+            self.assertFalse(hasattr(FaceEngine, method_name), method_name)
 
 
 if __name__ == "__main__":

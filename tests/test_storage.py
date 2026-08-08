@@ -489,6 +489,7 @@ class StorageMigrationTest(unittest.TestCase):
                 country="Nepal",
                 importance="Important",
                 editor_name="Editor One",
+                operation_id="profile-update-history",
             )
             updated = store.get_person(person.person_id)
             changes = store.list_person_changes(person.person_id)

@@ -162,7 +162,7 @@ def _required_capability(method: str, path: str) -> str | None:
     }:
         return "recognize"
     if path in {
-        "/api/enroll", "/api/person-placeholder", "/api/person-update", "/api/person-notes", "/api/person-preferences",
+        "/api/person-create", "/api/person-update", "/api/person-notes", "/api/person-preferences",
         "/api/person-association", "/api/person-association-placeholder",
         "/api/person-association-remove",
         "/api/recognition-person-candidates",
@@ -1243,6 +1243,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             payload = self._read_json()
+            if parsed.path == "/api/backups/restore":
+                raise DomainWorkflowUnavailableError(
+                    "Backup restore is temporarily unavailable until P12 validates normalized domain state"
+                )
             if parsed.path == "/api/photo-review":
                 faces = payload.get("faces")
                 if not isinstance(faces, list):
@@ -1289,9 +1293,25 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 "/api/recognition-accept-existing", "/api/recognition-new",
                 "/api/placeholder-enroll", "/api/recognition-followup",
                 "/api/confirm-new", "/api/confirm-existing",
+                "/api/enroll",
             }:
                 raise DomainWorkflowUnavailableError(
                     "Per-face confirmation is unavailable; complete the whole review atomically"
+                )
+            if parsed.path == "/api/person-photo-move":
+                raise DomainWorkflowUnavailableError(
+                    "Move Face is temporarily unavailable until P7 provides normalized correction provenance"
+                )
+            if parsed.path in {"/api/person-merge", "/api/person-merge-undo"}:
+                raise DomainWorkflowUnavailableError(
+                    "Identity Merge is temporarily unavailable until P8 provides normalized merge support"
+                )
+            if parsed.path in {
+                "/api/person-association", "/api/person-association-placeholder",
+                "/api/person-association-remove",
+            }:
+                raise DomainWorkflowUnavailableError(
+                    "Manual associations are temporarily unavailable until they use normalized graph evidence"
                 )
             if parsed.path == "/api/auth/signup":
                 user, token = self.server.auth.signup_initial(_required(payload, "username"), str(payload.get("display_name") or ""), _required(payload, "password"))
@@ -1474,20 +1494,6 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 record = self.server.backups.create_backup()
                 self._json({"backup": _backup(record)})
                 return
-            if parsed.path == "/api/backups/restore":
-                backup_id = _required(payload, "backup_id")
-                operation_id = _operation_id(payload)
-                result = self.server.backups.restore_backup(
-                    backup_id,
-                    operation_id,
-                    reload_callback=self.server.engine.initialize,
-                    allow_incomplete=bool(payload.get("allow_incomplete", False)),
-                )
-                with self.server.upload_object_index_lock:
-                    self.server.upload_object_index = None
-                self.server.log_event("app-state-restored", **result)
-                self._json({"restore": result})
-                return
             if parsed.path == "/api/upload":
                 saved_path = _save_upload(
                     self.server.config.data_dir,
@@ -1613,6 +1619,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     editor_name=_required(payload, "editor_name"),
                     tags=[str(tag) for tag in tags],
                     operation_id=_operation_id(payload),
+                    actor=self._operation_actor(),
+                    source=parsed.path,
                 )
                 self.server.log_event(
                     "person-update",
@@ -1648,14 +1656,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     ],
                 })
                 return
-            if parsed.path == "/api/person-placeholder":
+            if parsed.path == "/api/person-create":
                 tags = payload.get("tags", [])
                 if not isinstance(tags, list):
                     raise KeyError("tags must be a list")
-                mentioned_person_ids = payload.get("mentioned_person_ids", [])
-                if not isinstance(mentioned_person_ids, list):
-                    raise KeyError("mentioned_person_ids must be a list")
-                person = self.server.engine.create_placeholder_person(
+                person = self.server.engine.create_identified_person(
                     name=_required(payload, "name"),
                     metadata={
                         "rank": _required(payload, "rank").strip(),
@@ -1671,80 +1676,17 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                             "event_occasion": _required(payload, "event_occasion"),
                         },
                     },
-                    editor_name=self.auth_user.display_name or self.auth_user.username,
                     operation_id=_operation_id(payload),
-                    notes=str(payload.get("notes") or ""),
-                    mentioned_person_ids=[str(item) for item in mentioned_person_ids],
+                    actor=self._operation_actor(),
+                    source=parsed.path,
                 )
                 summary = next(
                     item for item in self.server.engine.list_persons()
                     if item.person.person_id == person.person_id
                 )
                 result = _person_summary(summary, self.server.engine)
-                self.server.log_event("person-placeholder-created", person_id=person.person_id)
+                self.server.log_event("person-created", person_id=person.person_id)
                 self._json({"person": result})
-                return
-            if parsed.path == "/api/person-association":
-                source_person_id = _required(payload, "source_person_id")
-                association = self.server.engine.create_person_association(
-                    source_person_id=source_person_id,
-                    target_person_id=_required(payload, "target_person_id"),
-                    actor_name=self.auth_user.display_name or self.auth_user.username,
-                    operation_id=_operation_id(payload),
-                )
-                person_summaries = {
-                    item.person.person_id: item
-                    for item in self.server.engine.list_persons()
-                }
-                result = _person_association(
-                    association,
-                    source_person_id,
-                    person_summaries,
-                    self.server.engine,
-                )
-                self.server.log_event(
-                    "person-association-created",
-                    association_id=association.association_id,
-                    source_person_id=source_person_id,
-                    target_person_id=_required(payload, "target_person_id"),
-                )
-                self._json({"association": result})
-                return
-            if parsed.path == "/api/person-association-placeholder":
-                source_person_id = _required(payload, "source_person_id")
-                person, association = self.server.engine.create_placeholder_association(
-                    source_person_id=source_person_id,
-                    name=_required(payload, "name"),
-                    metadata={},
-                    actor_name=self.auth_user.display_name or self.auth_user.username,
-                    operation_id=_operation_id(payload),
-                )
-                summary = next(
-                    item for item in self.server.engine.list_persons()
-                    if item.person.person_id == person.person_id
-                )
-                result = _person_association(
-                    association,
-                    source_person_id,
-                    {person.person_id: summary},
-                    self.server.engine,
-                )
-                self.server.log_event(
-                    "person-association-placeholder-created",
-                    association_id=association.association_id,
-                    source_person_id=source_person_id,
-                    target_person_id=person.person_id,
-                )
-                self._json({"association": result, "person": _person_summary(summary, self.server.engine)})
-                return
-            if parsed.path == "/api/person-association-remove":
-                result = self.server.engine.remove_person_association(
-                    association_id=_required(payload, "association_id"),
-                    actor_name=self.auth_user.display_name or self.auth_user.username,
-                    operation_id=_operation_id(payload),
-                )
-                self.server.log_event("person-association-removed", **result)
-                self._json(result)
                 return
             if parsed.path == "/api/person-preferences":
                 favorite = payload.get("favorite")
@@ -1755,6 +1697,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     operation_id=_operation_id(payload),
                     favorite=favorite,
                     representative_embedding_id=payload.get("representative_embedding_id"),
+                    actor=self._operation_actor(),
+                    source=parsed.path,
                 )
                 self.server.log_event("person-preferences", **result)
                 self._json(result)
@@ -1813,69 +1757,6 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self.server.log_event("person-purge", **result)
                 self._json(result)
                 return
-            if parsed.path == "/api/person-merge":
-                source_id = _required(payload, "source_person_id")
-                target_id = _required(payload, "target_person_id")
-                operation_id = _operation_id(payload)
-                source = self.server.engine.get_person(source_id)
-                target = self.server.engine.get_person(target_id)
-                if source is None:
-                    raise KeyError(f"Unknown source person: {source_id}")
-                if target is None:
-                    raise KeyError(f"Unknown target person: {target_id}")
-                result = self.server.backed_up_people_deletion(
-                    operation_id,
-                    "merge-persons",
-                    f"before-person-merge-{source.name}-into-{target.name}-{source_id[:8]}",
-                    lambda: self.server.engine.merge_persons(
-                        source_id,
-                        target_id,
-                        operation_id,
-                    ),
-                )
-                self.server.log_event("person-merge", **result)
-                self._json(result)
-                return
-            if parsed.path == "/api/person-merge-undo":
-                merge_operation_id = _required(payload, "merge_operation_id")
-                operation_id = _operation_id(payload)
-                merge = self.server.engine.get_person_operation(merge_operation_id, "merge-persons")
-                if merge is None:
-                    raise KeyError("Unknown merge operation")
-                source_id = str(merge["source_person_id"])
-                target_id = str(merge["target_person_id"])
-                result = self.server.backed_up_people_deletion(
-                    operation_id,
-                    "undo-merge-persons",
-                    f"before-person-merge-undo-{source_id[:8]}-from-{target_id[:8]}",
-                    lambda: self.server.engine.undo_merge_persons(
-                        merge_operation_id,
-                        operation_id,
-                    ),
-                )
-                source = next(
-                    item for item in self.server.engine.list_persons() if item.person.person_id == source_id
-                )
-                target = next(
-                    item for item in self.server.engine.list_persons() if item.person.person_id == target_id
-                )
-                response = {
-                    **result,
-                    "source_person": _person_summary(source, self.server.engine),
-                    "target_person": _person_summary(target, self.server.engine),
-                }
-                self.server.log_event("person-merge-undo", **result)
-                self._json(response)
-                return
-            if parsed.path == "/api/person-photo-move":
-                result = self.server.engine.move_embedding(
-                    _required(payload, "embedding_id"),
-                    _required(payload, "target_person_id"),
-                    _operation_id(payload),
-                )
-                self.server.log_event("person-photo-move", **result)
-                self._json(result)
-                return
             if parsed.path == "/api/person-photo-delete":
                 embedding_id = _required(payload, "embedding_id")
                 operation_id = _operation_id(payload)
@@ -1891,7 +1772,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         f"before-face-delete-{lifecycle['person_name']}-"
                         f"{embedding_id[:8]}"
                     ),
-                    lambda: self.server.engine.delete_embedding(embedding_id, operation_id),
+                    lambda: self.server.engine.delete_embedding(
+                        embedding_id, operation_id,
+                        actor=self._operation_actor(), source=parsed.path,
+                    ),
                 )
                 self.server.log_event("person-photo-delete", **result)
                 self._json(result)
@@ -1900,6 +1784,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 result = self.server.engine.restore_deleted_embedding(
                     _required(payload, "embedding_id"),
                     _operation_id(payload),
+                    actor=self._operation_actor(),
+                    source=parsed.path,
                 )
                 self.server.log_event("person-photo-restore", **result)
                 self._json(result)
@@ -1922,212 +1808,12 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     lambda: self.server.engine.permanently_delete_embedding(
                         embedding_id,
                         operation_id,
+                        actor=self._operation_actor(),
+                        source=parsed.path,
                     ),
                 )
                 self.server.log_event("person-photo-purge", **result)
                 self._json(result)
-                return
-            if parsed.path == "/api/recognition-accept-existing":
-                image_path = require_local_path(Path(_required(payload, "path")))
-                person_id = _required(payload, "person_id")
-                face_index = _face_index(payload)
-                if self.server.engine.get_person(person_id) is None:
-                    raise KeyError(f"Unknown person: {person_id}")
-                self.server.engine.reset_metrics()
-                addition = self.server.engine.prepare_face_addition(
-                    image_path,
-                    face_index,
-                    allow_bad_quality=bool(payload.get("force_bad_quality", False)),
-                    expected_box=_face_box(payload),
-                )
-                if addition is None:
-                    raise KeyError(f"Face {face_index} does not meet the enrollment quality requirements")
-                duplicate = _duplicate_embedding(addition.vector, self.server.engine.list_person_embeddings(person_id))
-                if duplicate:
-                    journal = self.server.engine.cleanup.schedule(
-                        (addition.face.crop_path,),
-                        f"duplicate-prepared-crop-{addition.pending_id}",
-                    )
-                    self.server.engine.cleanup.run(
-                        journal, self.server.engine.store.list_all_file_references
-                    )
-                    person = self.server.engine.get_person(person_id)
-                    self.server.log_event("recognition-duplicate", path=str(image_path), person_id=person_id, face_index=face_index)
-                    self._json(
-                        {
-                            "duplicate": True,
-                            "embedding_id": duplicate.embedding_id,
-                            "person_id": person_id,
-                            "name": person.name if person else person_id,
-                            "metrics": self.server.engine.metrics_snapshot(),
-                        }
-                    )
-                    return
-                embedding_id = self.server.engine.confirm_existing_person(addition, person_id, operation_id=_optional_operation_id(payload))
-                self.server.log_event("recognition-accept-existing", path=str(image_path), person_id=person_id, face_index=face_index)
-                self._json({"embedding_id": embedding_id, "metrics": self.server.engine.metrics_snapshot()})
-                return
-            if parsed.path == "/api/placeholder-enroll":
-                image_path = require_local_path(Path(_required(payload, "path")))
-                person_id = _required(payload, "person_id")
-                operation_id = _optional_operation_id(payload)
-                existing_operation = self.server.engine.store.get_person_operation(
-                    operation_id, "confirm-pending-existing"
-                )
-                if existing_operation:
-                    existing_person = self.server.engine.get_person(existing_operation["person_id"])
-                    self._json({
-                        "embedding_id": existing_operation["embedding_id"],
-                        "person_id": existing_operation["person_id"],
-                        "name": existing_person.name if existing_person else existing_operation["person_id"],
-                        "metrics": self.server.engine.metrics_snapshot(),
-                    })
-                    return
-                person = self.server.engine.get_person(person_id)
-                if person is None:
-                    raise KeyError("This person no longer exists")
-                if person.enrollment_status != "placeholder":
-                    raise KeyError("This profile already has biometric data. Use the normal add-to-existing-person flow.")
-                face_index = _face_index(payload)
-                self.server.engine.reset_metrics()
-                addition = self.server.engine.prepare_face_addition(
-                    image_path,
-                    face_index,
-                    allow_bad_quality=bool(payload.get("force_bad_quality", False)),
-                    expected_box=_face_box(payload),
-                )
-                if addition is None:
-                    raise KeyError(f"Face {face_index} does not meet the enrollment quality requirements")
-                conflict = addition.matches[0] if addition.decision != MatchDecision.UNKNOWN and addition.matches else None
-                if conflict and conflict.person_id != person_id and not bool(payload.get("conflict_acknowledged", False)):
-                    journal = self.server.engine.cleanup.schedule(
-                        (addition.face.crop_path,),
-                        f"placeholder-conflict-crop-{addition.pending_id}",
-                    )
-                    self.server.engine.cleanup.run(journal, self.server.engine.store.list_all_file_references)
-                    raise KeyError("This face resembles another existing person. Review the conflict before adding it here.")
-                mentioned_person_ids = payload.get("mentioned_person_ids", [])
-                if not isinstance(mentioned_person_ids, list):
-                    raise KeyError("mentioned_person_ids must be a list")
-                embedding_id = self.server.engine.confirm_existing_person_with_detail(
-                    addition,
-                    person_id,
-                    {
-                        "image_id": _required(payload, "image_id"),
-                        "image_path": str(image_path),
-                        "name": person.name,
-                        "decision": "existing",
-                        "seen_date": _required(payload, "date"),
-                        "seen_time": _required(payload, "time"),
-                        "place_seen": _required(payload, "place_seen"),
-                        "individual_count": _safe_count(payload.get("individual_count"), "individual_count", allow_zero=True),
-                        "event_occasion": _required(payload, "event_occasion"),
-                        "added_by": _required(payload, "added_by"),
-                        "notes": str(payload.get("notes") or ""),
-                        "mentioned_person_ids": [str(item) for item in mentioned_person_ids],
-                    },
-                    operation_id=operation_id,
-                )
-                self.server.log_event(
-                    "placeholder-enrolled",
-                    path=str(image_path),
-                    person_id=person_id,
-                    embedding_id=embedding_id,
-                    face_index=face_index,
-                )
-                self._json({
-                    "embedding_id": embedding_id,
-                    "person_id": person_id,
-                    "name": person.name,
-                    "metrics": self.server.engine.metrics_snapshot(),
-                })
-                return
-            if parsed.path == "/api/recognition-new":
-                image_path = require_local_path(Path(_required(payload, "path")))
-                name = _required(payload, "name")
-                face_index = _face_index(payload)
-                self.server.engine.reset_metrics()
-                addition = self.server.engine.prepare_face_addition(
-                    image_path,
-                    face_index,
-                    allow_bad_quality=bool(payload.get("force_bad_quality", False)),
-                    expected_box=_face_box(payload),
-                )
-                if addition is None:
-                    raise KeyError(f"Face {face_index} does not meet the enrollment quality requirements")
-                mentioned_person_ids = payload.get("mentioned_person_ids", [])
-                if not isinstance(mentioned_person_ids, list):
-                    raise KeyError("mentioned_person_ids must be a list")
-                person_id = self.server.engine.confirm_new_person(
-                    addition, name, operation_id=_optional_operation_id(payload),
-                    notes=str(payload.get("notes") or ""),
-                    mentioned_person_ids=[str(item) for item in mentioned_person_ids],
-                )
-                embedding = self.server.engine.list_person_embeddings(person_id)[-1]
-                self.server.log_event("recognition-new", path=str(image_path), person_id=person_id, face_index=face_index)
-                self._json(
-                    {
-                        "person_id": person_id,
-                        "embedding_id": embedding.embedding_id,
-                        "metrics": self.server.engine.metrics_snapshot(),
-                    }
-                )
-                return
-            if parsed.path == "/api/recognition-followup":
-                mentioned_person_ids = payload.get("mentioned_person_ids", [])
-                if not isinstance(mentioned_person_ids, list):
-                    raise KeyError("mentioned_person_ids must be a list")
-                detail_id = self.server.engine.add_recognition_detail(
-                    embedding_id=_required(payload, "embedding_id"),
-                    person_id=_required(payload, "person_id"),
-                    image_id=_required(payload, "image_id"),
-                    image_path=payload.get("image_path"),
-                    name=_required(payload, "name"),
-                    decision=_required(payload, "decision"),
-                    seen_date=_required(payload, "date"),
-                    seen_time=_required(payload, "time"),
-                    place_seen=_required(payload, "place_seen"),
-                    individual_count=int(_required(payload, "individual_count")),
-                    event_occasion=_required(payload, "event_occasion"),
-                    rank=payload.get("rank"),
-                    country=payload.get("country"),
-                    importance=payload.get("importance"),
-                    added_by=payload.get("added_by"),
-                    notes=str(payload.get("notes") or ""),
-                    mentioned_person_ids=[str(item) for item in mentioned_person_ids],
-                    operation_id=_optional_operation_id(payload),
-                )
-                self.server.log_event(
-                    "recognition-followup",
-                    detail_id=detail_id,
-                    path=_required(payload, "path"),
-                    image_id=_required(payload, "image_id"),
-                    embedding_id=_required(payload, "embedding_id"),
-                    name=_required(payload, "name"),
-                    person_id=_required(payload, "person_id"),
-                    decision=_required(payload, "decision"),
-                    date=_required(payload, "date"),
-                    time=_required(payload, "time"),
-                    place_seen=_required(payload, "place_seen"),
-                    individual_count=int(_required(payload, "individual_count")),
-                    event_occasion=_required(payload, "event_occasion"),
-                    rank=payload.get("rank"),
-                    country=payload.get("country"),
-                    importance=payload.get("importance"),
-                    added_by=payload.get("added_by"),
-                )
-                self._json({"confirmed": True, "detail_id": detail_id})
-                return
-            if parsed.path == "/api/enroll":
-                image_path = require_local_path(Path(_required(payload, "path")))
-                name = _required(payload, "name")
-                self.server.engine.reset_metrics()
-                additions = self.server.engine.prepare_additions(image_path, bool(payload.get("force_bad_quality", False)))
-                if not additions:
-                    raise KeyError("No acceptable faces found")
-                person_id = self.server.engine.confirm_new_person(additions[0], name)
-                self.server.log_event("enroll", path=str(image_path), person_id=person_id)
-                self._json({"person_id": person_id, "metrics": self.server.engine.metrics_snapshot()})
                 return
             if parsed.path == "/api/queue-add":
                 image_path = require_local_path(Path(_required(payload, "path")))
@@ -2399,20 +2085,6 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 groups = self.server.engine.list_init_groups(session_id)
                 self.server.log_event("queue-reject-match", session_id=session_id, group_id=group_id, person_id=person_id)
                 self._json({"rejected": True, "groups": [_init_group(self.server.engine, group) for group in groups]})
-                return
-            if parsed.path == "/api/confirm-new":
-                pending_id = _required(payload, "pending_id")
-                name = _required(payload, "name")
-                person_id = self.server.engine.confirm_pending_as_new_person(pending_id, name)
-                self.server.log_event("confirm-new", pending_id=pending_id, person_id=person_id)
-                self._json({"person_id": person_id})
-                return
-            if parsed.path == "/api/confirm-existing":
-                pending_id = _required(payload, "pending_id")
-                person_id = _required(payload, "person_id")
-                embedding_id = self.server.engine.confirm_pending_as_existing_person(pending_id, person_id)
-                self.server.log_event("confirm-existing", pending_id=pending_id, person_id=person_id)
-                self._json({"embedding_id": embedding_id})
                 return
             if parsed.path == "/api/reject-pending":
                 pending_id = _required(payload, "pending_id")
@@ -3431,13 +3103,21 @@ def _rejected(rejected: RejectedFace, index: int) -> dict[str, Any]:
 
 
 def _person(person: Person) -> dict[str, Any]:
+    lifecycle_status = person.lifecycle_status
     return {
         "person_id": person.person_id,
         "name": person.name,
         "metadata": person.metadata,
         "created_at": person.created_at,
         "deleted_at": person.deleted_at,
-        "archived": person.deleted_at is not None,
+        "lifecycle_status": lifecycle_status,
+        "canonical_person_id": person.canonical_person_id,
+        "identity_status": person.identity_status,
+        "biometric_status": person.biometric_status,
+        "archived": lifecycle_status == "ARCHIVED",
+        "deleted": lifecycle_status == "DELETED",
+        "merged": lifecycle_status == "MERGED",
+        "active": lifecycle_status == "ACTIVE" and person.deleted_at is None,
         "enrollment_status": person.enrollment_status,
         "is_placeholder": person.enrollment_status == "placeholder",
         "notes": person.notes,
@@ -3526,7 +3206,11 @@ def _deleted_embedding(record: dict[str, Any]) -> dict[str, Any]:
         "embedding_id": record["embedding_id"],
         "person_id": record["person_id"],
         "person_name": record["name"],
-        "person_archived": record["person_deleted_at"] is not None,
+        "person_lifecycle_status": record["person_lifecycle_status"],
+        "canonical_person_id": record["canonical_person_id"],
+        "person_archived": record["person_lifecycle_status"] == "ARCHIVED",
+        "person_deleted": record["person_lifecycle_status"] == "DELETED",
+        "person_merged": record["person_lifecycle_status"] == "MERGED",
         "quality_score": record["quality_score"],
         "source_image": record["source_image"],
         "crop_path": record["crop_path"],

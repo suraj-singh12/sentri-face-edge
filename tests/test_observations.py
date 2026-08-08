@@ -166,7 +166,7 @@ class ObservationStorageTest(unittest.TestCase):
             store = self._store(Path(temp))
             source = store.create_person("Source")
             survivor = store.create_person("Survivor")
-            store.set_canonical_person_id(
+            store._set_canonical_person_id_for_merge(
                 source.person_id, survivor.person_id, "canonical-map-observation",
             )
             observation = store.create_observation("canonical-observation")

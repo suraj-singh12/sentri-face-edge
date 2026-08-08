@@ -2178,6 +2178,100 @@ button {
   overflow-y: auto;
 }
 
+.relationship-graph-canvas {
+  position: relative;
+  height: min(64dvh, 620px);
+  min-height: 460px;
+  overflow: hidden;
+  border: 1px solid var(--mantine-color-dark-4);
+  border-radius: var(--mantine-radius-md);
+  background:
+    radial-gradient(circle at center, rgba(18, 184, 134, 0.08), transparent 36%),
+    var(--mantine-color-dark-8);
+}
+
+.relationship-graph-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.relationship-graph-edge {
+  stroke: var(--mantine-color-teal-6);
+  stroke-width: 0.32;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.72;
+}
+
+.relationship-graph-edge--mention {
+  stroke: var(--mantine-color-violet-5);
+  stroke-dasharray: 1.2 0.8;
+}
+
+.relationship-graph-node {
+  position: absolute;
+  width: 152px;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  border: 1px solid var(--mantine-color-dark-3);
+  border-radius: var(--mantine-radius-md);
+  background: color-mix(in srgb, var(--mantine-color-dark-7) 94%, transparent);
+  box-shadow: var(--mantine-shadow-sm);
+}
+
+.relationship-graph-node--root {
+  border-color: var(--mantine-color-teal-5);
+  box-shadow: 0 0 0 2px rgba(18, 184, 134, 0.18), var(--mantine-shadow-md);
+}
+
+.relationship-graph-node--no-photo {
+  border-style: dashed;
+  border-color: var(--mantine-color-orange-6);
+}
+
+.relationship-graph-node-main {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  color: inherit;
+  text-align: left;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.relationship-graph-node-main:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.relationship-graph-node-copy {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.relationship-graph-expand {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  box-shadow: var(--mantine-shadow-sm);
+}
+
+@media (max-width: 48em) {
+  .relationship-graph-canvas {
+    min-height: 520px;
+    overflow: auto;
+  }
+
+  .relationship-graph-node {
+    width: 132px;
+  }
+}
+
 .people-profile-tabs {
   flex: 1 1 auto;
   min-height: 0;

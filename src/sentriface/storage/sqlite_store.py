@@ -110,6 +110,14 @@ class SQLiteIdentityStore:
                     f"(v{initial_version} to v{current_version}); startup was stopped safely."
                 )
             _apply_schema_migrations(conn, current_version)
+            if current_version == SCHEMA_VERSION:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    _validate_and_repair_current_domain_state(conn)
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
 
     def _schema_version(self) -> int:
         if not self.db_path.exists():
@@ -144,6 +152,7 @@ class SQLiteIdentityStore:
         notes: str = "",
         identity_status: str = "IDENTIFIED",
     ) -> Person:
+        """Internal fixture/compatibility primitive; production uses IdentityService."""
         normalized_name = name.strip()
         normalized_metadata = metadata or {}
         normalized_notes = notes.strip()
@@ -185,7 +194,59 @@ class SQLiteIdentityStore:
             )
         return person
 
-    def create_placeholder_person(
+    def create_identified_person(
+        self,
+        name: str,
+        metadata: dict,
+        operation_id: str,
+        *,
+        actor: dict | None = None,
+        source: str = "identity-service",
+    ) -> Person:
+        normalized_name = str(name).strip()
+        normalized_metadata = dict(metadata or {})
+        with self._connect() as conn:
+            existing = _existing_committed_operation_result(
+                conn, operation_id, "identity.create",
+            )
+            if existing is not None:
+                row = conn.execute(
+                    "SELECT * FROM persons WHERE person_id = ?",
+                    (existing.get("person_id"),),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("Committed identity creation is missing its person")
+                return _person_from_row(row)
+            person_id = str(uuid.uuid4())
+            _begin_journal_operation(
+                conn,
+                "identity.create",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "identity-service",
+                affected_entities=[{"entity_type": "person", "entity_id": person_id}],
+                details={"identity_status": "IDENTIFIED", "biometric_status": "NO_FACE"},
+            )
+            try:
+                person = _insert_identified_person_record(
+                    conn,
+                    person_id=person_id,
+                    name=normalized_name,
+                    metadata=normalized_metadata,
+                    enrollment_status="placeholder",
+                )
+            except sqlite3.IntegrityError as exc:
+                raise _placeholder_name_conflict(exc) from exc
+            result = {
+                "person_id": person.person_id,
+                "lifecycle_status": "ACTIVE",
+                "identity_status": "IDENTIFIED",
+                "biometric_status": "NO_FACE",
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return person
+
+    def _legacy_create_placeholder_person(
         self,
         name: str,
         metadata: dict | None,
@@ -218,7 +279,7 @@ class SQLiteIdentityStore:
                 editor_name.strip(),
                 notes,
             )
-            automatic_associations = _create_note_associations(
+            automatic_associations = _legacy_create_note_associations(
                 conn, person.person_id, person.notes, editor_name.strip(), mentioned_person_ids or [],
             )
             _record_person_operation(
@@ -324,7 +385,7 @@ class SQLiteIdentityStore:
             ).fetchall()
         return [_embedding_from_row(row) for row in rows]
 
-    def rename_person(self, person_id: str, name: str) -> None:
+    def _legacy_rename_person(self, person_id: str, name: str) -> None:
         with self._connect() as conn:
             try:
                 cursor = conn.execute(
@@ -345,27 +406,33 @@ class SQLiteIdentityStore:
         importance: str | None,
         editor_name: str,
         tags: list[str] | None = None,
-        operation_id: str | None = None,
+        *,
+        operation_id: str,
+        actor: dict | None = None,
+        source: str | None = None,
     ) -> PersonChange:
         with self._connect() as conn:
-            if operation_id:
+            existing = _existing_committed_operation_result(
+                conn, operation_id, "identity.profile.update",
+            )
+            if existing is None:
                 existing = _begin_person_operation(conn, operation_id, "update-profile")
-                if existing:
-                    change_row = conn.execute(
-                        """
-                        SELECT change_id, person_id, previous_name, new_name,
-                               previous_rank, new_rank, previous_country, new_country,
-                               previous_importance, new_importance,
-                               previous_status, new_status, previous_notes, new_notes,
-                               editor_name, created_at
-                        FROM person_change_history
-                        WHERE change_id = ?
-                        """,
-                        (existing["change_id"],),
-                    ).fetchone()
-                    if change_row is None:
-                        raise RuntimeError("Stored profile update result is no longer available")
-                    return _person_change_from_row(change_row)
+            if existing:
+                change_row = conn.execute(
+                    """
+                    SELECT change_id, person_id, previous_name, new_name,
+                           previous_rank, new_rank, previous_country, new_country,
+                           previous_importance, new_importance,
+                           previous_status, new_status, previous_notes, new_notes,
+                           editor_name, created_at
+                    FROM person_change_history
+                    WHERE change_id = ?
+                    """,
+                    (existing["change_id"],),
+                ).fetchone()
+                if change_row is None:
+                    raise RuntimeError("Stored profile update result is no longer available")
+                return _person_change_from_row(change_row)
             row = conn.execute(
                 """
                 SELECT person_id, name, metadata, enrollment_status, notes
@@ -376,6 +443,14 @@ class SQLiteIdentityStore:
             ).fetchone()
             if row is None:
                 raise KeyError(f"Unknown person: {person_id}")
+            _begin_journal_operation(
+                conn,
+                "identity.profile.update",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "identity-service",
+                affected_entities=[{"entity_type": "person", "entity_id": person_id}],
+            )
             previous_metadata = json.loads(row["metadata"])
             previous_name = row["name"]
             next_metadata = {
@@ -419,13 +494,11 @@ class SQLiteIdentityStore:
             except sqlite3.IntegrityError as exc:
                 raise _placeholder_name_conflict(exc) from exc
             _insert_person_change(conn, change)
-            if operation_id:
-                _record_person_operation(
-                    conn,
-                    operation_id,
-                    "update-profile",
-                    {"change_id": change.change_id, "person_id": person_id},
-                )
+            result = {"change_id": change.change_id, "person_id": person_id}
+            _record_person_operation(
+                conn, operation_id, "update-profile", result,
+            )
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
         return change
 
     def create_note(
@@ -1040,7 +1113,7 @@ class SQLiteIdentityStore:
             )
         return operations
 
-    def create_person_association(
+    def _legacy_create_person_association(
         self,
         source_person_id: str,
         target_person_id: str,
@@ -1113,7 +1186,7 @@ class SQLiteIdentityStore:
             )
             return association
 
-    def create_placeholder_association(
+    def _legacy_create_placeholder_association(
         self,
         source_person_id: str,
         name: str,
@@ -1208,7 +1281,7 @@ class SQLiteIdentityStore:
             ).fetchall()
         return [_person_association_from_row(row) for row in rows]
 
-    def remove_person_association(
+    def _legacy_remove_person_association(
         self,
         association_id: str,
         actor_name: str,
@@ -1627,16 +1700,12 @@ class SQLiteIdentityStore:
                         if not _has_meaningful_identity_context(name, metadata, str(row["notes"] or "")):
                             raise ValueError("A new person requires meaningful identity or context")
                         person_id = str(uuid.uuid4())
-                        now = utc_now()
-                        conn.execute(
-                            """
-                            INSERT INTO persons(
-                                person_id, name, metadata, created_at, notes,
-                                lifecycle_status, identity_status, biometric_status,
-                                lifecycle_changed_at
-                            ) VALUES (?, ?, ?, ?, '', 'ACTIVE', 'IDENTIFIED', 'NO_FACE', ?)
-                            """,
-                            (person_id, name, json.dumps(metadata, separators=(",", ":")), now, now),
+                        _insert_identified_person_record(
+                            conn,
+                            person_id=person_id,
+                            name=name,
+                            metadata=metadata,
+                            enrollment_status="enrolled",
                         )
                         created_by_key[key] = person_id
                         created_person_ids.append(person_id)
@@ -2723,7 +2792,7 @@ class SQLiteIdentityStore:
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
-    def set_canonical_person_id(
+    def _set_canonical_person_id_for_merge(
         self,
         person_id: str,
         canonical_person_id: str,
@@ -2863,7 +2932,10 @@ class SQLiteIdentityStore:
             _record_person_operation(conn, operation_id, "physical-purge-person", result)
             return result
 
-    def delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
+    def delete_embedding(
+        self, embedding_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
         """Soft-delete a face for 30 days while retaining its linked sightings."""
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "soft-delete-embedding")
@@ -2883,6 +2955,14 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown embedding: {embedding_id}")
             if row["deleted_at"]:
                 raise KeyError("Face is already in Deleted Faces")
+            _begin_journal_operation(
+                conn, "biometric.face.delete", operation_id=operation_id,
+                actor=actor, source=_optional_text(source) or "identity-service",
+                affected_entities=[
+                    {"entity_type": "embedding", "entity_id": embedding_id},
+                    {"entity_type": "person", "entity_id": row["person_id"]},
+                ],
+            )
             detail_count = conn.execute(
                 "SELECT COUNT(*) FROM recognition_details WHERE embedding_id = ?",
                 (embedding_id,),
@@ -2919,6 +2999,7 @@ class SQLiteIdentityStore:
                 "crop_path": row["crop_path"],
             }
             _record_person_operation(conn, operation_id, "soft-delete-embedding", result)
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
     def list_deleted_embeddings(self) -> list[dict]:
@@ -2929,6 +3010,8 @@ class SQLiteIdentityStore:
                        e.source_image, e.crop_path, e.created_at,
                        e.deleted_at, e.purge_after,
                        p.name, p.deleted_at AS person_deleted_at,
+                       p.lifecycle_status AS person_lifecycle_status,
+                       p.canonical_person_id AS canonical_person_id,
                        COUNT(d.detail_id) AS sighting_count
                 FROM embeddings e
                 JOIN persons p ON p.person_id = e.person_id
@@ -2940,14 +3023,18 @@ class SQLiteIdentityStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def restore_deleted_embedding(self, embedding_id: str, operation_id: str) -> dict:
+    def restore_deleted_embedding(
+        self, embedding_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "restore-deleted-embedding")
             if existing:
                 return existing
             row = conn.execute(
                 """
-                SELECT e.person_id, e.deleted_at, e.purge_after, p.deleted_at AS person_deleted_at,
+                SELECT e.person_id, e.deleted_at, e.purge_after,
+                       p.deleted_at AS person_deleted_at, p.lifecycle_status,
                        p.metadata
                 FROM embeddings e
                 JOIN persons p ON p.person_id = e.person_id
@@ -2959,8 +3046,16 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown deleted face: {embedding_id}")
             if row["deleted_at"] is None:
                 raise KeyError("Face is not deleted")
-            if row["person_deleted_at"] is not None:
-                raise KeyError("Restore the archived person before restoring this face")
+            if row["lifecycle_status"] != "ACTIVE" or row["person_deleted_at"] is not None:
+                raise KeyError("Only an active identity can receive a restored face")
+            _begin_journal_operation(
+                conn, "biometric.face.restore", operation_id=operation_id,
+                actor=actor, source=_optional_text(source) or "identity-service",
+                affected_entities=[
+                    {"entity_type": "embedding", "entity_id": embedding_id},
+                    {"entity_type": "person", "entity_id": row["person_id"]},
+                ],
+            )
             conn.execute(
                 """
                 UPDATE embeddings
@@ -2983,9 +3078,13 @@ class SQLiteIdentityStore:
                 "previously_deleted_at": row["deleted_at"],
             }
             _record_person_operation(conn, operation_id, "restore-deleted-embedding", result)
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
-    def permanently_delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
+    def permanently_delete_embedding(
+        self, embedding_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "purge-deleted-embedding")
             if existing:
@@ -3002,6 +3101,14 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown deleted face: {embedding_id}")
             if row["deleted_at"] is None:
                 raise KeyError("Move the face to Deleted Faces before deleting it permanently")
+            _begin_journal_operation(
+                conn, "biometric.face.purge", operation_id=operation_id,
+                actor=actor, source=_optional_text(source) or "identity-service",
+                affected_entities=[
+                    {"entity_type": "embedding", "entity_id": embedding_id},
+                    {"entity_type": "person", "entity_id": row["person_id"]},
+                ],
+            )
             detail_count = conn.execute(
                 "SELECT COUNT(*) FROM recognition_details WHERE embedding_id = ?",
                 (embedding_id,),
@@ -3020,6 +3127,7 @@ class SQLiteIdentityStore:
                 "previous_purge_after": row["purge_after"],
             }
             _record_person_operation(conn, operation_id, "purge-deleted-embedding", result)
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
     def list_expired_deleted_embedding_ids(self, now: str | None = None) -> list[str]:
@@ -3043,6 +3151,8 @@ class SQLiteIdentityStore:
         embedding_ids: list[str],
         operation_id: str,
         now: str | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
     ) -> dict:
         unique_ids = list(dict.fromkeys(embedding_ids))
         with self._connect() as conn:
@@ -3053,6 +3163,14 @@ class SQLiteIdentityStore:
             )
             if existing:
                 return existing
+            _begin_journal_operation(
+                conn, "biometric.face.purge-expired", operation_id=operation_id,
+                actor=actor, source=_optional_text(source) or "retention-service",
+                affected_entities=[
+                    {"entity_type": "embedding", "entity_id": embedding_id}
+                    for embedding_id in unique_ids
+                ],
+            )
             if not unique_ids:
                 result = {
                     "embedding_ids": [],
@@ -3066,6 +3184,7 @@ class SQLiteIdentityStore:
                     "purge-expired-embeddings",
                     result,
                 )
+                _transition_journal_operation(conn, operation_id, "COMMITTED", result)
                 return result
             placeholders = ", ".join("?" for _ in unique_ids)
             rows = conn.execute(
@@ -3118,9 +3237,10 @@ class SQLiteIdentityStore:
                 "purge-expired-embeddings",
                 result,
             )
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
-    def move_embedding(self, embedding_id: str, person_id: str, operation_id: str) -> dict:
+    def _legacy_move_embedding(self, embedding_id: str, person_id: str, operation_id: str) -> dict:
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "move-embedding")
             if existing:
@@ -3485,6 +3605,8 @@ class SQLiteIdentityStore:
         operation_id: str,
         favorite: bool | None = None,
         representative_embedding_id: str | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
     ) -> dict:
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "person-preferences")
@@ -3496,6 +3618,11 @@ class SQLiteIdentityStore:
             ).fetchone()
             if person is None:
                 raise KeyError(f"Unknown person: {person_id}")
+            _begin_journal_operation(
+                conn, "identity.preferences.update", operation_id=operation_id,
+                actor=actor, source=_optional_text(source) or "identity-service",
+                affected_entities=[{"entity_type": "person", "entity_id": person_id}],
+            )
             metadata = json.loads(person["metadata"])
             changed_preferences = []
             if favorite is not None:
@@ -3527,6 +3654,7 @@ class SQLiteIdentityStore:
                 "updated": True,
             }
             _record_person_operation(conn, operation_id, "person-preferences", result)
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
     def add_recognition_detail(
@@ -3550,6 +3678,7 @@ class SQLiteIdentityStore:
         mentioned_person_ids: list[str] | None = None,
         operation_id: str | None = None,
     ) -> RecognitionDetail:
+        """Internal legacy/import primitive; production review details use P6."""
         detail = RecognitionDetail(
             detail_id=str(uuid.uuid4()),
             embedding_id=embedding_id,
@@ -3648,7 +3777,7 @@ class SQLiteIdentityStore:
                         "UPDATE persons SET metadata = ? WHERE person_id = ? AND deleted_at IS NULL",
                         (json.dumps(metadata, separators=(",", ":")), person_id),
                     )
-            automatic_associations = _create_note_associations(
+            automatic_associations = _legacy_create_note_associations(
                 conn, person_id, detail.notes, (added_by or "").strip(), mentioned_person_ids or [],
             )
             if operation_id:
@@ -3711,6 +3840,7 @@ class SQLiteIdentityStore:
         source_image: str | None = None,
         crop_path: str | None = None,
     ) -> EmbeddingRecord:
+        """Internal fixture/import primitive; production enrollment uses P6."""
         if len(vector) != self.embedding_dim:
             raise ValueError(f"Expected {self.embedding_dim} dimensions, got {len(vector)}")
         record = EmbeddingRecord(
@@ -3758,10 +3888,35 @@ class SQLiteIdentityStore:
                        e.source_image, e.crop_path, e.created_at
                 FROM embeddings e
                 JOIN persons p ON p.person_id = e.person_id
-                WHERE p.deleted_at IS NULL AND e.deleted_at IS NULL
+                WHERE p.lifecycle_status = 'ACTIVE'
+                  AND p.deleted_at IS NULL
+                  AND e.deleted_at IS NULL
                 """
             ).fetchall()
         return [_embedding_from_row(row) for row in rows]
+
+    def current_embedding_person_ids(self, embedding_ids: list[str]) -> dict[str, str]:
+        normalized_ids = list(dict.fromkeys(
+            str(embedding_id).strip() for embedding_id in embedding_ids
+            if str(embedding_id).strip()
+        ))
+        if not normalized_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in normalized_ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT e.embedding_id, e.person_id
+                FROM embeddings e
+                JOIN persons p ON p.person_id = e.person_id
+                WHERE e.embedding_id IN ({placeholders})
+                  AND e.deleted_at IS NULL
+                  AND p.lifecycle_status = 'ACTIVE'
+                  AND p.deleted_at IS NULL
+                """,
+                normalized_ids,
+            ).fetchall()
+        return {str(row["embedding_id"]): str(row["person_id"]) for row in rows}
 
     def save_pending_addition(self, pending: PendingAddition) -> None:
         if len(pending.vector) != self.embedding_dim:
@@ -3857,7 +4012,7 @@ class SQLiteIdentityStore:
                 if row["path"]
             ]
 
-    def confirm_pending_addition(
+    def _legacy_confirm_pending_addition(
         self,
         pending_id: str,
         operation_id: str,
@@ -3906,7 +4061,7 @@ class SQLiteIdentityStore:
                         notes.strip(),
                     ),
                 )
-                automatic_associations = _create_note_associations(
+                automatic_associations = _legacy_create_note_associations(
                     conn, person_id, notes.strip(), "SentriFace", mentioned_person_ids or [],
                 )
             if not creating_new_person:
@@ -3954,7 +4109,7 @@ class SQLiteIdentityStore:
                         recognition_detail.get("added_by"), detail_notes, utc_now(),
                     ),
                 )
-                automatic_associations.extend(_create_note_associations(
+                automatic_associations.extend(_legacy_create_note_associations(
                     conn, person_id, detail_notes,
                     str(recognition_detail.get("added_by") or "").strip(),
                     list(recognition_detail.get("mentioned_person_ids") or []),
@@ -4137,7 +4292,7 @@ class SQLiteIdentityStore:
                 (session_id, group_id, status, utc_now()),
             )
 
-    def confirm_init_faces_atomic(
+    def _legacy_confirm_init_faces_atomic(
         self,
         session_id: str,
         group_id: str,
@@ -4191,7 +4346,7 @@ class SQLiteIdentityStore:
                     "INSERT INTO persons(person_id, name, metadata, created_at, notes) VALUES (?, ?, '{}', ?, ?)",
                     (person_id, name.strip(), utc_now(), notes.strip()),
                 )
-                automatic_associations = _create_note_associations(
+                automatic_associations = _legacy_create_note_associations(
                     conn, person_id, notes.strip(), "SentriFace", mentioned_person_ids or [],
                 )
             if not creating_new_person:
@@ -4833,12 +4988,12 @@ def _migrate_15_to_16(conn: sqlite3.Connection) -> None:
         for row in conn.execute(
             "SELECT person_id, notes FROM persons WHERE deleted_at IS NULL AND notes LIKE '%@%'"
         ).fetchall():
-            _create_note_associations(conn, row["person_id"], row["notes"] or "", "SentriFace migration", [])
+            _legacy_create_note_associations(conn, row["person_id"], row["notes"] or "", "SentriFace migration", [])
     if "notes" in detail_columns and "person_associations" in tables:
         for row in conn.execute(
             "SELECT person_id, notes FROM recognition_details WHERE notes LIKE '%@%'"
         ).fetchall():
-            _create_note_associations(conn, row["person_id"], row["notes"] or "", "SentriFace migration", [])
+            _legacy_create_note_associations(conn, row["person_id"], row["notes"] or "", "SentriFace migration", [])
     conn.execute("PRAGMA user_version = 16")
 
 
@@ -5770,10 +5925,126 @@ def _apply_schema_migrations(conn: sqlite3.Connection, current_version: int) -> 
                     f"v{migration.to_version} reported schema v{migrated_version}."
                 )
             version = migrated_version
+        _validate_and_repair_current_domain_state(conn)
         conn.commit()
     except Exception:
         conn.rollback()
         raise
+
+
+def _validate_and_repair_current_domain_state(conn: sqlite3.Connection) -> None:
+    foreign_key_errors = conn.execute("PRAGMA foreign_key_check").fetchall()
+    authoritative_foreign_key_errors = [
+        row for row in foreign_key_errors if str(row[0]) != "graph_connections"
+    ]
+    if authoritative_foreign_key_errors:
+        raise SchemaMigrationError(
+            "Database domain validation failed: dangling foreign-key references"
+        )
+
+    lifecycle_errors: list[str] = []
+    people = conn.execute(
+        """
+        SELECT person_id, lifecycle_status, canonical_person_id, deleted_at,
+               identity_status, biometric_status, name, notes, metadata
+        FROM persons ORDER BY person_id
+        """
+    ).fetchall()
+    for person in people:
+        person_id = str(person["person_id"])
+        lifecycle_status = str(person["lifecycle_status"])
+        canonical_person_id = person["canonical_person_id"]
+        if lifecycle_status not in PERSON_LIFECYCLE_STATUSES:
+            lifecycle_errors.append(f"Person {person_id} has invalid lifecycle {lifecycle_status}")
+            continue
+        if lifecycle_status == "ACTIVE" and person["deleted_at"] is not None:
+            lifecycle_errors.append(f"Active person {person_id} has a deletion timestamp")
+        if lifecycle_status != "ACTIVE" and person["deleted_at"] is None:
+            lifecycle_errors.append(f"Historical person {person_id} lacks a lifecycle timestamp")
+        if lifecycle_status == "MERGED" and canonical_person_id is None:
+            lifecycle_errors.append(f"Merged person {person_id} has no canonical identity")
+        if lifecycle_status != "MERGED" and canonical_person_id is not None:
+            lifecycle_errors.append(f"Non-merged person {person_id} has a canonical mapping")
+        if canonical_person_id is not None:
+            try:
+                _resolve_canonical_person_id(conn, person_id)
+            except (KeyError, RuntimeError, ValueError) as exc:
+                lifecycle_errors.append(f"Person {person_id} has invalid canonical mapping: {exc}")
+        try:
+            metadata = json.loads(person["metadata"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            lifecycle_errors.append(f"Person {person_id} has invalid metadata")
+            metadata = {"invalid": True}
+        if (
+            person["identity_status"] == "UNIDENTIFIED"
+            and person["biometric_status"] == "NO_FACE"
+            and not str(person["name"] or "").strip()
+            and not str(person["notes"] or "").strip()
+            and not metadata
+        ):
+            lifecycle_errors.append(f"Person {person_id} is unidentified with no face or context")
+    if lifecycle_errors:
+        raise SchemaMigrationError(
+            "Database domain validation failed: " + "; ".join(lifecycle_errors)
+        )
+
+    _, evidence_errors, _ = _expected_graph_connections(conn)
+    if evidence_errors:
+        raise SchemaMigrationError(
+            "Database relationship evidence validation failed: "
+            + "; ".join(evidence_errors)
+        )
+    validation = _validate_graph_projection(conn)
+    if not validation["valid"]:
+        _replace_graph_projection(conn)
+        repaired = _validate_graph_projection(conn)
+        if not repaired["valid"]:
+            raise SchemaMigrationError(
+                "Database graph projection repair failed: "
+                + "; ".join(repaired["errors"])
+            )
+
+
+def _insert_identified_person_record(
+    conn: sqlite3.Connection,
+    *,
+    person_id: str,
+    name: str,
+    metadata: dict,
+    enrollment_status: str,
+) -> Person:
+    normalized_name = str(name).strip()
+    normalized_metadata = dict(metadata or {})
+    if not _has_meaningful_identity_context(normalized_name, normalized_metadata, ""):
+        raise ValueError("A person without a face requires meaningful identity or context")
+    created_at = utc_now()
+    person = Person(
+        person_id=person_id,
+        name=normalized_name,
+        metadata=normalized_metadata,
+        created_at=created_at,
+        enrollment_status=enrollment_status,
+        lifecycle_status="ACTIVE",
+        identity_status="IDENTIFIED",
+        biometric_status="NO_FACE",
+    )
+    conn.execute(
+        """
+        INSERT INTO persons(
+            person_id, name, metadata, created_at, enrollment_status, notes,
+            lifecycle_status, identity_status, biometric_status, lifecycle_changed_at
+        ) VALUES (?, ?, ?, ?, ?, '', 'ACTIVE', 'IDENTIFIED', 'NO_FACE', ?)
+        """,
+        (
+            person.person_id,
+            person.name,
+            json.dumps(person.metadata, separators=(",", ":")),
+            person.created_at,
+            person.enrollment_status,
+            person.created_at,
+        ),
+    )
+    return person
 
 
 def _create_placeholder_record(
@@ -6929,7 +7200,7 @@ def _person_association_from_row(row: sqlite3.Row) -> PersonAssociation:
     )
 
 
-def _create_note_associations(
+def _legacy_create_note_associations(
     conn: sqlite3.Connection,
     owner_person_id: str,
     notes: str,

@@ -162,7 +162,7 @@ test("new-person creator is retained in local state and profile history fallback
   assert.match(utils, /metadata\.added_by \|\| creatorDetail\.added_by \|\| ""/);
 });
 
-test("a recorded People merge can be undone with one narrow backend request", async () => {
+test("legacy People merge and undo remain gated until P8", async () => {
   const [view, controller] = await Promise.all([
     read("../src/views/PeopleView.jsx"),
     read("../src/hooks/usePeopleController.js"),
@@ -171,10 +171,9 @@ test("a recorded People merge can be undone with one narrow backend request", as
   assert.match(view, /Undo merge/);
   assert.match(view, /mergeEvent\?\.result\?\.undo_supported/);
   assert.match(view, /managementDialog === "undo-merge"/);
-  assert.match(controller, /apiPost\("\/api\/person-merge-undo"/);
-  assert.match(controller, /upsertPerson\(result\.source_person\)/);
-  assert.match(controller, /upsertPerson\(result\.target_person\)/);
-  assert.doesNotMatch(controller, /undoPeopleMerge[\s\S]{0,900}(?:loadPeople|loadPerson|refreshAll)\(/);
+  assert.doesNotMatch(controller, /apiPost\("\/api\/person-merge(?:-undo)?"/);
+  assert.match(controller, /Identity Merge is temporarily unavailable until P8/);
+  assert.match(controller, /Undo Merge is temporarily unavailable until P8/);
 });
 
 test("a newly archived merge opens immediately without requiring a tab refresh", async () => {

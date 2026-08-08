@@ -15,7 +15,7 @@ from sentriface.components.linear_index import LinearFaceIndex
 from sentriface.components.onnx_components import OnnxArcFaceEmbedder, OnnxScrfdDetector
 from sentriface.backup_service import BackupService
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
-from sentriface.engine import IMAGE_EXTENSIONS, FaceEngine
+from sentriface.engine import DomainWorkflowUnavailableError, IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import ModelSetupError, SentriFaceError
 from sentriface.model_setup import load_similarity_calibration, require_model_usage_declaration
 from sentriface.hardware import assess_hardware
@@ -372,6 +372,23 @@ def main() -> int:
         engine.initialize()
         if args.metrics:
             engine.reset_metrics()
+        cli_actor = {
+            "username": args.username or "local-cli",
+            "display_name": args.username or "Local CLI",
+            "roles": [],
+        }
+
+        gated_commands = {
+            "enroll": "Photo enrollment is only available through atomic review finalisation",
+            "confirm-new": "Pending faces can only be confirmed through atomic review finalisation",
+            "confirm-existing": "Pending faces can only be confirmed through atomic review finalisation",
+            "init-confirm": "Queue faces can only be confirmed through atomic review finalisation",
+            "init-confirm-existing": "Queue faces can only be confirmed through atomic review finalisation",
+            "move-embedding": "Move Face is temporarily unavailable until P7",
+            "merge-persons": "Identity Merge is temporarily unavailable until P8",
+        }
+        if args.command in gated_commands:
+            raise DomainWorkflowUnavailableError(gated_commands[args.command])
 
         if args.command == "init-db":
             return _emit_engine(args, engine, {"initialized": str(args.data_dir)})
@@ -403,24 +420,6 @@ def main() -> int:
                         }
                         for image_path in images
                     ]
-                },
-            )
-
-        if args.command == "enroll":
-            additions = engine.prepare_additions(
-                args.image,
-                allow_bad_quality=args.force_bad_quality,
-            )
-            if not additions:
-                return _emit_engine(args, engine, {"faces": []}, exit_code=1)
-            person_id = engine.confirm_new_person(additions[0], args.name)
-            return _emit_engine(
-                args,
-                engine,
-                {
-                    "person_id": person_id,
-                    "embeddings": 1,
-                    "quality": _quality(additions[0].quality),
                 },
             )
 
@@ -467,14 +466,6 @@ def main() -> int:
                 },
             )
 
-        if args.command == "confirm-new":
-            person_id = engine.confirm_pending_as_new_person(args.pending_id, args.name)
-            return _emit_engine(args, engine, {"person_id": person_id, "confirmed": "new"})
-
-        if args.command == "confirm-existing":
-            embedding_id = engine.confirm_pending_as_existing_person(args.pending_id, args.person_id)
-            return _emit_engine(args, engine, {"embedding_id": embedding_id, "confirmed": "existing"})
-
         if args.command == "reject-pending":
             engine.reject_pending_addition(args.pending_id)
             return _emit_engine(args, engine, {"rejected": 1})
@@ -497,33 +488,6 @@ def main() -> int:
         if args.command == "init-groups":
             groups = engine.list_init_groups(args.session_id)
             return _emit_engine(args, engine, {"groups": [_init_group(group) for group in groups]})
-
-        if args.command == "init-confirm":
-            person_id = engine.confirm_init_group(args.session_id, args.group_id, args.name)
-            return _emit_engine(
-                args,
-                engine,
-                {
-                    "session_id": args.session_id,
-                    "group_id": args.group_id,
-                    "person_id": person_id,
-                    "confirmed": "init_group",
-                },
-            )
-
-        if args.command == "init-confirm-existing":
-            embeddings = engine.confirm_init_group_existing(args.session_id, args.group_id, args.person_id)
-            return _emit_engine(
-                args,
-                engine,
-                {
-                    "session_id": args.session_id,
-                    "group_id": args.group_id,
-                    "person_id": args.person_id,
-                    "embeddings": embeddings,
-                    "confirmed": "init_group_existing",
-                },
-            )
 
         if args.command == "init-reject":
             engine.reject_init_group(args.session_id, args.group_id)
@@ -551,7 +515,10 @@ def main() -> int:
             )
 
         if args.command == "rename-person":
-            engine.rename_person(args.person_id, args.name)
+            engine.rename_person(
+                args.person_id, args.name, str(uuid.uuid4()),
+                actor=cli_actor, source="cli.rename-person",
+            )
             return _emit_engine(args, engine, {"person_id": args.person_id, "renamed": args.name})
 
         if args.command == "delete-person":
@@ -564,11 +531,15 @@ def main() -> int:
                 f"before-person-archive-{person.name}-{args.person_id[:8]}",
                 operation_id,
             )
-            result = engine.archive_person(args.person_id, operation_id)
+            result = engine.archive_person(
+                args.person_id, operation_id, cli_actor, "cli.delete-person",
+            )
             return _emit_engine(args, engine, {**result, "backup_id": backup.backup_id})
 
         if args.command == "restore-person":
-            result = engine.restore_person(args.person_id, str(uuid.uuid4()))
+            result = engine.restore_person(
+                args.person_id, str(uuid.uuid4()), cli_actor, "cli.restore-person",
+            )
             return _emit_engine(args, engine, result)
 
         if args.command == "delete-embedding":
@@ -586,7 +557,10 @@ def main() -> int:
                 ),
                 operation_id,
             )
-            result = engine.delete_embedding(args.embedding_id, operation_id)
+            result = engine.delete_embedding(
+                args.embedding_id, operation_id,
+                actor=cli_actor, source="cli.delete-embedding",
+            )
             return _emit_engine(args, engine, {**result, "backup_id": backup.backup_id})
 
         if args.command == "deleted-faces":
@@ -597,7 +571,10 @@ def main() -> int:
             )
 
         if args.command == "restore-embedding":
-            result = engine.restore_deleted_embedding(args.embedding_id, str(uuid.uuid4()))
+            result = engine.restore_deleted_embedding(
+                args.embedding_id, str(uuid.uuid4()),
+                actor=cli_actor, source="cli.restore-embedding",
+            )
             return _emit_engine(args, engine, result)
 
         if args.command == "purge-embedding":
@@ -613,54 +590,11 @@ def main() -> int:
                 ),
                 operation_id,
             )
-            result = engine.permanently_delete_embedding(args.embedding_id, operation_id)
+            result = engine.permanently_delete_embedding(
+                args.embedding_id, operation_id,
+                actor=cli_actor, source="cli.purge-embedding",
+            )
             return _emit_engine(args, engine, {**result, "backup_id": backup.backup_id})
-
-        if args.command == "move-embedding":
-            engine.move_embedding(args.embedding_id, args.person_id)
-            return _emit_engine(
-                args,
-                engine,
-                {
-                    "embedding_id": args.embedding_id,
-                    "person_id": args.person_id,
-                    "moved": 1,
-                },
-            )
-
-        if args.command == "merge-persons":
-            source = engine.get_person(args.source_person_id)
-            target = engine.get_person(args.target_person_id)
-            if source is None:
-                raise KeyError(f"Unknown source person: {args.source_person_id}")
-            if target is None:
-                raise KeyError(f"Unknown target person: {args.target_person_id}")
-            operation_id = str(uuid.uuid4())
-            backup = _pre_deletion_backup(
-                config,
-                (
-                    f"before-person-merge-{source.name}-into-{target.name}-"
-                    f"{args.source_person_id[:8]}"
-                ),
-                operation_id,
-            )
-            moved = engine.merge_persons(
-                args.source_person_id,
-                args.target_person_id,
-                operation_id,
-            )
-            return _emit_engine(
-                args,
-                engine,
-                {
-                    "source_person_id": args.source_person_id,
-                    "target_person_id": args.target_person_id,
-                    "embeddings_moved": moved["moved_embeddings"],
-                    "deleted_faces_moved": moved["moved_deleted_faces"],
-                    "backup_id": backup.backup_id,
-                    "merged": 1,
-                },
-            )
 
         if args.command == "benchmark":
             images = _image_paths(args.source)

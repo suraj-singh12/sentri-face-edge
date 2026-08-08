@@ -207,6 +207,7 @@ class IdentityLifecycleTest(unittest.TestCase):
                 "India",
                 "Regular",
                 "Operator",
+                operation_id="deleted-person-profile-update",
             )
 
             deleted = store.soft_delete_person(person.person_id, "delete-1")
@@ -249,7 +250,7 @@ class IdentityLifecycleTest(unittest.TestCase):
             target = store.create_person("Target")
             store.archive_person(archived.person_id, "archive-query")
             store.soft_delete_person(deleted.person_id, "delete-query")
-            store.set_canonical_person_id(merged.person_id, target.person_id, "map-query")
+            store._set_canonical_person_id_for_merge(merged.person_id, target.person_id, "map-query")
 
             active_ids = {item.person.person_id for item in store.list_persons()}
             historical_ids = {item.person.person_id for item in store.list_historical_persons()}
@@ -268,8 +269,8 @@ class IdentityLifecycleTest(unittest.TestCase):
             survivor = store.create_person("Survivor")
 
             self.assertEqual(store.resolve_canonical_person_id(survivor.person_id), survivor.person_id)
-            store.set_canonical_person_id(first.person_id, second.person_id, "map-1")
-            store.set_canonical_person_id(second.person_id, survivor.person_id, "map-2")
+            store._set_canonical_person_id_for_merge(first.person_id, second.person_id, "map-1")
+            store._set_canonical_person_id_for_merge(second.person_id, survivor.person_id, "map-2")
 
             self.assertEqual(store.resolve_canonical_person_id(first.person_id), survivor.person_id)
             self.assertEqual(store.resolve_canonical_person_id(second.person_id), survivor.person_id)
@@ -285,13 +286,13 @@ class IdentityLifecycleTest(unittest.TestCase):
             second = store.create_person("Second")
 
             with self.assertRaisesRegex(ValueError, "itself"):
-                store.set_canonical_person_id(first.person_id, first.person_id, "self-map")
+                store._set_canonical_person_id_for_merge(first.person_id, first.person_id, "self-map")
             with self.assertRaisesRegex(KeyError, "Unknown person"):
-                store.set_canonical_person_id(first.person_id, "missing", "dangling-map")
+                store._set_canonical_person_id_for_merge(first.person_id, "missing", "dangling-map")
 
-            store.set_canonical_person_id(first.person_id, second.person_id, "map-first")
+            store._set_canonical_person_id_for_merge(first.person_id, second.person_id, "map-first")
             with self.assertRaisesRegex(ValueError, "cycle"):
-                store.set_canonical_person_id(second.person_id, first.person_id, "cycle-map")
+                store._set_canonical_person_id_for_merge(second.person_id, first.person_id, "cycle-map")
 
             self.assertIsNone(store.get_operation("self-map"))
             self.assertIsNone(store.get_operation("dangling-map"))

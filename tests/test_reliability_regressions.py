@@ -93,6 +93,7 @@ class ReliabilityRegressionTest(unittest.TestCase):
                 "England",
                 "Regular",
                 "tester",
+                operation_id=str(uuid.uuid4()),
             )
             engine.archive_person(first.person_id, str(uuid.uuid4()))
             operation_id = str(uuid.uuid4())

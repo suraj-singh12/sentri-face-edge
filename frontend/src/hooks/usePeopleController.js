@@ -40,94 +40,50 @@ export function usePeopleController({
     return payload;
   };
 
-  const createPlaceholderPerson = async (values) => {
-    const payload = await apiPost("/api/person-placeholder", {
+  const loadRelationshipGraphPerson = async (personId, archived = false, limit = 30) => apiGet(
+    `/api/person-association-neighbors?person_id=${encodeURIComponent(personId)}&include_archived=${archived ? "1" : "0"}&limit=${encodeURIComponent(limit)}`,
+  );
+
+  const createIdentifiedPerson = async (values) => {
+    const payload = await apiPost("/api/person-create", {
       name: values.name,
       rank: values.rank,
       country: values.country,
       importance: values.importance,
       tags: values.tags || [],
-      notes: values.notes || "",
       seen_date: values.date,
       seen_time: values.time,
       place_seen: values.placeSeen,
       individual_count: Number(values.individualCount),
       event_occasion: values.eventOccasion,
       added_by: values.addedBy,
-      mentioned_person_ids: values.mentionedPersonIds || [],
       operation_id: operationId(),
     });
+    if ((values.notes || "").trim() || (values.mentionedPersonIds || []).length) {
+      const notePayload = await apiPost("/api/person-notes", {
+        person_id: payload.person.person_id,
+        notes: values.notes || "",
+        expected_previous_notes: "",
+        mentioned_person_ids: values.mentionedPersonIds || [],
+        operation_id: operationId(),
+      });
+      payload.person = { ...payload.person, notes: notePayload.notes };
+    }
     upsertPerson(payload.person);
-    showToast("Placeholder person created");
+    showToast("Person created");
     return payload.person;
   };
 
   const createPersonAssociation = async (sourcePersonId, targetPersonId) => {
-    const requestId = operationId();
-    const payload = await apiPost("/api/person-association", {
-      source_person_id: sourcePersonId,
-      target_person_id: targetPersonId,
-      operation_id: requestId,
-    });
-    setPeopleGallery((current) => current?.person?.person_id === sourcePersonId ? {
-      ...current,
-      associations: [
-        payload.association,
-        ...(current.associations || []).filter((item) => item.association_id !== payload.association.association_id),
-      ],
-      management_events: [
-        localManagementEvent(requestId, "create-person-association", {
-          association_id: payload.association.association_id,
-          source_person_id: sourcePersonId,
-          target_person_id: targetPersonId,
-        }),
-        ...(current.management_events || []),
-      ],
-    } : current);
-    showToast("Person association added");
-    return payload.association;
+    throw new Error("Manual associations are temporarily unavailable until normalized graph evidence is enabled");
   };
 
   const createPlaceholderAssociation = async (sourcePersonId, name) => {
-    const requestId = operationId();
-    const payload = await apiPost("/api/person-association-placeholder", {
-      source_person_id: sourcePersonId,
-      name,
-      operation_id: requestId,
-    });
-    upsertPerson(payload.person);
-    setPeopleGallery((current) => current?.person?.person_id === sourcePersonId ? {
-      ...current,
-      associations: [payload.association, ...(current.associations || [])],
-      management_events: [
-        localManagementEvent(requestId, "create-placeholder-association", {
-          association_id: payload.association.association_id,
-          source_person_id: sourcePersonId,
-          target_person_id: payload.person.person_id,
-        }),
-        ...(current.management_events || []),
-      ],
-    } : current);
-    showToast(`Placeholder “${payload.person.name}” created and associated`);
-    return payload.association;
+    throw new Error("Association profile creation is temporarily unavailable until normalized graph evidence is enabled");
   };
 
   const removePersonAssociation = async (sourcePersonId, associationId) => {
-    const requestId = operationId();
-    const result = await apiPost("/api/person-association-remove", {
-      association_id: associationId,
-      operation_id: requestId,
-    });
-    setPeopleGallery((current) => current?.person?.person_id === sourcePersonId ? {
-      ...current,
-      associations: (current.associations || []).filter((item) => item.association_id !== associationId),
-      management_events: [
-        localManagementEvent(requestId, "remove-person-association", result),
-        ...(current.management_events || []),
-      ],
-    } : current);
-    showToast("Person association removed", "yellow");
-    return result;
+    throw new Error("Legacy association editing is unavailable; historical associations remain read-only");
   };
 
   const savePeopleProfile = async (values) => {
@@ -282,68 +238,15 @@ export function usePeopleController({
   };
 
   const mergePeople = async (sourcePersonId, targetPersonId) => {
-    const result = await apiPost("/api/person-merge", {
-      source_person_id: sourcePersonId,
-      target_person_id: targetPersonId,
-      operation_id: operationId(),
-    });
-    const target = await loadPerson(targetPersonId);
-    setPeopleGallery(target);
-    setPeopleGalleryImage(null);
-    archivePersonLocally(sourcePersonId, new Date().toISOString(), { merged_into: targetPersonId });
-    upsertPerson(personSummaryFromPayload(target));
-    showToast(
-      `Merged ${result.moved_embeddings} active photo${result.moved_embeddings === 1 ? "" : "s"} and ${result.moved_deleted_faces || 0} deleted face${result.moved_deleted_faces === 1 ? "" : "s"}. A database backup was created first.`,
-    );
-    return result;
+    throw new Error("Identity Merge is temporarily unavailable until P8");
   };
 
   const undoPeopleMerge = async (mergeOperationId) => {
-    const result = await apiPost("/api/person-merge-undo", {
-      merge_operation_id: mergeOperationId,
-      operation_id: operationId(),
-    });
-    upsertPerson(result.source_person);
-    upsertPerson(result.target_person);
-    setPeopleGallery(null);
-    setPeopleGalleryImage(null);
-    showToast(
-      `${result.restored_embeddings || 0} photo record${result.restored_embeddings === 1 ? "" : "s"} returned to the original profile.`,
-      "teal",
-      { title: "Merge undone" },
-    );
-    return result;
+    throw new Error("Undo Merge is temporarily unavailable until P8");
   };
 
   const movePersonPhoto = async (personId, embeddingId, targetPersonId) => {
-    const result = await apiPost("/api/person-photo-move", {
-      embedding_id: embeddingId,
-      target_person_id: targetPersonId,
-      operation_id: operationId(),
-    });
-    const moved = peopleGallery?.embeddings?.find((item) => item.embedding_id === embeddingId);
-    const updatedSourceGallery = peopleGallery?.person?.person_id === personId
-      ? removeEmbeddingFromGallery(peopleGallery, embeddingId)
-      : null;
-    updatePerson(personId, (person) => ({
-      ...person,
-      embedding_count: Math.max(0, Number(person.embedding_count || 0) - 1),
-      representative_image: updatedSourceGallery?.person?.representative_image ?? person.representative_image,
-      metadata: updatedSourceGallery?.person?.metadata ?? person.metadata,
-    }));
-    updatePerson(targetPersonId, (person) => ({
-      ...person,
-      enrollment_status: "enrolled",
-      is_placeholder: false,
-      embedding_count: Number(person.embedding_count || 0) + 1,
-      representative_image: person.representative_image || moved?.crop_path || moved?.source_image,
-    }));
-    setPeopleGallery((current) => current?.person?.person_id === personId
-      ? removeEmbeddingFromGallery(current, embeddingId)
-      : current);
-    setPeopleGalleryImage(null);
-    showToast(`Photo moved with ${result.moved_sightings} linked sighting${result.moved_sightings === 1 ? "" : "s"}`);
-    return result;
+    throw new Error("Move Face is temporarily unavailable until P7");
   };
 
   const deletePersonPhoto = async (personId, embeddingId) => {
@@ -367,7 +270,11 @@ export function usePeopleController({
     addDeletedFace({
       ...result,
       person_name: peopleGallery?.person?.name || personId,
+      person_lifecycle_status: "ACTIVE",
+      canonical_person_id: null,
       person_archived: false,
+      person_deleted: false,
+      person_merged: false,
       quality_score: removed?.quality_score,
       created_at: removed?.created_at,
       sighting_count: result.retained_sightings || 0,
@@ -417,7 +324,8 @@ export function usePeopleController({
     actions: {
       peopleOpen,
       refreshPeopleProfile,
-      createPlaceholderPerson,
+      loadRelationshipGraphPerson,
+      createIdentifiedPerson,
       createPersonAssociation,
       createPlaceholderAssociation,
       removePersonAssociation,
@@ -460,15 +368,6 @@ function removeEmbeddingFromGallery(gallery, embeddingId, options = {}) {
         ? { ...(gallery.person.metadata || {}), representative_embedding_id: nextRepresentative?.embedding_id || "" }
         : gallery.person.metadata,
     },
-  };
-}
-
-function personSummaryFromPayload(payload) {
-  return {
-    ...payload.person,
-    embedding_count: (payload.embeddings || []).length,
-    favorite: Boolean(payload.person.favorite),
-    tags: payload.person.tags || payload.person.metadata?.tags || [],
   };
 }
 

@@ -12,6 +12,7 @@ import {
   Grid,
   Group,
   Image,
+  Loader,
   Menu,
   Modal,
   NumberInput,
@@ -34,6 +35,7 @@ import {
   IconAt,
   IconArchive,
   IconCalendar,
+  IconChartDots,
   IconChevronDown,
   IconCopy,
   IconDots,
@@ -50,6 +52,7 @@ import {
   IconNotes,
   IconPhoto,
   IconPhotoStar,
+  IconPlus,
   IconRefresh,
   IconSearch,
   IconSortDescending,
@@ -74,6 +77,13 @@ import {
   mediaUrl,
   personProfile,
 } from "../utils.js";
+import {
+  createRelationshipGraph,
+  layoutRelationshipGraph,
+  mergeRelationshipGraph,
+  relationshipGraphCollections,
+  RELATIONSHIP_GRAPH_NEIGHBOR_LIMIT,
+} from "../utils/relationshipGraph.js";
 
 export function PeopleView({
   canEdit = false,
@@ -85,10 +95,11 @@ export function PeopleView({
   peopleGalleryImage,
   onRefresh,
   onOpen,
-  onCreatePlaceholder,
+  onCreateIdentifiedPerson,
   onCreateAssociation,
   onCreatePlaceholderAssociation,
   onRemoveAssociation,
+  onLoadGraphPerson,
   onImage,
   onBack,
   onSave,
@@ -201,10 +212,11 @@ export function PeopleView({
           onSave={onSave}
           onSaveNotes={onSaveNotes}
           onAddPhoto={onAddPhoto}
-          onCreatePlaceholder={onCreatePlaceholder}
+          onCreateIdentifiedPerson={onCreateIdentifiedPerson}
           onCreateAssociation={onCreateAssociation}
           onCreatePlaceholderAssociation={onCreatePlaceholderAssociation}
           onRemoveAssociation={onRemoveAssociation}
+          onLoadGraphPerson={onLoadGraphPerson}
           onFavorite={onFavorite}
           onSetRepresentative={onSetRepresentative}
           onArchive={onArchive}
@@ -344,7 +356,7 @@ export function PeopleView({
           if (placeholderBusy || !placeholderValues.name.trim()) return;
           setPlaceholderBusy(true);
           try {
-            await onCreatePlaceholder(placeholderValues);
+            await onCreateIdentifiedPerson(placeholderValues);
             setPlaceholderValues(newPlaceholderValues());
             setPlaceholderOpen(false);
           } finally {
@@ -618,16 +630,17 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
                       </Text>
                     </Box>
                   </Group>
-                  {face.person_archived && (
+                  {face.person_lifecycle_status !== "ACTIVE" && (
                     <Text size="xs" c="yellow.4" mt="sm">
-                      Restore the archived person before restoring this face.
+                      This face belongs to a {String(face.person_lifecycle_status || "historical").toLowerCase()} identity and cannot be restored here.
                     </Text>
                   )}
                   <Group grow mt="md">
                     <Button
                       variant="default"
                       size="xs"
-                      onClick={() => onOpenPerson(face.person_id, { archived: face.person_archived })}
+                      disabled={face.person_lifecycle_status !== "ACTIVE"}
+                      onClick={() => onOpenPerson(face.person_id, { archived: false })}
                     >
                       View person
                     </Button>
@@ -635,7 +648,7 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
                       variant="light"
                       size="xs"
                       leftSection={<IconRestore size={15} />}
-                      disabled={face.person_archived}
+                      disabled={face.person_lifecycle_status !== "ACTIVE"}
                       loading={busy}
                       onClick={() => run(face, () => onRestore(face.embedding_id, face.person_id))}
                     >
@@ -751,16 +764,17 @@ function PeopleResults({ people, groupBy, viewMode, archived, canDestroy, onOpen
   const cards = (items) => (
     <Box className={viewMode === "list" ? "people-card-list" : "people-card-grid"}>
       {items.map((person) => {
-        const isArchived = archived || Boolean(person.archived || person.deleted_at);
+        const lifecycleStatus = personLifecycleStatus(person);
+        const isHistorical = lifecycleStatus !== "ACTIVE";
         return (
           <PersonCard
             key={person.person_id}
             person={person}
             favorite={Boolean(person.favorite)}
-            archived={isArchived}
+            archived={isHistorical}
             viewMode={viewMode}
             canDestroy={canDestroy}
-            onOpen={() => onOpen(person.person_id, { archived: isArchived })}
+            onOpen={() => onOpen(person.person_id, { archived: isHistorical })}
             onFavorite={() => onFavorite(person)}
             onDelete={() => onDelete(person)}
           />
@@ -807,7 +821,11 @@ function PeopleResults({ people, groupBy, viewMode, archived, canDestroy, onOpen
 
 function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, onFavorite, onDelete }) {
   const cardClass = viewMode === "list" ? "people-person-card people-person-card--list" : "people-person-card";
-  const openPerson = () => onOpen(person.person_id);
+  const lifecycleStatus = personLifecycleStatus(person);
+  const historical = lifecycleStatus !== "ACTIVE";
+  const openPerson = () => {
+    if (!historical) onOpen(person.person_id);
+  };
   const toggleFavorite = (event) => {
     event.stopPropagation();
     onFavorite();
@@ -820,7 +838,7 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
   return (
     <Card withBorder radius="md" p="xs" className={cardClass}>
       <Stack gap="xs" align="stretch" className="people-person-card-inner">
-        <Box component="button" type="button" className="people-card-main" onClick={openPerson} aria-label={`Open ${person.name}`}>
+        <Box component="button" type="button" className="people-card-main" onClick={openPerson} disabled={historical} aria-label={`${historical ? "Historical identity" : "Open"} ${person.name}`}>
           <Box className="people-card-image-wrap">
             <ImageFrame variant="peopleCard">
               <SafeImage
@@ -835,7 +853,7 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
           <Box miw={0} className="people-card-copy">
             <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
               <Text fw={800} lineClamp={1}>{person.name}</Text>
-              {archived && <Badge color="gray" variant="light">{person.metadata?.merged_into ? "Merged" : "Archived"}</Badge>}
+              {historical && <Badge color="gray" variant="light">{lifecycleStatusLabel(lifecycleStatus)}</Badge>}
             </Group>
             <Group gap="xs" mt={4} wrap="nowrap">
               <Text size="xs" c="dimmed" fw={700}>{rank}</Text>
@@ -854,14 +872,14 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
           variant="filled"
           className="people-card-star"
           onClick={toggleFavorite}
-          disabled={archived}
-          aria-label={archived ? "Archived person" : favorite ? "Remove favorite" : "Add favorite"}
+          disabled={historical}
+          aria-label={historical ? "Historical identity" : favorite ? "Remove favorite" : "Add favorite"}
         >
           {favorite ? <IconStar size={15} fill="currentColor" /> : <IconStar size={15} />}
         </ActionIcon>
         <Group justify="space-between" wrap="nowrap" className="people-card-actions">
-          <Button fullWidth size="compact-xs" variant="subtle" onClick={(event) => { event.stopPropagation(); openPerson(); }}>
-            {archived ? "Review archived" : "Open profile"}
+          <Button fullWidth size="compact-xs" variant="subtle" disabled={historical} onClick={(event) => { event.stopPropagation(); openPerson(); }}>
+            {historical ? lifecycleStatusLabel(lifecycleStatus) : "Open profile"}
           </Button>
           <Menu withinPortal position="bottom-end">
             <Menu.Target>
@@ -1041,10 +1059,11 @@ function PeopleGalleryView({
   onSave,
   onSaveNotes,
   onAddPhoto,
-  onCreatePlaceholder,
+  onCreateIdentifiedPerson,
   onCreateAssociation,
   onCreatePlaceholderAssociation,
   onRemoveAssociation,
+  onLoadGraphPerson,
   onFavorite,
   onSetRepresentative,
   onArchive,
@@ -1070,8 +1089,10 @@ function PeopleGalleryView({
   const [notePlaceholderOpen, setNotePlaceholderOpen] = useState(false);
   const [notePlaceholderBusy, setNotePlaceholderBusy] = useState(false);
   const [notePlaceholderValues, setNotePlaceholderValues] = useState(() => newPlaceholderValues());
-  const archived = Boolean(payload.person.archived);
-  const mergedInto = payload.person.metadata?.merged_into || "";
+  const lifecycleStatus = personLifecycleStatus(payload.person);
+  const archived = lifecycleStatus !== "ACTIVE";
+  const canRestore = lifecycleStatus === "ARCHIVED";
+  const mergedInto = payload.person.canonical_person_id || payload.person.metadata?.merged_into || "";
   const favorite = Boolean(payload.person.favorite || payload.person.metadata?.favorite);
   const selectedRecord = selectedImage
     ? imageRecords.find((record) => record.path === selectedImage || record.thumbPath === selectedImage) || imageRecords[0]
@@ -1092,7 +1113,7 @@ function PeopleGalleryView({
     const normalized = activeMentionQuery.toLocaleLowerCase();
     return people.filter((candidate) => (
       candidate.person_id !== payload.person.person_id
-      && !candidate.archived
+      && personLifecycleStatus(candidate) === "ACTIVE"
       && [candidate.name, candidate.person_id, candidate.metadata?.rank, candidate.metadata?.country]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase().includes(normalized))
@@ -1273,12 +1294,12 @@ function PeopleGalleryView({
               </Button>
             </>
           )}
-          {archived && !mergedInto && (
+          {canRestore && (
             <Button size="xs" leftSection={<IconRestore size={14} />} disabled={!canDestroy} onClick={() => setManagementDialog("restore")}>
               Restore
             </Button>
           )}
-          {archived && mergedInto && (
+          {lifecycleStatus === "MERGED" && mergedInto && (
             <>
               {canUndoMerge && (
                 <Button
@@ -1323,12 +1344,14 @@ function PeopleGalleryView({
                 </>
               )}
               {archived && <Menu.Divider />}
-              <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={() => {
-                setProfileDeleteConfirmation("");
-                setManagementDialog("delete-profile");
-              }}>
-                Delete entire profile
-              </Menu.Item>
+              {(lifecycleStatus === "ACTIVE" || lifecycleStatus === "ARCHIVED") && (
+                <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={() => {
+                  setProfileDeleteConfirmation("");
+                  setManagementDialog("delete-profile");
+                }}>
+                  Delete entire profile
+                </Menu.Item>
+              )}
             </Menu.Dropdown>
           </Menu>
         </Group>
@@ -1355,7 +1378,7 @@ function PeopleGalleryView({
             <Text size="sm" c="dimmed">•</Text>
             <Text size="sm">{summaryProfile.country || "Unknown country"}</Text>
             <Badge color={importanceColor(summaryProfile.importance)} variant="light">{summaryProfile.importance || "Regular"}</Badge>
-            {archived && <Badge color="gray">{mergedInto ? "Merged record" : "Archived"}</Badge>}
+            {archived && <Badge color="gray">{lifecycleStatusLabel(lifecycleStatus)}</Badge>}
           </Group>
           {(payload.person.tags || payload.person.metadata?.tags || []).length > 0 && (
             <Group gap={5} mt={7}>
@@ -1431,6 +1454,7 @@ function PeopleGalleryView({
             onCreate={onCreateAssociation}
             onCreatePlaceholder={onCreatePlaceholderAssociation}
             onRemove={onRemoveAssociation}
+            onLoadGraphPerson={onLoadGraphPerson}
           />
         </Tabs.Panel>
         <Tabs.Panel value="changes">
@@ -1527,7 +1551,7 @@ function PeopleGalleryView({
           if (notePlaceholderBusy || !notePlaceholderValues.name.trim()) return;
           setNotePlaceholderBusy(true);
           try {
-            const createdPerson = await onCreatePlaceholder(notePlaceholderValues);
+            const createdPerson = await onCreateIdentifiedPerson(notePlaceholderValues);
             setNotesDraft((current) => replaceNoteMentionQuery(current, createdPerson.name));
             setSelectedNoteMentionIds((current) => current.includes(createdPerson.person_id)
               ? current
@@ -1894,6 +1918,161 @@ function PeopleProfileSightings({ details, imageRecords, onSighting }) {
   );
 }
 
+function RelationshipGraphModal({
+  opened,
+  onClose,
+  rootPerson,
+  initialAssociations,
+  onLoadPerson,
+  onOpenProfile,
+}) {
+  const [graph, setGraph] = useState(() => mergeRelationshipGraph(
+    createRelationshipGraph(rootPerson), rootPerson, initialAssociations,
+  ));
+  const [expandedIds, setExpandedIds] = useState(() => new Set([rootPerson.person_id]));
+  const [loadingIds, setLoadingIds] = useState(() => new Set());
+  const [queryTruncated, setQueryTruncated] = useState(false);
+
+  useEffect(() => {
+    if (!opened) return;
+    setGraph(mergeRelationshipGraph(
+      createRelationshipGraph(rootPerson), rootPerson, initialAssociations,
+    ));
+    setExpandedIds(new Set([rootPerson.person_id]));
+    setLoadingIds(new Set());
+    setQueryTruncated(false);
+  }, [opened, rootPerson.person_id, initialAssociations]);
+
+  const { nodes, edges } = relationshipGraphCollections(graph);
+  const positions = layoutRelationshipGraph(graph);
+  const expandNode = async (node) => {
+    if (personLifecycleStatus(node) !== "ACTIVE"
+      || expandedIds.has(node.person_id) || loadingIds.has(node.person_id) || graph.limitReached) return;
+    setLoadingIds((current) => new Set([...current, node.person_id]));
+    try {
+      const payload = await onLoadPerson(
+        node.person_id,
+        Boolean(node.archived),
+        RELATIONSHIP_GRAPH_NEIGHBOR_LIMIT,
+      );
+      if (!payload?.person) return;
+      setGraph((current) => mergeRelationshipGraph(
+        current,
+        payload.person,
+        payload.associations,
+      ));
+      setExpandedIds((current) => new Set([...current, node.person_id]));
+      if (payload.truncated) setQueryTruncated(true);
+    } finally {
+      setLoadingIds((current) => {
+        const next = new Set(current);
+        next.delete(node.person_id);
+        return next;
+      });
+    }
+  };
+
+  return (
+    <Modal opened={opened} onClose={onClose} title={`Relationship Graph · ${rootPerson.name}`} size="calc(100vw - 48px)" centered>
+      {!initialAssociations.length ? (
+        <EmptyCard text={`${rootPerson.name} has no stored associations.`} />
+      ) : (
+        <Stack gap="sm">
+          <Group justify="space-between" gap="sm">
+            <Group gap="xs">
+              <Badge color="teal" variant="light">Selected person</Badge>
+              <Badge color="violet" variant="light">Mention-linked</Badge>
+              <Badge color="teal" variant="outline">Manually linked</Badge>
+              <Badge color="orange" variant="outline">No photograph</Badge>
+            </Group>
+            <Text size="xs" c="dimmed">{nodes.length} people · {edges.length} stored associations</Text>
+          </Group>
+          {(graph.limitReached || queryTruncated) && (
+            <Alert color="yellow" title="Graph display limit reached">
+              Some associations are hidden to keep this view responsive. Open a person’s profile to continue from there.
+            </Alert>
+          )}
+          <Box className="relationship-graph-canvas">
+            <svg className="relationship-graph-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              {edges.map((edge) => {
+                const source = positions[edge.sourceId];
+                const target = positions[edge.targetId];
+                if (!source || !target) return null;
+                return (
+                  <line
+                    key={edge.edgeKey}
+                    x1={source.x}
+                    y1={source.y}
+                    x2={target.x}
+                    y2={target.y}
+                    className={edge.associationOrigin === "automatic_mention" ? "relationship-graph-edge relationship-graph-edge--mention" : "relationship-graph-edge"}
+                  >
+                    <title>{edge.relationshipType}</title>
+                  </line>
+                );
+              })}
+            </svg>
+            {nodes.map((node) => {
+              const position = positions[node.person_id];
+              if (!position) return null;
+              const isRoot = node.person_id === graph.centerId;
+              const isHistorical = personLifecycleStatus(node) !== "ACTIVE";
+              const noPhoto = node.is_placeholder || !node.representative_image;
+              const className = [
+                "relationship-graph-node",
+                isRoot ? "relationship-graph-node--root" : "",
+                noPhoto ? "relationship-graph-node--no-photo" : "",
+              ].filter(Boolean).join(" ");
+              return (
+                <Box
+                  key={node.person_id}
+                  className={className}
+                  style={{ left: `${position.x}%`, top: `${position.y}%` }}
+                >
+                  <button
+                    type="button"
+                    className="relationship-graph-node-main"
+                    disabled={isHistorical}
+                    onClick={() => {
+                      if (!isHistorical) onOpenProfile(node.person_id, false);
+                    }}
+                    aria-label={isHistorical ? `${node.name} is ${lifecycleStatusLabel(personLifecycleStatus(node))}` : `Open ${node.name} profile`}
+                  >
+                    {node.representative_image
+                      ? <Image src={mediaUrl(node.representative_image)} alt="" h={42} w={42} radius="xl" fit="cover" />
+                      : <ThemeIcon size={42} radius="xl" variant="light" color="gray"><IconUser size={21} /></ThemeIcon>}
+                    <Box miw={0} className="relationship-graph-node-copy">
+                      <Text size="xs" fw={800} truncate>{node.name}</Text>
+                      <Text size="10px" c="dimmed" truncate>ID {String(node.person_id).slice(0, 8)} · {node.metadata?.rank || "No role"}</Text>
+                      {noPhoto && <Text size="10px" c="orange">No photograph</Text>}
+                    </Box>
+                  </button>
+                  {!isHistorical && !isRoot && !expandedIds.has(node.person_id) && (
+                    <Tooltip label="Show direct associations">
+                      <ActionIcon
+                        size="sm"
+                        variant="filled"
+                        color="teal"
+                        className="relationship-graph-expand"
+                        disabled={graph.limitReached}
+                        onClick={() => expandNode(node)}
+                        aria-label={`Expand ${node.name}`}
+                      >
+                        {loadingIds.has(node.person_id) ? <Loader size={12} color="white" /> : <IconPlus size={13} />}
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
+          <Text size="xs" c="dimmed">Click a person to open their profile. Use + to load only that person’s direct stored associations.</Text>
+        </Stack>
+      )}
+    </Modal>
+  );
+}
+
 function PeopleProfileAssociations({
   person,
   people,
@@ -1903,11 +2082,13 @@ function PeopleProfileAssociations({
   onCreate,
   onCreatePlaceholder,
   onRemove,
+  onLoadGraphPerson,
 }) {
   const [query, setQuery] = useState("@");
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [busy, setBusy] = useState(false);
   const [removeTarget, setRemoveTarget] = useState(null);
+  const [graphOpen, setGraphOpen] = useState(false);
   const searchText = query.replace(/^@/, "").trim();
   const normalizedSearch = searchText.toLowerCase();
   const associatedIds = new Set(associations.map((item) => item.person?.person_id));
@@ -2013,23 +2194,37 @@ function PeopleProfileAssociations({
       </Card>
 
       <Card withBorder radius="md" className="people-profile-panel">
-        <Text fw={800} mb="md">Associated people ({associations.length})</Text>
+        <Group justify="space-between" mb="md">
+          <Text fw={800}>Associated people ({associations.length})</Text>
+          <Button
+            size="xs"
+            variant="default"
+            leftSection={<IconChartDots size={15} />}
+            onClick={() => setGraphOpen(true)}
+          >
+            View Relationship Graph
+          </Button>
+        </Group>
         <Stack gap="xs">
-          {associations.length ? associations.map((association) => (
+          {associations.length ? associations.map((association) => {
+            const associationHistorical = personLifecycleStatus(association.person) !== "ACTIVE";
+            return (
             <Paper
               key={association.association_id}
               withBorder
               radius="md"
               p="sm"
               component="div"
-              role="button"
-              tabIndex={0}
-              className="mantine-click-card association-person-row"
-              onClick={() => onOpen(association.person.person_id, { archived: Boolean(association.person.archived) })}
+              role={associationHistorical ? undefined : "button"}
+              tabIndex={associationHistorical ? undefined : 0}
+              className={associationHistorical ? "association-person-row" : "mantine-click-card association-person-row"}
+              onClick={() => {
+                if (!associationHistorical) onOpen(association.person.person_id, { archived: false });
+              }}
               onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+                if (!associationHistorical && (event.key === "Enter" || event.key === " ")) {
                   event.preventDefault();
-                  onOpen(association.person.person_id, { archived: Boolean(association.person.archived) });
+                  onOpen(association.person.person_id, { archived: false });
                 }
               }}
             >
@@ -2060,9 +2255,22 @@ function PeopleProfileAssociations({
                 </Group>
               </Group>
             </Paper>
-          )) : <EmptyCard text="No person associations recorded yet." />}
+            );
+          }) : <EmptyCard text="No person associations recorded yet." />}
         </Stack>
       </Card>
+
+      <RelationshipGraphModal
+        opened={graphOpen}
+        onClose={() => setGraphOpen(false)}
+        rootPerson={person}
+        initialAssociations={associations}
+        onLoadPerson={onLoadGraphPerson}
+        onOpenProfile={(personId, archived) => {
+          setGraphOpen(false);
+          onOpen(personId, { archived });
+        }}
+      />
 
       <Modal
         opened={Boolean(removeTarget)}
@@ -2285,7 +2493,12 @@ function ProfileNoteSummary({ notes, associations, onOpen }) {
             variant="light"
             color={association.association_origin === "automatic_mention" ? "violet" : "teal"}
             className="people-note-person-chip"
-            onClick={() => onOpen(association.person.person_id, { archived: association.person.archived })}
+            disabled={personLifecycleStatus(association.person) !== "ACTIVE"}
+            onClick={() => {
+              if (personLifecycleStatus(association.person) === "ACTIVE") {
+                onOpen(association.person.person_id, { archived: false });
+              }
+            }}
           >@{association.person.name}</Badge>
         ) : <Text key={index} component="span" size="sm">{part}</Text>;
       })}
@@ -2752,4 +2965,22 @@ function SeenAtList({ details }) {
       ))}
     </Stack>
   );
+}
+
+function personLifecycleStatus(person) {
+  const explicit = String(person?.lifecycle_status || "").toUpperCase();
+  if (["ACTIVE", "ARCHIVED", "DELETED", "MERGED"].includes(explicit)) return explicit;
+  if (person?.merged || person?.canonical_person_id || person?.metadata?.merged_into) return "MERGED";
+  if (person?.deleted) return "DELETED";
+  if (person?.archived || person?.deleted_at) return "ARCHIVED";
+  return "ACTIVE";
+}
+
+function lifecycleStatusLabel(status) {
+  return {
+    ACTIVE: "Active",
+    ARCHIVED: "Archived",
+    DELETED: "Deleted",
+    MERGED: "Merged",
+  }[status] || status;
 }

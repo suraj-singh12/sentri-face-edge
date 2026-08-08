@@ -245,7 +245,7 @@ class NoteRevisionDomainTest(unittest.TestCase):
                 "raw-note",
                 mentioned_person_ids=[target.person_id],
             )
-            store.set_canonical_person_id(
+            store._set_canonical_person_id_for_merge(
                 raw_owner.person_id, survivor.person_id, "raw-owner-map",
             )
 

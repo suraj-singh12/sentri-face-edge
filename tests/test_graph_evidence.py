@@ -166,7 +166,7 @@ class GlobalGraphEvidenceTest(unittest.TestCase):
             )
             self.assertEqual(len(initial_evidence), 1)
             self.assertEqual(len(graph.get_global_projection().connections), 1)
-            store.set_canonical_person_id(
+            store._set_canonical_person_id_for_merge(
                 source.person_id, survivor.person_id, "canonical-self-map",
             )
 
@@ -188,7 +188,7 @@ class GlobalGraphEvidenceTest(unittest.TestCase):
                 "raw-provenance",
                 [first.person_id, survivor.person_id, third.person_id],
             )
-            store.set_canonical_person_id(
+            store._set_canonical_person_id_for_merge(
                 first.person_id, survivor.person_id, "raw-provenance-map",
             )
 

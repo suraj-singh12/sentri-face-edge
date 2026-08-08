@@ -117,6 +117,27 @@ class PersonAssociationTest(unittest.TestCase):
             self.assertEqual(events[0]["operation_type"], "remove-person-association")
             self.assertEqual(events[0]["result"]["actor_name"], "Reviewer")
 
+    def test_bounded_neighbor_query_limits_dense_graph_expansion(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            center = store.create_person("Center")
+            for index in range(5):
+                neighbor = store.create_person(f"Neighbor {index}")
+                store.create_person_association(
+                    center.person_id,
+                    neighbor.person_id,
+                    "Operator",
+                    f"graph-neighbor-{index}",
+                )
+
+            bounded = store.list_person_associations(center.person_id, limit=3)
+
+            self.assertEqual(len(bounded), 3)
+            self.assertTrue(all(
+                center.person_id in {item.source_person_id, item.target_person_id}
+                for item in bounded
+            ))
+
     def test_foreign_keys_restrict_accidental_delete_and_purge_removes_links(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             store = self._store(Path(temp))

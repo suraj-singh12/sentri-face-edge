@@ -15,6 +15,7 @@ from sentriface.config import RuntimeConfig
 from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, IdentityStore
 from sentriface.errors import InputImageError, QueueCancellationError
 from sentriface.graph_service import GlobalIdentityGraphService
+from sentriface.identity_service import IdentityService
 from sentriface.metrics import MetricsCollector
 from sentriface.models import (
     FaceBox,
@@ -94,6 +95,7 @@ class FaceEngine:
         self.index = _SynchronizedFaceIndex(index)
         self.store = store
         self.graph = GlobalIdentityGraphService(store)
+        self.identity = IdentityService(store)
         self.index_degraded_reason: str | None = (
             "requested backend unavailable"
             if config.index_backend != self.index.backend_name
@@ -300,23 +302,18 @@ class FaceEngine:
         with self.metrics.timer("db_list_persons_ms"):
             return self.store.list_persons(archived=archived)
 
-    def create_placeholder_person(
+    def create_identified_person(
         self,
         name: str,
-        metadata: dict | None,
-        editor_name: str,
+        metadata: dict,
         operation_id: str,
-        notes: str = "",
-        mentioned_person_ids: list[str] | None = None,
+        *,
+        actor: dict | None = None,
+        source: str = "identity-service",
     ) -> Person:
-        with self.metrics.timer("db_create_placeholder_person_ms"):
-            return self.store.create_placeholder_person(
-                name=name,
-                metadata=metadata,
-                editor_name=editor_name,
-                operation_id=operation_id,
-                notes=notes,
-                mentioned_person_ids=mentioned_person_ids,
+        with self.metrics.timer("db_create_identified_person_ms"):
+            return self.identity.create_identified_person(
+                name, metadata, operation_id, actor=actor, source=source,
             )
 
     def list_person_embeddings(self, person_id: str, include_archived: bool = False):
@@ -328,9 +325,21 @@ class FaceEngine:
                 include_archived=include_archived,
             )
 
-    def rename_person(self, person_id: str, name: str) -> None:
-        with self.metrics.timer("db_rename_person_ms"):
-            self.store.rename_person(person_id, name)
+    def rename_person(
+        self, person_id: str, name: str, operation_id: str,
+        *, actor: dict | None = None, source: str | None = None,
+    ) -> PersonChange:
+        person = self.get_person(person_id)
+        if person is None:
+            raise KeyError(f"Unknown person: {person_id}")
+        metadata = person.metadata
+        return self.update_person_profile(
+            person_id, name,
+            metadata.get("rank"), metadata.get("country"), metadata.get("importance"),
+            str((actor or {}).get("display_name") or (actor or {}).get("username") or "SentriFace CLI"),
+            tags=list(metadata.get("tags") or []), operation_id=operation_id,
+            actor=actor, source=source or "cli.rename-person",
+        )
 
     def update_person_profile(
         self,
@@ -341,7 +350,10 @@ class FaceEngine:
         importance: str | None,
         editor_name: str,
         tags: list[str] | None = None,
-        operation_id: str | None = None,
+        *,
+        operation_id: str,
+        actor: dict | None = None,
+        source: str | None = None,
     ) -> PersonChange:
         with self.metrics.timer("db_update_person_profile_ms"):
             return self.store.update_person_profile(
@@ -353,6 +365,8 @@ class FaceEngine:
                 editor_name=editor_name,
                 tags=tags,
                 operation_id=operation_id,
+                actor=actor,
+                source=source,
             )
 
     def list_person_changes(
@@ -410,38 +424,6 @@ class FaceEngine:
         with self.metrics.timer("db_list_person_operations_ms"):
             return self.store.list_person_operations(person_id)
 
-    def create_person_association(
-        self,
-        source_person_id: str,
-        target_person_id: str,
-        actor_name: str,
-        operation_id: str,
-    ) -> PersonAssociation:
-        with self.metrics.timer("db_create_person_association_ms"):
-            return self.store.create_person_association(
-                source_person_id,
-                target_person_id,
-                actor_name,
-                operation_id,
-            )
-
-    def create_placeholder_association(
-        self,
-        source_person_id: str,
-        name: str,
-        metadata: dict | None,
-        actor_name: str,
-        operation_id: str,
-    ) -> tuple[Person, PersonAssociation]:
-        with self.metrics.timer("db_create_placeholder_association_ms"):
-            return self.store.create_placeholder_association(
-                source_person_id,
-                name,
-                metadata,
-                actor_name,
-                operation_id,
-            )
-
     def list_person_associations(
         self,
         person_id: str,
@@ -453,19 +435,6 @@ class FaceEngine:
                 person_id,
                 include_archived=include_archived,
                 limit=limit,
-            )
-
-    def remove_person_association(
-        self,
-        association_id: str,
-        actor_name: str,
-        operation_id: str,
-    ) -> dict:
-        with self.metrics.timer("db_remove_person_association_ms"):
-            return self.store.remove_person_association(
-                association_id,
-                actor_name,
-                operation_id,
             )
 
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
@@ -636,18 +605,18 @@ class FaceEngine:
         actor: dict | None = None,
         source: str | None = None,
     ) -> dict:
-        result = self.store.set_canonical_person_id(
-            person_id, canonical_person_id, operation_id, actor, source,
+        raise DomainWorkflowUnavailableError(
+            "Canonical identity mapping is temporarily unavailable until P8 merge support"
         )
-        self._rebuild_index()
-        return result
 
-    def delete_person(self, person_id: str) -> None:
-        self.archive_person(person_id, str(uuid.uuid4()))
-
-    def delete_embedding(self, embedding_id: str, operation_id: str | None = None) -> dict:
+    def delete_embedding(
+        self, embedding_id: str, operation_id: str | None = None,
+        *, actor: dict | None = None, source: str | None = None,
+    ) -> dict:
         with self.metrics.timer("db_soft_delete_embedding_ms"):
-            result = self.store.delete_embedding(embedding_id, operation_id or str(uuid.uuid4()))
+            result = self.store.delete_embedding(
+                embedding_id, operation_id or str(uuid.uuid4()), actor, source,
+            )
         self._rebuild_index()
         return result
 
@@ -659,11 +628,14 @@ class FaceEngine:
         self,
         embedding_id: str,
         operation_id: str | None = None,
+        *, actor: dict | None = None, source: str | None = None,
     ) -> dict:
         with self.metrics.timer("db_restore_deleted_embedding_ms"):
             result = self.store.restore_deleted_embedding(
                 embedding_id,
                 operation_id or str(uuid.uuid4()),
+                actor,
+                source,
             )
         self._rebuild_index()
         return result
@@ -672,6 +644,7 @@ class FaceEngine:
         self,
         embedding_id: str,
         operation_id: str | None = None,
+        *, actor: dict | None = None, source: str | None = None,
     ) -> dict:
         lifecycle = self.store.get_embedding_lifecycle(embedding_id)
         journal = self.cleanup.schedule(
@@ -685,6 +658,8 @@ class FaceEngine:
             result = self.store.permanently_delete_embedding(
                 embedding_id,
                 operation_id or str(uuid.uuid4()),
+                actor,
+                source,
             )
         self._rebuild_index()
         self.cleanup.run(journal, self.store.list_all_file_references)
@@ -698,6 +673,7 @@ class FaceEngine:
         embedding_ids: list[str],
         operation_id: str,
         now: str | None = None,
+        *, actor: dict | None = None, source: str | None = None,
     ) -> dict:
         lifecycles = [self.store.get_embedding_lifecycle(item) for item in embedding_ids]
         journal = self.cleanup.schedule(
@@ -714,6 +690,8 @@ class FaceEngine:
                 embedding_ids,
                 operation_id,
                 now,
+                actor,
+                source,
             )
         self._rebuild_index()
         self.cleanup.run(journal, self.store.list_all_file_references)
@@ -725,58 +703,9 @@ class FaceEngine:
         person_id: str,
         operation_id: str | None = None,
     ) -> dict:
-        with self.metrics.timer("db_move_embedding_ms"):
-            result = self.store.move_embedding(
-                embedding_id,
-                person_id,
-                operation_id or str(uuid.uuid4()),
-            )
-        self._rebuild_index()
-        return result
-
-    def add_recognition_detail(
-        self,
-        embedding_id: str,
-        person_id: str,
-        image_id: str,
-        name: str,
-        decision: str,
-        seen_date: str,
-        seen_time: str,
-        place_seen: str,
-        individual_count: int,
-        event_occasion: str,
-        image_path: str | None = None,
-        rank: str | None = None,
-        country: str | None = None,
-        importance: str | None = None,
-        added_by: str | None = None,
-        notes: str = "",
-        mentioned_person_ids: list[str] | None = None,
-        operation_id: str | None = None,
-    ) -> str:
-        with self.metrics.timer("db_add_recognition_detail_ms"):
-            detail = self.store.add_recognition_detail(
-                embedding_id=embedding_id,
-                person_id=person_id,
-                image_id=image_id,
-                image_path=image_path,
-                name=name,
-                decision=decision,
-                seen_date=seen_date,
-                seen_time=seen_time,
-                place_seen=place_seen,
-                individual_count=individual_count,
-                event_occasion=event_occasion,
-                rank=rank,
-                country=country,
-                importance=importance,
-                added_by=added_by,
-                notes=notes,
-                mentioned_person_ids=mentioned_person_ids,
-                operation_id=operation_id,
-            )
-        return detail.detail_id
+        raise DomainWorkflowUnavailableError(
+            "Move Face is temporarily unavailable until P7 provides normalized correction provenance"
+        )
 
     def merge_persons(
         self,
@@ -818,84 +747,20 @@ class FaceEngine:
         operation_id: str,
         favorite: bool | None = None,
         representative_embedding_id: str | None = None,
+        *, actor: dict | None = None, source: str | None = None,
     ) -> dict:
         return self.store.update_person_preferences(
             person_id=person_id,
             operation_id=operation_id,
             favorite=favorite,
             representative_embedding_id=representative_embedding_id,
+            actor=actor,
+            source=source,
         )
 
     def backup_database(self, target_path: Path) -> None:
         with self.metrics.timer("db_backup_ms"):
             self.store.backup_to(target_path)
-
-    def confirm_new_person(
-        self,
-        pending: PendingAddition,
-        name: str,
-        metadata: dict | None = None,
-        operation_id: str | None = None,
-        notes: str = "",
-        mentioned_person_ids: list[str] | None = None,
-    ) -> str:
-        with self.metrics.timer("db_save_pending_ms"):
-            self.store.save_pending_addition(pending)
-        with self.metrics.timer("db_confirm_pending_ms"):
-            person, _record = self.store.confirm_pending_addition(
-                pending.pending_id,
-                operation_id or str(uuid.uuid4()),
-                name=name,
-                metadata=metadata,
-                notes=notes,
-                mentioned_person_ids=mentioned_person_ids,
-            )
-        self._rebuild_index()
-        return person.person_id
-
-    def confirm_existing_person(
-        self,
-        pending: PendingAddition,
-        person_id: str,
-        operation_id: str | None = None,
-    ) -> str:
-        try:
-            with self.metrics.timer("db_save_pending_ms"):
-                self.store.save_pending_addition(pending)
-            with self.metrics.timer("db_confirm_pending_ms"):
-                _person, record = self.store.confirm_pending_addition(
-                    pending.pending_id,
-                    operation_id or str(uuid.uuid4()),
-                    person_id=person_id,
-                )
-        except Exception:
-            self.discard_prepared_addition(pending)
-            raise
-        self._rebuild_index()
-        return record.embedding_id
-
-    def confirm_existing_person_with_detail(
-        self,
-        pending: PendingAddition,
-        person_id: str,
-        recognition_detail: dict,
-        operation_id: str | None = None,
-    ) -> str:
-        try:
-            with self.metrics.timer("db_save_pending_ms"):
-                self.store.save_pending_addition(pending)
-            with self.metrics.timer("db_confirm_pending_ms"):
-                _person, record = self.store.confirm_pending_addition(
-                    pending.pending_id,
-                    operation_id or str(uuid.uuid4()),
-                    person_id=person_id,
-                    recognition_detail=recognition_detail,
-                )
-        except Exception:
-            self.discard_prepared_addition(pending)
-            raise
-        self._rebuild_index()
-        return record.embedding_id
 
     def discard_prepared_addition(self, pending: PendingAddition) -> None:
         journal = self.cleanup.schedule(
@@ -906,16 +771,6 @@ class FaceEngine:
             self.store.delete_pending_addition(pending.pending_id)
         finally:
             self.cleanup.run(journal, self.store.list_all_file_references)
-    def confirm_pending_as_new_person(self, pending_id: str, name: str) -> str:
-        raise DomainWorkflowUnavailableError(
-            "Per-face confirmation is unavailable; complete the whole review atomically"
-        )
-
-    def confirm_pending_as_existing_person(self, pending_id: str, person_id: str) -> str:
-        raise DomainWorkflowUnavailableError(
-            "Per-face confirmation is unavailable; complete the whole review atomically"
-        )
-
     def reject_pending_addition(self, pending_id: str) -> None:
         pending = self.store.get_pending_addition(pending_id)
         journal = self.cleanup.schedule(
@@ -1185,16 +1040,6 @@ class FaceEngine:
         self._regroup_pending_init_session(session_id)
         return self.list_init_groups(session_id)
 
-    def confirm_init_group(self, session_id: str, group_id: str, name: str) -> str:
-        raise DomainWorkflowUnavailableError(
-            "Queue groups must be committed through complete_photo_review"
-        )
-
-    def confirm_init_group_existing(self, session_id: str, group_id: str, person_id: str) -> int:
-        raise DomainWorkflowUnavailableError(
-            "Queue groups must be committed through complete_photo_review"
-        )
-
     def confirm_init_faces(
         self,
         session_id: str,
@@ -1372,26 +1217,6 @@ class FaceEngine:
         if len(faces) != len(selected):
             raise KeyError("One or more selected images are no longer in this group")
         return faces
-
-    def _add_init_face_embeddings(self, person_id: str, faces: list[InitFace]) -> list[dict]:
-        accepted: list[dict] = []
-        for face in faces:
-            duplicate = _duplicate_embedding(face.vector, self.store.list_embeddings_for_person(person_id))
-            if duplicate:
-                accepted.append(_accepted_init_face(face, duplicate.embedding_id, duplicate=True))
-                continue
-            with self.metrics.timer("db_add_embedding_ms"):
-                record = self.store.add_embedding(
-                    person_id=person_id,
-                    vector=face.vector,
-                    quality_score=face.quality.score,
-                    source_image=face.source_image,
-                    crop_path=face.face.crop_path,
-                )
-            with self.metrics.timer("index_add_ms"):
-                self.index.add(record)
-            accepted.append(_accepted_init_face(face, record.embedding_id, duplicate=False))
-        return accepted
 
     def _remove_reviewed_init_faces(
         self,
@@ -1634,11 +1459,19 @@ class FaceEngine:
     def _search_unique_people(self, vector, excluded_person_ids: set[str] | None = None) -> list[PersonMatch]:
         excluded_person_ids = excluded_person_ids or set()
         raw_matches = self.index.search(vector, max(self.config.top_k * 8, self.config.top_k))
+        current_owners = self.store.current_embedding_person_ids(
+            [match.embedding_id for match in raw_matches],
+        )
         grouped: dict[str, list[Match]] = {}
         for match in raw_matches:
-            if match.person_id in excluded_person_ids:
+            current_person_id = current_owners.get(match.embedding_id)
+            if current_person_id is None or current_person_id in excluded_person_ids:
                 continue
-            grouped.setdefault(match.person_id, []).append(match)
+            grouped.setdefault(current_person_id, []).append(Match(
+                person_id=current_person_id,
+                score=match.score,
+                embedding_id=match.embedding_id,
+            ))
         person_matches = [
             PersonMatch(
                 person_id=person_id,
