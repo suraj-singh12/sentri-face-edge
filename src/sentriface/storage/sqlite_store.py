@@ -35,8 +35,11 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 DELETED_FACE_RETENTION_DAYS = 30
+PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
+PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
+PERSON_BIOMETRIC_STATUSES = frozenset({"NO_FACE", "ENROLLED"})
 OPERATION_STATUSES = frozenset({"STARTED", "COMMITTED", "FAILED", "ROLLED_BACK", "REVERTED"})
 OPERATION_STATUS_TRANSITIONS = {
     "STARTED": frozenset({"COMMITTED", "FAILED", "ROLLED_BACK"}),
@@ -118,18 +121,38 @@ class SQLiteIdentityStore:
         if not backup.verified or not service.verify_backup(backup.backup_id):
             raise BackupError(f"Pre-migration backup failed verification: {backup.backup_id}")
 
-    def create_person(self, name: str, metadata: dict | None = None, notes: str = "") -> Person:
+    def create_person(
+        self,
+        name: str,
+        metadata: dict | None = None,
+        notes: str = "",
+        identity_status: str = "IDENTIFIED",
+    ) -> Person:
+        normalized_name = name.strip()
+        normalized_metadata = metadata or {}
+        normalized_notes = notes.strip()
+        normalized_identity_status = identity_status.strip().upper()
+        if normalized_identity_status not in PERSON_IDENTITY_STATUSES:
+            raise ValueError(f"Unsupported identity status: {identity_status}")
+        if not _has_meaningful_identity_context(
+            normalized_name, normalized_metadata, normalized_notes,
+        ):
+            raise ValueError("A person without a face requires meaningful identity or context")
         person = Person(
             person_id=str(uuid.uuid4()),
-            name=name,
-            metadata=metadata or {},
-            notes=notes.strip(),
+            name=normalized_name,
+            metadata=normalized_metadata,
+            notes=normalized_notes,
+            identity_status=normalized_identity_status,
+            biometric_status="NO_FACE",
         )
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO persons(person_id, name, metadata, created_at, notes)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO persons(
+                    person_id, name, metadata, created_at, notes,
+                    identity_status, biometric_status, lifecycle_changed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'NO_FACE', ?)
                 """,
                 (
                     person.person_id,
@@ -137,6 +160,8 @@ class SQLiteIdentityStore:
                     json.dumps(person.metadata, separators=(",", ":")),
                     person.created_at,
                     person.notes,
+                    person.identity_status,
+                    person.created_at,
                 ),
             )
             _create_note_associations(conn, person.person_id, person.notes, "SentriFace", [])
@@ -161,8 +186,7 @@ class SQLiteIdentityStore:
             if existing:
                 row = conn.execute(
                     """
-                    SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status, notes
-                    FROM persons WHERE person_id = ?
+                    SELECT * FROM persons WHERE person_id = ?
                     """,
                     (existing["person_id"],),
                 ).fetchone()
@@ -196,9 +220,9 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             row = conn.execute(
                 f"""
-                SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status, notes
+                SELECT *
                 FROM persons
-                WHERE person_id = ? {" " if include_archived else "AND deleted_at IS NULL"}
+                WHERE person_id = ? {" " if include_archived else "AND lifecycle_status = 'ACTIVE' AND deleted_at IS NULL"}
                 """,
                 (person_id,),
             ).fetchone()
@@ -210,8 +234,7 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             rows = conn.execute(
                 f"""
-                SELECT p.person_id, p.name, p.metadata, p.created_at, p.deleted_at,
-                       p.enrollment_status, p.notes,
+                SELECT p.*,
                        (
                            SELECT COUNT(*)
                            FROM embeddings e
@@ -236,7 +259,7 @@ class SQLiteIdentityStore:
                            WHERE d.person_id = p.person_id AND e.deleted_at IS NULL
                        ) AS last_seen_at
                 FROM persons p
-                WHERE p.deleted_at IS {"NOT NULL" if archived else "NULL"}
+                WHERE {"p.lifecycle_status <> 'ACTIVE' OR p.deleted_at IS NOT NULL" if archived else "p.lifecycle_status = 'ACTIVE' AND p.deleted_at IS NULL"}
                 ORDER BY p.name COLLATE NOCASE
                 """
             ).fetchall()
@@ -250,6 +273,10 @@ class SQLiteIdentityStore:
                     deleted_at=row["deleted_at"],
                     enrollment_status=row["enrollment_status"],
                     notes=row["notes"],
+                    lifecycle_status=row["lifecycle_status"],
+                    canonical_person_id=row["canonical_person_id"],
+                    identity_status=row["identity_status"],
+                    biometric_status=row["biometric_status"],
                 ),
                 embedding_count=row["embedding_count"],
                 sighting_count=row["sighting_count"],
@@ -272,7 +299,7 @@ class SQLiteIdentityStore:
                 JOIN persons p ON p.person_id = e.person_id
                 WHERE e.person_id = ?
                   AND e.deleted_at IS NULL
-                  {" " if include_archived else "AND p.deleted_at IS NULL"}
+                  {" " if include_archived else "AND p.lifecycle_status = 'ACTIVE' AND p.deleted_at IS NULL"}
                 ORDER BY e.created_at ASC
                 """,
                 (person_id,),
@@ -613,9 +640,7 @@ class SQLiteIdentityStore:
             if existing:
                 person_row = conn.execute(
                     """
-                    SELECT person_id, name, metadata, created_at, deleted_at,
-                           enrollment_status
-                    FROM persons WHERE person_id = ?
+                    SELECT * FROM persons WHERE person_id = ?
                     """,
                     (existing["target_person_id"],),
                 ).fetchone()
@@ -807,56 +832,264 @@ class SQLiteIdentityStore:
             ).fetchone()
         return dict(row) if row else None
 
-    def archive_person(self, person_id: str, operation_id: str) -> dict:
+    def get_person_lifecycle(self, person_id: str) -> dict | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT person_id, lifecycle_status, canonical_person_id,
+                       identity_status, biometric_status, deleted_at, lifecycle_changed_at
+                FROM persons WHERE person_id = ?
+                """,
+                (person_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            result = dict(row)
+            result["resolved_canonical_person_id"] = _resolve_canonical_person_id(conn, person_id)
+            return result
+
+    def resolve_canonical_person_id(self, person_id: str) -> str:
+        with self._connect() as conn:
+            return _resolve_canonical_person_id(conn, person_id)
+
+    def list_historical_persons(self) -> list[PersonSummary]:
+        return self.list_persons(archived=True)
+
+    def archive_person(
+        self,
+        person_id: str,
+        operation_id: str,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "archive-person")
             if existing:
                 return existing
             row = conn.execute(
-                "SELECT deleted_at FROM persons WHERE person_id = ?",
+                "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
                 (person_id,),
             ).fetchone()
             if row is None:
                 raise KeyError(f"Unknown person: {person_id}")
+            if row["lifecycle_status"] not in {"ACTIVE", "ARCHIVED"}:
+                raise KeyError(f"Only active or archived people can be archived: {person_id}")
+            _begin_journal_operation(
+                conn,
+                "identity.archive",
+                operation_id=operation_id,
+                actor=actor,
+                source=source or "identity-lifecycle",
+                affected_entities=[{"entity_type": "person", "entity_id": person_id}],
+                details={"previous_status": row["lifecycle_status"]},
+            )
             archived_at = row["deleted_at"] or utc_now()
             cursor = conn.execute(
-                "UPDATE persons SET deleted_at = ? WHERE person_id = ? AND deleted_at IS NULL",
-                (archived_at, person_id),
+                """
+                UPDATE persons
+                SET lifecycle_status = 'ARCHIVED', deleted_at = ?, lifecycle_changed_at = ?
+                WHERE person_id = ? AND lifecycle_status = 'ACTIVE'
+                """,
+                (archived_at, archived_at, person_id),
             )
             result = {
                 "person_id": person_id,
                 "archived": True,
                 "archived_at": archived_at,
+                "lifecycle_status": "ARCHIVED",
                 "changed": bool(cursor.rowcount),
             }
             _record_person_operation(conn, operation_id, "archive-person", result)
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
-    def restore_person(self, person_id: str, operation_id: str) -> dict:
+    def restore_person(
+        self,
+        person_id: str,
+        operation_id: str,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "restore-person")
             if existing:
                 return existing
             row = conn.execute(
-                "SELECT deleted_at, metadata FROM persons WHERE person_id = ?",
+                "SELECT lifecycle_status, deleted_at, metadata FROM persons WHERE person_id = ?",
                 (person_id,),
             ).fetchone()
             if row is None:
                 raise KeyError(f"Unknown person: {person_id}")
-            metadata = json.loads(row["metadata"])
-            if metadata.get("merged_into"):
-                raise KeyError(
-                    f"Merged person records cannot be restored; merged into {metadata['merged_into']}"
-                )
+            if row["lifecycle_status"] != "ARCHIVED":
+                raise KeyError(f"Only archived people can be restored: {person_id}")
+            _begin_journal_operation(
+                conn,
+                "identity.restore",
+                operation_id=operation_id,
+                actor=actor,
+                source=source or "identity-lifecycle",
+                affected_entities=[{"entity_type": "person", "entity_id": person_id}],
+                details={"previous_status": "ARCHIVED"},
+            )
             try:
                 cursor = conn.execute(
-                    "UPDATE persons SET deleted_at = NULL WHERE person_id = ? AND deleted_at IS NOT NULL",
-                    (person_id,),
+                    """
+                    UPDATE persons
+                    SET lifecycle_status = 'ACTIVE', deleted_at = NULL, lifecycle_changed_at = ?
+                    WHERE person_id = ? AND lifecycle_status = 'ARCHIVED'
+                    """,
+                    (utc_now(), person_id),
                 )
             except sqlite3.IntegrityError as exc:
                 raise _placeholder_name_conflict(exc) from exc
-            result = {"person_id": person_id, "restored": True, "changed": bool(cursor.rowcount)}
+            result = {
+                "person_id": person_id,
+                "restored": True,
+                "lifecycle_status": "ACTIVE",
+                "changed": bool(cursor.rowcount),
+            }
             _record_person_operation(conn, operation_id, "restore-person", result)
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def soft_delete_person(
+        self,
+        person_id: str,
+        operation_id: str,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
+        return self._soft_delete_person(
+            person_id, operation_id, "soft-delete-person", actor, source,
+        )
+
+    def permanently_delete_person(
+        self,
+        person_id: str,
+        operation_id: str,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
+        """Compatibility entry point for the former destructive UI action."""
+        return self._soft_delete_person(person_id, operation_id, "purge-person", actor, source)
+
+    def _soft_delete_person(
+        self,
+        person_id: str,
+        operation_id: str,
+        legacy_operation_type: str,
+        actor: dict | None,
+        source: str | None,
+    ) -> dict:
+        with self._connect() as conn:
+            existing = _begin_person_operation(conn, operation_id, legacy_operation_type)
+            if existing:
+                return existing
+            person = conn.execute(
+                "SELECT name, lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
+                (person_id,),
+            ).fetchone()
+            if person is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            if person["lifecycle_status"] == "MERGED":
+                raise KeyError("Merged source identities cannot be deleted independently")
+            _begin_journal_operation(
+                conn,
+                "identity.delete",
+                operation_id=operation_id,
+                actor=actor,
+                source=source or "identity-lifecycle",
+                affected_entities=[{"entity_type": "person", "entity_id": person_id}],
+                details={"previous_status": person["lifecycle_status"]},
+            )
+            deleted_at = person["deleted_at"] or utc_now()
+            cursor = conn.execute(
+                """
+                UPDATE persons
+                SET lifecycle_status = 'DELETED', deleted_at = ?, lifecycle_changed_at = ?
+                WHERE person_id = ? AND lifecycle_status <> 'DELETED'
+                """,
+                (deleted_at, deleted_at, person_id),
+            )
+            counts = _person_historical_counts(conn, person_id)
+            result = {
+                "person_id": person_id,
+                "person_name": person["name"],
+                "deleted": True,
+                "permanent": False,
+                "tombstoned": True,
+                "lifecycle_status": "DELETED",
+                "deleted_at": deleted_at,
+                "changed": bool(cursor.rowcount),
+                **counts,
+                "deleted_embeddings": 0,
+                "deleted_sightings": 0,
+                "deleted_profile_changes": 0,
+                "deleted_queue_exclusions": 0,
+                "deleted_associations": 0,
+                "deleted_association_ids": [],
+            }
+            _record_person_operation(conn, operation_id, legacy_operation_type, result)
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def set_canonical_person_id(
+        self,
+        person_id: str,
+        canonical_person_id: str,
+        operation_id: str,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
+        with self._connect() as conn:
+            source_row = conn.execute(
+                "SELECT lifecycle_status FROM persons WHERE person_id = ?",
+                (person_id,),
+            ).fetchone()
+            if source_row is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            if source_row["lifecycle_status"] not in {"ACTIVE", "ARCHIVED"}:
+                raise KeyError("Only active or archived identities can receive a canonical mapping")
+            resolved_target = _resolve_canonical_person_id(conn, canonical_person_id)
+            if resolved_target == person_id:
+                raise ValueError("Canonical identity cannot reference itself or create a cycle")
+            target_row = conn.execute(
+                "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
+                (resolved_target,),
+            ).fetchone()
+            if target_row is None:
+                raise KeyError(f"Unknown canonical person: {canonical_person_id}")
+            if target_row["lifecycle_status"] != "ACTIVE" or target_row["deleted_at"] is not None:
+                raise KeyError("Canonical identity must resolve to an active person")
+            _begin_journal_operation(
+                conn,
+                "identity.canonical-map",
+                operation_id=operation_id,
+                actor=actor,
+                source=source or "identity-lifecycle",
+                affected_entities=[
+                    {"entity_type": "person", "entity_id": person_id},
+                    {"entity_type": "person", "entity_id": resolved_target},
+                ],
+                details={"requested_canonical_person_id": canonical_person_id},
+            )
+            changed_at = utc_now()
+            conn.execute(
+                """
+                UPDATE persons
+                SET lifecycle_status = 'MERGED', canonical_person_id = ?,
+                    deleted_at = COALESCE(deleted_at, ?), lifecycle_changed_at = ?
+                WHERE person_id = ?
+                """,
+                (resolved_target, changed_at, changed_at, person_id),
+            )
+            result = {
+                "person_id": person_id,
+                "canonical_person_id": resolved_target,
+                "lifecycle_status": "MERGED",
+                "mapped": True,
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
     def list_file_references_for_person(self, person_id: str) -> list[str]:
@@ -876,9 +1109,9 @@ class SQLiteIdentityStore:
             ).fetchall()
         return [str(row["path"]) for row in rows if row["path"]]
 
-    def permanently_delete_person(self, person_id: str, operation_id: str) -> dict:
+    def physically_purge_person(self, person_id: str, operation_id: str) -> dict:
         with self._connect() as conn:
-            existing = _begin_person_operation(conn, operation_id, "purge-person")
+            existing = _begin_person_operation(conn, operation_id, "physical-purge-person")
             if existing:
                 return existing
             person = conn.execute(
@@ -933,7 +1166,7 @@ class SQLiteIdentityStore:
                 "deleted_associations": len(association_rows),
                 "deleted_association_ids": [row["association_id"] for row in association_rows],
             }
-            _record_person_operation(conn, operation_id, "purge-person", result)
+            _record_person_operation(conn, operation_id, "physical-purge-person", result)
             return result
 
     def delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
@@ -2048,7 +2281,7 @@ class SQLiteIdentityStore:
         embedding_id: str,
     ) -> tuple[Person, EmbeddingRecord]:
         person_row = conn.execute(
-            "SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status FROM persons WHERE person_id = ?",
+            "SELECT * FROM persons WHERE person_id = ?",
             (person_id,),
         ).fetchone()
         embedding_row = conn.execute(
@@ -2983,6 +3216,149 @@ def _migrate_16_to_17(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_17_to_18(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "ALTER TABLE persons ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'ACTIVE' "
+        "CHECK(lifecycle_status IN ('ACTIVE', 'ARCHIVED', 'DELETED', 'MERGED'))"
+    )
+    conn.execute(
+        "ALTER TABLE persons ADD COLUMN canonical_person_id TEXT REFERENCES persons(person_id) "
+        "ON DELETE RESTRICT CHECK(canonical_person_id IS NULL OR canonical_person_id <> person_id)"
+    )
+    conn.execute(
+        "ALTER TABLE persons ADD COLUMN identity_status TEXT NOT NULL DEFAULT 'IDENTIFIED' "
+        "CHECK(identity_status IN ('IDENTIFIED', 'UNIDENTIFIED'))"
+    )
+    conn.execute(
+        "ALTER TABLE persons ADD COLUMN biometric_status TEXT NOT NULL DEFAULT 'NO_FACE' "
+        "CHECK(biometric_status IN ('NO_FACE', 'ENROLLED'))"
+    )
+    conn.execute("ALTER TABLE persons ADD COLUMN lifecycle_changed_at TEXT")
+
+    rows = conn.execute(
+        "SELECT person_id, metadata, deleted_at, enrollment_status "
+        "FROM persons ORDER BY person_id"
+    ).fetchall()
+    has_embeddings_table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'embeddings'"
+    ).fetchone() is not None
+    person_ids = {str(row["person_id"]) for row in rows}
+    for row in rows:
+        person_id = str(row["person_id"])
+        metadata = json.loads(row["metadata"] or "{}")
+        legacy_target = str(metadata.get("merged_into") or "").strip()
+        if row["deleted_at"] and legacy_target in person_ids and legacy_target != person_id:
+            lifecycle_status = "MERGED"
+            canonical_person_id = legacy_target
+        elif row["deleted_at"]:
+            lifecycle_status = "ARCHIVED"
+            canonical_person_id = None
+        else:
+            lifecycle_status = "ACTIVE"
+            canonical_person_id = None
+        if has_embeddings_table:
+            has_embedding = conn.execute(
+                "SELECT 1 FROM embeddings WHERE person_id = ? LIMIT 1",
+                (person_id,),
+            ).fetchone() is not None
+        else:
+            has_embedding = row["enrollment_status"] == "enrolled"
+        biometric_status = "ENROLLED" if has_embedding else "NO_FACE"
+        conn.execute(
+            """
+            UPDATE persons
+            SET lifecycle_status = ?, canonical_person_id = ?, identity_status = 'IDENTIFIED',
+                biometric_status = ?, lifecycle_changed_at = COALESCE(deleted_at, created_at)
+            WHERE person_id = ?
+            """,
+            (lifecycle_status, canonical_person_id, biometric_status, person_id),
+        )
+
+    _execute_migration_script(
+        conn,
+        """
+        CREATE INDEX idx_persons_lifecycle
+        ON persons(lifecycle_status, name COLLATE NOCASE);
+
+        CREATE INDEX idx_persons_canonical
+        ON persons(canonical_person_id);
+
+        CREATE TRIGGER persons_identity_biometric_insert
+        BEFORE INSERT ON persons
+        WHEN NEW.identity_status = 'UNIDENTIFIED'
+         AND NEW.biometric_status = 'NO_FACE'
+         AND trim(NEW.name) = ''
+         AND trim(NEW.notes) = ''
+         AND trim(NEW.metadata) IN ('', '{}')
+        BEGIN
+            SELECT RAISE(ABORT, 'an unidentified person without a face or context is invalid');
+        END;
+
+        CREATE TRIGGER persons_identity_biometric_update
+        BEFORE UPDATE OF identity_status, biometric_status ON persons
+        WHEN NEW.identity_status = 'UNIDENTIFIED'
+         AND NEW.biometric_status = 'NO_FACE'
+         AND trim(NEW.name) = ''
+         AND trim(NEW.notes) = ''
+         AND trim(NEW.metadata) IN ('', '{}')
+        BEGIN
+            SELECT RAISE(ABORT, 'an unidentified person without a face or context is invalid');
+        END;
+
+        CREATE TRIGGER persons_canonical_insert
+        BEFORE INSERT ON persons
+        WHEN NEW.canonical_person_id IS NOT NULL OR NEW.lifecycle_status = 'MERGED'
+        BEGIN
+            SELECT CASE
+                WHEN NEW.lifecycle_status <> 'MERGED' OR NEW.canonical_person_id IS NULL
+                THEN RAISE(ABORT, 'canonical mapping requires MERGED lifecycle status')
+            END;
+            SELECT CASE
+                WHEN NEW.canonical_person_id = NEW.person_id
+                THEN RAISE(ABORT, 'canonical identity cannot reference itself')
+            END;
+            SELECT CASE
+                WHEN NOT EXISTS(SELECT 1 FROM persons WHERE person_id = NEW.canonical_person_id)
+                THEN RAISE(ABORT, 'canonical identity target does not exist')
+            END;
+        END;
+
+        CREATE TRIGGER persons_canonical_update
+        BEFORE UPDATE OF canonical_person_id, lifecycle_status ON persons
+        WHEN NEW.canonical_person_id IS NOT NULL OR NEW.lifecycle_status = 'MERGED'
+        BEGIN
+            SELECT CASE
+                WHEN NEW.lifecycle_status <> 'MERGED' OR NEW.canonical_person_id IS NULL
+                THEN RAISE(ABORT, 'canonical mapping requires MERGED lifecycle status')
+            END;
+            SELECT CASE
+                WHEN NEW.canonical_person_id = NEW.person_id
+                THEN RAISE(ABORT, 'canonical identity cannot reference itself')
+            END;
+            SELECT CASE
+                WHEN NOT EXISTS(SELECT 1 FROM persons WHERE person_id = NEW.canonical_person_id)
+                THEN RAISE(ABORT, 'canonical identity target does not exist')
+            END;
+            WITH RECURSIVE canonical_chain(person_id, canonical_person_id) AS (
+                SELECT person_id, canonical_person_id
+                FROM persons WHERE person_id = NEW.canonical_person_id
+                UNION
+                SELECT p.person_id, p.canonical_person_id
+                FROM persons p
+                JOIN canonical_chain c ON p.person_id = c.canonical_person_id
+                WHERE c.canonical_person_id IS NOT NULL
+            )
+            SELECT CASE
+                WHEN EXISTS(SELECT 1 FROM canonical_chain WHERE person_id = NEW.person_id)
+                THEN RAISE(ABORT, 'canonical identity cycle detected')
+            END;
+        END;
+
+        PRAGMA user_version = 18;
+        """,
+    )
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -3008,6 +3384,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(14, 15, _migrate_14_to_15),
         SchemaMigration(15, 16, _migrate_15_to_16),
         SchemaMigration(16, 17, _migrate_16_to_17),
+        SchemaMigration(17, 18, _migrate_17_to_18),
     )
 
 
@@ -3088,6 +3465,7 @@ def _create_placeholder_record(
         """
         SELECT 1 FROM persons
         WHERE enrollment_status = 'placeholder'
+          AND lifecycle_status <> 'DELETED'
           AND lower(trim(name)) = lower(trim(?))
         LIMIT 1
         """,
@@ -3152,6 +3530,60 @@ def _create_placeholder_record(
     return person
 
 
+def _has_meaningful_identity_context(name: str, metadata: dict, notes: str) -> bool:
+    if name.strip() or notes.strip():
+        return True
+    return any(value not in (None, "", [], {}, ()) for value in metadata.values())
+
+
+def _resolve_canonical_person_id(conn: sqlite3.Connection, person_id: str) -> str:
+    current_id = str(person_id).strip()
+    if not current_id:
+        raise ValueError("Person ID is required")
+    visited: set[str] = set()
+    while True:
+        if current_id in visited:
+            raise RuntimeError("Canonical identity cycle detected")
+        visited.add(current_id)
+        row = conn.execute(
+            "SELECT lifecycle_status, canonical_person_id FROM persons WHERE person_id = ?",
+            (current_id,),
+        ).fetchone()
+        if row is None:
+            if len(visited) == 1:
+                raise KeyError(f"Unknown person: {current_id}")
+            raise RuntimeError(f"Canonical identity target does not exist: {current_id}")
+        canonical_person_id = row["canonical_person_id"]
+        if row["lifecycle_status"] != "MERGED":
+            if canonical_person_id is not None:
+                raise RuntimeError("Non-merged identity has an invalid canonical mapping")
+            return current_id
+        if not canonical_person_id:
+            raise RuntimeError("Merged identity has no canonical target")
+        current_id = str(canonical_person_id)
+
+
+def _person_historical_counts(conn: sqlite3.Connection, person_id: str) -> dict:
+    return {
+        "retained_embeddings": int(conn.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE person_id = ?", (person_id,),
+        ).fetchone()[0]),
+        "retained_sightings": int(conn.execute(
+            "SELECT COUNT(*) FROM recognition_details WHERE person_id = ?", (person_id,),
+        ).fetchone()[0]),
+        "retained_profile_changes": int(conn.execute(
+            "SELECT COUNT(*) FROM person_change_history WHERE person_id = ?", (person_id,),
+        ).fetchone()[0]),
+        "retained_associations": int(conn.execute(
+            """
+            SELECT COUNT(*) FROM person_associations
+            WHERE source_person_id = ? OR target_person_id = ?
+            """,
+            (person_id, person_id),
+        ).fetchone()[0]),
+    }
+
+
 def _canonical_person_pair(source_person_id: str, target_person_id: str) -> tuple[str, str]:
     source = source_person_id.strip()
     target = target_person_id.strip()
@@ -3165,7 +3597,10 @@ def _canonical_person_pair(source_person_id: str, target_person_id: str) -> tupl
 def _require_active_people(conn: sqlite3.Connection, *person_ids: str) -> None:
     for person_id in person_ids:
         row = conn.execute(
-            "SELECT 1 FROM persons WHERE person_id = ? AND deleted_at IS NULL",
+            """
+            SELECT 1 FROM persons
+            WHERE person_id = ? AND lifecycle_status = 'ACTIVE' AND deleted_at IS NULL
+            """,
             (person_id,),
         ).fetchone()
         if row is None:
@@ -3281,6 +3716,14 @@ def _person_from_row(row: sqlite3.Row) -> Person:
         deleted_at=row["deleted_at"],
         enrollment_status=row["enrollment_status"],
         notes=row["notes"] if "notes" in row.keys() else "",
+        lifecycle_status=row["lifecycle_status"] if "lifecycle_status" in row.keys() else (
+            "ARCHIVED" if row["deleted_at"] else "ACTIVE"
+        ),
+        canonical_person_id=(
+            row["canonical_person_id"] if "canonical_person_id" in row.keys() else None
+        ),
+        identity_status=(row["identity_status"] if "identity_status" in row.keys() else "IDENTIFIED"),
+        biometric_status=(row["biometric_status"] if "biometric_status" in row.keys() else "NO_FACE"),
     )
 
 
@@ -3319,12 +3762,17 @@ def _mark_person_enrolled(conn: sqlite3.Connection, person_id: str) -> None:
     row = conn.execute(
         """
         SELECT name, metadata, enrollment_status, notes
-        FROM persons WHERE person_id = ? AND deleted_at IS NULL
+        FROM persons
+        WHERE person_id = ? AND lifecycle_status = 'ACTIVE' AND deleted_at IS NULL
         """,
         (person_id,),
     ).fetchone()
     if row is None:
         raise KeyError(f"Unknown person: {person_id}")
+    conn.execute(
+        "UPDATE persons SET biometric_status = 'ENROLLED' WHERE person_id = ?",
+        (person_id,),
+    )
     if row["enrollment_status"] != "placeholder":
         return
     conn.execute(

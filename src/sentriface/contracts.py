@@ -44,7 +44,13 @@ class IdentityStore(Protocol):
     def initialize(self) -> None:
         """Create or migrate durable storage."""
 
-    def create_person(self, name: str, metadata: dict | None = None, notes: str = "") -> Person:
+    def create_person(
+        self,
+        name: str,
+        metadata: dict | None = None,
+        notes: str = "",
+        identity_status: str = "IDENTIFIED",
+    ) -> Person:
         """Create a person record."""
 
     def create_placeholder_person(
@@ -184,17 +190,51 @@ class IdentityStore(Protocol):
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         """Load face ownership and deletion state."""
 
-    def archive_person(self, person_id: str, operation_id: str) -> dict:
+    def get_person_lifecycle(self, person_id: str) -> dict | None:
+        """Load lifecycle, identity, biometric, and canonical state for one person."""
+
+    def resolve_canonical_person_id(self, person_id: str) -> str:
+        """Resolve a person through any canonical identity chain."""
+
+    def list_historical_persons(self) -> list[PersonSummary]:
+        """List archived, deleted, and merged historical identities."""
+
+    def archive_person(
+        self, person_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
         """Atomically archive one person."""
 
-    def restore_person(self, person_id: str, operation_id: str) -> dict:
+    def restore_person(
+        self, person_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
         """Atomically restore one archived person."""
+
+    def soft_delete_person(
+        self, person_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
+        """Atomically tombstone one person while retaining historical data."""
+
+    def set_canonical_person_id(
+        self,
+        person_id: str,
+        canonical_person_id: str,
+        operation_id: str,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
+        """Store a canonical mapping without performing identity merge transfer work."""
 
     def list_file_references_for_person(self, person_id: str) -> list[str]:
         """List image and crop paths owned or referenced by one person."""
 
-    def permanently_delete_person(self, person_id: str, operation_id: str) -> dict:
-        """Erase a person and all linked live-library records atomically."""
+    def permanently_delete_person(
+        self, person_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
+        """Compatibility entry point that tombstones a person without historical erasure."""
 
     def delete_embedding(self, embedding_id: str, operation_id: str) -> dict:
         """Atomically soft-delete an embedding while retaining linked details."""

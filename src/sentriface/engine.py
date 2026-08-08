@@ -433,6 +433,15 @@ class FaceEngine:
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         return self.store.get_embedding_lifecycle(embedding_id)
 
+    def get_person_lifecycle(self, person_id: str) -> dict | None:
+        return self.store.get_person_lifecycle(person_id)
+
+    def resolve_canonical_person_id(self, person_id: str) -> str:
+        return self.store.resolve_canonical_person_id(person_id)
+
+    def list_historical_persons(self) -> list[PersonSummary]:
+        return self.store.list_historical_persons()
+
     def list_recognition_details_for_person(
         self,
         person_id: str,
@@ -443,27 +452,54 @@ class FaceEngine:
         with self.metrics.timer("db_list_recognition_details_for_person_ms"):
             return self.store.list_recognition_details_for_person(person_id)
 
-    def archive_person(self, person_id: str, operation_id: str) -> dict:
+    def archive_person(
+        self, person_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
         with self.metrics.timer("db_delete_person_ms"):
-            result = self.store.archive_person(person_id, operation_id)
+            result = self.store.archive_person(person_id, operation_id, actor, source)
         self._rebuild_index()
         return result
 
-    def restore_person(self, person_id: str, operation_id: str) -> dict:
+    def restore_person(
+        self, person_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
         with self.metrics.timer("db_restore_person_ms"):
-            result = self.store.restore_person(person_id, operation_id)
+            result = self.store.restore_person(person_id, operation_id, actor, source)
         self._rebuild_index()
         return result
 
-    def permanently_delete_person(self, person_id: str, operation_id: str) -> dict:
-        journal = self.cleanup.schedule(
-            self.store.list_file_references_for_person(person_id),
-            f"purge-person-{person_id}",
-        )
+    def soft_delete_person(
+        self, person_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
         with self.metrics.timer("db_purge_person_ms"):
-            result = self.store.permanently_delete_person(person_id, operation_id)
+            result = self.store.soft_delete_person(person_id, operation_id, actor, source)
         self._rebuild_index()
-        self.cleanup.run(journal, self.store.list_all_file_references)
+        return result
+
+    def permanently_delete_person(
+        self, person_id: str, operation_id: str,
+        actor: dict | None = None, source: str | None = None,
+    ) -> dict:
+        with self.metrics.timer("db_purge_person_ms"):
+            result = self.store.permanently_delete_person(person_id, operation_id, actor, source)
+        self._rebuild_index()
+        return result
+
+    def set_canonical_person_id(
+        self,
+        person_id: str,
+        canonical_person_id: str,
+        operation_id: str,
+        actor: dict | None = None,
+        source: str | None = None,
+    ) -> dict:
+        result = self.store.set_canonical_person_id(
+            person_id, canonical_person_id, operation_id, actor, source,
+        )
+        self._rebuild_index()
         return result
 
     def delete_person(self, person_id: str) -> None:

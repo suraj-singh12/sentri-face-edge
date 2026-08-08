@@ -779,6 +779,16 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         morsel = cookies.get(AUTH_COOKIE_NAME)
         return morsel.value if morsel else ""
 
+    def _operation_actor(self) -> dict | None:
+        if self.auth_user is None:
+            return None
+        return {
+            "user_id": self.auth_user.user_id,
+            "username": self.auth_user.username,
+            "display_name": self.auth_user.display_name,
+            "roles": list(self.auth_user.roles),
+        }
+
     def _reject_user_authorization(self, method: str, path: str) -> bool:
         required = _required_capability(method, path)
         user = self.server.auth.authenticate(self._auth_token())
@@ -1016,6 +1026,46 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         ],
                     }
                 )
+                return
+            if parsed.path == "/api/person-association-neighbors":
+                person_id = _query_value(parsed.query, "person_id")
+                include_archived = _query_bool(parsed.query, "include_archived")
+                requested_limit = _safe_count(_query_value(parsed.query, "limit") or "30", "graph limit")
+                limit = max(1, min(requested_limit, 50))
+                person = self.server.engine.get_person(person_id, include_archived=include_archived)
+                if person is None:
+                    raise KeyError("This person no longer exists")
+                associations = self.server.engine.list_person_associations(
+                    person_id,
+                    include_archived=include_archived,
+                    limit=limit + 1,
+                )
+                person_summaries = {
+                    item.person.person_id: item
+                    for item in [
+                        *self.server.engine.list_persons(),
+                        *self.server.engine.list_persons(archived=True),
+                    ]
+                }
+                self._json({
+                    "person": {
+                        **_person(person),
+                        "favorite": bool(person.metadata.get("favorite")),
+                        "tags": list(person.metadata.get("tags", [])),
+                        "representative_image": _representative_image(
+                            self.server.engine.list_person_embeddings(
+                                person_id, include_archived=include_archived,
+                            ),
+                            person.metadata.get("representative_embedding_id"),
+                        ),
+                    },
+                    "associations": [
+                        _person_association(item, person_id, person_summaries, self.server.engine)
+                        for item in associations[:limit]
+                    ],
+                    "truncated": len(associations) > limit,
+                    "limit": limit,
+                })
                 return
             if parsed.path == "/api/pending":
                 self._json({"pending": [_pending(self.server.engine, item) for item in self.server.engine.list_pending_additions()]})
@@ -1650,17 +1700,22 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/person-archive":
                 person_id = _required(payload, "person_id")
                 operation_id = _operation_id(payload)
+                actor = self._operation_actor()
                 person = self.server.engine.get_person(person_id, include_archived=True)
                 if person is None:
                     raise KeyError(f"Unknown person: {person_id}")
                 if person.deleted_at:
-                    result = self.server.engine.archive_person(person_id, operation_id)
+                    result = self.server.engine.archive_person(
+                        person_id, operation_id, actor, parsed.path,
+                    )
                 else:
                     result = self.server.backed_up_people_deletion(
                         operation_id,
                         "archive-person",
                         f"before-person-archive-{person.name}-{person_id[:8]}",
-                        lambda: self.server.engine.archive_person(person_id, operation_id),
+                        lambda: self.server.engine.archive_person(
+                            person_id, operation_id, actor, parsed.path,
+                        ),
                     )
                 self.server.log_event("person-archive", **result)
                 self._json(result)
@@ -1669,6 +1724,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 result = self.server.engine.restore_person(
                     _required(payload, "person_id"),
                     _operation_id(payload),
+                    self._operation_actor(),
+                    parsed.path,
                 )
                 self.server.log_event("person-restore", **result)
                 self._json(result)
@@ -1687,6 +1744,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     lambda: self.server.engine.permanently_delete_person(
                         person_id,
                         operation_id,
+                        self._operation_actor(),
+                        parsed.path,
                     ),
                 )
                 self.server.log_event("person-purge", **result)

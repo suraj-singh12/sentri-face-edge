@@ -40,6 +40,10 @@ class Person:
     deleted_at: str | None = None
     enrollment_status: str = "enrolled"
     notes: str = ""
+    lifecycle_status: str = "ACTIVE"
+    canonical_person_id: str | None = None
+    identity_status: str = "IDENTIFIED"
+    biometric_status: str = "NO_FACE"
 
 
 @dataclass(frozen=True)

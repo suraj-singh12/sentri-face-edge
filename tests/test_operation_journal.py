@@ -169,6 +169,34 @@ class OperationJournalTest(unittest.TestCase):
             with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.execute(
                     """
+                    CREATE TABLE persons (
+                        person_id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        metadata TEXT NOT NULL DEFAULT '{}',
+                        created_at TEXT NOT NULL,
+                        deleted_at TEXT,
+                        enrollment_status TEXT NOT NULL DEFAULT 'enrolled',
+                        notes TEXT NOT NULL DEFAULT ''
+                    )
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TABLE embeddings (
+                        embedding_id TEXT PRIMARY KEY,
+                        person_id TEXT NOT NULL,
+                        vector BLOB NOT NULL,
+                        quality_score REAL NOT NULL,
+                        source_image TEXT,
+                        crop_path TEXT,
+                        created_at TEXT NOT NULL,
+                        deleted_at TEXT,
+                        purge_after TEXT
+                    )
+                    """
+                )
+                conn.execute(
+                    """
                     CREATE TABLE person_operations (
                         operation_id TEXT PRIMARY KEY,
                         operation_type TEXT NOT NULL,

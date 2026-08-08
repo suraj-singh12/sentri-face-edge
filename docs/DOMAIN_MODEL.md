@@ -38,13 +38,13 @@ A projected relationship exists while at least one active evidence record suppor
 
 Identity corrections (move face, add face, change a participant decision) are first-class historical operations; they do not silently rewrite provenance. Every important write has an immutable operation-journal entry with operation/idempotency ID, type, actor, timestamp, affected entities, before/after or inverse data, and status. A graph-affecting write and its journal entry commit in the same SQLite transaction.
 
-## Current repository map (schema version 17)
+## Current repository map (schema version 18)
 
 | Concern | Current implementation |
 | --- | --- |
 | Domain types | `src/sentriface/models.py`: `Person`, `EmbeddingRecord`, `RecognitionDetail`, `PendingAddition`, `InitSession`, `InitGroup`, `InitFace`, `PersonAssociation`, `PersonChange` |
 | Storage boundary | `src/sentriface/contracts.py::IdentityStore` |
-| Database and migrations | `src/sentriface/storage/sqlite_store.py`: `SCHEMA_VERSION`, `SQLiteIdentityStore.initialize()`, and the validated `_schema_migrations()` registry through `_migrate_16_to_17`; `_connect()` enables foreign keys and commits/rolls back a connection-scoped transaction |
+| Database and migrations | `src/sentriface/storage/sqlite_store.py`: `SCHEMA_VERSION`, `SQLiteIdentityStore.initialize()`, and the validated `_schema_migrations()` registry through `_migrate_17_to_18`; `_connect()` enables foreign keys and commits/rolls back a connection-scoped transaction |
 | Current tables | `persons`, `embeddings`, `pending_additions`, `init_sessions`, `init_faces`, `init_groups`, `init_face_person_exclusions`, `recognition_details`, `person_change_history`, legacy `person_operations`, global `operation_journal` and `operation_journal_status_history`, `person_associations`, plus `app_users`, `auth_audit`, `app_settings` |
 | Application service | `src/sentriface/engine.py::FaceEngine`; recognition, pending confirmation, queue grouping/confirmation, lifecycle, face move, merge, and index rebuild |
 | Recognition/index | `FaceEngine.recognize()` returns proposals; `linear_index.py`/`hnsw_index.py` are rebuilt from active embeddings and are derived caches |
@@ -58,7 +58,8 @@ Identity corrections (move face, add face, change a participant decision) are fi
 
 ## Current semantics and conflicts to resolve
 
-- `persons.deleted_at` currently represents archive/soft-delete, while `permanently_delete_person()` physically deletes the person, embeddings, sightings, history, exclusions, and associations. The target requires person tombstones and permanent historical graph representation.
+- `persons` now has explicit `lifecycle_status`, `canonical_person_id`, `identity_status`, `biometric_status`, and `lifecycle_changed_at`. Existing live rows migrate to `ACTIVE`; legacy archived rows remain historical, and valid `metadata.merged_into` sources migrate to `MERGED` mappings.
+- Ordinary archive, restore, and delete paths now use atomic lifecycle transitions plus the global operation journal. The compatibility `permanently_delete_person()` entry point tombstones as `DELETED` and retains linked history; the former destructive implementation remains isolated as the storage-only `physically_purge_person()` exceptional capability.
 - `recognition_details` is attached to one embedding/person/image and duplicates event fields (`seen_date`, `seen_time`, `place_seen`, `event_occasion`, `individual_count`). There is no event, event-photo, face-decision, or deduplicated participant model.
 - Queue identity confirmation is atomic per selected group subset in `confirm_init_faces_atomic()`, but `useQueueController.js::confirmQueueFollowup()` then creates one `/api/recognition-followup` write per accepted face. There is no explicit all-faces-final event completion transaction, so identity, sighting, mention, and future graph writes can partially commit.
 - Check Photo similarly performs identity confirmation and recognition follow-up as separate API operations in `useRecognizeController.js`.
@@ -66,7 +67,7 @@ Identity corrections (move face, add face, change a participant decision) are fi
 - `_create_note_associations()` creates an association when saved notes contain a mention, but it does not reconcile removed mentions. A manual link can overwrite an automatic mention's origin, losing independent provenance.
 - Removing a current association deletes the whole row even if multiple underlying reasons should support the relationship.
 - The current Relationship Graph is a client-side view of `person_associations`; there is no authoritative evidence engine, rebuild operation, integrity checker, global projection API, or World projection.
-- Merge currently moves embeddings and `recognition_details` to the target and stores `merged_into` plus an undo snapshot in JSON. This changes original ownership, does not provide a normalized canonical-identity/merge-history model, and does not canonicalize/reconcile relationship evidence.
+- The P2 canonical resolver and constrained `MERGED` mapping are present, but the existing full merge path still moves embeddings and `recognition_details` and stores its undo snapshot in JSON. P8 must replace that transfer/reconciliation behavior with normalized merge history and complete journal/provenance handling.
 - Face move similarly rewrites embedding and sighting ownership; it journals a result but does not preserve a normalized correction history/provenance chain.
 - `person_operations` remains unchanged as the legacy idempotency/result table because its rows lack reliable actor and lifecycle data. New work uses the global `operation_journal` API; existing writes are not speculatively backfilled or automatically bridged, so important legacy paths remain unjournaled until their owning phase adopts the API.
 - Storage methods are generally transaction-scoped through `_connect()`, which is a useful foundation, but workflows spanning several engine/API calls are not atomic.

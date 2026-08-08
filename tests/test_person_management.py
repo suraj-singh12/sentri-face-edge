@@ -104,7 +104,10 @@ class PersonManagementTest(unittest.TestCase):
             )
             self.assertTrue(deleted["deleted"])
             self.assertEqual(deleted["deleted_embeddings"], 0)
-            self.assertIsNone(engine.get_person(placeholder.person_id, include_archived=True))
+            self.assertTrue(deleted["tombstoned"])
+            historical = engine.get_person(placeholder.person_id, include_archived=True)
+            self.assertIsNotNone(historical)
+            self.assertEqual(historical.lifecycle_status, "DELETED")
 
     def test_unique_person_ranking_collapses_embedding_matches(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

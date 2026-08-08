@@ -99,7 +99,10 @@ class PlaceholderPersonTest(unittest.TestCase):
                 "placeholder-purge-1",
             )
             self.assertEqual(result["deleted_embeddings"], 0)
-            self.assertIsNone(store.get_person(person.person_id, include_archived=True))
+            self.assertTrue(result["tombstoned"])
+            historical = store.get_person(person.person_id, include_archived=True)
+            self.assertIsNotNone(historical)
+            self.assertEqual(historical.lifecycle_status, "DELETED")
             replacement = store.create_placeholder_person(
                 "temporary identity",
                 {},
