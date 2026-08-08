@@ -17,6 +17,9 @@ from sentriface.models import (
     Embedding,
     EmbeddingRecord,
     FaceBox,
+    GlobalGraphProjection,
+    GraphConnection,
+    GraphNode,
     InitFace,
     InitGroup,
     InitSession,
@@ -33,16 +36,20 @@ from sentriface.models import (
     QualityReport,
     QualityStatus,
     RecognitionDetail,
+    RelationshipEvidence,
     utc_now,
 )
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
 PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
 PERSON_BIOMETRIC_STATUSES = frozenset({"NO_FACE", "ENROLLED"})
+RELATIONSHIP_EVIDENCE_TYPES = frozenset({
+    "CO_OBSERVED", "NOTE_REFERENCE", "MANUAL_ASSOCIATION",
+})
 OPERATION_STATUSES = frozenset({"STARTED", "COMMITTED", "FAILED", "ROLLED_BACK", "REVERTED"})
 OPERATION_STATUS_TRANSITIONS = {
     "STARTED": frozenset({"COMMITTED", "FAILED", "ROLLED_BACK"}),
@@ -1243,6 +1250,385 @@ class SQLiteIdentityStore:
             ).fetchall()
         return [_observation_from_row(row) for row in rows]
 
+    def record_observation_evidence(
+        self,
+        observation_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> list[RelationshipEvidence]:
+        normalized_observation_id = str(observation_id).strip()
+        if not normalized_observation_id:
+            raise ValueError("Observation ID is required")
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "graph.observation-evidence.record",
+            )
+            if existing_result is not None:
+                if existing_result.get("observation_id") != normalized_observation_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                return _list_relationship_evidence_for_source(
+                    conn, "CO_OBSERVED", normalized_observation_id,
+                )
+            observation = _require_observation(conn, normalized_observation_id)
+            if observation["status"] != "FINALIZED":
+                raise ValueError("Co-observation evidence requires a finalized observation")
+            participants = conn.execute(
+                """
+                SELECT person_id
+                FROM observation_participants
+                WHERE observation_id = ?
+                ORDER BY person_id
+                """,
+                (normalized_observation_id,),
+            ).fetchall()
+            canonical_representatives: dict[str, str] = {}
+            for participant in participants:
+                raw_person_id = str(participant["person_id"])
+                canonical_person_id = _resolve_canonical_person_id(conn, raw_person_id)
+                canonical_representatives.setdefault(canonical_person_id, raw_person_id)
+            representatives = [
+                canonical_representatives[key]
+                for key in sorted(canonical_representatives)
+            ]
+            _begin_journal_operation(
+                conn,
+                "graph.observation-evidence.record",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "global-graph-service",
+                affected_entities=[
+                    {"entity_type": "observation", "entity_id": normalized_observation_id},
+                    *[
+                        {"entity_type": "person", "entity_id": person_id}
+                        for person_id in representatives
+                    ],
+                ],
+                details={"evidence_type": "CO_OBSERVED"},
+            )
+            created_at = utc_now()
+            for index, first_person_id in enumerate(representatives):
+                for second_person_id in representatives[index + 1:]:
+                    source_person_id, target_person_id = _canonical_person_pair(
+                        first_person_id, second_person_id,
+                    )
+                    evidence_id = str(uuid.uuid5(
+                        uuid.NAMESPACE_URL,
+                        "|".join((
+                            "sentriface",
+                            "CO_OBSERVED",
+                            normalized_observation_id,
+                            source_person_id,
+                            target_person_id,
+                            "ASSOCIATED_WITH",
+                            "UNDIRECTED",
+                        )),
+                    ))
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO relationship_evidence(
+                            evidence_id, evidence_type, source_entity_type, source_entity_id,
+                            source_person_id, target_person_id, relationship_type,
+                            directionality, active, source, created_operation_id, created_at
+                        ) VALUES (?, 'CO_OBSERVED', 'OBSERVATION', ?, ?, ?,
+                                  'ASSOCIATED_WITH', 'UNDIRECTED', 1, ?, ?, ?)
+                        """,
+                        (
+                            evidence_id,
+                            normalized_observation_id,
+                            source_person_id,
+                            target_person_id,
+                            _optional_text(source),
+                            operation_id,
+                            created_at,
+                        ),
+                    )
+            evidence = _list_relationship_evidence_for_source(
+                conn, "CO_OBSERVED", normalized_observation_id,
+            )
+            _replace_graph_projection(conn)
+            validation = _validate_graph_projection(conn)
+            if not validation["valid"]:
+                raise RuntimeError(
+                    "Graph projection validation failed: " + "; ".join(validation["errors"])
+                )
+            result = {
+                "observation_id": normalized_observation_id,
+                "evidence_ids": [item.evidence_id for item in evidence],
+                "evidence_count": len(evidence),
+                "connection_count": validation["actual_connection_count"],
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return evidence
+
+    def deactivate_relationship_evidence(
+        self,
+        evidence_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> RelationshipEvidence:
+        normalized_evidence_id = str(evidence_id).strip()
+        if not normalized_evidence_id:
+            raise ValueError("Evidence ID is required")
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "graph.evidence.deactivate",
+            )
+            if existing_result is not None:
+                if existing_result.get("evidence_id") != normalized_evidence_id:
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                row = conn.execute(
+                    "SELECT * FROM relationship_evidence WHERE evidence_id = ?",
+                    (normalized_evidence_id,),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("Committed evidence deactivation is missing its evidence")
+                return _relationship_evidence_from_row(row)
+            row = conn.execute(
+                "SELECT * FROM relationship_evidence WHERE evidence_id = ?",
+                (normalized_evidence_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown relationship evidence: {normalized_evidence_id}")
+            _begin_journal_operation(
+                conn,
+                "graph.evidence.deactivate",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "global-graph-service",
+                affected_entities=[
+                    {"entity_type": "relationship_evidence", "entity_id": normalized_evidence_id},
+                    {"entity_type": "person", "entity_id": row["source_person_id"]},
+                    {"entity_type": "person", "entity_id": row["target_person_id"]},
+                ],
+            )
+            changed = False
+            if bool(row["active"]):
+                deactivated_at = utc_now()
+                conn.execute(
+                    """
+                    UPDATE relationship_evidence
+                    SET active = 0, deactivated_operation_id = ?, deactivated_at = ?
+                    WHERE evidence_id = ? AND active = 1
+                    """,
+                    (operation_id, deactivated_at, normalized_evidence_id),
+                )
+                changed = True
+            _replace_graph_projection(conn)
+            validation = _validate_graph_projection(conn)
+            if not validation["valid"]:
+                raise RuntimeError(
+                    "Graph projection validation failed: " + "; ".join(validation["errors"])
+                )
+            result = {
+                "evidence_id": normalized_evidence_id,
+                "deactivated": True,
+                "changed": changed,
+                "connection_count": validation["actual_connection_count"],
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            updated = conn.execute(
+                "SELECT * FROM relationship_evidence WHERE evidence_id = ?",
+                (normalized_evidence_id,),
+            ).fetchone()
+            return _relationship_evidence_from_row(updated)
+
+    def deactivate_relationship_evidence_for_source(
+        self,
+        evidence_type: str,
+        source_entity_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> list[RelationshipEvidence]:
+        normalized_type = str(evidence_type).strip().upper()
+        if normalized_type not in RELATIONSHIP_EVIDENCE_TYPES:
+            raise ValueError(f"Unsupported relationship evidence type: {evidence_type}")
+        normalized_source_entity_id = str(source_entity_id).strip()
+        if not normalized_source_entity_id:
+            raise ValueError("Evidence source entity ID is required")
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "graph.source-evidence.deactivate",
+            )
+            if existing_result is not None:
+                if (
+                    existing_result.get("evidence_type") != normalized_type
+                    or existing_result.get("source_entity_id") != normalized_source_entity_id
+                ):
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                return _list_relationship_evidence_for_source(
+                    conn, normalized_type, normalized_source_entity_id,
+                )
+            rows = conn.execute(
+                """
+                SELECT * FROM relationship_evidence
+                WHERE evidence_type = ? AND source_entity_id = ?
+                ORDER BY evidence_id
+                """,
+                (normalized_type, normalized_source_entity_id),
+            ).fetchall()
+            if not rows:
+                raise KeyError(
+                    f"No {normalized_type} evidence exists for source {normalized_source_entity_id}"
+                )
+            _begin_journal_operation(
+                conn,
+                "graph.source-evidence.deactivate",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "global-graph-service",
+                affected_entities=[
+                    {
+                        "entity_type": "relationship_evidence",
+                        "entity_id": row["evidence_id"],
+                    }
+                    for row in rows
+                ],
+                details={
+                    "evidence_type": normalized_type,
+                    "source_entity_id": normalized_source_entity_id,
+                },
+            )
+            deactivated_at = utc_now()
+            cursor = conn.execute(
+                """
+                UPDATE relationship_evidence
+                SET active = 0, deactivated_operation_id = ?, deactivated_at = ?
+                WHERE evidence_type = ? AND source_entity_id = ? AND active = 1
+                """,
+                (
+                    operation_id,
+                    deactivated_at,
+                    normalized_type,
+                    normalized_source_entity_id,
+                ),
+            )
+            _replace_graph_projection(conn)
+            validation = _validate_graph_projection(conn)
+            if not validation["valid"]:
+                raise RuntimeError(
+                    "Graph projection validation failed: " + "; ".join(validation["errors"])
+                )
+            result = {
+                "evidence_type": normalized_type,
+                "source_entity_id": normalized_source_entity_id,
+                "deactivated_count": int(cursor.rowcount),
+                "connection_count": validation["actual_connection_count"],
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return _list_relationship_evidence_for_source(
+                conn, normalized_type, normalized_source_entity_id,
+            )
+
+    def get_person_neighbors(self, person_id: str) -> list[GraphConnection]:
+        with self._connect() as conn:
+            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
+            rows = conn.execute(
+                """
+                SELECT * FROM graph_connections
+                WHERE source_person_id = ? OR target_person_id = ?
+                ORDER BY last_evidence_at DESC, source_person_id, target_person_id,
+                         relationship_type, directionality
+                """,
+                (canonical_person_id, canonical_person_id),
+            ).fetchall()
+        return [_graph_connection_from_row(row) for row in rows]
+
+    def get_connection_evidence(
+        self,
+        source_person_id: str,
+        target_person_id: str,
+        *,
+        include_inactive: bool = False,
+    ) -> list[RelationshipEvidence]:
+        with self._connect() as conn:
+            canonical_source = _resolve_canonical_person_id(conn, source_person_id)
+            canonical_target = _resolve_canonical_person_id(conn, target_person_id)
+            if canonical_source == canonical_target:
+                return []
+            requested_pair = tuple(sorted((canonical_source, canonical_target)))
+            rows = conn.execute(
+                f"SELECT * FROM relationship_evidence "
+                f"{' ' if include_inactive else 'WHERE active = 1 '}"
+                "ORDER BY created_at, evidence_id"
+            ).fetchall()
+            evidence: list[RelationshipEvidence] = []
+            for row in rows:
+                resolved_pair = tuple(sorted((
+                    _resolve_canonical_person_id(conn, row["source_person_id"]),
+                    _resolve_canonical_person_id(conn, row["target_person_id"]),
+                )))
+                if resolved_pair == requested_pair:
+                    evidence.append(_relationship_evidence_from_row(row))
+            return evidence
+
+    def get_global_graph_projection(self) -> GlobalGraphProjection:
+        with self._connect() as conn:
+            person_rows = conn.execute(
+                "SELECT person_id, name, lifecycle_status FROM persons ORDER BY person_id"
+            ).fetchall()
+            nodes = tuple(
+                GraphNode(
+                    person_id=row["person_id"],
+                    canonical_person_id=_resolve_canonical_person_id(conn, row["person_id"]),
+                    name=row["name"],
+                    lifecycle_status=row["lifecycle_status"],
+                )
+                for row in person_rows
+            )
+            connection_rows = conn.execute(
+                """
+                SELECT * FROM graph_connections
+                ORDER BY source_person_id, target_person_id, relationship_type, directionality
+                """
+            ).fetchall()
+            connections = tuple(_graph_connection_from_row(row) for row in connection_rows)
+            return GlobalGraphProjection(nodes=nodes, connections=connections)
+
+    def rebuild_graph_projection(
+        self,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> dict:
+        with self._connect() as conn:
+            existing_result = _existing_committed_operation_result(
+                conn, operation_id, "graph.projection.rebuild",
+            )
+            if existing_result is not None:
+                return existing_result
+            _begin_journal_operation(
+                conn,
+                "graph.projection.rebuild",
+                operation_id=operation_id,
+                actor=actor,
+                source=_optional_text(source) or "global-graph-service",
+                affected_entities=[{"entity_type": "global_graph", "entity_id": "global"}],
+            )
+            _replace_graph_projection(conn)
+            validation = _validate_graph_projection(conn)
+            if not validation["valid"]:
+                raise RuntimeError(
+                    "Graph projection validation failed: " + "; ".join(validation["errors"])
+                )
+            result = {
+                "rebuilt": True,
+                "connection_count": validation["actual_connection_count"],
+                "evidence_count": validation["active_evidence_count"],
+            }
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def validate_graph_projection(self) -> dict:
+        with self._connect() as conn:
+            return _validate_graph_projection(conn)
+
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         with self._connect() as conn:
             row = conn.execute(
@@ -1508,6 +1894,10 @@ class SQLiteIdentityStore:
                 """,
                 (resolved_target, changed_at, changed_at, person_id),
             )
+            if conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'graph_connections'"
+            ).fetchone() is not None:
+                _replace_graph_projection(conn)
             result = {
                 "person_id": person_id,
                 "canonical_person_id": resolved_target,
@@ -3943,6 +4333,106 @@ def _migrate_18_to_19(conn: sqlite3.Connection) -> None:
         )
 
 
+def _migrate_19_to_20(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(
+        conn,
+        """
+        CREATE TABLE relationship_evidence (
+            evidence_id TEXT PRIMARY KEY,
+            evidence_type TEXT NOT NULL
+                CHECK(evidence_type IN ('CO_OBSERVED', 'NOTE_REFERENCE', 'MANUAL_ASSOCIATION')),
+            source_entity_type TEXT NOT NULL
+                CHECK(source_entity_type IN ('OBSERVATION', 'NOTE', 'MANUAL_ASSERTION')),
+            source_entity_id TEXT NOT NULL,
+            source_person_id TEXT NOT NULL,
+            target_person_id TEXT NOT NULL,
+            relationship_type TEXT NOT NULL DEFAULT 'ASSOCIATED_WITH',
+            directionality TEXT NOT NULL DEFAULT 'UNDIRECTED'
+                CHECK(directionality IN ('UNDIRECTED', 'DIRECTED')),
+            active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+            source TEXT,
+            created_operation_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            deactivated_operation_id TEXT,
+            deactivated_at TEXT,
+            FOREIGN KEY(source_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(target_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(created_operation_id)
+                REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            FOREIGN KEY(deactivated_operation_id)
+                REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            UNIQUE(
+                evidence_type, source_entity_type, source_entity_id,
+                source_person_id, target_person_id, relationship_type, directionality
+            ),
+            CHECK(source_person_id <> target_person_id),
+            CHECK(
+                (active = 1 AND deactivated_operation_id IS NULL AND deactivated_at IS NULL)
+                OR
+                (active = 0 AND deactivated_operation_id IS NOT NULL AND deactivated_at IS NOT NULL)
+            ),
+            CHECK(
+                (evidence_type = 'CO_OBSERVED' AND source_entity_type = 'OBSERVATION')
+                OR (evidence_type = 'NOTE_REFERENCE' AND source_entity_type = 'NOTE')
+                OR (evidence_type = 'MANUAL_ASSOCIATION' AND source_entity_type = 'MANUAL_ASSERTION')
+            )
+        );
+
+        CREATE INDEX idx_relationship_evidence_source
+        ON relationship_evidence(evidence_type, source_entity_id, active);
+
+        CREATE INDEX idx_relationship_evidence_people
+        ON relationship_evidence(source_person_id, target_person_id, active);
+
+        CREATE TABLE graph_connections (
+            source_person_id TEXT NOT NULL,
+            target_person_id TEXT NOT NULL,
+            relationship_type TEXT NOT NULL,
+            directionality TEXT NOT NULL
+                CHECK(directionality IN ('UNDIRECTED', 'DIRECTED')),
+            evidence_count INTEGER NOT NULL CHECK(evidence_count > 0),
+            evidence_types TEXT NOT NULL,
+            last_evidence_at TEXT NOT NULL,
+            PRIMARY KEY(
+                source_person_id, target_person_id, relationship_type, directionality
+            ),
+            FOREIGN KEY(source_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            FOREIGN KEY(target_person_id) REFERENCES persons(person_id) ON DELETE RESTRICT,
+            CHECK(source_person_id <> target_person_id),
+            CHECK(directionality = 'DIRECTED' OR source_person_id < target_person_id)
+        );
+
+        CREATE INDEX idx_graph_connections_target
+        ON graph_connections(target_person_id, source_person_id);
+
+        CREATE TRIGGER relationship_evidence_no_delete
+        BEFORE DELETE ON relationship_evidence
+        BEGIN
+            SELECT RAISE(ABORT, 'relationship evidence cannot be deleted');
+        END;
+
+        CREATE TRIGGER relationship_evidence_identity_immutable
+        BEFORE UPDATE OF evidence_id, evidence_type, source_entity_type, source_entity_id,
+                         source_person_id, target_person_id, relationship_type, directionality,
+                         source, created_operation_id, created_at
+        ON relationship_evidence
+        BEGIN
+            SELECT RAISE(ABORT, 'relationship evidence provenance is immutable');
+        END;
+
+        CREATE TRIGGER relationship_evidence_deactivation_only
+        BEFORE UPDATE OF active, deactivated_operation_id, deactivated_at
+        ON relationship_evidence
+        WHEN OLD.active = 0 OR NEW.active <> 0
+        BEGIN
+            SELECT RAISE(ABORT, 'relationship evidence can only transition from active to inactive');
+        END;
+
+        PRAGMA user_version = 20;
+        """,
+    )
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -3970,6 +4460,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(16, 17, _migrate_16_to_17),
         SchemaMigration(17, 18, _migrate_17_to_18),
         SchemaMigration(18, 19, _migrate_18_to_19),
+        SchemaMigration(19, 20, _migrate_19_to_20),
     )
 
 
@@ -4120,6 +4611,223 @@ def _optional_text(value: object | None) -> str | None:
         return None
     normalized = str(value).strip()
     return normalized or None
+
+
+def _relationship_evidence_from_row(row: sqlite3.Row) -> RelationshipEvidence:
+    return RelationshipEvidence(
+        evidence_id=row["evidence_id"],
+        evidence_type=row["evidence_type"],
+        source_entity_type=row["source_entity_type"],
+        source_entity_id=row["source_entity_id"],
+        source_person_id=row["source_person_id"],
+        target_person_id=row["target_person_id"],
+        relationship_type=row["relationship_type"],
+        directionality=row["directionality"],
+        active=bool(row["active"]),
+        source=row["source"],
+        created_operation_id=row["created_operation_id"],
+        created_at=row["created_at"],
+        deactivated_operation_id=row["deactivated_operation_id"],
+        deactivated_at=row["deactivated_at"],
+    )
+
+
+def _graph_connection_from_row(row: sqlite3.Row) -> GraphConnection:
+    return GraphConnection(
+        source_person_id=row["source_person_id"],
+        target_person_id=row["target_person_id"],
+        relationship_type=row["relationship_type"],
+        directionality=row["directionality"],
+        evidence_count=int(row["evidence_count"]),
+        evidence_types=tuple(json.loads(row["evidence_types"])),
+        last_evidence_at=row["last_evidence_at"],
+    )
+
+
+def _list_relationship_evidence_for_source(
+    conn: sqlite3.Connection,
+    evidence_type: str,
+    source_entity_id: str,
+) -> list[RelationshipEvidence]:
+    rows = conn.execute(
+        """
+        SELECT * FROM relationship_evidence
+        WHERE evidence_type = ? AND source_entity_id = ?
+        ORDER BY source_person_id, target_person_id, evidence_id
+        """,
+        (evidence_type, source_entity_id),
+    ).fetchall()
+    return [_relationship_evidence_from_row(row) for row in rows]
+
+
+def _expected_graph_connections(
+    conn: sqlite3.Connection,
+) -> tuple[list[GraphConnection], list[str], int]:
+    errors: list[str] = []
+    aggregates: dict[tuple[str, str, str, str], dict] = {}
+    rows = conn.execute(
+        "SELECT * FROM relationship_evidence ORDER BY created_at, evidence_id"
+    ).fetchall()
+    active_evidence_count = 0
+    for row in rows:
+        evidence_id = str(row["evidence_id"])
+        if row["evidence_type"] == "CO_OBSERVED":
+            observation = conn.execute(
+                "SELECT status FROM observations WHERE observation_id = ?",
+                (row["source_entity_id"],),
+            ).fetchone()
+            if observation is None:
+                errors.append(f"Evidence {evidence_id} has a missing observation source")
+            elif observation["status"] != "FINALIZED":
+                errors.append(f"Evidence {evidence_id} references a non-finalized observation")
+            participant_ids = {
+                str(item[0])
+                for item in conn.execute(
+                    "SELECT person_id FROM observation_participants WHERE observation_id = ?",
+                    (row["source_entity_id"],),
+                ).fetchall()
+            }
+            if (
+                row["source_person_id"] not in participant_ids
+                or row["target_person_id"] not in participant_ids
+            ):
+                errors.append(f"Evidence {evidence_id} endpoints are not observation participants")
+        if not bool(row["active"]):
+            continue
+        active_evidence_count += 1
+        try:
+            source_person_id = _resolve_canonical_person_id(conn, row["source_person_id"])
+            target_person_id = _resolve_canonical_person_id(conn, row["target_person_id"])
+        except (KeyError, RuntimeError, ValueError) as exc:
+            errors.append(f"Evidence {evidence_id} has invalid canonical endpoints: {exc}")
+            continue
+        if source_person_id == target_person_id:
+            continue
+        if row["directionality"] == "UNDIRECTED":
+            source_person_id, target_person_id = sorted((source_person_id, target_person_id))
+        key = (
+            source_person_id,
+            target_person_id,
+            str(row["relationship_type"]),
+            str(row["directionality"]),
+        )
+        aggregate = aggregates.setdefault(key, {
+            "count": 0,
+            "types": set(),
+            "last": str(row["created_at"]),
+        })
+        aggregate["count"] += 1
+        aggregate["types"].add(str(row["evidence_type"]))
+        aggregate["last"] = max(aggregate["last"], str(row["created_at"]))
+    connections = [
+        GraphConnection(
+            source_person_id=key[0],
+            target_person_id=key[1],
+            relationship_type=key[2],
+            directionality=key[3],
+            evidence_count=int(value["count"]),
+            evidence_types=tuple(sorted(value["types"])),
+            last_evidence_at=str(value["last"]),
+        )
+        for key, value in sorted(aggregates.items())
+    ]
+    return connections, errors, active_evidence_count
+
+
+def _replace_graph_projection(conn: sqlite3.Connection) -> None:
+    connections, errors, _ = _expected_graph_connections(conn)
+    if errors:
+        raise RuntimeError("Relationship evidence validation failed: " + "; ".join(errors))
+    conn.execute("DELETE FROM graph_connections")
+    conn.executemany(
+        """
+        INSERT INTO graph_connections(
+            source_person_id, target_person_id, relationship_type, directionality,
+            evidence_count, evidence_types, last_evidence_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                item.source_person_id,
+                item.target_person_id,
+                item.relationship_type,
+                item.directionality,
+                item.evidence_count,
+                json.dumps(item.evidence_types, separators=(",", ":")),
+                item.last_evidence_at,
+            )
+            for item in connections
+        ],
+    )
+
+
+def _validate_graph_projection(conn: sqlite3.Connection) -> dict:
+    expected, errors, active_evidence_count = _expected_graph_connections(conn)
+    actual_rows = conn.execute(
+        """
+        SELECT * FROM graph_connections
+        ORDER BY source_person_id, target_person_id, relationship_type, directionality
+        """
+    ).fetchall()
+    actual: list[GraphConnection] = []
+    for row in actual_rows:
+        try:
+            actual.append(_graph_connection_from_row(row))
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(
+                "Invalid projected connection payload for "
+                f"{row['source_person_id']} -> {row['target_person_id']}: {exc}"
+            )
+    expected_map = {
+        (
+            item.source_person_id,
+            item.target_person_id,
+            item.relationship_type,
+            item.directionality,
+        ): item
+        for item in expected
+    }
+    actual_map = {
+        (
+            item.source_person_id,
+            item.target_person_id,
+            item.relationship_type,
+            item.directionality,
+        ): item
+        for item in actual
+    }
+    for key in sorted(expected_map.keys() - actual_map.keys()):
+        errors.append(f"Missing projected connection: {key}")
+    for key in sorted(actual_map.keys() - expected_map.keys()):
+        errors.append(f"Unexpected projected connection: {key}")
+    for key in sorted(expected_map.keys() & actual_map.keys()):
+        if expected_map[key] != actual_map[key]:
+            errors.append(f"Projected connection does not match evidence: {key}")
+    dangling = conn.execute(
+        """
+        SELECT g.source_person_id, g.target_person_id
+        FROM graph_connections g
+        LEFT JOIN persons source ON source.person_id = g.source_person_id
+        LEFT JOIN persons target ON target.person_id = g.target_person_id
+        WHERE source.person_id IS NULL OR target.person_id IS NULL
+        """
+    ).fetchall()
+    for row in dangling:
+        errors.append(
+            f"Dangling projected connection: {row['source_person_id']} -> {row['target_person_id']}"
+        )
+    self_edges = conn.execute(
+        "SELECT source_person_id FROM graph_connections WHERE source_person_id = target_person_id"
+    ).fetchall()
+    for row in self_edges:
+        errors.append(f"Illegal projected self-edge: {row['source_person_id']}")
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "active_evidence_count": active_evidence_count,
+        "expected_connection_count": len(expected),
+        "actual_connection_count": len(actual),
+    }
 
 
 def _require_observation(conn: sqlite3.Connection, observation_id: str) -> sqlite3.Row:

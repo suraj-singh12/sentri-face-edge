@@ -14,6 +14,7 @@ from sentriface.components.quality import FaceQualityEvaluator
 from sentriface.config import RuntimeConfig
 from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, IdentityStore
 from sentriface.errors import InputImageError, QueueCancellationError
+from sentriface.graph_service import GlobalIdentityGraphService
 from sentriface.metrics import MetricsCollector
 from sentriface.models import (
     FaceBox,
@@ -85,6 +86,7 @@ class FaceEngine:
         self.embedder = embedder
         self.index = _SynchronizedFaceIndex(index)
         self.store = store
+        self.graph = GlobalIdentityGraphService(store)
         self.index_degraded_reason: str | None = (
             "requested backend unavailable"
             if config.index_backend != self.index.backend_name

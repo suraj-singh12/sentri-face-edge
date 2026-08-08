@@ -115,6 +115,49 @@ class ObservationParticipant:
 
 
 @dataclass(frozen=True)
+class RelationshipEvidence:
+    evidence_id: str
+    evidence_type: str
+    source_entity_type: str
+    source_entity_id: str
+    source_person_id: str
+    target_person_id: str
+    relationship_type: str = "ASSOCIATED_WITH"
+    directionality: str = "UNDIRECTED"
+    active: bool = True
+    source: str | None = None
+    created_operation_id: str = ""
+    created_at: str = field(default_factory=utc_now)
+    deactivated_operation_id: str | None = None
+    deactivated_at: str | None = None
+
+
+@dataclass(frozen=True)
+class GraphConnection:
+    source_person_id: str
+    target_person_id: str
+    relationship_type: str
+    directionality: str
+    evidence_count: int
+    evidence_types: tuple[str, ...]
+    last_evidence_at: str
+
+
+@dataclass(frozen=True)
+class GraphNode:
+    person_id: str
+    canonical_person_id: str
+    name: str
+    lifecycle_status: str
+
+
+@dataclass(frozen=True)
+class GlobalGraphProjection:
+    nodes: tuple[GraphNode, ...]
+    connections: tuple[GraphConnection, ...]
+
+
+@dataclass(frozen=True)
 class PersonChange:
     change_id: str
     person_id: str

@@ -7,6 +7,8 @@ from sentriface.models import (
     DetectedFace,
     Embedding,
     EmbeddingRecord,
+    GlobalGraphProjection,
+    GraphConnection,
     InitFace,
     InitGroup,
     InitSession,
@@ -19,6 +21,7 @@ from sentriface.models import (
     PersonChange,
     PersonSummary,
     RecognitionDetail,
+    RelationshipEvidence,
 )
 
 
@@ -277,6 +280,64 @@ class IdentityStore(Protocol):
 
     def list_observations_for_media(self, media_id: str) -> list[Observation]:
         """List observations containing a media identifier."""
+
+    def record_observation_evidence(
+        self,
+        observation_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> list[RelationshipEvidence]:
+        """Idempotently derive co-observation evidence from one finalized observation."""
+
+    def deactivate_relationship_evidence(
+        self,
+        evidence_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> RelationshipEvidence:
+        """Deactivate one evidence item without erasing its provenance."""
+
+    def deactivate_relationship_evidence_for_source(
+        self,
+        evidence_type: str,
+        source_entity_id: str,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> list[RelationshipEvidence]:
+        """Deactivate all evidence from one source without erasing provenance."""
+
+    def get_person_neighbors(self, person_id: str) -> list[GraphConnection]:
+        """Load projected connections for a person's current canonical identity."""
+
+    def get_connection_evidence(
+        self,
+        source_person_id: str,
+        target_person_id: str,
+        *,
+        include_inactive: bool = False,
+    ) -> list[RelationshipEvidence]:
+        """Explain one current canonical connection with normalized evidence."""
+
+    def get_global_graph_projection(self) -> GlobalGraphProjection:
+        """Load all identity nodes and derived connections in the one global graph."""
+
+    def rebuild_graph_projection(
+        self,
+        operation_id: str,
+        *,
+        source: str | None = None,
+        actor: dict | None = None,
+    ) -> dict:
+        """Deterministically replace the projection from active normalized evidence."""
+
+    def validate_graph_projection(self) -> dict:
+        """Compare the current projection with normalized evidence."""
 
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         """Load face ownership and deletion state."""
