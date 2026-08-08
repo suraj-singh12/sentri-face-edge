@@ -6,8 +6,10 @@ import sqlite3
 import struct
 import uuid
 from contextlib import closing, contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Callable
 
 from sentriface.backup_service import BackupError, BackupService
 from sentriface.models import (
@@ -37,6 +39,17 @@ SCHEMA_VERSION = 16
 DELETED_FACE_RETENTION_DAYS = 30
 
 
+class SchemaMigrationError(RuntimeError):
+    """Raised when the database cannot be migrated safely to the current schema."""
+
+
+@dataclass(frozen=True)
+class SchemaMigration:
+    from_version: int
+    to_version: int
+    apply: Callable[[sqlite3.Connection], None]
+
+
 class SQLiteIdentityStore:
     def __init__(
         self,
@@ -56,72 +69,20 @@ class SQLiteIdentityStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         if self.database_key is not None:
             ensure_encrypted_database(self.db_path, self.database_key)
-        version = self._schema_version()
-        if version > SCHEMA_VERSION:
-            raise RuntimeError(
-                f"Database schema version {version} is newer than this app supports "
-                f"({SCHEMA_VERSION}). Please update SentriFace."
-            )
-        if 0 < version < SCHEMA_VERSION:
-            self._create_pre_migration_backup(version)
+        initial_version = self._schema_version()
+        _require_supported_schema_version(initial_version)
+        if 0 < initial_version < SCHEMA_VERSION:
+            self._create_pre_migration_backup(initial_version)
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
-            version = conn.execute("PRAGMA user_version").fetchone()[0]
-            if version > SCHEMA_VERSION:
-                raise RuntimeError(
-                    f"Database schema version {version} is newer than this app supports "
-                    f"({SCHEMA_VERSION}). Please update SentriFace."
+            current_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+            _require_supported_schema_version(current_version)
+            if current_version != initial_version:
+                raise SchemaMigrationError(
+                    "Database schema version changed while migration was being prepared "
+                    f"(v{initial_version} to v{current_version}); startup was stopped safely."
                 )
-            if version == 0:
-                _migrate_0_to_1(conn)
-                version = 1
-            if version == 1:
-                _migrate_1_to_2(conn)
-                version = 2
-            if version == 2:
-                _migrate_2_to_3(conn)
-                version = 3
-            if version == 3:
-                _migrate_3_to_4(conn)
-                version = 4
-            if version == 4:
-                _migrate_4_to_5(conn)
-                version = 5
-            if version == 5:
-                _migrate_5_to_6(conn)
-                version = 6
-            if version == 6:
-                _migrate_6_to_7(conn)
-                version = 7
-            if version == 7:
-                _migrate_7_to_8(conn)
-                version = 8
-            if version == 8:
-                _migrate_8_to_9(conn)
-                version = 9
-            if version == 9:
-                _migrate_9_to_10(conn)
-                version = 10
-            if version == 10:
-                _migrate_10_to_11(conn)
-                version = 11
-            if version == 11:
-                _migrate_11_to_12(conn)
-                version = 12
-            if version == 12:
-                _migrate_12_to_13(conn)
-                version = 13
-            if version == 13:
-                _migrate_13_to_14(conn)
-                version = 14
-            if version == 14:
-                _migrate_14_to_15(conn)
-                version = 15
-            if version == 15:
-                _migrate_15_to_16(conn)
-                version = 16
-            if version != SCHEMA_VERSION:
-                raise RuntimeError(f"Unsupported database schema version: {version}")
+            _apply_schema_migrations(conn, current_version)
 
     def _schema_version(self) -> int:
         if not self.db_path.exists():
@@ -691,6 +652,7 @@ class SQLiteIdentityStore:
         self,
         person_id: str,
         include_archived: bool = False,
+        limit: int | None = None,
     ) -> list[PersonAssociation]:
         with self._connect() as conn:
             person = conn.execute(
@@ -702,15 +664,18 @@ class SQLiteIdentityStore:
             ).fetchone()
             if person is None:
                 raise KeyError(f"Unknown person: {person_id}")
+            limit_clause = " LIMIT ?" if limit is not None else ""
+            params: tuple = (person_id, person_id, max(1, int(limit))) if limit is not None else (person_id, person_id)
             rows = conn.execute(
-                """
+                f"""
                 SELECT association_id, source_person_id, target_person_id,
                        relationship_type, created_at, updated_at, created_by, association_origin
                 FROM person_associations
                 WHERE source_person_id = ? OR target_person_id = ?
                 ORDER BY updated_at DESC, association_id
+                {limit_clause}
                 """,
-                (person_id, person_id),
+                params,
             ).fetchall()
         return [_person_association_from_row(row) for row in rows]
 
@@ -2401,8 +2366,24 @@ def _unpack_embedding(payload: bytes) -> Embedding:
     return struct.unpack(f"{count}f", payload)
 
 
+def _execute_migration_script(conn: sqlite3.Connection, script: str) -> None:
+    """Execute a SQL script without sqlite3.executescript's implicit commit."""
+    statement = ""
+    for line in script.splitlines(keepends=True):
+        statement += line
+        if not sqlite3.complete_statement(statement):
+            continue
+        sql = statement.strip()
+        if sql:
+            conn.execute(sql)
+        statement = ""
+    if statement.strip():
+        raise SchemaMigrationError("Migration contains an incomplete SQL statement")
+
+
 def _migrate_0_to_1(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS persons (
             person_id TEXT PRIMARY KEY,
@@ -2468,7 +2449,8 @@ def _migrate_1_to_2(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_2_to_3(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS init_sessions (
             session_id TEXT PRIMARY KEY,
@@ -2526,7 +2508,8 @@ def _migrate_3_to_4(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_4_to_5(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS recognition_details (
             detail_id TEXT PRIMARY KEY,
@@ -2575,7 +2558,8 @@ def _migrate_5_to_6(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_6_to_7(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS person_change_history (
             change_id TEXT PRIMARY KEY,
@@ -2602,7 +2586,8 @@ def _migrate_6_to_7(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_7_to_8(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS init_face_person_exclusions (
             session_id TEXT NOT NULL,
@@ -2624,7 +2609,8 @@ def _migrate_7_to_8(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_8_to_9(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS person_operations (
             operation_id TEXT PRIMARY KEY,
@@ -2663,7 +2649,8 @@ def _migrate_9_to_10(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE embeddings ADD COLUMN deleted_at TEXT")
     if "purge_after" not in columns:
         conn.execute("ALTER TABLE embeddings ADD COLUMN purge_after TEXT")
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE INDEX IF NOT EXISTS idx_embeddings_deleted
         ON embeddings(deleted_at, purge_after);
@@ -2674,7 +2661,8 @@ def _migrate_9_to_10(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_10_to_11(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS app_users (
             user_id TEXT PRIMARY KEY,
@@ -2712,7 +2700,8 @@ def _migrate_10_to_11(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_11_to_12(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
@@ -2728,7 +2717,8 @@ def _migrate_11_to_12(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_12_to_13(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS persons (
             person_id TEXT PRIMARY KEY,
@@ -2773,7 +2763,8 @@ def _migrate_12_to_13(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE person_change_history ADD COLUMN previous_status TEXT")
     if "new_status" not in history_columns:
         conn.execute("ALTER TABLE person_change_history ADD COLUMN new_status TEXT")
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_active_placeholder_name
         ON persons(lower(trim(name)))
@@ -2785,7 +2776,8 @@ def _migrate_12_to_13(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_13_to_14(conn: sqlite3.Connection) -> None:
-    conn.executescript(
+    _execute_migration_script(
+        conn,
         """
         CREATE TABLE IF NOT EXISTS person_associations (
             association_id TEXT PRIMARY KEY,
@@ -2849,6 +2841,99 @@ def _migrate_15_to_16(conn: sqlite3.Connection) -> None:
         ).fetchall():
             _create_note_associations(conn, row["person_id"], row["notes"] or "", "SentriFace migration", [])
     conn.execute("PRAGMA user_version = 16")
+
+
+def _schema_migrations() -> tuple[SchemaMigration, ...]:
+    """Return the ordered migration registry.
+
+    Future schema work adds one `_migrate_N_to_N_plus_1` function and one entry
+    here, then increments `SCHEMA_VERSION`. Resolving the functions on each call
+    keeps migration failure tests and recovery tooling able to patch a step.
+    """
+    return (
+        SchemaMigration(0, 1, _migrate_0_to_1),
+        SchemaMigration(1, 2, _migrate_1_to_2),
+        SchemaMigration(2, 3, _migrate_2_to_3),
+        SchemaMigration(3, 4, _migrate_3_to_4),
+        SchemaMigration(4, 5, _migrate_4_to_5),
+        SchemaMigration(5, 6, _migrate_5_to_6),
+        SchemaMigration(6, 7, _migrate_6_to_7),
+        SchemaMigration(7, 8, _migrate_7_to_8),
+        SchemaMigration(8, 9, _migrate_8_to_9),
+        SchemaMigration(9, 10, _migrate_9_to_10),
+        SchemaMigration(10, 11, _migrate_10_to_11),
+        SchemaMigration(11, 12, _migrate_11_to_12),
+        SchemaMigration(12, 13, _migrate_12_to_13),
+        SchemaMigration(13, 14, _migrate_13_to_14),
+        SchemaMigration(14, 15, _migrate_14_to_15),
+        SchemaMigration(15, 16, _migrate_15_to_16),
+    )
+
+
+def _require_supported_schema_version(version: int) -> None:
+    if version > SCHEMA_VERSION:
+        raise RuntimeError(
+            f"Database schema version {version} is newer than this app supports "
+            f"({SCHEMA_VERSION}). Please update SentriFace."
+        )
+    if version < 0:
+        raise RuntimeError(f"Unsupported database schema version: {version}")
+
+
+def _validated_migration_registry() -> tuple[SchemaMigration, ...]:
+    migrations = _schema_migrations()
+    expected_version = 0
+    for migration in migrations:
+        if migration.from_version != expected_version or migration.to_version != expected_version + 1:
+            raise SchemaMigrationError(
+                "Invalid schema migration registry: expected "
+                f"v{expected_version} to v{expected_version + 1}, found "
+                f"v{migration.from_version} to v{migration.to_version}."
+            )
+        expected_version = migration.to_version
+    if expected_version != SCHEMA_VERSION:
+        raise SchemaMigrationError(
+            "Invalid schema migration registry: "
+            f"ends at v{expected_version}, expected v{SCHEMA_VERSION}."
+        )
+    return migrations
+
+
+def _apply_schema_migrations(conn: sqlite3.Connection, current_version: int) -> None:
+    migrations = _validated_migration_registry()
+    if current_version == SCHEMA_VERSION:
+        return
+    migrations_by_version = {migration.from_version: migration for migration in migrations}
+    if current_version not in migrations_by_version:
+        raise SchemaMigrationError(f"Unsupported database schema version: {current_version}")
+
+    conn.execute("BEGIN IMMEDIATE")
+    version = current_version
+    try:
+        while version < SCHEMA_VERSION:
+            migration = migrations_by_version.get(version)
+            if migration is None:
+                raise SchemaMigrationError(
+                    f"No migration is registered from database schema v{version}."
+                )
+            try:
+                migration.apply(conn)
+            except Exception as exc:
+                raise SchemaMigrationError(
+                    f"Database migration v{migration.from_version} to "
+                    f"v{migration.to_version} failed: {exc}"
+                ) from exc
+            migrated_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+            if migrated_version != migration.to_version:
+                raise SchemaMigrationError(
+                    f"Database migration v{migration.from_version} to "
+                    f"v{migration.to_version} reported schema v{migrated_version}."
+                )
+            version = migrated_version
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def _create_placeholder_record(

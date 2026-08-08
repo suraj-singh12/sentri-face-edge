@@ -8,10 +8,25 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sentriface.backup_service import BackupError, BackupService
-from sentriface.storage.sqlite_store import SCHEMA_VERSION, SQLiteIdentityStore
+from sentriface.storage.sqlite_store import (
+    SCHEMA_VERSION,
+    SQLiteIdentityStore,
+    SchemaMigrationError,
+    _schema_migrations,
+)
 
 
 class StorageMigrationTest(unittest.TestCase):
+    def test_migration_registry_is_contiguous_through_current_schema(self) -> None:
+        migrations = _schema_migrations()
+
+        self.assertEqual(migrations[0].from_version, 0)
+        self.assertEqual(migrations[-1].to_version, SCHEMA_VERSION)
+        self.assertEqual(
+            [(item.from_version, item.to_version) for item in migrations],
+            [(version, version + 1) for version in range(SCHEMA_VERSION)],
+        )
+
     def test_v13_migration_adds_person_associations_without_changing_people(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -111,6 +126,48 @@ class StorageMigrationTest(unittest.TestCase):
                 version = conn.execute("PRAGMA user_version").fetchone()[0]
 
             self.assertEqual(version, SCHEMA_VERSION)
+
+    def test_current_database_repeated_startup_is_a_no_op(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "sentriface.db"
+            store = SQLiteIdentityStore(db_path)
+            store.initialize()
+            person = store.create_person("Current Schema Person")
+
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                before_schema = conn.execute(
+                    "SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name"
+                ).fetchall()
+                before_person = conn.execute(
+                    "SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status, notes "
+                    "FROM persons WHERE person_id = ?",
+                    (person.person_id,),
+                ).fetchone()
+
+            with patch.object(store, "_create_pre_migration_backup") as create_backup, patch(
+                "sentriface.storage.sqlite_store._migrate_15_to_16",
+                side_effect=AssertionError("current schema must not run migrations"),
+            ):
+                store.initialize()
+                store.initialize()
+
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                after_schema = conn.execute(
+                    "SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name"
+                ).fetchall()
+                after_person = conn.execute(
+                    "SELECT person_id, name, metadata, created_at, deleted_at, enrollment_status, notes "
+                    "FROM persons WHERE person_id = ?",
+                    (person.person_id,),
+                ).fetchone()
+                version = conn.execute("PRAGMA user_version").fetchone()[0]
+
+            create_backup.assert_not_called()
+            self.assertEqual(version, SCHEMA_VERSION)
+            self.assertEqual(after_schema, before_schema)
+            self.assertEqual(after_person, before_person)
+            self.assertEqual(BackupService(db_path, root / "backups").list_backups(), [])
 
     def test_newer_schema_version_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -216,6 +273,81 @@ class StorageMigrationTest(unittest.TestCase):
                 len(BackupService(db_path, root / "backups").list_backups()),
                 1,
             )
+
+    def test_failure_after_partial_migration_rolls_back_version_schema_and_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "sentriface.db"
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                conn.executescript(
+                    """
+                    CREATE TABLE persons (
+                        person_id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        metadata TEXT NOT NULL DEFAULT '{}',
+                        created_at TEXT NOT NULL,
+                        deleted_at TEXT
+                    );
+                    CREATE TABLE embeddings (
+                        embedding_id TEXT PRIMARY KEY,
+                        person_id TEXT NOT NULL,
+                        vector BLOB NOT NULL,
+                        quality_score REAL NOT NULL,
+                        source_image TEXT,
+                        crop_path TEXT,
+                        created_at TEXT NOT NULL
+                    );
+                    CREATE TABLE person_operations (
+                        operation_id TEXT PRIMARY KEY,
+                        operation_type TEXT NOT NULL,
+                        result TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+                    INSERT INTO persons(person_id, name, metadata, created_at)
+                    VALUES ('person-1', 'Recoverable Person', '{}', '2026-08-08T00:00:00+00:00');
+                    INSERT INTO embeddings(
+                        embedding_id, person_id, vector, quality_score, created_at
+                    ) VALUES (
+                        'embedding-1', 'person-1', X'00000000', 0.9,
+                        '2026-08-08T00:00:00+00:00'
+                    );
+                    PRAGMA user_version = 9;
+                    """
+                )
+
+            with patch(
+                "sentriface.storage.sqlite_store._migrate_10_to_11",
+                side_effect=RuntimeError("simulated second-step failure"),
+            ):
+                with self.assertRaisesRegex(
+                    SchemaMigrationError,
+                    "migration v10 to v11 failed.*simulated second-step failure",
+                ):
+                    SQLiteIdentityStore(db_path, embedding_dim=1).initialize()
+
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                version = conn.execute("PRAGMA user_version").fetchone()[0]
+                embedding_columns = {
+                    row[1] for row in conn.execute("PRAGMA table_info(embeddings)")
+                }
+                person = conn.execute(
+                    "SELECT person_id, name FROM persons WHERE person_id = 'person-1'"
+                ).fetchone()
+                embedding = conn.execute(
+                    "SELECT embedding_id, person_id FROM embeddings WHERE embedding_id = 'embedding-1'"
+                ).fetchone()
+                integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+
+            self.assertEqual(version, 9)
+            self.assertNotIn("purge_after", embedding_columns)
+            self.assertNotIn("deleted_at", embedding_columns)
+            self.assertEqual(person, ("person-1", "Recoverable Person"))
+            self.assertEqual(embedding, ("embedding-1", "person-1"))
+            self.assertEqual(integrity, "ok")
+            backups = BackupService(db_path, root / "backups").list_backups()
+            self.assertEqual(len(backups), 1)
+            self.assertTrue(backups[0].verified)
+            self.assertEqual(backups[0].database_version, 9)
 
     def test_v9_database_adds_deleted_face_retention_columns_without_deleting_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
