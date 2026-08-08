@@ -135,6 +135,7 @@ class IdentityStore(Protocol):
         self,
         person_id: str,
         include_archived: bool = False,
+        limit: int | None = None,
     ) -> list[PersonAssociation]:
         """List undirected associations involving a person."""
 
@@ -148,6 +149,37 @@ class IdentityStore(Protocol):
 
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         """Load a prior idempotent operation result, if one exists."""
+
+    def begin_operation(
+        self,
+        operation_type: str,
+        *,
+        operation_id: str | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
+        context: dict | None = None,
+        affected_entities: list[dict] | None = None,
+        details: dict | None = None,
+    ) -> dict:
+        """Create a globally journaled operation in STARTED state."""
+
+    def mark_operation_committed(self, operation_id: str, details: dict | None = None) -> dict:
+        """Mark a started operation committed."""
+
+    def mark_operation_failed(self, operation_id: str, details: dict | None = None) -> dict:
+        """Mark a started operation failed."""
+
+    def mark_operation_rolled_back(self, operation_id: str, details: dict | None = None) -> dict:
+        """Mark a started or failed operation rolled back."""
+
+    def mark_operation_reverted(self, operation_id: str, details: dict | None = None) -> dict:
+        """Mark a committed operation reverted by a later operation."""
+
+    def get_operation(self, operation_id: str) -> dict | None:
+        """Load one global operation and its append-only status history."""
+
+    def list_recent_operations(self, limit: int = 50) -> list[dict]:
+        """List recent global operations, newest first."""
 
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         """Load face ownership and deletion state."""

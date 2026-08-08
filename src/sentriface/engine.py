@@ -384,11 +384,13 @@ class FaceEngine:
         self,
         person_id: str,
         include_archived: bool = False,
+        limit: int | None = None,
     ) -> list[PersonAssociation]:
         with self.metrics.timer("db_list_person_associations_ms"):
             return self.store.list_person_associations(
                 person_id,
                 include_archived=include_archived,
+                limit=limit,
             )
 
     def remove_person_association(
@@ -406,6 +408,27 @@ class FaceEngine:
 
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         return self.store.get_person_operation(operation_id, operation_type)
+
+    def begin_operation(self, operation_type: str, **metadata) -> dict:
+        return self.store.begin_operation(operation_type, **metadata)
+
+    def mark_operation_committed(self, operation_id: str, details: dict | None = None) -> dict:
+        return self.store.mark_operation_committed(operation_id, details)
+
+    def mark_operation_failed(self, operation_id: str, details: dict | None = None) -> dict:
+        return self.store.mark_operation_failed(operation_id, details)
+
+    def mark_operation_rolled_back(self, operation_id: str, details: dict | None = None) -> dict:
+        return self.store.mark_operation_rolled_back(operation_id, details)
+
+    def mark_operation_reverted(self, operation_id: str, details: dict | None = None) -> dict:
+        return self.store.mark_operation_reverted(operation_id, details)
+
+    def get_operation(self, operation_id: str) -> dict | None:
+        return self.store.get_operation(operation_id)
+
+    def list_recent_operations(self, limit: int = 50) -> list[dict]:
+        return self.store.list_recent_operations(limit)
 
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         return self.store.get_embedding_lifecycle(embedding_id)

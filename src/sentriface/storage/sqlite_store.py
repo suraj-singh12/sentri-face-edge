@@ -35,8 +35,16 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 DELETED_FACE_RETENTION_DAYS = 30
+OPERATION_STATUSES = frozenset({"STARTED", "COMMITTED", "FAILED", "ROLLED_BACK", "REVERTED"})
+OPERATION_STATUS_TRANSITIONS = {
+    "STARTED": frozenset({"COMMITTED", "FAILED", "ROLLED_BACK"}),
+    "FAILED": frozenset({"ROLLED_BACK"}),
+    "COMMITTED": frozenset({"REVERTED"}),
+    "ROLLED_BACK": frozenset(),
+    "REVERTED": frozenset(),
+}
 
 
 class SchemaMigrationError(RuntimeError):
@@ -726,6 +734,64 @@ class SQLiteIdentityStore:
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         with self._connect() as conn:
             return _existing_person_operation(conn, operation_id, operation_type)
+
+    def begin_operation(
+        self,
+        operation_type: str,
+        *,
+        operation_id: str | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
+        context: dict | None = None,
+        affected_entities: list[dict] | None = None,
+        details: dict | None = None,
+    ) -> dict:
+        with self._connect() as conn:
+            return _begin_journal_operation(
+                conn,
+                operation_type,
+                operation_id=operation_id,
+                actor=actor,
+                source=source,
+                context=context,
+                affected_entities=affected_entities,
+                details=details,
+            )
+
+    def mark_operation_committed(self, operation_id: str, details: dict | None = None) -> dict:
+        return self._mark_operation_status(operation_id, "COMMITTED", details)
+
+    def mark_operation_failed(self, operation_id: str, details: dict | None = None) -> dict:
+        return self._mark_operation_status(operation_id, "FAILED", details)
+
+    def mark_operation_rolled_back(self, operation_id: str, details: dict | None = None) -> dict:
+        return self._mark_operation_status(operation_id, "ROLLED_BACK", details)
+
+    def mark_operation_reverted(self, operation_id: str, details: dict | None = None) -> dict:
+        return self._mark_operation_status(operation_id, "REVERTED", details)
+
+    def _mark_operation_status(
+        self,
+        operation_id: str,
+        status: str,
+        details: dict | None,
+    ) -> dict:
+        with self._connect() as conn:
+            return _transition_journal_operation(conn, operation_id, status, details)
+
+    def get_operation(self, operation_id: str) -> dict | None:
+        with self._connect() as conn:
+            return _get_journal_operation(conn, operation_id)
+
+    def list_recent_operations(self, limit: int = 50) -> list[dict]:
+        if limit < 1 or limit > 500:
+            raise ValueError("Operation list limit must be between 1 and 500")
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT operation_id FROM operation_journal ORDER BY created_at DESC, operation_id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [_get_journal_operation(conn, row["operation_id"]) for row in rows]
 
     def get_embedding_lifecycle(self, embedding_id: str) -> dict | None:
         with self._connect() as conn:
@@ -2843,6 +2909,80 @@ def _migrate_15_to_16(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA user_version = 16")
 
 
+def _migrate_16_to_17(conn: sqlite3.Connection) -> None:
+    # `person_operations` remains the legacy idempotency/result store. Its rows
+    # lack reliable actor and lifecycle data, so backfilling would invent audit
+    # history. New journal-aware work uses these dedicated tables instead.
+    _execute_migration_script(
+        conn,
+        """
+        CREATE TABLE operation_journal (
+            operation_id TEXT PRIMARY KEY,
+            operation_type TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('STARTED', 'COMMITTED', 'FAILED', 'ROLLED_BACK', 'REVERTED')),
+            actor_user_id TEXT,
+            actor TEXT NOT NULL DEFAULT '{}',
+            source TEXT,
+            context TEXT NOT NULL DEFAULT '{}',
+            affected_entities TEXT NOT NULL DEFAULT '[]',
+            details TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            completed_at TEXT
+        );
+
+        CREATE INDEX idx_operation_journal_created
+        ON operation_journal(created_at DESC);
+
+        CREATE INDEX idx_operation_journal_status
+        ON operation_journal(status, created_at DESC);
+
+        CREATE INDEX idx_operation_journal_actor
+        ON operation_journal(actor_user_id, created_at DESC);
+
+        CREATE TABLE operation_journal_status_history (
+            transition_id TEXT PRIMARY KEY,
+            operation_id TEXT NOT NULL,
+            from_status TEXT,
+            to_status TEXT NOT NULL CHECK(to_status IN ('STARTED', 'COMMITTED', 'FAILED', 'ROLLED_BACK', 'REVERTED')),
+            details TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(operation_id) REFERENCES operation_journal(operation_id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX idx_operation_journal_history_operation
+        ON operation_journal_status_history(operation_id, created_at, transition_id);
+
+        CREATE TRIGGER operation_journal_no_delete
+        BEFORE DELETE ON operation_journal
+        BEGIN
+            SELECT RAISE(ABORT, 'operation journal records cannot be deleted');
+        END;
+
+        CREATE TRIGGER operation_journal_identity_immutable
+        BEFORE UPDATE OF operation_id, operation_type, actor_user_id, actor, source,
+                         context, affected_entities, details, created_at
+        ON operation_journal
+        BEGIN
+            SELECT RAISE(ABORT, 'operation journal identity and details are immutable');
+        END;
+
+        CREATE TRIGGER operation_journal_history_no_update
+        BEFORE UPDATE ON operation_journal_status_history
+        BEGIN
+            SELECT RAISE(ABORT, 'operation journal history is append-only');
+        END;
+
+        CREATE TRIGGER operation_journal_history_no_delete
+        BEFORE DELETE ON operation_journal_status_history
+        BEGIN
+            SELECT RAISE(ABORT, 'operation journal history cannot be deleted');
+        END;
+
+        PRAGMA user_version = 17;
+        """,
+    )
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -2867,6 +3007,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(13, 14, _migrate_13_to_14),
         SchemaMigration(14, 15, _migrate_14_to_15),
         SchemaMigration(15, 16, _migrate_15_to_16),
+        SchemaMigration(16, 17, _migrate_16_to_17),
     )
 
 
@@ -3217,6 +3358,203 @@ def _placeholder_name_conflict(exc: sqlite3.IntegrityError) -> KeyError:
     return KeyError(
         "A placeholder with this name already exists. Add a photograph to that profile or choose a different name."
     )
+
+
+def _journal_json_object(value: dict | None, label: str) -> tuple[dict, str]:
+    normalized = value or {}
+    if not isinstance(normalized, dict):
+        raise ValueError(f"Operation {label} must be an object")
+    try:
+        payload = json.dumps(normalized, separators=(",", ":"), sort_keys=True, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Operation {label} must contain JSON-compatible values") from exc
+    return normalized, payload
+
+
+def _journal_json_array(value: list[dict] | None, label: str) -> tuple[list[dict], str]:
+    normalized = value or []
+    if not isinstance(normalized, list) or any(not isinstance(item, dict) for item in normalized):
+        raise ValueError(f"Operation {label} must be a list of objects")
+    try:
+        payload = json.dumps(normalized, separators=(",", ":"), sort_keys=True, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Operation {label} must contain JSON-compatible values") from exc
+    return normalized, payload
+
+
+def _operation_actor_snapshot(actor: dict | None) -> tuple[dict, str, str | None]:
+    if actor is not None and not isinstance(actor, dict):
+        raise ValueError("Operation actor must be an AuthUser-compatible object")
+    source = actor or {}
+    roles = source.get("roles") or []
+    if not isinstance(roles, (list, tuple)):
+        raise ValueError("Operation actor roles must be a list")
+    snapshot = {
+        key: str(source[key])
+        for key in ("user_id", "username", "display_name")
+        if source.get(key) is not None
+    }
+    snapshot["roles"] = [str(role) for role in roles]
+    _, payload = _journal_json_object(snapshot, "actor")
+    return snapshot, payload, snapshot.get("user_id")
+
+
+def _begin_journal_operation(
+    conn: sqlite3.Connection,
+    operation_type: str,
+    *,
+    operation_id: str | None = None,
+    actor: dict | None = None,
+    source: str | None = None,
+    context: dict | None = None,
+    affected_entities: list[dict] | None = None,
+    details: dict | None = None,
+) -> dict:
+    normalized_type = str(operation_type).strip()
+    if not normalized_type:
+        raise ValueError("Operation type is required")
+    normalized_id = str(operation_id or uuid.uuid4()).strip()
+    if not normalized_id:
+        raise ValueError("Operation ID is required")
+    _, actor_payload, actor_user_id = _operation_actor_snapshot(actor)
+    _, context_payload = _journal_json_object(context, "context")
+    _, entities_payload = _journal_json_array(affected_entities, "affected entities")
+    _, details_payload = _journal_json_object(details, "details")
+    normalized_source = str(source).strip() if source is not None else None
+    normalized_source = normalized_source or None
+    created_at = utc_now()
+    try:
+        conn.execute(
+            """
+            INSERT INTO operation_journal(
+                operation_id, operation_type, status, actor_user_id, actor,
+                source, context, affected_entities, details, created_at
+            ) VALUES (?, ?, 'STARTED', ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                normalized_id,
+                normalized_type,
+                actor_user_id,
+                actor_payload,
+                normalized_source,
+                context_payload,
+                entities_payload,
+                details_payload,
+                created_at,
+            ),
+        )
+    except sqlite3.IntegrityError as exc:
+        if conn.execute(
+            "SELECT 1 FROM operation_journal WHERE operation_id = ?",
+            (normalized_id,),
+        ).fetchone():
+            raise KeyError(f"Operation ID already exists: {normalized_id}") from exc
+        raise
+    conn.execute(
+        """
+        INSERT INTO operation_journal_status_history(
+            transition_id, operation_id, from_status, to_status, details, created_at
+        ) VALUES (?, ?, NULL, 'STARTED', '{}', ?)
+        """,
+        (str(uuid.uuid4()), normalized_id, created_at),
+    )
+    return _get_journal_operation(conn, normalized_id)
+
+
+def _transition_journal_operation(
+    conn: sqlite3.Connection,
+    operation_id: str,
+    target_status: str,
+    details: dict | None = None,
+) -> dict:
+    normalized_id = str(operation_id).strip()
+    if not normalized_id:
+        raise ValueError("Operation ID is required")
+    if target_status not in OPERATION_STATUSES or target_status == "STARTED":
+        raise ValueError(f"Unsupported operation status: {target_status}")
+    row = conn.execute(
+        "SELECT status FROM operation_journal WHERE operation_id = ?",
+        (normalized_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"Unknown operation: {normalized_id}")
+    current_status = str(row["status"])
+    if target_status not in OPERATION_STATUS_TRANSITIONS[current_status]:
+        raise ValueError(
+            f"Invalid operation status transition: {current_status} -> {target_status}"
+        )
+    _, details_payload = _journal_json_object(details, "transition details")
+    transitioned_at = utc_now()
+    cursor = conn.execute(
+        """
+        UPDATE operation_journal
+        SET status = ?, completed_at = ?
+        WHERE operation_id = ? AND status = ?
+        """,
+        (target_status, transitioned_at, normalized_id, current_status),
+    )
+    if cursor.rowcount != 1:
+        raise RuntimeError("Operation status changed concurrently; transition was not applied")
+    conn.execute(
+        """
+        INSERT INTO operation_journal_status_history(
+            transition_id, operation_id, from_status, to_status, details, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            str(uuid.uuid4()),
+            normalized_id,
+            current_status,
+            target_status,
+            details_payload,
+            transitioned_at,
+        ),
+    )
+    return _get_journal_operation(conn, normalized_id)
+
+
+def _get_journal_operation(conn: sqlite3.Connection, operation_id: str) -> dict | None:
+    normalized_id = str(operation_id).strip()
+    if not normalized_id:
+        raise ValueError("Operation ID is required")
+    row = conn.execute(
+        "SELECT * FROM operation_journal WHERE operation_id = ?",
+        (normalized_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    history = conn.execute(
+        """
+        SELECT transition_id, from_status, to_status, details, created_at
+        FROM operation_journal_status_history
+        WHERE operation_id = ?
+        ORDER BY created_at, rowid
+        """,
+        (normalized_id,),
+    ).fetchall()
+    return {
+        "operation_id": row["operation_id"],
+        "operation_type": row["operation_type"],
+        "status": row["status"],
+        "actor": json.loads(row["actor"]),
+        "source": row["source"],
+        "context": json.loads(row["context"]),
+        "affected_entities": json.loads(row["affected_entities"]),
+        "details": json.loads(row["details"]),
+        "created_at": row["created_at"],
+        "completed_at": row["completed_at"],
+        "status_history": [
+            {
+                "transition_id": item["transition_id"],
+                "from_status": item["from_status"],
+                "to_status": item["to_status"],
+                "details": json.loads(item["details"]),
+                "created_at": item["created_at"],
+            }
+            for item in history
+        ],
+    }
+
 
 def _existing_person_operation(
     conn: sqlite3.Connection,
