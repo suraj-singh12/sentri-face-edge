@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Card,
+  Collapse,
   Divider,
   Drawer,
   Grid,
@@ -34,6 +35,7 @@ import {
   IconDots,
   IconEdit,
   IconFilter,
+  IconEye,
   IconFlag,
   IconGlobe,
   IconGridDots,
@@ -91,7 +93,8 @@ export function PeopleView({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const [sort, setSort] = useState("recent");
+  const [groupBy, setGroupBy] = useState("country");
+  const [sort, setSort] = useState("priority");
   const [viewMode, setViewMode] = useState("grid");
   const [pageSize, setPageSize] = useState("12");
   const [page, setPage] = useState(1);
@@ -126,9 +129,15 @@ export function PeopleView({
           .some((value) => String(value).toLowerCase().includes(normalizedQuery));
       })
       .sort((left, right) => {
-        if (sort === "name") return String(left.name || "").localeCompare(String(right.name || ""));
-        if (sort === "photos") return Number(right.embedding_count || 0) - Number(left.embedding_count || 0);
-        return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
+        if (sort === "name") return compareText(left.name, right.name);
+        if (sort === "country") return compareText(profileValue(left, "country"), profileValue(right, "country")) || compareText(left.name, right.name);
+        if (sort === "rank") return compareText(profileValue(left, "rank"), profileValue(right, "rank")) || compareText(left.name, right.name);
+        if (sort === "priority") return priorityScore(right) - priorityScore(left) || compareText(left.name, right.name);
+        if (sort === "sightings") return sightingCount(right) - sightingCount(left) || compareText(left.name, right.name);
+        if (sort === "frequency") return sightingFrequencyScore(right) - sightingFrequencyScore(left) || compareText(left.name, right.name);
+        if (sort === "seen") return dateValue(right.last_seen_at) - dateValue(left.last_seen_at) || compareText(left.name, right.name);
+        if (sort === "frequent") return frequentlySeenScore(right) - frequentlySeenScore(left) || compareText(left.name, right.name);
+        return dateValue(right.created_at) - dateValue(left.created_at);
       });
   }, [archivedPeople, filter, normalizedQuery, people, sort]);
   const pageCount = Number(pageSize);
@@ -148,7 +157,7 @@ export function PeopleView({
   useEffect(() => {
     setPage(1);
     resultsRef.current?.scrollTo({ top: 0 });
-  }, [filter, normalizedQuery, pageSize, sort, viewMode]);
+  }, [filter, groupBy, normalizedQuery, pageSize, sort, viewMode]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -228,10 +237,12 @@ export function PeopleView({
                   <PeopleToolbar
                     query={query}
                     filter={filter}
+                    groupBy={groupBy}
                     sort={sort}
                     viewMode={viewMode}
                     onQuery={setQuery}
                     onFilter={setFilter}
+                    onGroupBy={setGroupBy}
                     onSort={setSort}
                     onViewMode={setViewMode}
                   />
@@ -255,26 +266,19 @@ export function PeopleView({
                   />
                   <Box ref={resultsRef} className="people-results-scroll">
                     {pagePeople.length ? (
-                      <Box className={viewMode === "list" ? "people-card-list" : "people-card-grid"}>
-                        {pagePeople.map((person) => (
-                          <PersonCard
-                            key={person.person_id}
-                            person={person}
-                            favorite={Boolean(person.favorite)}
-                            archived={filter === "archived" || Boolean(person.archived || person.deleted_at)}
-                            viewMode={viewMode}
-                            canDestroy={canDestroy}
-                            onOpen={() => onOpen(person.person_id, {
-                              archived: filter === "archived" || Boolean(person.archived || person.deleted_at),
-                            })}
-                            onFavorite={() => toggleFavorite(person)}
-                            onDelete={() => {
-                              setDeleteTarget(person);
-                              setDeleteConfirmation("");
-                            }}
-                          />
-                        ))}
-                      </Box>
+                      <PeopleResults
+                        people={pagePeople}
+                        groupBy={groupBy}
+                        viewMode={viewMode}
+                        archived={filter === "archived"}
+                        canDestroy={canDestroy}
+                        onOpen={onOpen}
+                        onFavorite={toggleFavorite}
+                        onDelete={(person) => {
+                          setDeleteTarget(person);
+                          setDeleteConfirmation("");
+                        }}
+                      />
                     ) : (
                       <EmptyCard text="No people match the current search." />
                     )}
@@ -344,7 +348,7 @@ export function PeopleView({
   );
 }
 
-function PeopleToolbar({ query, filter, sort, viewMode, onQuery, onFilter, onSort, onViewMode }) {
+function PeopleToolbar({ query, filter, groupBy, sort, viewMode, onQuery, onFilter, onGroupBy, onSort, onViewMode }) {
   const filterLabel = {
     all: "Filter",
     favorites: "Favorites",
@@ -352,10 +356,24 @@ function PeopleToolbar({ query, filter, sort, viewMode, onQuery, onFilter, onSor
     withoutPhotos: "No Photos",
     archived: "Archived",
   }[filter];
+  const groupLabel = {
+    none: "None",
+    country: "Country",
+    rank: "Rank",
+    priority: "Priority",
+    frequency: "Sightings Frequency",
+    frequent: "Frequently Seen",
+  }[groupBy];
   const sortLabel = {
     recent: "Newest Added",
     name: "Name",
-    photos: "Photo Count",
+    country: "Country",
+    rank: "Rank",
+    priority: "Priority",
+    sightings: "Most Sightings",
+    frequency: "Sightings Frequency",
+    seen: "Recently Seen",
+    frequent: "Frequently Seen",
   }[sort];
   return (
     <Group gap="sm" className="people-toolbar">
@@ -379,12 +397,31 @@ function PeopleToolbar({ query, filter, sort, viewMode, onQuery, onFilter, onSor
       </Menu>
       <Menu withinPortal position="bottom-start">
         <Menu.Target>
+          <Button variant="default" rightSection={<IconChevronDown size={15} />}>Group by: {groupLabel}</Button>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item onClick={() => onGroupBy("none")}>None</Menu.Item>
+          <Menu.Item onClick={() => onGroupBy("country")}>Country</Menu.Item>
+          <Menu.Item onClick={() => onGroupBy("rank")}>Rank</Menu.Item>
+          <Menu.Item onClick={() => onGroupBy("priority")}>Priority</Menu.Item>
+          <Menu.Item onClick={() => onGroupBy("frequency")}>Sightings Frequency</Menu.Item>
+          <Menu.Item onClick={() => onGroupBy("frequent")}>Frequently Seen</Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+      <Menu withinPortal position="bottom-start">
+        <Menu.Target>
           <Button variant="default" leftSection={<IconSortDescending size={16} />} rightSection={<IconChevronDown size={15} />}>Sort: {sortLabel}</Button>
         </Menu.Target>
         <Menu.Dropdown>
           <Menu.Item onClick={() => onSort("recent")}>Newest Added</Menu.Item>
           <Menu.Item onClick={() => onSort("name")}>Name</Menu.Item>
-          <Menu.Item onClick={() => onSort("photos")}>Photo Count</Menu.Item>
+          <Menu.Item onClick={() => onSort("country")}>Country</Menu.Item>
+          <Menu.Item onClick={() => onSort("rank")}>Rank</Menu.Item>
+          <Menu.Item onClick={() => onSort("priority")}>Priority</Menu.Item>
+          <Menu.Item onClick={() => onSort("sightings")}>Most Sightings</Menu.Item>
+          <Menu.Item onClick={() => onSort("frequency")}>Sightings Frequency</Menu.Item>
+          <Menu.Item onClick={() => onSort("seen")}>Recently Seen</Menu.Item>
+          <Menu.Item onClick={() => onSort("frequent")}>Frequently Seen</Menu.Item>
         </Menu.Dropdown>
       </Menu>
       <Group gap={0} className="people-view-toggle">
@@ -611,12 +648,14 @@ function PeopleStatsStrip({ people, totalPhotos, favoriteCount, addedToday, arch
     { label: "Archived Today", value: people.filter((person) => isTodayLike(person.deleted_at)).length, icon: IconRefresh, color: "green" },
   ] : [
     { label: "Total People", value: people.length, icon: IconUser, color: "teal" },
-    { label: "Total Photos", value: totalPhotos.toLocaleString(), icon: IconImageInPicture, color: "violet" },
+    { label: "With Photos", value: people.filter((person) => Number(person.embedding_count || 0)).length, icon: IconImageInPicture, color: "violet" },
+    { label: "No Photos", value: people.filter((person) => !Number(person.embedding_count || 0)).length, icon: IconUser, color: "indigo" },
     { label: "Favorites", value: favoriteCount, icon: IconStar, color: "yellow" },
+    { label: "Seen in last 7 days", value: people.filter((person) => daysSince(person.last_seen_at) <= 7).length, icon: IconEye, color: "blue" },
     { label: "Added Today", value: addedToday, icon: IconRefresh, color: "blue" },
   ];
   return (
-    <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm" className="people-stats-strip">
+    <SimpleGrid cols={{ base: 2, sm: 3, lg: archived ? 4 : 6 }} spacing="sm" className="people-stats-strip">
       {stats.map((item) => {
         const Icon = item.icon;
         return (
@@ -635,6 +674,72 @@ function PeopleStatsStrip({ people, totalPhotos, favoriteCount, addedToday, arch
   );
 }
 
+function PeopleResults({ people, groupBy, viewMode, archived, canDestroy, onOpen, onFavorite, onDelete }) {
+  const groups = useMemo(() => groupPeople(people, groupBy), [groupBy, people]);
+  const groupSignature = groups.map((group) => group.label).join("\u0000");
+  const [closedGroups, setClosedGroups] = useState(new Set());
+
+  useEffect(() => {
+    setClosedGroups(new Set(groupBy === "none" ? [] : groups.slice(1).map((group) => group.label)));
+  }, [groupBy, groupSignature]);
+
+  const cards = (items) => (
+    <Box className={viewMode === "list" ? "people-card-list" : "people-card-grid"}>
+      {items.map((person) => {
+        const isArchived = archived || Boolean(person.archived || person.deleted_at);
+        return (
+          <PersonCard
+            key={person.person_id}
+            person={person}
+            favorite={Boolean(person.favorite)}
+            archived={isArchived}
+            viewMode={viewMode}
+            canDestroy={canDestroy}
+            onOpen={() => onOpen(person.person_id, { archived: isArchived })}
+            onFavorite={() => onFavorite(person)}
+            onDelete={() => onDelete(person)}
+          />
+        );
+      })}
+    </Box>
+  );
+
+  if (groupBy === "none") return cards(people);
+  return (
+    <Stack gap="xs" className="people-group-stack">
+      {groups.map((group) => {
+        const closed = closedGroups.has(group.label);
+        return (
+          <Paper key={group.label} withBorder radius="md" className="people-group-section">
+            <Box
+              component="button"
+              type="button"
+              className="people-group-header"
+              onClick={() => setClosedGroups((current) => {
+                const next = new Set(current);
+                if (next.has(group.label)) next.delete(group.label);
+                else next.add(group.label);
+                return next;
+              })}
+              aria-expanded={!closed}
+            >
+              <Group gap="sm" wrap="nowrap">
+                <IconGlobe size={16} />
+                <Text fw={900} size="sm">{group.label}</Text>
+                <Badge variant="light" color="gray" size="sm">{group.people.length} {group.people.length === 1 ? "person" : "people"}</Badge>
+              </Group>
+              <IconChevronDown size={18} className={closed ? "" : "people-group-chevron--open"} />
+            </Box>
+            <Collapse expanded={!closed}>
+              <Box className="people-group-content">{cards(group.people)}</Box>
+            </Collapse>
+          </Paper>
+        );
+      })}
+    </Stack>
+  );
+}
+
 function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, onFavorite, onDelete }) {
   const cardClass = viewMode === "list" ? "people-person-card people-person-card--list" : "people-person-card";
   const openPerson = () => onOpen(person.person_id);
@@ -643,7 +748,10 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
     onFavorite();
   };
   const photoCount = Number(person.embedding_count || 0);
-  const photoFallback = <ThemeIcon size={72} radius="xl" variant="light" color="gray"><IconUser size={44} /></ThemeIcon>;
+  const sightings = sightingCount(person);
+  const rank = profileValue(person, "rank") || "—";
+  const priority = priorityDetails(person);
+  const photoFallback = <ThemeIcon size={54} radius="xl" variant="light" color="gray"><IconUser size={32} /></ThemeIcon>;
   return (
     <Card withBorder radius="md" p="xs" className={cardClass}>
       <Stack gap="xs" align="stretch" className="people-person-card-inner">
@@ -660,16 +768,18 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
             </ImageFrame>
           </Box>
           <Box miw={0} className="people-card-copy">
-            <Group justify="space-between" align="flex-start" wrap="nowrap">
+            <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
               <Text fw={800} lineClamp={1}>{person.name}</Text>
-              <Badge color={archived ? "gray" : "teal"} variant="light">
-                {archived ? person.metadata?.merged_into ? "Merged" : "Archived" : photoCount}
-              </Badge>
+              {archived && <Badge color="gray" variant="light">{person.metadata?.merged_into ? "Merged" : "Archived"}</Badge>}
             </Group>
-            <Group gap={5} mt={5}>
-              <IconImageInPicture size={13} />
-              <Text size="xs" c="dimmed">{photoCount} {photoCount === 1 ? "photo" : "photos"}</Text>
+            <Group gap="xs" mt={4} wrap="nowrap">
+              <Text size="xs" c="dimmed" fw={700}>{rank}</Text>
+              <Badge color={priority.color} variant="light" size="xs">{priority.label}</Badge>
             </Group>
+            <Text size="xs" c="dimmed" mt={5}>
+              {photoCount} {photoCount === 1 ? "photo" : "photos"} <Text span mx={5}>·</Text> {sightings} {sightings === 1 ? "sighting" : "sightings"}
+            </Text>
+            <Text size="xs" c={person.last_seen_at ? "teal.4" : "dimmed"} mt={3}>{lastSeenLabelForCard(person.last_seen_at)}</Text>
           </Box>
         </Box>
         <ActionIcon
@@ -684,8 +794,8 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
         >
           {favorite ? <IconStar size={15} fill="currentColor" /> : <IconStar size={15} />}
         </ActionIcon>
-        <Group justify="space-between" className="people-card-actions">
-          <Button size="compact-xs" variant="subtle" onClick={(event) => { event.stopPropagation(); openPerson(); }}>
+        <Group justify="space-between" wrap="nowrap" className="people-card-actions">
+          <Button fullWidth size="compact-xs" variant="subtle" onClick={(event) => { event.stopPropagation(); openPerson(); }}>
             {archived ? "Review archived" : "Open profile"}
           </Button>
           <Menu withinPortal position="bottom-end">
@@ -743,6 +853,108 @@ function PeoplePagination({ total, shown, start, page, pageSize, onPage, onPageS
       </Group>
     </Paper>
   );
+}
+
+function groupPeople(people, groupBy) {
+  if (groupBy === "none") return [{ label: "All People", people }];
+  const grouped = new Map();
+  people.forEach((person) => {
+    const label = groupLabelForPerson(person, groupBy);
+    grouped.set(label, [...(grouped.get(label) || []), person]);
+  });
+  const preferredOrder = {
+    priority: ["High Priority", "Watch Priority", "Regular Priority", "Unspecified Priority"],
+    frequency: ["Very Frequent", "Frequent", "Occasional", "Rare", "Never Seen"],
+    frequent: ["Frequently Seen", "Seen Occasionally", "Not Seen Yet"],
+  }[groupBy];
+  return [...grouped.entries()]
+    .map(([label, groupedPeople]) => ({ label, people: groupedPeople }))
+    .sort((left, right) => {
+      if (preferredOrder) return preferredOrder.indexOf(left.label) - preferredOrder.indexOf(right.label);
+      if (/^(Unknown|Unspecified)/.test(left.label)) return 1;
+      if (/^(Unknown|Unspecified)/.test(right.label)) return -1;
+      return compareText(left.label, right.label);
+    });
+}
+
+function groupLabelForPerson(person, groupBy) {
+  if (groupBy === "country") return profileValue(person, "country") || "Unknown Country";
+  if (groupBy === "rank") return profileValue(person, "rank") || "Unspecified Rank";
+  if (groupBy === "priority") return `${priorityDetails(person).longLabel} Priority`;
+  if (groupBy === "frequency") return sightingFrequencyLabel(person);
+  if (groupBy === "frequent") {
+    if (!sightingCount(person)) return "Not Seen Yet";
+    return sightingFrequencyScore(person) >= 3 && daysSince(person.last_seen_at) <= 30
+      ? "Frequently Seen"
+      : "Seen Occasionally";
+  }
+  return "All People";
+}
+
+function profileValue(person, key) {
+  return String(person?.metadata?.[key] || "").trim();
+}
+
+function compareText(left, right) {
+  return String(left || "").localeCompare(String(right || ""), undefined, { sensitivity: "base" });
+}
+
+function dateValue(value) {
+  const parsed = new Date(value || 0).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function daysSince(value) {
+  const timestamp = dateValue(value);
+  if (!timestamp) return Number.POSITIVE_INFINITY;
+  return Math.max(0, (Date.now() - timestamp) / 86_400_000);
+}
+
+function sightingCount(person) {
+  return Number(person?.sighting_count || 0);
+}
+
+function sightingFrequencyScore(person) {
+  const activeMonths = Math.max(1, daysSince(person?.created_at) / 30);
+  return sightingCount(person) / activeMonths;
+}
+
+function frequentlySeenScore(person) {
+  const recencyWeight = Math.max(0.1, 1 - (daysSince(person?.last_seen_at) / 365));
+  return sightingFrequencyScore(person) * recencyWeight;
+}
+
+function sightingFrequencyLabel(person) {
+  const score = sightingFrequencyScore(person);
+  if (score >= 8) return "Very Frequent";
+  if (score >= 3) return "Frequent";
+  if (score >= 1) return "Occasional";
+  if (sightingCount(person)) return "Rare";
+  return "Never Seen";
+}
+
+function priorityScore(person) {
+  const value = profileValue(person, "importance").toLowerCase();
+  if (value === "important" || value === "high") return 3;
+  if (value === "suspicious" || value === "watch") return 2;
+  if (value === "regular" || value === "medium") return 1;
+  return 0;
+}
+
+function priorityDetails(person) {
+  const score = priorityScore(person);
+  if (score === 3) return { label: "HIGH", longLabel: "High", color: "red" };
+  if (score === 2) return { label: "WATCH", longLabel: "Watch", color: "orange" };
+  if (score === 1) return { label: "REGULAR", longLabel: "Regular", color: "yellow" };
+  return { label: "UNSPECIFIED", longLabel: "Unspecified", color: "gray" };
+}
+
+function lastSeenLabelForCard(value) {
+  const days = daysSince(value);
+  if (!Number.isFinite(days)) return "Never seen";
+  if (days < 1) return "Seen today";
+  const rounded = Math.floor(days);
+  return `Seen ${rounded} day${rounded === 1 ? "" : "s"} ago`;
 }
 
 function isTodayLike(value) {

@@ -107,6 +107,8 @@ class PersonMatch:
 class PersonSummary:
     person: Person
     embedding_count: int
+    sighting_count: int = 0
+    last_seen_at: str | None = None
 
 
 @dataclass(frozen=True)

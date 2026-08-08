@@ -185,5 +185,5 @@ test("a newly archived merge opens immediately without requiring a tab refresh",
 
   assert.match(appData, /archived:\s*true,[\s\S]*deleted_at:/);
   assert.match(appData, /archived:\s*false,\s*deleted_at:\s*null/);
-  assert.match(view, /archived:\s*filter === "archived" \|\| Boolean\(person\.archived \|\| person\.deleted_at\)/);
+  assert.match(view, /const isArchived = archived \|\| Boolean\(person\.archived \|\| person\.deleted_at\)/);
 });

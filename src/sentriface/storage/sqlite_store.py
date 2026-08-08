@@ -181,11 +181,31 @@ class SQLiteIdentityStore:
             rows = conn.execute(
                 f"""
                 SELECT p.person_id, p.name, p.metadata, p.created_at, p.deleted_at,
-                       COUNT(CASE WHEN e.deleted_at IS NULL THEN e.embedding_id END) AS embedding_count
+                       (
+                           SELECT COUNT(*)
+                           FROM embeddings e
+                           WHERE e.person_id = p.person_id AND e.deleted_at IS NULL
+                       ) AS embedding_count,
+                       (
+                           SELECT COUNT(*)
+                           FROM recognition_details d
+                           JOIN embeddings e ON e.embedding_id = d.embedding_id
+                           WHERE d.person_id = p.person_id AND e.deleted_at IS NULL
+                       ) AS sighting_count,
+                       (
+                           SELECT MAX(
+                               CASE
+                                   WHEN TRIM(COALESCE(d.seen_date, '')) <> ''
+                                   THEN d.seen_date || 'T' || COALESCE(NULLIF(d.seen_time, ''), '00:00:00')
+                                   ELSE d.created_at
+                               END
+                           )
+                           FROM recognition_details d
+                           JOIN embeddings e ON e.embedding_id = d.embedding_id
+                           WHERE d.person_id = p.person_id AND e.deleted_at IS NULL
+                       ) AS last_seen_at
                 FROM persons p
-                LEFT JOIN embeddings e ON e.person_id = p.person_id
                 WHERE p.deleted_at IS {"NOT NULL" if archived else "NULL"}
-                GROUP BY p.person_id
                 ORDER BY p.name COLLATE NOCASE
                 """
             ).fetchall()
@@ -199,6 +219,8 @@ class SQLiteIdentityStore:
                     deleted_at=row["deleted_at"],
                 ),
                 embedding_count=row["embedding_count"],
+                sighting_count=row["sighting_count"],
+                last_seen_at=row["last_seen_at"],
             )
             for row in rows
         ]

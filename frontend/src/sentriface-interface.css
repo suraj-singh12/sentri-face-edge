@@ -994,7 +994,7 @@ button {
 
 .image-frame--peopleCard {
   min-height: 0;
-  height: 112px;
+  height: 76px;
 }
 
 .image-frame--librarySelected {
@@ -1514,7 +1514,7 @@ button {
 
 .people-toolbar {
   display: grid !important;
-  grid-template-columns: minmax(240px, 1fr) max-content max-content max-content;
+  grid-template-columns: minmax(220px, 1fr) max-content max-content max-content max-content;
   justify-content: stretch;
   width: 100%;
   min-width: 0;
@@ -1528,7 +1528,7 @@ button {
 .people-toolbar .mantine-Button-root {
   flex: 0 0 auto;
   height: 40px;
-  max-width: 260px;
+  max-width: 250px;
 }
 
 .people-toolbar .mantine-Button-label {
@@ -1540,7 +1540,7 @@ button {
 
 @media (max-width: 62em) {
   .people-toolbar {
-    grid-template-columns: minmax(0, 1fr) max-content max-content;
+    grid-template-columns: minmax(0, 1fr) repeat(3, max-content);
   }
 
   .people-search {
@@ -1561,7 +1561,7 @@ button {
 }
 
 .people-stat-card {
-  padding: 10px 12px !important;
+  padding: 9px 10px !important;
   min-height: 68px;
 }
 
@@ -1572,7 +1572,7 @@ button {
 }
 
 .people-stat-card .mantine-Text-root[data-size="xl"] {
-  font-size: 1.25rem;
+  font-size: 1.18rem;
   line-height: 1.1;
 }
 
@@ -1586,7 +1586,7 @@ button {
 
 .people-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
   gap: 12px;
 }
 
@@ -1601,10 +1601,59 @@ button {
   text-align: left;
 }
 
+.people-group-stack {
+  min-width: 0;
+}
+
+.people-group-section {
+  min-width: 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--sentriface-card-bg) 82%, transparent);
+  border-color: var(--sentriface-card-border);
+}
+
+.people-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  color: var(--mantine-color-teal-4);
+  font: inherit;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.people-group-header .mantine-Text-root {
+  text-transform: uppercase;
+}
+
+.people-group-header:focus-visible {
+  outline: 2px solid var(--sentriface-success);
+  outline-offset: -2px;
+}
+
+.people-group-header > svg {
+  transition: transform 160ms ease;
+}
+
+.people-group-chevron--open {
+  transform: rotate(180deg);
+}
+
+.people-group-content {
+  padding: 2px 8px 8px;
+  border-top: 1px solid var(--sentriface-card-border);
+}
+
 .people-card-main {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
   width: 100%;
   min-width: 0;
   padding: 0;
@@ -1624,17 +1673,17 @@ button {
 
 .people-person-card--list .people-person-card-inner {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 156px;
+  grid-template-columns: minmax(0, 1fr) 156px;
   gap: 18px;
   align-items: center;
 }
 
 .people-person-card--list .people-card-main {
-  display: contents;
+  display: flex;
 }
 
 .people-person-card--list .image-frame--peopleCard {
-  height: 108px;
+  height: 76px;
 }
 
 .people-person-card--list .people-card-actions {
@@ -1647,7 +1696,7 @@ button {
 }
 
 .people-person-card--list .people-card-copy .mantine-Badge-root {
-  display: none;
+  display: inline-flex;
 }
 
 .people-person-card--list .people-card-copy {
@@ -1660,6 +1709,8 @@ button {
 
 .people-card-image-wrap {
   position: relative;
+  flex: 0 0 76px;
+  width: 76px;
   min-width: 0;
 }
 
@@ -1681,6 +1732,10 @@ button {
 .people-card-actions {
   padding-top: 4px;
   border-top: 1px solid var(--sentriface-card-border);
+}
+
+.people-card-actions .mantine-Button-root {
+  min-width: 0;
 }
 
 .people-seen-dot {
@@ -2853,7 +2908,7 @@ button {
 
   .image-frame--peopleCard {
     min-height: 0;
-    height: 112px;
+    height: 76px;
   }
 
   .image-frame--librarySelected {
@@ -3045,7 +3100,7 @@ button {
   }
 
   .people-card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
 
   .people-person-card--list .people-person-card-inner {
@@ -3058,7 +3113,7 @@ button {
   }
 
   .people-person-card--list .image-frame--peopleCard {
-    height: 148px;
+    height: 76px;
   }
 
   .people-person-card--list .people-card-actions {

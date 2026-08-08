@@ -3037,6 +3037,8 @@ def _person_summary_from_embeddings(
     return {
         **_person(summary.person),
         "embedding_count": summary.embedding_count,
+        "sighting_count": summary.sighting_count,
+        "last_seen_at": summary.last_seen_at,
         "favorite": bool(summary.person.metadata.get("favorite")),
         "tags": list(summary.person.metadata.get("tags", [])),
         "representative_image": _representative_image(
