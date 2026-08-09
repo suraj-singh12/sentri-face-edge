@@ -2,7 +2,7 @@
 
 Implement in order. Each phase must preserve offline operation, use additive migrations where possible, keep important writes transactional and journaled, and add upgrade/failure tests before moving on.
 
-Status at this checkpoint: P0 through P9 and the P9.5 frontend-normalization pass are complete. P10 is the next planned phase; P10 and later remain future work.
+Status at this checkpoint: P0 through P10-A and P10-B Person Graph UI are complete. World UI is next; P11 and later remain future work.
 
 ## P0 Database migration/version foundation — Complete
 
@@ -60,9 +60,17 @@ Added a read-only intelligence service and normalized backend models for effecti
 
 Converted React into a rendering and interaction layer over explicit backend read contracts. People collection statistics, intelligence ordering, lifecycle/canonical identity, allowed actions, normalized notes and mention occurrences, relationship rows, and journal activity now arrive from backend services. The existing relationship modal consumes a versioned backend subgraph with canonical endpoints, depth, counts, evidence, lifecycle, and revision metadata; the client computes coordinates only. Identity mutations invalidate and refetch authoritative collections/profiles instead of synthesizing final state. Legacy recognition detail remains available only inside historical face/photo presentation. No P10 Person Graph or World projection was implemented.
 
-## P10 Person Graph + World — Future
+## P10-A Graph and World intelligence backend contracts — Complete
 
-Build both as projections of the same global graph API/evidence engine. Person Graph is identity-centred; World filters/aggregates the same observations and nodes by place/time. Archived/tombstoned nodes remain visible where historically relevant but inactive/non-clickable. Exit: neither view owns association state, and both explain edge evidence consistently.
+Added typed Person Graph and World Graph read models behind `GraphReadService`, versioned loopback APIs, backend-owned temporal/location/lifecycle/profile/frequency/strength filtering, canonical node collapse, evidence-derived provenance summaries, and an opaque durable graph revision token. Schema v27 adds only the singleton revision state and two required read indexes; responses remain uncached and expose no raw evidence or compatibility tables. Exit: frontend consumers can render consistent Person and World projections and detect stale data without reconstructing graph truth.
+
+## P10-B Person Graph UI — Complete
+
+Added a dedicated Person Graph workspace inside People. It consumes only the versioned P10-A Person Graph and revision contracts, renders backend-provided nodes/edges/lifecycle/actions/evidence, and owns only deterministic node coordinates plus pan, zoom, hover, and selection state. Graph revision is an opaque consistency token. In the current offline single-user model, the UI validates it at lifecycle boundaries and after known graph mutations. Continuous polling is intentionally avoided. Opening stores the revision; returning validates once and reuses unchanged state; successful graph mutations invalidate the snapshot; changed, invalidated, and manually refreshed graphs are replaced in full. Node navigation follows backend `allowed_actions`. Empty and large graphs are covered without adding client topology reconstruction. No World UI or backend change was introduced.
+
+## P10-C World UI — Future
+
+Render the P10-A World contract as a spatial/temporal experience. Layout, interaction, and presentation remain client concerns; membership, filtering semantics, intelligence, evidence explanation, and revision ownership remain backend concerns. Archived/tombstoned nodes remain historically visible but inactive/non-clickable. Exit: World and Person Graph remain projections of the same backend truth and explain edge evidence consistently.
 
 ## P11 Integrity checker + graph rebuild + operation revert — Future
 

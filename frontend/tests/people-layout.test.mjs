@@ -40,17 +40,25 @@ test("notes preserve backend mention identities and never match names to links",
 });
 
 test("lifecycle and graph interactions consume explicit backend permissions", async () => {
-  const [view, controller] = await Promise.all([read("../src/views/PeopleView.jsx"), read("../src/hooks/usePeopleController.js")]);
+  const [view, graphView, controller] = await Promise.all([
+    read("../src/views/PeopleView.jsx"),
+    read("../src/views/PersonGraphView.jsx"),
+    read("../src/hooks/usePeopleController.js"),
+  ]);
   assert.match(view, /requirePersonContract\(payload\.person\)/);
-  assert.match(view, /personAllows\(node, "OPEN"\)/);
-  assert.match(controller, /\/api\/person-relationship-graph/);
+  assert.match(graphView, /node\.allowed_actions/);
+  assert.match(graphView, /data-lifecycle=\{node\.lifecycle_status\}/);
+  assert.match(controller, /\/api\/person-graph/);
+  assert.match(controller, /\/api\/graph-revision/);
+  assert.doesNotMatch(controller, /setInterval|addEventListener\(["']focus/);
+  assert.doesNotMatch(controller, /\/api\/person-relationship-graph/);
   assert.doesNotMatch(view, /personLifecycleStatus|metadata\?\.merged_into/);
   assert.doesNotMatch(view, /createRelationshipGraph|mergeRelationshipGraph|relationshipGraphCollections/);
 });
 
 test("manual legacy association controls are not current UI authority", async () => {
   const [view, controller] = await Promise.all([read("../src/views/PeopleView.jsx"), read("../src/hooks/usePeopleController.js")]);
-  assert.match(view, />\s*View Relationship Graph\s*<\/Button>/);
+  assert.equal((view.match(/>\s*Open Person Graph\s*<\/Button>/g) || []).length, 2);
   assert.doesNotMatch(view, /Link person|Remove association|Create placeholder/);
   assert.doesNotMatch(controller, /person-association|createPersonAssociation|removePersonAssociation/);
 });

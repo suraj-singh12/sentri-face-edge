@@ -8,6 +8,9 @@ from sentriface.models import (
     Embedding,
     EmbeddingRecord,
     GlobalGraphProjection,
+    GraphReadFilter,
+    PersonGraphReadModel,
+    WorldGraphReadModel,
     GraphConnection,
     InitFace,
     InitGroup,
@@ -416,6 +419,19 @@ class IdentityStore(Protocol):
 
     def get_global_graph_projection(self) -> GlobalGraphProjection:
         """Load all identity nodes and derived connections in the one global graph."""
+
+    def get_graph_revision(self) -> str:
+        """Return the durable revision token for graph read invalidation."""
+
+    def get_person_graph_read(
+        self, person_id: str, filters: GraphReadFilter | None = None,
+    ) -> PersonGraphReadModel:
+        """Build one canonical identity-centred graph from authoritative evidence."""
+
+    def get_world_graph_read(
+        self, filters: GraphReadFilter | None = None,
+    ) -> WorldGraphReadModel:
+        """Build the canonical global graph read model using backend filter semantics."""
 
     def rebuild_graph_projection(
         self,

@@ -13,6 +13,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
   const uploads = useFileUploads(api);
   const appData = useAppData({ activeView, capabilities, ...api });
   const people = usePeopleController({
+    activeView,
     ...api,
     loadPeople: appData.loadPeople,
     loadDeletedFaces: appData.loadDeletedFaces,
@@ -25,12 +26,14 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       await people.actions.refreshPeopleProfile(personId);
       setActiveView("people");
     },
+    onGraphMutation: people.actions.invalidatePersonGraph,
   });
   const queue = useQueueController({
     enabled: canAdd && activeView === "queue",
     ...api,
     ...uploads,
     loadPeople: appData.loadPeople,
+    onGraphMutation: people.actions.invalidatePersonGraph,
   });
 
   return {

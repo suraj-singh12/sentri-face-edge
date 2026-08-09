@@ -15,6 +15,7 @@ export function useQueueController({
   showToast,
   uploadFile,
   uploadFolder,
+  onGraphMutation,
 }) {
   const [queueSessions, setQueueSessions] = useState([]);
   const [queueGroups, setQueueGroups] = useState([]);
@@ -539,6 +540,7 @@ export function useQueueController({
         event_occasion: queueFollowup.eventOccasion,
         added_by: queueFollowup.addedBy,
       });
+    onGraphMutation?.(payload);
     const entries = payload.accepted || [];
     if (payload.session_closed) removeClosedQueueSession(confirmedSessionId);
     else {

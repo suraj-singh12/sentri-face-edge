@@ -6,7 +6,7 @@ import struct
 import uuid
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -19,6 +19,9 @@ from sentriface.models import (
     GlobalGraphProjection,
     GraphConnection,
     GraphNode,
+    GraphReadEdge,
+    GraphReadFilter,
+    GraphReadNode,
     InitFace,
     InitGroup,
     InitSession,
@@ -37,6 +40,7 @@ from sentriface.models import (
     PendingAddition,
     Person,
     PersonIntelligence,
+    PersonGraphReadModel,
     PersonAssociation,
     PersonChange,
     PersonMatch,
@@ -52,12 +56,13 @@ from sentriface.models import (
     Sighting,
     TemporalCount,
     LocationCount,
+    WorldGraphReadModel,
     utc_now,
 )
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
 PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
@@ -3280,6 +3285,85 @@ class SQLiteIdentityStore:
             ).fetchall()
             connections = tuple(_graph_connection_from_row(row) for row in connection_rows)
             return GlobalGraphProjection(nodes=nodes, connections=connections)
+
+    def get_graph_revision(self) -> str:
+        with self._connect() as conn:
+            return _graph_revision_token(conn)
+
+    def get_person_graph_read(
+        self, person_id: str, filters: GraphReadFilter | None = None,
+    ) -> PersonGraphReadModel:
+        normalized_person_id = str(person_id).strip()
+        if not normalized_person_id:
+            raise ValueError("Person ID is required")
+        normalized_filters = _normalize_graph_filters(filters)
+        with self._connect() as conn:
+            requested = conn.execute(
+                "SELECT lifecycle_status FROM persons WHERE person_id = ?",
+                (normalized_person_id,),
+            ).fetchone()
+            if requested is None:
+                raise KeyError(f"Unknown person: {normalized_person_id}")
+            root_person_id = _resolve_canonical_person_id(conn, normalized_person_id)
+            nodes_by_id, edges = _graph_read_components(
+                conn, normalized_filters, always_include_person_id=root_person_id,
+            )
+            root = nodes_by_id.get(root_person_id)
+            if root is None:
+                root = _graph_read_node(conn, root_person_id)
+            person_edges = tuple(
+                GraphReadEdge(
+                    **{
+                        **item.__dict__,
+                        "connected_person_id": (
+                            item.target_person_id
+                            if item.source_person_id == root_person_id
+                            else item.source_person_id
+                        ),
+                    }
+                )
+                for item in edges
+                if root_person_id in {item.source_person_id, item.target_person_id}
+            )
+            included_ids = {root_person_id}
+            included_ids.update(
+                item.connected_person_id for item in person_edges if item.connected_person_id
+            )
+            nodes = tuple(
+                root if item_id == root_person_id else nodes_by_id[item_id]
+                for item_id in sorted(included_ids, key=lambda value: (
+                    value != root_person_id,
+                    (root if value == root_person_id else nodes_by_id[value]).display_name.casefold(),
+                    value,
+                ))
+            )
+            return PersonGraphReadModel(
+                graph_revision=_graph_revision_token(conn),
+                generated_at=utc_now(),
+                requested_person_id=normalized_person_id,
+                root_person_id=root_person_id,
+                root_requested_state=str(requested["lifecycle_status"]),
+                filters=normalized_filters,
+                nodes=nodes,
+                edges=person_edges,
+            )
+
+    def get_world_graph_read(
+        self, filters: GraphReadFilter | None = None,
+    ) -> WorldGraphReadModel:
+        normalized_filters = _normalize_graph_filters(filters)
+        with self._connect() as conn:
+            nodes_by_id, edges = _graph_read_components(conn, normalized_filters)
+            return WorldGraphReadModel(
+                graph_revision=_graph_revision_token(conn),
+                generated_at=utc_now(),
+                filters=normalized_filters,
+                nodes=tuple(sorted(
+                    nodes_by_id.values(),
+                    key=lambda item: (item.display_name.casefold(), item.person_id),
+                )),
+                edges=edges,
+            )
 
     def rebuild_graph_projection(
         self,
@@ -7189,6 +7273,44 @@ def _migrate_25_to_26(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_26_to_27(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(
+        conn,
+        """
+        CREATE TABLE graph_state (
+            singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1),
+            revision INTEGER NOT NULL CHECK(revision >= 1),
+            updated_at TEXT NOT NULL
+        );
+        INSERT INTO graph_state(singleton_id, revision, updated_at)
+        VALUES (1, 1, CURRENT_TIMESTAMP);
+
+        CREATE INDEX idx_relationship_evidence_active_endpoints_time
+        ON relationship_evidence(active, source_person_id, target_person_id, created_at);
+        CREATE INDEX idx_observations_finalized_time_location
+        ON observations(status, observed_at, location);
+
+        CREATE TRIGGER graph_revision_person_insert
+        AFTER INSERT ON persons
+        BEGIN
+            UPDATE graph_state
+            SET revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE singleton_id = 1;
+        END;
+        CREATE TRIGGER graph_revision_person_read_fields
+        AFTER UPDATE OF name, metadata, lifecycle_status, canonical_person_id,
+                        identity_status, biometric_status ON persons
+        BEGIN
+            UPDATE graph_state
+            SET revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE singleton_id = 1;
+        END;
+
+        PRAGMA user_version = 27;
+        """,
+    )
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -7223,6 +7345,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(23, 24, _migrate_23_to_24),
         SchemaMigration(24, 25, _migrate_24_to_25),
         SchemaMigration(25, 26, _migrate_25_to_26),
+        SchemaMigration(26, 27, _migrate_26_to_27),
     )
 
 
@@ -8148,6 +8271,350 @@ def _replace_graph_projection(conn: sqlite3.Connection) -> None:
             for item in connections
         ],
     )
+    _advance_graph_revision(conn)
+
+
+def _graph_revision_token(conn: sqlite3.Connection) -> str:
+    row = conn.execute(
+        "SELECT revision FROM graph_state WHERE singleton_id = 1"
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("Graph revision state is unavailable")
+    return f"g{int(row['revision'])}"
+
+
+def _advance_graph_revision(conn: sqlite3.Connection) -> None:
+    table_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'graph_state'"
+    ).fetchone()
+    if table_exists is None:
+        return
+    cursor = conn.execute(
+        """
+        UPDATE graph_state
+        SET revision = revision + 1, updated_at = ?
+        WHERE singleton_id = 1
+        """,
+        (utc_now(),),
+    )
+    if cursor.rowcount != 1:
+        raise RuntimeError("Graph revision state is unavailable")
+
+
+def _normalize_graph_filters(filters: GraphReadFilter | None) -> GraphReadFilter:
+    value = filters or GraphReadFilter()
+
+    def choices(items: tuple[str, ...], *, upper: bool = False) -> tuple[str, ...]:
+        normalized = {
+            (str(item).strip().upper() if upper else str(item).strip())
+            for item in items
+            if str(item).strip()
+        }
+        return tuple(sorted(normalized, key=str.casefold))
+
+    date_from = _optional_text(value.date_from)
+    date_to = _optional_text(value.date_to)
+    start = _graph_filter_datetime(date_from, end_of_day=False) if date_from else None
+    end = _graph_filter_datetime(date_to, end_of_day=True) if date_to else None
+    if start and end and start > end:
+        raise ValueError("Graph date_from must be earlier than or equal to date_to")
+    lifecycle = choices(value.lifecycle, upper=True)
+    unsupported = set(lifecycle) - PERSON_LIFECYCLE_STATUSES
+    if unsupported:
+        raise ValueError(f"Unsupported graph lifecycle filter: {sorted(unsupported)[0]}")
+    min_frequency = value.min_frequency
+    if min_frequency is not None and float(min_frequency) < 0:
+        raise ValueError("Graph minimum frequency cannot be negative")
+    min_strength = value.min_relationship_strength
+    if min_strength is not None and int(min_strength) < 1:
+        raise ValueError("Graph minimum relationship strength must be at least 1")
+    return GraphReadFilter(
+        date_from=date_from,
+        date_to=date_to,
+        location=_optional_text(value.location),
+        lifecycle=lifecycle,
+        country=choices(value.country),
+        rank=choices(value.rank),
+        priority=choices(value.priority),
+        min_frequency=float(min_frequency) if min_frequency is not None else None,
+        min_relationship_strength=int(min_strength) if min_strength is not None else None,
+    )
+
+
+def _graph_filter_datetime(value: str, *, end_of_day: bool) -> datetime:
+    text = value.strip()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"Invalid graph date/time: {value}") from exc
+    if len(text) == 10 and end_of_day:
+        parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _graph_occurrence_datetime(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _graph_read_components(
+    conn: sqlite3.Connection,
+    filters: GraphReadFilter,
+    *,
+    always_include_person_id: str | None = None,
+) -> tuple[dict[str, GraphReadNode], tuple[GraphReadEdge, ...]]:
+    canonical_ids: set[str] = set()
+    aliases: dict[str, list[str]] = {}
+    for row in conn.execute("SELECT person_id FROM persons ORDER BY person_id").fetchall():
+        raw_id = str(row["person_id"])
+        canonical_id = _resolve_canonical_person_id(conn, raw_id)
+        canonical_ids.add(canonical_id)
+        if raw_id != canonical_id:
+            aliases.setdefault(canonical_id, []).append(raw_id)
+
+    all_nodes = {
+        person_id: _graph_read_node(
+            conn, person_id, historical_person_ids=tuple(sorted(aliases.get(person_id, []))),
+        )
+        for person_id in sorted(canonical_ids)
+    }
+    nodes = {
+        person_id: node
+        for person_id, node in all_nodes.items()
+        if person_id == always_include_person_id or _graph_node_matches(node, filters)
+    }
+
+    start = (
+        _graph_filter_datetime(filters.date_from, end_of_day=False)
+        if filters.date_from else None
+    )
+    end = (
+        _graph_filter_datetime(filters.date_to, end_of_day=True)
+        if filters.date_to else None
+    )
+    observations = {
+        str(row["observation_id"]): row
+        for row in conn.execute(
+            "SELECT observation_id, status, observed_at, created_at, location FROM observations"
+        ).fetchall()
+    }
+    scoped_people: set[str] = set()
+    if start or end or filters.location:
+        for observation_id, observation in observations.items():
+            if observation["status"] != "FINALIZED":
+                continue
+            occurrence_at = str(observation["observed_at"] or observation["created_at"])
+            if not _graph_time_matches(occurrence_at, start, end):
+                continue
+            if filters.location and str(observation["location"] or "").casefold() != filters.location.casefold():
+                continue
+            scoped_people.update(_effective_observation_person_ids(conn, observation_id))
+
+    aggregates: dict[tuple[str, str], dict[str, object]] = {}
+    evidence_rows = conn.execute(
+        "SELECT * FROM relationship_evidence WHERE active = 1 ORDER BY created_at, evidence_id"
+    ).fetchall()
+    for row in evidence_rows:
+        observation = (
+            observations.get(str(row["source_entity_id"]))
+            if row["evidence_type"] == "CO_OBSERVED"
+            and row["source_entity_type"] == "OBSERVATION"
+            else None
+        )
+        occurrence_at = str(
+            (observation["observed_at"] or observation["created_at"])
+            if observation is not None else row["created_at"]
+        )
+        if not _graph_time_matches(occurrence_at, start, end):
+            continue
+        if filters.location:
+            if observation is None:
+                continue
+            if str(observation["location"] or "").casefold() != filters.location.casefold():
+                continue
+        source_id = _resolve_canonical_person_id(conn, str(row["source_person_id"]))
+        target_id = _resolve_canonical_person_id(conn, str(row["target_person_id"]))
+        if source_id == target_id:
+            continue
+        pair = tuple(sorted((source_id, target_id)))
+        aggregate = aggregates.setdefault(pair, {
+            "items": [], "types": {}, "relationships": {}, "sources": set(),
+            "directions": {}, "first": occurrence_at, "last": occurrence_at,
+        })
+        aggregate["items"].append(row)
+        evidence_type = str(row["evidence_type"])
+        aggregate["types"][evidence_type] = aggregate["types"].get(evidence_type, 0) + 1
+        relationship_type = str(row["relationship_type"])
+        aggregate["relationships"][relationship_type] = (
+            aggregate["relationships"].get(relationship_type, 0) + 1
+        )
+        aggregate["sources"].add((str(row["source_entity_type"]), str(row["source_entity_id"])))
+        direction_key = (
+            "UNDIRECTED" if row["directionality"] == "UNDIRECTED"
+            else f"{source_id}->{target_id}"
+        )
+        aggregate["directions"][direction_key] = aggregate["directions"].get(direction_key, 0) + 1
+        if _graph_occurrence_datetime(occurrence_at) < _graph_occurrence_datetime(str(aggregate["first"])):
+            aggregate["first"] = occurrence_at
+        if _graph_occurrence_datetime(occurrence_at) > _graph_occurrence_datetime(str(aggregate["last"])):
+            aggregate["last"] = occurrence_at
+        scoped_people.update((source_id, target_id))
+
+    if start or end or filters.location:
+        nodes = {
+            person_id: node for person_id, node in nodes.items()
+            if person_id == always_include_person_id or person_id in scoped_people
+        }
+
+    edges: list[GraphReadEdge] = []
+    for pair, aggregate in sorted(aggregates.items()):
+        if pair[0] not in nodes or pair[1] not in nodes:
+            continue
+        evidence_count = len(aggregate["items"])
+        if (
+            filters.min_relationship_strength is not None
+            and evidence_count < filters.min_relationship_strength
+        ):
+            continue
+        directions = aggregate["directions"]
+        if set(directions) == {"UNDIRECTED"}:
+            source_id, target_id = pair
+            directionality = "UNDIRECTED"
+        elif len(directions) == 1 and "UNDIRECTED" not in directions:
+            source_id, target_id = next(iter(directions)).split("->", 1)
+            directionality = "DIRECTED"
+        else:
+            source_id, target_id = pair
+            directionality = "MIXED"
+        evidence_types = tuple(sorted(aggregate["types"]))
+        relationship_types = tuple(sorted(aggregate["relationships"]))
+        edges.append(GraphReadEdge(
+            source_person_id=source_id,
+            target_person_id=target_id,
+            connected_person_id=None,
+            canonical_source_person_id=source_id,
+            canonical_target_person_id=target_id,
+            relationship_strength=evidence_count,
+            evidence_count=evidence_count,
+            evidence_types=evidence_types,
+            first_occurrence_at=str(aggregate["first"]),
+            last_occurrence_at=str(aggregate["last"]),
+            directionality=directionality,
+            relationship_types=relationship_types,
+            relationship_type_summary=(
+                relationship_types[0] if len(relationship_types) == 1 else "MULTIPLE"
+            ),
+            strength_basis="active_authoritative_evidence_count",
+            provenance_summary={
+                "evidence_type_counts": dict(sorted(aggregate["types"].items())),
+                "relationship_type_counts": dict(sorted(aggregate["relationships"].items())),
+                "source_record_count": len(aggregate["sources"]),
+                "direction_counts": dict(sorted(directions.items())),
+            },
+        ))
+    return nodes, tuple(edges)
+
+
+def _graph_time_matches(
+    value: str, start: datetime | None, end: datetime | None,
+) -> bool:
+    occurrence = _graph_occurrence_datetime(value)
+    return not ((start and occurrence < start) or (end and occurrence > end))
+
+
+def _graph_read_node(
+    conn: sqlite3.Connection,
+    person_id: str,
+    *,
+    historical_person_ids: tuple[str, ...] = (),
+) -> GraphReadNode:
+    row = conn.execute("SELECT * FROM persons WHERE person_id = ?", (person_id,)).fetchone()
+    if row is None:
+        raise RuntimeError(f"Canonical graph person is unavailable: {person_id}")
+    metadata = json.loads(row["metadata"] or "{}")
+    sightings = _list_person_sightings(conn, person_id)
+    presence = _presence_analytics(sightings)
+    embedding_rows = conn.execute(
+        "SELECT embedding_id, person_id, crop_path, source_image FROM embeddings WHERE deleted_at IS NULL"
+    ).fetchall()
+    effective_embeddings = [
+        item for item in embedding_rows
+        if _effective_embedding_owner_person_id(conn, item) == person_id
+    ]
+    representative_id = metadata.get("representative_embedding_id")
+    representative = next((
+        str(item["crop_path"] or item["source_image"])
+        for item in effective_embeddings
+        if item["embedding_id"] == representative_id and (item["crop_path"] or item["source_image"])
+    ), None)
+    if representative is None:
+        representative = next((
+            str(item["crop_path"] or item["source_image"])
+            for item in effective_embeddings if item["crop_path"] or item["source_image"]
+        ), None)
+    lifecycle = str(row["lifecycle_status"])
+    return GraphReadNode(
+        person_id=person_id,
+        canonical_person_id=person_id,
+        display_name=str(row["name"]),
+        lifecycle_status=lifecycle,
+        biometric_status=str(row["biometric_status"]),
+        representative_media_reference=representative,
+        allowed_actions=_graph_allowed_actions(lifecycle),
+        state_indicator="CURRENT" if lifecycle == "ACTIVE" else "HISTORICAL",
+        historical_person_ids=historical_person_ids,
+        summary_intelligence={
+            "observation_count": presence.observation_count,
+            "first_seen_at": presence.first_seen_at,
+            "last_seen_at": presence.last_seen_at,
+            "frequency_per_30_days": presence.frequency_per_30_days,
+            "frequency_label": presence.frequency_label,
+            "locations": [
+                {"location": item.location, "count": item.count, "last_observed_at": item.last_observed_at}
+                for item in presence.locations
+            ],
+            "country": metadata.get("country"),
+            "rank": metadata.get("rank"),
+            "priority": metadata.get("importance"),
+        },
+    )
+
+
+def _graph_node_matches(node: GraphReadNode, filters: GraphReadFilter) -> bool:
+    summary = node.summary_intelligence
+
+    def matches(value: object, choices: tuple[str, ...]) -> bool:
+        return not choices or str(value or "").casefold() in {item.casefold() for item in choices}
+
+    return (
+        (not filters.lifecycle or node.lifecycle_status in filters.lifecycle)
+        and matches(summary.get("country"), filters.country)
+        and matches(summary.get("rank"), filters.rank)
+        and matches(summary.get("priority"), filters.priority)
+        and (
+            filters.min_frequency is None
+            or float(summary.get("frequency_per_30_days") or 0) >= filters.min_frequency
+        )
+    )
+
+
+def _graph_allowed_actions(lifecycle_status: str) -> tuple[str, ...]:
+    return {
+        "ACTIVE": (
+            "OPEN", "EDIT", "EDIT_NOTES", "FAVORITE", "MANAGE_FACES",
+            "ARCHIVE", "DELETE", "MERGE",
+        ),
+        "ARCHIVED": ("VIEW_HISTORY", "RESTORE", "DELETE"),
+        "DELETED": ("VIEW_HISTORY",),
+        "MERGED": ("VIEW_HISTORY", "OPEN_CANONICAL"),
+    }.get(lifecycle_status, ("VIEW_HISTORY",))
 
 
 def _validate_graph_projection(conn: sqlite3.Connection) -> dict:

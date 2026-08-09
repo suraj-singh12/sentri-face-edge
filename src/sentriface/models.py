@@ -353,6 +353,75 @@ class PersonIntelligence:
 
 
 @dataclass(frozen=True)
+class GraphReadFilter:
+    """Backend-owned intent for graph read scoping."""
+
+    date_from: str | None = None
+    date_to: str | None = None
+    location: str | None = None
+    lifecycle: tuple[str, ...] = ()
+    country: tuple[str, ...] = ()
+    rank: tuple[str, ...] = ()
+    priority: tuple[str, ...] = ()
+    min_frequency: float | None = None
+    min_relationship_strength: int | None = None
+
+
+@dataclass(frozen=True)
+class GraphReadNode:
+    person_id: str
+    canonical_person_id: str
+    display_name: str
+    lifecycle_status: str
+    biometric_status: str
+    representative_media_reference: str | None
+    allowed_actions: tuple[str, ...]
+    state_indicator: str
+    historical_person_ids: tuple[str, ...] = ()
+    summary_intelligence: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class GraphReadEdge:
+    source_person_id: str
+    target_person_id: str
+    connected_person_id: str | None
+    canonical_source_person_id: str
+    canonical_target_person_id: str
+    relationship_strength: int
+    evidence_count: int
+    evidence_types: tuple[str, ...]
+    first_occurrence_at: str
+    last_occurrence_at: str
+    directionality: str
+    relationship_types: tuple[str, ...]
+    relationship_type_summary: str
+    strength_basis: str
+    provenance_summary: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PersonGraphReadModel:
+    graph_revision: str
+    generated_at: str
+    requested_person_id: str
+    root_person_id: str
+    root_requested_state: str
+    filters: GraphReadFilter
+    nodes: tuple[GraphReadNode, ...]
+    edges: tuple[GraphReadEdge, ...]
+
+
+@dataclass(frozen=True)
+class WorldGraphReadModel:
+    graph_revision: str
+    generated_at: str
+    filters: GraphReadFilter
+    nodes: tuple[GraphReadNode, ...]
+    edges: tuple[GraphReadEdge, ...]
+
+
+@dataclass(frozen=True)
 class PersonChange:
     change_id: str
     person_id: str

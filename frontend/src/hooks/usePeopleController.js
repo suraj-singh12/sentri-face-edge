@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { requirePersonContract } from "../utils.js";
+import {
+  graphNodeNavigation,
+  graphRevisionChanged,
+  invalidatePersonGraphSnapshot,
+  personGraphEntryMode,
+  requirePersonGraphContract,
+} from "../utils/personGraph.js";
 
 function operationId() {
   return globalThis.crypto?.randomUUID?.()
@@ -11,6 +18,7 @@ function operationId() {
 }
 
 export function usePeopleController({
+  activeView,
   apiGet,
   apiPost,
   loadPeople,
@@ -19,6 +27,19 @@ export function usePeopleController({
 }) {
   const [peopleGallery, setPeopleGallery] = useState(null);
   const [peopleGalleryImage, setPeopleGalleryImage] = useState(null);
+  const [personGraph, setPersonGraph] = useState({
+    personId: null,
+    data: null,
+    active: false,
+    invalidated: false,
+    pendingRevision: null,
+    loading: false,
+    error: null,
+  });
+  const graphRequestRef = useRef(0);
+  const personGraphRef = useRef(personGraph);
+  const previousActiveViewRef = useRef(activeView);
+  personGraphRef.current = personGraph;
 
   const loadPerson = async (personId, archived = false) => {
     const payload = await apiGet(
@@ -42,10 +63,117 @@ export function usePeopleController({
     return payload;
   };
 
-  const loadRelationshipGraphPerson = async (personId, _archived = false, limit = 30) => apiGet(
-    `/api/person-relationship-graph?person_id=${encodeURIComponent(personId)}&limit=${encodeURIComponent(limit)}`,
-    { dedupe: false },
-  );
+  const loadPersonGraph = useCallback(async (personId, { preserve = false } = {}) => {
+    if (!personId) return null;
+    const requestId = graphRequestRef.current + 1;
+    graphRequestRef.current = requestId;
+    setPersonGraph((current) => ({
+      personId,
+      data: preserve && current.personId === personId ? current.data : null,
+      active: true,
+      invalidated: false,
+      pendingRevision: null,
+      loading: true,
+      error: null,
+    }));
+    try {
+      const payload = requirePersonGraphContract(await apiGet(
+        `/api/person-graph?person_id=${encodeURIComponent(personId)}`,
+        { dedupe: false },
+      ));
+      if (graphRequestRef.current === requestId) {
+        setPersonGraph({
+          personId,
+          data: payload,
+          active: true,
+          invalidated: false,
+          pendingRevision: null,
+          loading: false,
+          error: null,
+        });
+      }
+      return payload;
+    } catch (error) {
+      if (graphRequestRef.current === requestId) {
+        setPersonGraph((current) => ({ ...current, loading: false, error }));
+      }
+      throw error;
+    }
+  }, [apiGet]);
+
+  const closePersonGraph = useCallback(() => {
+    graphRequestRef.current += 1;
+    setPersonGraph((current) => ({ ...current, active: false, loading: false, error: null }));
+  }, []);
+
+  const invalidatePersonGraph = useCallback((mutation = null) => {
+    graphRequestRef.current += 1;
+    setPersonGraph((current) => invalidatePersonGraphSnapshot(current, mutation));
+  }, []);
+
+  const openPersonGraph = useCallback(async (personId) => {
+    if (!personId) return null;
+    const cached = personGraphRef.current;
+    if (personGraphEntryMode(cached, personId) === "LOAD") {
+      return loadPersonGraph(personId);
+    }
+
+    const requestId = graphRequestRef.current + 1;
+    graphRequestRef.current = requestId;
+    setPersonGraph((current) => ({ ...current, active: true, loading: true, error: null }));
+    try {
+      const revision = await apiGet(
+        `/api/graph-revision?current_revision=${encodeURIComponent(cached.data.graph_revision)}`,
+        { dedupe: false, silent: true },
+      );
+      if (graphRequestRef.current !== requestId) return null;
+      if (
+        revision.stale
+        || graphRevisionChanged(cached.data.graph_revision, revision.graph_revision)
+      ) {
+        return loadPersonGraph(personId);
+      }
+      setPersonGraph((current) => ({
+        ...current,
+        active: true,
+        invalidated: false,
+        pendingRevision: null,
+        loading: false,
+        error: null,
+      }));
+      return cached.data;
+    } catch (error) {
+      if (graphRequestRef.current === requestId) {
+        setPersonGraph((current) => ({ ...current, loading: false, error }));
+      }
+      throw error;
+    }
+  }, [apiGet, loadPersonGraph]);
+
+  const refreshPersonGraph = useCallback(async () => {
+    if (!personGraph.personId) return null;
+    return loadPersonGraph(personGraph.personId, { preserve: true });
+  }, [loadPersonGraph, personGraph.personId]);
+
+  const openPersonGraphNode = useCallback(async (node) => {
+    const navigation = graphNodeNavigation(node);
+    if (!navigation.allowed) {
+      showToast(navigation.restriction, "yellow", { title: "Graph access restricted" });
+      return false;
+    }
+    await openPersonGraph(navigation.personId);
+    return true;
+  }, [openPersonGraph, showToast]);
+
+  useEffect(() => {
+    const previousView = previousActiveViewRef.current;
+    previousActiveViewRef.current = activeView;
+    if (activeView !== "people" || previousView === "people") return;
+    const cached = personGraphRef.current;
+    if (cached.active && cached.personId && cached.data) {
+      openPersonGraph(cached.personId).catch((error) => console.error(error));
+    }
+  }, [activeView, openPersonGraph]);
 
   const createIdentifiedPerson = async (values) => {
     const payload = await apiPost("/api/person-create", {
@@ -62,8 +190,9 @@ export function usePeopleController({
       added_by: values.addedBy,
       operation_id: operationId(),
     });
+    let graphMutation = payload;
     if ((values.notes || "").trim() || (values.mentionedPersonIds || []).length) {
-      await apiPost("/api/person-notes", {
+      graphMutation = await apiPost("/api/person-notes", {
         person_id: payload.person.person_id,
         notes: values.notes || "",
         expected_previous_notes: "",
@@ -71,13 +200,14 @@ export function usePeopleController({
         operation_id: operationId(),
       });
     }
+    invalidatePersonGraph(graphMutation);
     await loadPeople({ dedupe: false });
     showToast("Person created");
     return (await loadPerson(payload.person.person_id)).person;
   };
 
   const savePeopleProfile = async (values) => {
-    await apiPost("/api/person-update", {
+    const result = await apiPost("/api/person-update", {
       person_id: values.personId,
       name: values.name,
       rank: values.rank,
@@ -87,6 +217,7 @@ export function usePeopleController({
       editor_name: values.editorName,
       operation_id: operationId(),
     });
+    invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await refreshPeopleProfile(values.personId);
     showToast("Person details updated");
@@ -102,6 +233,7 @@ export function usePeopleController({
       operation_id: operationId(),
     });
     if (!payload.updated) return { updated: false, notes: payload.notes };
+    invalidatePersonGraph(payload);
     await loadPeople({ dedupe: false });
     const refreshed = await refreshPeopleProfile(personId);
     showToast("Notes saved");
@@ -126,21 +258,23 @@ export function usePeopleController({
 
   const setRepresentativePhoto = async (personId, embeddingId) => {
     const requestId = operationId();
-    await apiPost("/api/person-preferences", {
+    const result = await apiPost("/api/person-preferences", {
       person_id: personId,
       representative_embedding_id: embeddingId,
       operation_id: requestId,
     });
+    invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await refreshPeopleProfile(personId);
     showToast("Profile photo updated");
   };
 
   const archivePerson = async (personId) => {
-    await apiPost("/api/person-archive", {
+    const result = await apiPost("/api/person-archive", {
       person_id: personId,
       operation_id: operationId(),
     });
+    invalidatePersonGraph(result);
     setPeopleGallery(null);
     setPeopleGalleryImage(null);
     await loadPeople({ dedupe: false });
@@ -152,6 +286,7 @@ export function usePeopleController({
       person_id: personId,
       operation_id: operationId(),
     });
+    invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     setPeopleGallery(await loadPerson(result.person_id || personId));
     showToast("Person restored");
@@ -162,6 +297,7 @@ export function usePeopleController({
       person_id: personId,
       operation_id: operationId(),
     });
+    invalidatePersonGraph(result);
     setPeopleGallery(null);
     setPeopleGalleryImage(null);
     await loadPeople({ dedupe: false });
@@ -185,6 +321,7 @@ export function usePeopleController({
       operation_id: operationId(),
       conflict_resolutions: preview.proposed_conflict_resolutions,
     });
+    invalidatePersonGraph(result);
     setPeopleGallery(null);
     setPeopleGalleryImage(null);
     await loadPeople({ dedupe: false });
@@ -198,6 +335,7 @@ export function usePeopleController({
       target_person_id: targetPersonId,
       operation_id: operationId(),
     });
+    invalidatePersonGraph(result);
     await refreshPeopleProfile(personId);
     await loadPeople({ dedupe: false });
     showToast("Face ownership corrected");
@@ -209,6 +347,7 @@ export function usePeopleController({
       embedding_id: embeddingId,
       operation_id: operationId(),
     });
+    invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await loadDeletedFaces({ dedupe: false });
     await refreshPeopleProfile(personId);
@@ -226,6 +365,7 @@ export function usePeopleController({
       embedding_id: embeddingId,
       operation_id: operationId(),
     });
+    invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await loadDeletedFaces({ dedupe: false });
     if (peopleGallery?.person?.effective_person_id === personId) await refreshPeopleProfile(personId);
@@ -238,6 +378,7 @@ export function usePeopleController({
       embedding_id: embeddingId,
       operation_id: operationId(),
     });
+    invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await loadDeletedFaces({ dedupe: false });
     showToast(
@@ -254,11 +395,15 @@ export function usePeopleController({
   };
 
   return {
-    state: { peopleGallery, peopleGalleryImage },
+    state: { peopleGallery, peopleGalleryImage, personGraph },
     actions: {
       peopleOpen,
       refreshPeopleProfile,
-      loadRelationshipGraphPerson,
+      openPersonGraph,
+      openPersonGraphNode,
+      refreshPersonGraph,
+      closePersonGraph,
+      invalidatePersonGraph,
       createIdentifiedPerson,
       setPeopleGalleryImage,
       peopleBack,

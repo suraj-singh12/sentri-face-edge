@@ -58,7 +58,27 @@ A current `Sighting` is a derived `(finalized observation, effective canonical p
 
 These models are calculated by the backend read boundary and returned by the API. They introduce no new authoritative table or cache. No-face identities participate normally because sightings, notes, activity, and relationship evidence do not require an embedding.
 
-## Current repository map (schema version 26)
+### P10-A graph intelligence read models
+
+`PersonGraphReadModel` and `WorldGraphReadModel` are UI-ready backend projections over the same active authoritative `relationship_evidence`, canonical person mapping, finalized observations, corrected effective participants, and P9 intelligence reads. They never read `person_associations`, never expose raw evidence rows, and do not make layout decisions.
+
+Both contracts collapse merged aliases into the terminal canonical node. A canonical node includes display, lifecycle and biometric state, representative media reference, backend-owned allowed actions, a current/historical indicator, merged historical IDs, and normalized summary intelligence. Archived and deleted terminal identities remain historical nodes. A request made with a merged source ID reports that requested historical state while rooting the Person Graph at its canonical survivor.
+
+Edges aggregate active evidence by canonical person pair. Self-edges created by canonical collapse are suppressed. Strength is the count of active authoritative evidence items after the requested evidence scope is applied; it is descriptive, not probabilistic. The read model supplies evidence types, relationship-type summary, first/last occurrence, directionality, canonical endpoints, and aggregate provenance counts without returning raw `relationship_evidence` records or compatibility identifiers. For co-observation evidence, occurrence time and location come from the finalized observation; note-reference and manual evidence use their committed evidence time and have no location.
+
+`GraphReadFilter` expresses frontend intent. Date bounds are inclusive and apply to occurrence time. A location filter is an exact case-insensitive match and necessarily limits relationship evidence to co-observations with that location. Lifecycle, country, rank, and priority filter canonical nodes; minimum frequency uses the P9 whole-history descriptive frequency; minimum relationship strength applies after evidence scoping. Person Graph always retains its canonical root, while filters govern connected nodes and edges. World temporal/location scopes retain canonically resolved participants in matching finalized observations plus endpoints of matching evidence. No frontend reconstruction or filtering is authoritative.
+
+`graph_state` holds one local monotonic revision counter, exposed as an opaque `g<number>` token. Graph projection replacement advances it in the same SQLite transaction as finalisation, correction, merge, evidence creation/retirement, or rebuild. Person read-field changes also advance it through local SQLite triggers. Retries that return an already committed operation do not advance it. The token is invalidation metadata rather than distributed versioning and does not identify a particular evidence record.
+
+### P10-B Person Graph UI projection
+
+The People profile opens a dedicated Person Graph workspace backed only by `/api/person-graph`. React renders the returned nodes and edges, maps the returned relationship strength to line weight, and presents the returned evidence and provenance summaries. Its radial multi-ring placement uses only the backend node collection and root ID; it does not inspect edges to decide membership, depth, relationship existence, canonical identity, lifecycle, or strength.
+
+Node navigation consumes `allowed_actions` exactly as supplied by the backend. Restricted historical nodes remain visible and explain that backend access is restricted. The UI retains only ephemeral camera, hover, and selection state.
+
+Graph revision is an opaque consistency token. In the current offline single-user model, the UI validates it at lifecycle boundaries and after known graph mutations. Continuous polling is intentionally avoided. The initial graph read stores its revision. Leaving the workspace retains that immutable read model; returning validates the token once and reuses the model when unchanged. Successful graph-affecting writes invalidate the retained model, and a changed or invalidated model is replaced by a complete `/api/person-graph` response rather than patched locally. Manual refresh also requests a complete replacement.
+
+## Current repository map (schema version 27)
 
 | Concern | Current implementation |
 | --- | --- |
@@ -69,12 +89,12 @@ These models are calculated by the backend read boundary and returned by the API
 | Application service | `src/sentriface/graph_service.py::GlobalIdentityGraphService` is the single normalized evidence/projection boundary; `src/sentriface/engine.py::FaceEngine` owns it as `graph` alongside existing recognition and identity services |
 | Correction service | `src/sentriface/correction_service.py::IdentityCorrectionService` centralizes P7 observation correction, Move Face, and Add Face commands and routes graph-affecting work through `GlobalIdentityGraphService` |
 | Merge service | `src/sentriface/merge_service.py::IdentityMergeService` is the P8-B preview/execution boundary and coordinates transactional storage execution with derived-index publication/reconciliation |
-| Intelligence service | `src/sentriface/intelligence_service.py::IntelligenceReadService` is the read-only P9 boundary for canonical sightings, presence/temporal metrics, evidence-derived relationship analytics, and profile intelligence |
+| Intelligence services | `src/sentriface/intelligence_service.py::IntelligenceReadService` is the read-only P9 boundary; `src/sentriface/graph_read_service.py::GraphReadService` is the P10-A boundary for Person Graph, World Graph, backend filtering, and revision reads |
 | Recognition/index | `FaceEngine.recognize()` returns proposals; `linear_index.py`/`hnsw_index.py` are rebuilt from active embeddings and are derived caches |
-| API | `src/sentriface/api_server.py`; P9/P9.5 enrich `/api/persons` and `/api/person`, expose `/api/person-sightings` and `/api/person-intelligence`, and add the bounded versioned `/api/person-relationship-graph` read contract; recognition, queue, merge, lifecycle, and backup routes retain their prior boundaries |
-| React shell/controllers | `frontend/src/SentriFaceApp.jsx`; `useRecognizeController.js`, `useQueueController.js`, `usePeopleController.js`, `useAppData.js` |
-| React views | `frontend/src/views/RecognizeView.jsx`, `QueueView.jsx`, `PeopleView.jsx`; no World view exists |
-| Current graph UI | `frontend/src/views/PeopleView.jsx::RelationshipGraphModal` renders the backend relationship-subgraph contract; `frontend/src/utils/relationshipGraph.js` converts backend-provided depth bands into coordinates only |
+| API | `src/sentriface/api_server.py`; P10-A adds `/api/person-graph`, `/api/world-graph`, and `/api/graph-revision` while preserving the P9.5 `/api/person-relationship-graph` compatibility contract; recognition, queue, merge, lifecycle, and backup routes retain their prior boundaries |
+| React shell/controllers | `frontend/src/SentriFaceApp.jsx`; `useRecognizeController.js`, `useQueueController.js`, `usePeopleController.js`, `useAppData.js`; the People controller owns Person Graph fetch/revision invalidation state |
+| React views | `frontend/src/views/RecognizeView.jsx`, `QueueView.jsx`, `PeopleView.jsx`, and `PersonGraphView.jsx`; no World view exists |
+| Current graph UI | `frontend/src/views/PersonGraphView.jsx` renders the P10-A Person Graph contract; `frontend/src/utils/personGraphLayout.js` positions backend-provided nodes without reading edges; the P9.5 relationship layout utility remains compatibility code only |
 | Backup/offline | `src/sentriface/backup_service.py`, `backup_crypto.py`, `secure_storage.py`, `offline_guard.py`, `os_network_policy.py`; packaging policies under `packaging/` |
 | Relevant backend tests | `tests/test_graph_evidence.py`, `test_observations.py`, `test_storage.py`, `test_operation_journal.py`, `test_identity_lifecycle.py`, `test_merge_foundation.py`, `test_identity_merge_orchestration.py`, plus existing engine, queue, person, notes, backup, and offline-packaging tests |
 | Relevant frontend tests | `frontend/tests/relationship-graph.test.mjs`, `queue-layout.test.mjs`, `people-layout.test.mjs`, `backend-call-discipline.test.mjs` |
@@ -95,7 +115,7 @@ These models are calculated by the backend read boundary and returned by the API
 - Legacy `person_associations` remains unchanged for historical/raw compatibility. Current profile and relationship-graph reads use the normalized `graph_connections` projection. Legacy rows are not speculatively copied into evidence when accurate provenance cannot be established.
 - `_create_note_associations()` remains only for explicit-ID legacy compatibility paths; name matching no longer infers new associations. Normal profile-note saves use the global graph service and normalized evidence instead.
 - Removing a current association deletes the whole row even if multiple underlying reasons should support the relationship.
-- The current Relationship Graph UI reads canonical neighbors from the evidence-derived `graph_connections` projection. Person Graph/World UI expansion remains P10.
+- The current Person Graph UI reads the P10-A contract and maintains only layout, camera, hover, and selection state. World UI remains deferred.
 - The P2 canonical resolver and constrained `MERGED` mapping are present. P8-B exposes normalized merge preview and execution through `IdentityMergeService`, `FaceEngine`, and the loopback API. Undo remains gated for P11.
 - P8-A provides the caller-owned, connection-scoped canonical update primitive and immutable normalized `merge_operations` / `merge_affected_items` manifests linked to the global operation journal. P8-B executes those primitives in one transaction; legacy merge snapshots are not imported as normalized truth.
 - Merge execution preserves source-owned embeddings, recognition history, raw participants, corrections, notes/revisions/mentions, evidence, and prior operation history. It changes the source lifecycle/canonical mapping, applies selected survivor profile values, rebuilds the derived graph projection, and publishes canonical index ownership. A failed transaction leaves no manifest or canonical/profile/graph change and records a durable failed attempt under a non-reusable operation ID.

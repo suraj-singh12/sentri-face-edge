@@ -2261,6 +2261,216 @@ button {
   box-shadow: var(--mantine-shadow-sm);
 }
 
+/* P10-B Person Graph: layout and interaction only; graph truth is server-provided. */
+.person-graph-shell,
+.person-graph-loading {
+  height: 100%;
+  min-height: 0;
+}
+
+.person-graph-loading {
+  min-height: 420px;
+}
+
+.person-graph-header {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
+.person-graph-zoom-label {
+  width: 42px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.person-graph-workarea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 278px;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.person-graph-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 480px;
+  overflow: hidden;
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: var(--mantine-radius-md);
+  background:
+    radial-gradient(circle at center, rgba(18, 184, 134, 0.1), transparent 34%),
+    linear-gradient(145deg, rgba(4, 12, 21, 0.98), rgba(8, 18, 29, 0.98));
+}
+
+[data-mantine-color-scheme="light"] .person-graph-stage {
+  background:
+    radial-gradient(circle at center, rgba(18, 184, 134, 0.1), transparent 36%),
+    linear-gradient(145deg, rgba(239, 248, 250, 0.98), rgba(225, 238, 243, 0.98));
+}
+
+.person-graph-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  touch-action: none;
+  user-select: none;
+}
+
+.person-graph-pan-surface {
+  cursor: grab;
+}
+
+.person-graph-pan-surface:active {
+  cursor: grabbing;
+}
+
+.person-graph-grid-line {
+  stroke: color-mix(in srgb, var(--mantine-color-text) 7%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.person-graph-edge-line {
+  stroke: color-mix(in srgb, var(--mantine-color-teal-5) 72%, var(--mantine-color-text));
+  opacity: 0.64;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.person-graph-edge-line[data-directionality="DIRECTED"],
+.person-graph-edge-line[data-directionality="MIXED"] {
+  stroke-dasharray: 8 5;
+}
+
+.person-graph-edge-line[data-selected="true"] {
+  stroke: var(--mantine-color-cyan-3);
+  opacity: 1;
+}
+
+.person-graph-edge-hit {
+  stroke: transparent;
+  stroke-width: 18;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.person-graph-node-object {
+  overflow: visible;
+}
+
+.person-graph-node {
+  display: flex;
+  width: 172px;
+  height: 114px;
+  align-items: center;
+  gap: 10px;
+  padding: 11px;
+  color: var(--mantine-color-text);
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--sentriface-card-border) 82%, var(--mantine-color-dark-2));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sentriface-solid-card-bg) 96%, transparent);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+}
+
+.person-graph-node:hover,
+.person-graph-node:focus-visible {
+  border-color: var(--mantine-color-teal-5);
+  outline: none;
+}
+
+.person-graph-node[data-root="true"] {
+  border-color: var(--mantine-color-teal-4);
+  box-shadow: 0 0 0 2px rgba(18, 184, 134, 0.18), 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+.person-graph-node[data-lifecycle="ARCHIVED"] {
+  border-color: var(--mantine-color-yellow-7);
+}
+
+.person-graph-node[data-lifecycle="DELETED"] {
+  border-color: var(--mantine-color-red-8);
+  opacity: 0.78;
+}
+
+.person-graph-node[data-lifecycle="MERGED"] {
+  border-color: var(--mantine-color-violet-6);
+}
+
+.person-graph-node[data-navigation-allowed="false"] {
+  cursor: not-allowed;
+}
+
+.person-graph-node-image {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.person-graph-node-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.person-graph-node-copy > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-graph-inspector {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.person-graph-empty-note {
+  position: absolute;
+  left: 50%;
+  bottom: 46px;
+  width: min(360px, calc(100% - 32px));
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--sentriface-card-bg) 94%, transparent);
+  border-color: var(--sentriface-card-border);
+  pointer-events: none;
+}
+
+.person-graph-pan-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--sentriface-card-bg) 82%, transparent);
+  pointer-events: none;
+}
+
+@media (max-width: 62em) {
+  .person-graph-workarea {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .person-graph-stage,
+  .person-graph-svg {
+    min-height: 560px;
+  }
+
+  .person-graph-inspector {
+    min-height: 180px;
+    overflow: visible;
+  }
+}
+
 @media (max-width: 48em) {
   .relationship-graph-canvas {
     min-height: 520px;

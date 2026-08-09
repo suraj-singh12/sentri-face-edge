@@ -16,6 +16,7 @@ from sentriface.config import RuntimeConfig
 from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, IdentityStore
 from sentriface.errors import InputImageError, QueueCancellationError
 from sentriface.graph_service import GlobalIdentityGraphService
+from sentriface.graph_read_service import GraphReadService
 from sentriface.identity_service import IdentityService
 from sentriface.intelligence_service import IntelligenceReadService
 from sentriface.metrics import MetricsCollector
@@ -98,6 +99,7 @@ class FaceEngine:
         self.index = _SynchronizedFaceIndex(index)
         self.store = store
         self.graph = GlobalIdentityGraphService(store)
+        self.graph_reads = GraphReadService(store)
         self.identity = IdentityService(store)
         self.intelligence = IntelligenceReadService(store)
         self.merges = IdentityMergeService(
@@ -501,6 +503,17 @@ class FaceEngine:
     def get_global_graph_projection(self):
         """Return the normalized derived graph projection for read contracts."""
         return self.graph.get_global_projection()
+
+    def get_graph_revision(self):
+        return self.graph_reads.revision()
+
+    def get_person_graph_read(self, person_id, filters=None):
+        with self.metrics.timer("db_person_graph_read_ms"):
+            return self.graph_reads.person_graph(person_id, filters)
+
+    def get_world_graph_read(self, filters=None):
+        with self.metrics.timer("db_world_graph_read_ms"):
+            return self.graph_reads.world_graph(filters)
 
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         return self.store.get_person_operation(operation_id, operation_type)

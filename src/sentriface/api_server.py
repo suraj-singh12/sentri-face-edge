@@ -58,6 +58,9 @@ from sentriface.models import (
     EmbeddingRecord,
     FaceBox,
     GraphConnection,
+    GraphReadEdge,
+    GraphReadFilter,
+    GraphReadNode,
     InitGroup,
     InitSession,
     MatchDecision,
@@ -70,12 +73,14 @@ from sentriface.models import (
     PersonChange,
     PersonMatch,
     PersonIntelligence,
+    PersonGraphReadModel,
     PersonSummary,
     QualityReport,
     RecognitionDetail,
     RecognitionResult,
     RejectedFace,
     Sighting,
+    WorldGraphReadModel,
 )
 from sentriface.storage.sqlite_store import SCHEMA_VERSION
 STATIC_DIR = Path(__file__).with_name("ui_static")
@@ -1085,6 +1090,32 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     self.server.engine,
                     person_id,
                     limit=max(1, min(requested_limit, 100)),
+                ))
+                return
+            if parsed.path == "/api/graph-revision":
+                revision = self.server.engine.get_graph_revision()
+                current_revision = parse_qs(parsed.query).get("current_revision", [None])[0]
+                self._json({
+                    "contract": "sentriface.graph-revision",
+                    "contract_version": 1,
+                    "graph_revision": revision,
+                    "current_revision": current_revision,
+                    "stale": current_revision is not None and current_revision != revision,
+                })
+                return
+            if parsed.path == "/api/person-graph":
+                person_id = _query_value(parsed.query, "person_id")
+                self._json(_person_graph_read_payload(
+                    self.server.engine.get_person_graph_read(
+                        person_id, _graph_filters_from_query(parsed.query),
+                    )
+                ))
+                return
+            if parsed.path == "/api/world-graph":
+                self._json(_world_graph_read_payload(
+                    self.server.engine.get_world_graph_read(
+                        _graph_filters_from_query(parsed.query),
+                    )
                 ))
                 return
             if parsed.path == "/api/person-sightings":
@@ -3559,6 +3590,127 @@ def _relationship_label(evidence_counts: dict[str, int] | set[str] | tuple[str, 
     if "MANUAL_ASSOCIATION" in types:
         return "Manually linked"
     return "Related"
+
+
+def _graph_filters_from_query(query: str) -> GraphReadFilter:
+    values = parse_qs(query)
+
+    def one(key: str) -> str | None:
+        value = values.get(key, [None])[0]
+        return str(value).strip() if value is not None and str(value).strip() else None
+
+    def many(key: str) -> tuple[str, ...]:
+        result: list[str] = []
+        for value in values.get(key, []):
+            result.extend(item.strip() for item in str(value).split(",") if item.strip())
+        return tuple(result)
+
+    def number(key: str, caster):
+        value = one(key)
+        if value is None:
+            return None
+        try:
+            return caster(value)
+        except ValueError as exc:
+            raise ValueError(f"Invalid graph filter: {key}") from exc
+
+    return GraphReadFilter(
+        date_from=one("date_from"),
+        date_to=one("date_to"),
+        location=one("location"),
+        lifecycle=many("lifecycle"),
+        country=many("country"),
+        rank=many("rank"),
+        priority=many("priority"),
+        min_frequency=number("min_frequency", float),
+        min_relationship_strength=number("min_relationship_strength", int),
+    )
+
+
+def _graph_filter_payload(filters: GraphReadFilter) -> dict[str, Any]:
+    return {
+        "date_from": filters.date_from,
+        "date_to": filters.date_to,
+        "location": filters.location,
+        "lifecycle": list(filters.lifecycle),
+        "country": list(filters.country),
+        "rank": list(filters.rank),
+        "priority": list(filters.priority),
+        "min_frequency": filters.min_frequency,
+        "min_relationship_strength": filters.min_relationship_strength,
+    }
+
+
+def _graph_read_node_payload(node: GraphReadNode) -> dict[str, Any]:
+    return {
+        "person_id": node.person_id,
+        "canonical_person_id": node.canonical_person_id,
+        "effective_person_id": node.canonical_person_id,
+        "display_name": node.display_name,
+        "lifecycle_status": node.lifecycle_status,
+        "biometric_status": node.biometric_status,
+        "representative_media_reference": node.representative_media_reference,
+        "allowed_actions": list(node.allowed_actions),
+        "state_indicator": node.state_indicator,
+        "historical_person_ids": list(node.historical_person_ids),
+        "summary_intelligence": node.summary_intelligence,
+    }
+
+
+def _graph_read_edge_payload(edge: GraphReadEdge) -> dict[str, Any]:
+    return {
+        "edge_id": f"graph:{edge.source_person_id}:{edge.target_person_id}",
+        "source": edge.source_person_id,
+        "target": edge.target_person_id,
+        "source_person_id": edge.source_person_id,
+        "target_person_id": edge.target_person_id,
+        "connected_person_id": edge.connected_person_id,
+        "canonical_endpoints": {
+            "source_person_id": edge.canonical_source_person_id,
+            "target_person_id": edge.canonical_target_person_id,
+        },
+        "relationship_strength": edge.relationship_strength,
+        "evidence_count": edge.evidence_count,
+        "evidence_types": list(edge.evidence_types),
+        "first_occurrence": edge.first_occurrence_at,
+        "last_occurrence": edge.last_occurrence_at,
+        "directionality": edge.directionality,
+        "relationship_types": list(edge.relationship_types),
+        "relationship_type_summary": edge.relationship_type_summary,
+        "strength_basis": edge.strength_basis,
+        "provenance_summary": edge.provenance_summary,
+    }
+
+
+def _person_graph_read_payload(model: PersonGraphReadModel) -> dict[str, Any]:
+    return {
+        "contract": "sentriface.person-graph",
+        "contract_version": 1,
+        "graph_revision": model.graph_revision,
+        "generated_at": model.generated_at,
+        "requested_person_id": model.requested_person_id,
+        "root_person_id": model.root_person_id,
+        "root_requested_state": model.root_requested_state,
+        "filters": _graph_filter_payload(model.filters),
+        "nodes": [_graph_read_node_payload(item) for item in model.nodes],
+        "edges": [_graph_read_edge_payload(item) for item in model.edges],
+        "node_count": len(model.nodes),
+        "edge_count": len(model.edges),
+    }
+
+
+def _world_graph_read_payload(model: WorldGraphReadModel) -> dict[str, Any]:
+    return {
+        "contract": "sentriface.world-graph",
+        "contract_version": 1,
+        "graph_revision": model.graph_revision,
+        "generated_at": model.generated_at,
+        "filters": _graph_filter_payload(model.filters),
+        "nodes": [_graph_read_node_payload(item) for item in model.nodes],
+        "edges": [_graph_read_edge_payload(item) for item in model.edges],
+        "node_count": len(model.nodes),
+        "edge_count": len(model.edges),
+    }
 
 
 def _person_relationship_graph(

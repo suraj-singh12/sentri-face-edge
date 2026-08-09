@@ -13,6 +13,7 @@ export function useRecognizeController({
   showToast,
   uploadFile,
   onExistingPersonEnrolled,
+  onGraphMutation,
 }) {
   const [recognition, setRecognition] = usePersistentState("sentriface.recognize.result", null);
   const [selectedRecognitionFace, setSelectedRecognitionFace] = usePersistentState("sentriface.recognize.selectedFace", 1);
@@ -221,12 +222,13 @@ export function useRecognizeController({
 
   const completeRecognitionReview = async () => {
     if (!recognition?.reviewId || recognitionAcceptedFaces.length !== recognition.faces.length) return;
-    await apiPost("/api/photo-review-complete", {
+    const result = await apiPost("/api/photo-review-complete", {
       review_id: recognition.reviewId,
       operation_id: recognition.completionOperationId,
       source: recognitionTargetPerson ? "add-face-review" : "check-photo",
       target_person_id: recognitionTargetPerson?.person_id,
     });
+    onGraphMutation?.(result);
     await loadPeople({ dedupe: false });
     if (recognitionTargetPerson?.person_id) {
       await onExistingPersonEnrolled?.(recognitionTargetPerson.person_id);

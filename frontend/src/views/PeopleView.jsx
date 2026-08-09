@@ -65,6 +65,7 @@ import {
 
 import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
+import { PersonGraphView } from "./PersonGraphView.jsx";
 import {
   currentDateTimeParts,
   detailsForEmbedding,
@@ -74,11 +75,6 @@ import {
   personAllows,
   requirePersonContract,
 } from "../utils.js";
-import {
-  layoutRelationshipGraph,
-  RELATIONSHIP_GRAPH_NODE_LIMIT,
-} from "../utils/relationshipGraph.js";
-
 export function PeopleView({
   canEdit = false,
   canDestroy = false,
@@ -88,10 +84,14 @@ export function PeopleView({
   deletedFaces = [],
   peopleGallery,
   peopleGalleryImage,
+  personGraph,
   onRefresh,
   onOpen,
   onCreateIdentifiedPerson,
-  onLoadGraphPerson,
+  onOpenGraph,
+  onOpenGraphNode,
+  onRefreshGraph,
+  onCloseGraph,
   onImage,
   onBack,
   onSave,
@@ -181,7 +181,14 @@ export function PeopleView({
 
   return (
     <Paper withBorder radius="md" p="md" className="people-workspace">
-      {peopleGallery ? (
+      {personGraph?.active && personGraph.personId ? (
+        <PersonGraphView
+          state={personGraph}
+          onBack={onCloseGraph}
+          onRefresh={onRefreshGraph}
+          onOpenNode={onOpenGraphNode}
+        />
+      ) : peopleGallery ? (
         <PeopleGalleryView
           payload={peopleGallery}
           people={people}
@@ -195,7 +202,7 @@ export function PeopleView({
           onSaveNotes={onSaveNotes}
           onAddPhoto={onAddPhoto}
           onCreateIdentifiedPerson={onCreateIdentifiedPerson}
-          onLoadGraphPerson={onLoadGraphPerson}
+          onOpenGraph={onOpenGraph}
           onFavorite={onFavorite}
           onSetRepresentative={onSetRepresentative}
           onArchive={onArchive}
@@ -985,7 +992,7 @@ function PeopleGalleryView({
   onSaveNotes,
   onAddPhoto,
   onCreateIdentifiedPerson,
-  onLoadGraphPerson,
+  onOpenGraph,
   onFavorite,
   onSetRepresentative,
   onArchive,
@@ -1177,6 +1184,14 @@ function PeopleGalleryView({
           <Text size="xs">{payload.person.name}</Text>
         </Group>
         <Group gap="xs">
+          <Button
+            size="xs"
+            variant="default"
+            leftSection={<IconChartDots size={15} />}
+            onClick={() => onOpenGraph(payload.person.person_id)}
+          >
+            Open Person Graph
+          </Button>
           {personAllows(payload.person, "EDIT") && (
             <>
               {payload.person.is_placeholder && (
@@ -1349,7 +1364,7 @@ function PeopleGalleryView({
             person={payload.person}
             associations={relationships}
             onOpen={onOpen}
-            onLoadGraphPerson={onLoadGraphPerson}
+            onOpenGraph={onOpenGraph}
           />
         </Tabs.Panel>
         <Tabs.Panel value="changes">
@@ -1786,123 +1801,12 @@ function PeopleProfileSightings({ details, imageRecords, onSighting }) {
   );
 }
 
-function RelationshipGraphModal({
-  opened,
-  onClose,
-  rootPerson,
-  onLoadPerson,
-  onOpenProfile,
-}) {
-  const [graph, setGraph] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!opened) return;
-    let active = true;
-    setLoading(true);
-    onLoadPerson(rootPerson.person_id, false, RELATIONSHIP_GRAPH_NODE_LIMIT)
-      .then((payload) => { if (active) setGraph(payload); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [opened, rootPerson.person_id]);
-
-  const nodes = graph?.nodes || [];
-  const edges = graph?.edges || [];
-  const positions = layoutRelationshipGraph(graph);
-
-  return (
-    <Modal opened={opened} onClose={onClose} title={`Relationship Graph · ${rootPerson.name}`} size="calc(100vw - 48px)" centered>
-      {loading ? <Loader /> : !edges.length ? (
-        <EmptyCard text={`${rootPerson.name} has no stored relationships.`} />
-      ) : (
-        <Stack gap="sm">
-          <Group justify="space-between" gap="sm">
-            <Group gap="xs">
-              <Badge color="teal" variant="light">Selected person</Badge>
-              <Badge color="violet" variant="light">Mention-linked</Badge>
-              <Badge color="teal" variant="outline">Manually linked</Badge>
-              <Badge color="orange" variant="outline">No photograph</Badge>
-            </Group>
-            <Text size="xs" c="dimmed">{graph.node_count} people · {graph.edge_count} stored relationships</Text>
-          </Group>
-          {graph.truncated && (
-            <Alert color="yellow" title="Graph display limit reached">
-              Some associations are hidden to keep this view responsive. Open a person’s profile to continue from there.
-            </Alert>
-          )}
-          <Box className="relationship-graph-canvas">
-            <svg className="relationship-graph-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              {edges.map((edge) => {
-                const source = positions[edge.source_person_id];
-                const target = positions[edge.target_person_id];
-                if (!source || !target) return null;
-                return (
-                  <line
-                    key={edge.edge_id}
-                    x1={source.x}
-                    y1={source.y}
-                    x2={target.x}
-                    y2={target.y}
-                    className={edge.evidence_types?.includes("NOTE_REFERENCE") ? "relationship-graph-edge relationship-graph-edge--mention" : "relationship-graph-edge"}
-                  >
-                    <title>{edge.presentation_label}</title>
-                  </line>
-                );
-              })}
-            </svg>
-            {nodes.map((node) => {
-              const position = positions[node.person_id];
-              if (!position) return null;
-              const isRoot = node.person_id === graph.root_person_id;
-              const isHistorical = !personAllows(node, "OPEN");
-              const noPhoto = node.is_placeholder || !node.representative_image;
-              const className = [
-                "relationship-graph-node",
-                isRoot ? "relationship-graph-node--root" : "",
-                noPhoto ? "relationship-graph-node--no-photo" : "",
-              ].filter(Boolean).join(" ");
-              return (
-                <Box
-                  key={node.person_id}
-                  className={className}
-                  style={{ left: `${position.x}%`, top: `${position.y}%` }}
-                >
-                  <button
-                    type="button"
-                    className="relationship-graph-node-main"
-                    disabled={isHistorical}
-                    onClick={() => {
-                      if (!isHistorical) onOpenProfile(node.person_id, false);
-                    }}
-                    aria-label={isHistorical ? `${node.name} is ${lifecycleStatusLabel(node.lifecycle_status)}` : `Open ${node.name} profile`}
-                  >
-                    {node.representative_image
-                      ? <Image src={mediaUrl(node.representative_image)} alt="" h={42} w={42} radius="xl" fit="cover" />
-                      : <ThemeIcon size={42} radius="xl" variant="light" color="gray"><IconUser size={21} /></ThemeIcon>}
-                    <Box miw={0} className="relationship-graph-node-copy">
-                      <Text size="xs" fw={800} truncate>{node.name}</Text>
-                      <Text size="10px" c="dimmed" truncate>ID {String(node.person_id).slice(0, 8)} · {node.metadata?.rank || "No role"}</Text>
-                      {noPhoto && <Text size="10px" c="orange">No photograph</Text>}
-                    </Box>
-                  </button>
-                </Box>
-              );
-            })}
-          </Box>
-          <Text size="xs" c="dimmed">Click an active person to open their profile. Graph membership, edges, depth, and counts come from the backend read model.</Text>
-        </Stack>
-      )}
-    </Modal>
-  );
-}
-
 function PeopleProfileAssociations({
   person,
   associations,
   onOpen,
-  onLoadGraphPerson,
+  onOpenGraph,
 }) {
-  const [graphOpen, setGraphOpen] = useState(false);
   return (
     <Stack mt="md" gap="md" className="people-associations-panel">
       <Card withBorder radius="md" className="people-profile-panel">
@@ -1912,9 +1816,9 @@ function PeopleProfileAssociations({
             size="xs"
             variant="default"
             leftSection={<IconChartDots size={15} />}
-            onClick={() => setGraphOpen(true)}
+            onClick={() => onOpenGraph(person.person_id)}
           >
-            View Relationship Graph
+            Open Person Graph
           </Button>
         </Group>
         <Stack gap="xs">
@@ -1957,18 +1861,6 @@ function PeopleProfileAssociations({
           }) : <EmptyCard text="No person associations recorded yet." />}
         </Stack>
       </Card>
-
-      <RelationshipGraphModal
-        opened={graphOpen}
-        onClose={() => setGraphOpen(false)}
-        rootPerson={person}
-        onLoadPerson={onLoadGraphPerson}
-        onOpenProfile={(personId, archived) => {
-          setGraphOpen(false);
-          onOpen(personId, { archived });
-        }}
-      />
-
     </Stack>
   );
 }
