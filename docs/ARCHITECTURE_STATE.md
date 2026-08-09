@@ -4,7 +4,7 @@ This document is a concise checkpoint of the stable implemented architecture. De
 
 ## Current phase
 
-P10-B Person Graph UI is complete. P0 through P10-A remain frozen; World UI remains a separate future phase.
+P10-C World Graph architecture and product design review is complete. P0 through P10-B remain frozen; the bounded World backend contract and World UI remain separate future phases.
 
 ## Core principles
 
@@ -81,9 +81,32 @@ Compatibility stores are not current truth: `persons.notes` mirrors the latest n
 - The opening graph read stores its token. Closing retains the read model; returning validates once through `/api/graph-revision`, reuses an unchanged model, and fully reloads a changed model. Successful merge, correction/move-face, archive, delete, restore, finalized review, queue acceptance, and graph-affecting note writes invalidate the retained model. Manual refresh fully reloads it. No mutation patches local nodes or edges.
 - No World route, view, request, rendering, or layout was added.
 
+## P10-C World Graph architecture decision
+
+- World is a scope-first, spatial/temporal exploration of the global identity graph, not a zoomed-out Person Graph. Its purpose is to surface significant people, evidence-derived relationships, activity patterns, and their time/place context, then let the operator progressively ask for explanation.
+- The initial World experience is Level 0 overview data, followed by Level 1 important people/read-model clusters, Level 2 canonical person relationships, and Level 3 evidence/finalized-event detail. Every response and expansion is bounded and revision-consistent. The backend owns membership, clustering, ranking semantics, canonical collapse, evidence aggregation, filters, totals, and truncation; the frontend owns coordinates, camera, selection, and presentation.
+- Canonical people are the only current relationship nodes. Active, archived, and deleted identities remain representable; merged sources remain historical provenance but collapse into their survivor. `NO_FACE` is biometric state, not an unknown node type. `UNIDENTIFIED` is distinct identity state and is currently missing from `GraphReadNode`/the API payload.
+- Finalized observations/events are secondary evidence-detail objects and appear only on explicit drill-down. Locations remain filters/facets because the current source is free-text observation metadata and has no stable location identity. Read-model clusters are ephemeral summaries for one query/revision and never authoritative organizations or associations.
+- One finalized observation is already the grouped-encounter unit; sightings are derived detail records, not nodes, and no cross-observation encounter group may be inferred. Overview edges aggregate scoped person-pair relationships between summaries, Level 2 edges remain evidence-derived person relationships, and Level 3 may expose finalized-event participation. Each edge states its type and aggregation/strength basis.
+- Unresolved face decisions are not participants, sightings, nodes, or relationship endpoints. Repeated unknown appearances cannot be linked from recognition similarity. Tracked unknown nodes require a future explicit operator-finalized authoritative entity/lifecycle; until then only aggregate unresolved-detection metadata is permissible.
+- Backend filters must support effective date/recent scopes, location facets, lifecycle, identity/biometric state, country, rank, priority, evidence/relationship type, descriptive frequency, and scoped evidence-count strength. Responses echo resolved filters and `as_of`; the UI sends intent and does not recreate semantics.
+
+## World contract gap and scaling assessment
+
+- `/api/world-graph` version 1 is sufficient only for a small Level 2 person-to-person projection. It already has canonical nodes, evidence summaries, filters, revision, generation time, and counts, but returns the complete matching graph.
+- Before World UI, a versioned backend read contract must add requested/returned level, typed objects, focus/expansion intent, backend ranking basis, cluster summaries, person identity state, effective filters/facets, scope totals, and bounded/truncated results with revision-bound cursors or expansion tokens. Evidence/event detail must be lazy and bounded.
+- The current SQLite read walks all persons, observations, active evidence, sightings, and embeddings and constructs full node intelligence before returning. This is acceptable around 100 people but is not an appropriate initial-load path for 10,000 people or 100,000+ observations. Existing indexes help but do not make the current all-record materialization bounded.
+- The first performance step is query bounding and server-side scoping, not a new cache or dependency. For medium data, overview/cluster reads, stable pagination, and lazy expansion are required. For large observation histories, evidence/event detail must be queried on demand and aggregation should be pushed into indexed SQL where measurements show it is needed. Derived caches remain optional, rebuildable optimizations only.
+
+## Person Graph reuse boundary
+
+- Reuse the opaque revision token, immutable replacement model, canonical/lifecycle semantics, backend `allowed_actions`, evidence-count strength, occurrence/provenance explanations, and the rule that React owns only presentation/interaction.
+- Do not reuse the person-centred radial membership model, complete-graph loading assumption, homogeneous person-node schema, client-only full-response refresh strategy, or the assumption that edge weight alone communicates importance. World requires scope-first levels, typed summary/detail objects, server-side ranking/clustering, bounded expansion, and density-aware presentation.
+- No World UI is safe to start against contract version 1 beyond disposable prototyping. Implement and test the bounded World read contract first; then the UI can safely render it without acquiring graph semantics.
+
 ## Known deferred work
 
 - P11 guarded merge/operation revert; normalized merge undo is intentionally not exposed yet.
 - P12 backup/restore hardening for normalized authoritative, journal, and projection records.
 - P13 fully offline BYOM/model-management work.
-- World map/graph rendering and query controls remain deferred, along with later integrity/rebuild/revert, packaging, and release work.
+- The bounded World read/expansion contract and then World rendering/query controls remain deferred, along with later integrity/rebuild/revert, packaging, and release work.

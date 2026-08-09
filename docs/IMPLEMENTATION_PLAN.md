@@ -2,7 +2,7 @@
 
 Implement in order. Each phase must preserve offline operation, use additive migrations where possible, keep important writes transactional and journaled, and add upgrade/failure tests before moving on.
 
-Status at this checkpoint: P0 through P10-A and P10-B Person Graph UI are complete. World UI is next; P11 and later remain future work.
+Status at this checkpoint: P0 through P10-B and the P10-C World architecture/product review are complete and frozen. The bounded World backend contract is next; World UI must follow it. P11 and later remain future work.
 
 ## P0 Database migration/version foundation — Complete
 
@@ -68,9 +68,17 @@ Added typed Person Graph and World Graph read models behind `GraphReadService`, 
 
 Added a dedicated Person Graph workspace inside People. It consumes only the versioned P10-A Person Graph and revision contracts, renders backend-provided nodes/edges/lifecycle/actions/evidence, and owns only deterministic node coordinates plus pan, zoom, hover, and selection state. Graph revision is an opaque consistency token. In the current offline single-user model, the UI validates it at lifecycle boundaries and after known graph mutations. Continuous polling is intentionally avoided. Opening stores the revision; returning validates once and reuses unchanged state; successful graph mutations invalidate the snapshot; changed, invalidated, and manually refreshed graphs are replaced in full. Node navigation follows backend `allowed_actions`. Empty and large graphs are covered without adding client topology reconstruction. No World UI or backend change was introduced.
 
-## P10-C World UI — Future
+## P10-C World Graph architecture and product design review — Complete
 
-Render the P10-A World contract as a spatial/temporal experience. Layout, interaction, and presentation remain client concerns; membership, filtering semantics, intelligence, evidence explanation, and revision ownership remain backend concerns. Archived/tombstoned nodes remain historically visible but inactive/non-clickable. Exit: World and Person Graph remain projections of the same backend truth and explain edge evidence consistently.
+Defined World as a scope-first, progressive spatial/temporal projection of the one global identity graph rather than a zoomed-out Person Graph. Canonical people and evidence-derived relationships are primary; backend-computed clusters are ephemeral read-model summaries; finalized events are explicit evidence drill-down; and locations remain filters/facets until a normalized place identity exists. Defined Levels 0–3, unknown-person boundaries, backend filter ownership, contract gaps, scaling limits, and the Person Graph decisions that may or may not be reused. No UI, rendering, backend behavior, schema, dependency, or generated asset changed. Exit: the product model and backend/frontend responsibility boundary are documented before implementation.
+
+## P10-D Bounded World read and expansion contract — Future
+
+Evolve the P10-A version-1 full person graph into a versioned, revision-consistent World read contract. Add overview and progressive detail intent, typed person/cluster/event-detail objects, person identity state, effective filters and facets, backend ranking/cluster explanations, scope totals, truncation, stable revision-bound pagination/expansion, and bounded evidence/event detail. Preserve canonical collapse, historical identity representation, evidence provenance, offline operation, and rebuildability. Do not add World UI in this phase. Exit: focused tests cover deterministic membership, filter semantics, unknown exclusion, historical identities, canonical deduplication/no self-links, cursor/revision behavior, bounded responses, and small/medium/large fixtures without frontend reconstruction.
+
+## P10-E World UI — Future
+
+Render only the P10-D World contract as the progressive Level 0–3 experience. Layout, camera, interaction, and presentation remain client concerns; membership, filters, clustering, ranking, intelligence, evidence explanation, pagination, and revision ownership remain backend concerns. Archived/tombstoned nodes remain historically represented and restricted according to backend actions. Exit: World and Person Graph remain projections of the same backend truth, explain evidence consistently, and the frontend never loads or derives an unbounded global graph.
 
 ## P11 Integrity checker + graph rebuild + operation revert — Future
 

@@ -78,6 +78,56 @@ Node navigation consumes `allowed_actions` exactly as supplied by the backend. R
 
 Graph revision is an opaque consistency token. In the current offline single-user model, the UI validates it at lifecycle boundaries and after known graph mutations. Continuous polling is intentionally avoided. The initial graph read stores its revision. Leaving the workspace retains that immutable read model; returning validates the token once and reuses the model when unchanged. Successful graph-affecting writes invalidate the retained model, and a changed or invalidated model is replaced by a complete `/api/person-graph` response rather than patched locally. Manual refresh also requests a complete replacement.
 
+### P10-C World product model
+
+World is the global exploratory projection of identity activity across relationship, time, and place. It answers “who and what is significant in this scope, how are they connected, and what authoritative evidence explains that picture?” It is not a larger Person Graph, an inferred social network, or a geographic map. Person Graph starts from one identity and explains its neighbourhood; World starts from an operator-selected scope and progressively summarizes the global graph.
+
+The primary domain objects are canonical people, evidence-derived relationships, and backend-computed clusters or summaries. Clusters are read-model objects only: their membership is deterministic for a graph revision and query, they do not assert an organization or relationship, and they are never durable identity truth. Finalized observations/events are secondary objects used for evidence drill-down and temporal context. They may appear as typed detail nodes only when an operator explicitly expands evidence; they are not peers of people in the default relationship view. Locations and time ranges are currently metadata/facets because an observation stores a free-text location and no authoritative location entity exists. A stable normalized place model with identity and hierarchy would be required before locations could safely become nodes.
+
+At Levels 0–1, an edge between summaries is an `AGGREGATED_RELATIONSHIP`: a backend count of scoped person-pair relationships/evidence crossing those summaries, not a claim that every member is related. Cluster membership is returned as expansion metadata rather than invented as relationship evidence. Level 2 uses `PERSON_RELATIONSHIP` edges backed by the existing evidence rules. At Level 3, a finalized event may use `PARTICIPATED_IN` links to its effective canonical participants; note-reference and manual-association details explain the selected relationship without being promoted to event nodes. Every edge therefore states its type and aggregation/strength basis.
+
+World uses progressive detail rather than an unbounded graph:
+
+- **Level 0 — overview:** the initial response is a bounded set of high-level cluster/summary objects, aggregate counts, active filter facets, and indications that more detail is available. Historical identities remain represented in scope totals and may be explicitly expanded; overview labels must describe measured data rather than infer groups or intent.
+- **Level 1 — important people and groups:** operator expansion returns bounded backend-selected people and read-model clusters, with the ranking basis supplied by the backend. “Important” means an explicit profile priority or a documented descriptive activity/evidence measure, never model confidence.
+- **Level 2 — individual relationships:** expansion of a person or cluster returns canonical person nodes and evidence-derived person-to-person edges. Membership, canonical resolution, edge inclusion, strength, and truncation are backend decisions.
+- **Level 3 — evidence/event detail:** explicit edge or person expansion returns the supporting evidence summary and bounded finalized observation/event details needed to explain it. Raw evidence records, recognition proposals, and unsaved review state are not exposed as graph truth.
+
+The frontend may request a scope, level, focus/expansion target, sort or ranking intent, and page size. It may position returned objects and retain ephemeral camera/selection state. It must not compute clusters, promote event or location nodes, infer missing relationships, choose canonical identities, reinterpret evidence, or combine separately fetched pages into a claim the backend did not return.
+
+### World entity and unknown-identity rules
+
+At relationship detail, a person node is a terminal canonical `Person`. Active, archived, and deleted people remain graph identities; archived and deleted nodes are historical and non-openable except for backend-allowed history actions. A merged source is preserved as historical identity/provenance but collapses into its terminal survivor in current topology, so it is not a second current person node. `NO_FACE` is only a biometric state: an identified profile without enrolled media remains an ordinary person node. `UNIDENTIFIED` is an identity state and must be exposed separately from biometric and lifecycle state.
+
+One finalized `Observation` is the current grouped-encounter unit and can contain multiple media and effective participants. A `Sighting` remains a derived `(observation, canonical person)` record and is detail/metadata, not a separate node. There is no authoritative cross-observation “encounter group”; World must not create one from temporal proximity or recognition similarity without a future explicit, reviewable domain model.
+
+An unknown face decision is not a person. Rejected, skipped, or unresolved detections remain review history and cannot become a participant, sighting, node, or relationship endpoint. Similarity across unknown detections is recognition output and therefore cannot create durable unknown clusters or association evidence.
+
+Repeated-unknown tracking is a future domain capability, not part of the current World contract. If introduced, it must require explicit operator finalisation to create an authoritative tracked-unidentified entity with preserved observation provenance. Its lifecycle must distinguish at least tracked-unidentified, resolved-to-person, merged, archived, and deleted states; confidence may be reported only as a documented proposal for review and must never advance lifecycle or graph evidence automatically. Resolution to a person must be a journaled correction/merge operation that preserves the unknown entity and its history. Until that foundation exists, World may show aggregate unresolved-detection counts as non-graph metadata, but it must not show unknown nodes.
+
+An unknown becomes a profile only through explicit operator intent: either creation of a context-bearing `UNIDENTIFIED` person or finalised resolution/creation as an identified person. No score threshold or repeated appearance performs that transition. Proposal confidence may change as local models or observations change, but authoritative identity confidence does not accumulate; accepted decisions and their provenance are what change the graph.
+
+### World filtering semantics
+
+World filters are backend-owned scope semantics. Supported intent includes inclusive occurrence date/time bounds, a backend-resolved recent-activity preset with an explicit `as_of` and effective bounds, exact normalized location values/facets, person lifecycle, identity and biometric state, country, rank, priority, evidence type, relationship type, minimum descriptive activity frequency, and minimum post-scope evidence-count strength. Profile filters select person nodes; temporal, location, and evidence filters scope qualifying observations/evidence before relationships are aggregated. The response must echo effective filters so the UI never guesses how a preset or facet was interpreted.
+
+Archived, deleted, and merged history is never erased by a filter. A current-only request may omit historical nodes from that returned projection, but history counts and explicit historical queries remain available. Empty/missing location is a defined facet, not silently equivalent to every location. Relationship strength remains an authoritative evidence count within the effective scope, not a probability.
+
+### World read-contract requirements
+
+The version-1 `/api/world-graph` response is a valid small-data Level 2 person relationship projection: it supplies canonical person nodes, evidence-derived edges, requested filters, revision, generation time, and counts. It is not sufficient to start the progressive World product because it always materializes the complete matching person graph and has no typed cluster/event objects or bounded expansion protocol.
+
+A World-capable backend contract must add only fields with an interaction or explanation purpose:
+
+- request intent and response metadata for requested/returned detail level, focus or expansion target, effective filters (including `as_of`), selection/ranking basis, and the graph revision used;
+- typed object IDs and node types for `PERSON`, read-model `CLUSTER`, and explicitly requested `EVENT_DETAIL`, with person `identity_status` kept separate from lifecycle and biometric state;
+- cluster summary/member counts, deterministic expansion capability, and backend-supplied importance/ranking reason so the frontend does not derive membership or significance;
+- bounded-result metadata: returned and total counts, limit, truncation/`has_more`, and revision-bound cursor or expansion token;
+- scoped typed edges: aggregate summary-to-summary connections with member-pair/evidence counts and aggregation basis, person relationships retaining canonical endpoints/evidence-count strength/occurrence bounds/directionality/provenance counts, and explicit event participation at detail level; plus a bounded evidence/event-detail expansion rather than raw evidence rows;
+- scope totals and available/effective facets needed to explain an overview or build valid filter controls.
+
+The route shape may evolve through a versioned `/api/world-graph` contract or related read-only expansion endpoint, but the backend must produce one coherent revision-bound result. Pagination and lazy expansion must not make the frontend responsible for deduplication, canonical collapse, cluster membership, or edge aggregation.
+
 ## Current repository map (schema version 27)
 
 | Concern | Current implementation |
