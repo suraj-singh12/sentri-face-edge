@@ -19,7 +19,8 @@ test("successful operations update local state without broad refetches", async (
   assert.doesNotMatch(people, /refreshPersonAndLists/);
   assert.match(people, /updatePerson\(values\.personId/);
   assert.match(recognize, /upsertPerson\(/);
-  assert.match(queue, /for \(const entry of entries\)/);
+  assert.match(queue, /const entries = payload\.accepted \|\| \[\]/);
+  assert.match(queue, /embedding_count: entries\.length/);
   assert.doesNotMatch(queue, /Promise\.all\(entries\.map/);
   assert.doesNotMatch(accounts, /await load\(\);/);
 });
@@ -162,7 +163,7 @@ test("new-person creator is retained in local state and profile history fallback
   assert.match(utils, /metadata\.added_by \|\| creatorDetail\.added_by \|\| ""/);
 });
 
-test("legacy People merge and undo remain gated until P8", async () => {
+test("People merge previews before one normalized execution and undo remains gated", async () => {
   const [view, controller] = await Promise.all([
     read("../src/views/PeopleView.jsx"),
     read("../src/hooks/usePeopleController.js"),
@@ -171,9 +172,11 @@ test("legacy People merge and undo remain gated until P8", async () => {
   assert.match(view, /Undo merge/);
   assert.match(view, /mergeEvent\?\.result\?\.undo_supported/);
   assert.match(view, /managementDialog === "undo-merge"/);
-  assert.doesNotMatch(controller, /apiPost\("\/api\/person-merge(?:-undo)?"/);
-  assert.match(controller, /Identity Merge is temporarily unavailable until P8/);
-  assert.match(controller, /Undo Merge is temporarily unavailable until P8/);
+  assert.match(controller, /apiPost\("\/api\/person-merge-preview"/);
+  assert.match(controller, /preview\.proposed_conflict_resolutions/);
+  assert.match(controller, /apiPost\("\/api\/person-merge"/);
+  assert.doesNotMatch(controller, /apiPost\("\/api\/person-merge-undo"/);
+  assert.match(controller, /Undo Merge is not available in P8-B/);
 });
 
 test("a newly archived merge opens immediately without requiring a tab refresh", async () => {
@@ -183,6 +186,6 @@ test("a newly archived merge opens immediately without requiring a tab refresh",
   ]);
 
   assert.match(appData, /archived:\s*true,[\s\S]*deleted_at:/);
-  assert.match(appData, /archived:\s*false,\s*deleted_at:\s*null/);
-  assert.match(view, /const isArchived = archived \|\| Boolean\(person\.archived \|\| person\.deleted_at\)/);
+  assert.match(appData, /archived:\s*false,[\s\S]*canonical_person_id:\s*null,[\s\S]*deleted_at:\s*null/);
+  assert.match(view, /if \(person\?\.archived \|\| person\?\.deleted_at\) return "ARCHIVED"/);
 });

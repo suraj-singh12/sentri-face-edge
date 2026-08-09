@@ -18,6 +18,7 @@ from sentriface.errors import InputImageError, QueueCancellationError
 from sentriface.graph_service import GlobalIdentityGraphService
 from sentriface.identity_service import IdentityService
 from sentriface.metrics import MetricsCollector
+from sentriface.merge_service import IdentityMergeService
 from sentriface.models import (
     FaceBox,
     Match,
@@ -97,6 +98,11 @@ class FaceEngine:
         self.store = store
         self.graph = GlobalIdentityGraphService(store)
         self.identity = IdentityService(store)
+        self.merges = IdentityMergeService(
+            store,
+            publish_index=self._publish_merge_index,
+            reconcile_index=self._rebuild_index,
+        )
         self.corrections = IdentityCorrectionService(self.graph)
         self.index_degraded_reason: str | None = (
             "requested backend unavailable"
@@ -317,6 +323,7 @@ class FaceEngine:
         actor: dict | None = None,
         source: str = "identity-service",
     ) -> Person:
+        _require_mutation_context(operation_id, actor)
         with self.metrics.timer("db_create_identified_person_ms"):
             return self.identity.create_identified_person(
                 name, metadata, operation_id, actor=actor, source=source,
@@ -369,6 +376,7 @@ class FaceEngine:
         actor: dict | None = None,
         source: str | None = None,
     ) -> PersonChange:
+        _require_mutation_context(operation_id, actor)
         with self.metrics.timer("db_update_person_profile_ms"):
             return self.store.update_person_profile(
                 person_id=person_id,
@@ -407,6 +415,7 @@ class FaceEngine:
         editor_name: str, operation_id: str, mentioned_person_ids: list[str] | None = None,
         actor: dict | None = None, source: str | None = None,
     ) -> tuple[bool, Person, PersonChange | None]:
+        _require_mutation_context(operation_id, actor)
         with self.metrics.timer("db_update_person_notes_ms"):
             return self.graph.update_person_notes(
                 person_id, notes, expected_previous_notes, editor_name, operation_id,
@@ -475,6 +484,9 @@ class FaceEngine:
                 include_archived=include_archived,
                 limit=limit,
             )
+
+    def get_person_graph_neighbors(self, person_id: str):
+        return self.graph.get_person_neighbors(person_id)
 
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         return self.store.get_person_operation(operation_id, operation_type)
@@ -578,6 +590,7 @@ class FaceEngine:
     def complete_photo_review(
         self, review_id: str, operation_id: str, **values,
     ) -> dict:
+        _require_mutation_context(operation_id, values.get("actor"))
         result = self.graph.complete_photo_review(review_id, operation_id, **values)
         self._rebuild_index()
         return result
@@ -586,6 +599,7 @@ class FaceEngine:
         self, observation_id: str, from_person_id: str, to_person_id: str,
         operation_id: str, **values,
     ) -> dict:
+        _require_mutation_context(operation_id, values.get("actor"))
         return self.corrections.correct_observation_identity(
             observation_id, from_person_id, to_person_id, operation_id, **values,
         )
@@ -593,6 +607,7 @@ class FaceEngine:
     def add_face_to_person(
         self, review_id: str, person_id: str, operation_id: str, **values,
     ) -> dict:
+        _require_mutation_context(operation_id, values.get("actor"))
         result = self.corrections.add_face_to_person(
             review_id, person_id, operation_id, **values,
         )
@@ -643,6 +658,7 @@ class FaceEngine:
         self, person_id: str, operation_id: str,
         actor: dict | None = None, source: str | None = None,
     ) -> dict:
+        _require_mutation_context(operation_id, actor)
         with self.metrics.timer("db_delete_person_ms"):
             result = self.store.archive_person(person_id, operation_id, actor, source)
         self._rebuild_index()
@@ -652,6 +668,7 @@ class FaceEngine:
         self, person_id: str, operation_id: str,
         actor: dict | None = None, source: str | None = None,
     ) -> dict:
+        _require_mutation_context(operation_id, actor)
         with self.metrics.timer("db_restore_person_ms"):
             result = self.store.restore_person(person_id, operation_id, actor, source)
         self._rebuild_index()
@@ -661,6 +678,7 @@ class FaceEngine:
         self, person_id: str, operation_id: str,
         actor: dict | None = None, source: str | None = None,
     ) -> dict:
+        _require_mutation_context(operation_id, actor)
         with self.metrics.timer("db_purge_person_ms"):
             result = self.store.soft_delete_person(person_id, operation_id, actor, source)
         self._rebuild_index()
@@ -670,6 +688,7 @@ class FaceEngine:
         self, person_id: str, operation_id: str,
         actor: dict | None = None, source: str | None = None,
     ) -> dict:
+        _require_mutation_context(operation_id, actor)
         with self.metrics.timer("db_purge_person_ms"):
             result = self.store.permanently_delete_person(person_id, operation_id, actor, source)
         self._rebuild_index()
@@ -691,6 +710,7 @@ class FaceEngine:
         self, embedding_id: str, operation_id: str | None = None,
         *, actor: dict | None = None, source: str | None = None,
     ) -> dict:
+        _require_mutation_context(operation_id, actor)
         with self.metrics.timer("db_soft_delete_embedding_ms"):
             result = self.store.delete_embedding(
                 embedding_id, operation_id or str(uuid.uuid4()), actor, source,
@@ -708,6 +728,7 @@ class FaceEngine:
         operation_id: str | None = None,
         *, actor: dict | None = None, source: str | None = None,
     ) -> dict:
+        _require_mutation_context(operation_id, actor)
         with self.metrics.timer("db_restore_deleted_embedding_ms"):
             result = self.store.restore_deleted_embedding(
                 embedding_id,
@@ -782,6 +803,7 @@ class FaceEngine:
         operation_id: str | None = None,
         *, actor: dict | None = None, source: str | None = None,
     ) -> dict:
+        _require_mutation_context(operation_id, actor)
         result = self.corrections.move_face(
             embedding_id,
             person_id,
@@ -803,14 +825,41 @@ class FaceEngine:
         source_person_id: str,
         target_person_id: str,
         operation_id: str | None = None,
+        *,
+        conflict_resolutions: list[dict] | dict[str, dict | str] | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
+        reason: str | None = None,
+        context: dict | None = None,
+        failure_injector: Callable[[str], None] | None = None,
     ) -> dict:
-        raise DomainWorkflowUnavailableError(
-            "Merge is temporarily unavailable pending normalized identity merge support in P8"
+        _require_mutation_context(operation_id, actor)
+        service = getattr(self, "merges", None) or IdentityMergeService(
+            self.store,
+            publish_index=self._publish_merge_index if hasattr(self, "index") else None,
+            reconcile_index=self._rebuild_index if hasattr(self, "index") else None,
         )
+        return service.execute(
+            source_person_id,
+            target_person_id,
+            operation_id or str(uuid.uuid4()),
+            conflict_resolutions=conflict_resolutions,
+            actor=actor,
+            source=source,
+            reason=reason,
+            context=context,
+            failure_injector=failure_injector,
+        )
+
+    def preview_merge_persons(
+        self, source_person_id: str, target_person_id: str,
+    ) -> dict:
+        service = getattr(self, "merges", None) or IdentityMergeService(self.store)
+        return service.preview(source_person_id, target_person_id)
 
     def undo_merge_persons(self, merge_operation_id: str, operation_id: str) -> dict:
         raise DomainWorkflowUnavailableError(
-            "Merge undo is temporarily unavailable pending normalized identity merge support in P8"
+            "Merge undo is not exposed in P8-B"
         )
 
     def _legacy_merge_persons_for_compatibility(
@@ -840,6 +889,7 @@ class FaceEngine:
         representative_embedding_id: str | None = None,
         *, actor: dict | None = None, source: str | None = None,
     ) -> dict:
+        _require_mutation_context(operation_id, actor)
         return self.store.update_person_preferences(
             person_id=person_id,
             operation_id=operation_id,
@@ -1137,15 +1187,17 @@ class FaceEngine:
         group_id: str,
         init_face_ids: list[str],
         name: str,
-        operation_id: str | None = None,
+        operation_id: str,
         notes: str = "",
         mentioned_person_ids: list[str] | None = None,
         recognition_detail: dict | None = None,
+        actor: dict | None = None,
     ) -> tuple[str, list[dict]]:
+        _require_mutation_context(operation_id, actor)
         result = self._complete_queue_face_review(
-            session_id, group_id, init_face_ids, operation_id or str(uuid.uuid4()),
+            session_id, group_id, init_face_ids, operation_id,
             name=name, notes=notes, mentioned_person_ids=mentioned_person_ids,
-            recognition_detail=recognition_detail,
+            recognition_detail=recognition_detail, actor=actor,
         )
         return str(result["created_person_ids"][0]), list(result["accepted"])
 
@@ -1155,16 +1207,18 @@ class FaceEngine:
         group_id: str,
         init_face_ids: list[str],
         person_id: str,
-        operation_id: str | None = None,
+        operation_id: str,
         notes: str = "",
         mentioned_person_ids: list[str] | None = None,
         recognition_detail: dict | None = None,
+        actor: dict | None = None,
     ) -> list[dict]:
+        _require_mutation_context(operation_id, actor)
         result = self._complete_queue_face_review(
-            session_id, group_id, init_face_ids, operation_id or str(uuid.uuid4()),
+            session_id, group_id, init_face_ids, operation_id,
             person_id=person_id, notes=notes,
             mentioned_person_ids=mentioned_person_ids,
-            recognition_detail=recognition_detail,
+            recognition_detail=recognition_detail, actor=actor,
         )
         return list(result["accepted"])
 
@@ -1180,10 +1234,12 @@ class FaceEngine:
         notes: str = "",
         mentioned_person_ids: list[str] | None = None,
         recognition_detail: dict | None = None,
+        actor: dict | None = None,
     ) -> dict:
         existing = self.store.get_operation(operation_id)
         if existing and existing.get("operation_type") == "review.complete" and existing.get("status") == "COMMITTED":
-            result = dict(existing.get("result") or {})
+            history = existing.get("status_history") or []
+            result = dict(history[-1].get("details") or {}) if history else {}
         else:
             faces = self._selected_init_faces(session_id, group_id, init_face_ids)
             review_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:queue-review:{operation_id}"))
@@ -1221,7 +1277,7 @@ class FaceEngine:
                         },
                     )
             result = self.graph.complete_photo_review(
-                review_id, operation_id, source="queue",
+                review_id, operation_id, source="queue", actor=actor,
             )
         result["accepted"] = [
             {
@@ -1416,6 +1472,12 @@ class FaceEngine:
             self.index.replace(fallback)
             self.index_degraded_reason = f"{type(exc).__name__}: {exc}"
             self.metrics.increment("index_fallbacks")
+
+    def _publish_merge_index(self, embeddings) -> None:
+        """Publish the transaction's canonical ownership before its DB commit."""
+        with self.metrics.timer("index_rebuild_ms"):
+            self.index.rebuild(embeddings)
+        self.index_degraded_reason = None
 
     @property
     def index_status(self) -> dict[str, str | None]:
@@ -1774,6 +1836,16 @@ def _accepted_init_face(face: InitFace, embedding_id: str, duplicate: bool) -> d
         "image_path": face.source_image,
         "duplicate": duplicate,
     }
+
+
+def _require_mutation_context(operation_id: str | None, actor: dict | None) -> None:
+    if not str(operation_id or "").strip():
+        raise ValueError("Operation ID is required")
+    if not isinstance(actor, dict) or not any(
+        str(actor.get(key) or "").strip()
+        for key in ("user_id", "username", "display_name")
+    ):
+        raise ValueError("Operation actor identity is required")
 
 
 def _cosine(left, right) -> float:

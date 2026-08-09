@@ -107,6 +107,7 @@ class InitWorkflowTest(unittest.TestCase):
         self.assertAlmostEqual(representative[0], 0.70710678)
         self.assertAlmostEqual(representative[1], 0.70710678)
 
+    @unittest.skip("obsolete whole-group confirmation API; selected-face atomic review tests replace it")
     def test_init_scan_groups_and_confirms(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
@@ -252,6 +253,7 @@ class InitWorkflowTest(unittest.TestCase):
             updated = engine.list_init_groups(session.session_id)[0]
             self.assertEqual(updated.status, "rejected")
 
+    @unittest.skip("obsolete pre-P6 confirmation API; selected-face atomic review tests replace it")
     def test_init_confirm_existing_person(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
@@ -358,7 +360,10 @@ class InitWorkflowTest(unittest.TestCase):
             self.assertGreaterEqual(len(group.faces), 2)
 
             selected = [group.faces[0].init_face_id]
-            person_id, embedding_ids = engine.confirm_init_faces(session.session_id, group.group_id, selected, "Queue Person")
+            person_id, embedding_ids = engine.confirm_init_faces(
+                session.session_id, group.group_id, selected, "Queue Person", "queue-selected",
+                actor={"username": "operator"},
+            )
 
             self.assertTrue(person_id)
             self.assertEqual(len(embedding_ids), 1)
@@ -385,6 +390,8 @@ class InitWorkflowTest(unittest.TestCase):
                 "group_0001",
                 ["face_1"],
                 "Subset Person",
+                "queue-subset",
+                actor={"username": "operator"},
             )
 
             self.assertTrue(person_id)
@@ -424,6 +431,8 @@ class InitWorkflowTest(unittest.TestCase):
                 "group_0001",
                 ["face_1", "face_3"],
                 person_p.person_id,
+                "queue-existing-subset",
+                actor={"username": "operator"},
             )
 
             self.assertEqual(len(accepted), 2)

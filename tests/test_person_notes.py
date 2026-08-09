@@ -94,11 +94,10 @@ class PersonNotesTest(unittest.TestCase):
         self.assertEqual(evidence[0].directionality, "DIRECTED")
         self.assertEqual(self.store.list_person_associations(owner.person_id), [])
 
-        manual = self.store.create_person_association(
-            mentioned.person_id, owner.person_id, "Operator", "manual-upgrade",
+        self.assertEqual(
+            self.store.get_person_neighbors(owner.person_id)[0].evidence_types,
+            ("NOTE_REFERENCE",),
         )
-        self.assertEqual(manual.association_origin, "manual")
-        self.assertEqual(len(evidence), 1)
 
     def test_sighting_plain_text_does_not_infer_association(self) -> None:
         owner = self.store.create_person("Observed")

@@ -117,12 +117,22 @@ class ProductionMutationSurfaceTest(unittest.TestCase):
         self.assertTrue(hasattr(SQLiteIdentityStore, "_legacy_move_embedding"))
         self.assertFalse(hasattr(IdentityStore, "_legacy_move_embedding"))
 
-    def test_merge_remains_explicitly_gated(self) -> None:
+    def test_merge_uses_the_normalized_store_boundary_and_undo_remains_gated(self) -> None:
+        self.assertTrue(hasattr(IdentityStore, "preview_identity_merge"))
+        self.assertTrue(hasattr(IdentityStore, "execute_identity_merge"))
         engine = object.__new__(FaceEngine)
         with self.assertRaisesRegex(DomainWorkflowUnavailableError, "P8"):
-            engine.merge_persons("source", "target", "merge-op")
-        with self.assertRaisesRegex(DomainWorkflowUnavailableError, "P8"):
             engine.undo_merge_persons("merge-op", "undo-op")
+
+    def test_authoritative_engine_mutations_require_operation_and_actor(self) -> None:
+        engine = object.__new__(FaceEngine)
+        with self.assertRaisesRegex(ValueError, "Operation ID"):
+            engine.merge_persons("source", "target", None, actor={"user_id": "operator"})
+        with self.assertRaisesRegex(ValueError, "actor identity"):
+            engine.merge_persons("source", "target", "merge-op", actor=None)
+        api_source = (Path(__file__).parents[1] / "src/sentriface/api_server.py").read_text()
+        self.assertNotIn("def _optional_operation_id", api_source)
+        self.assertIn('_operation_id(payload)', api_source)
 
     def test_historical_legacy_associations_remain_readable(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

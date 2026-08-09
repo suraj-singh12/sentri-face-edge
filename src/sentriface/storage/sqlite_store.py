@@ -451,10 +451,11 @@ class SQLiteIdentityStore:
             result = [
                 _embedding_from_row(
                     row,
-                    canonical_person_id=_resolve_canonical_person_id(conn, row["person_id"]),
+                    raw_person_id=_raw_embedding_owner_person_id(conn, row),
+                    canonical_person_id=_effective_embedding_owner_person_id(conn, row),
                 )
                 for row in rows
-                if _resolve_canonical_person_id(conn, row["person_id"])
+                if _effective_embedding_owner_person_id(conn, row)
                 == requested_canonical_id
             ]
             if not include_archived:
@@ -478,16 +479,19 @@ class SQLiteIdentityStore:
                 f"""
                 SELECT embedding_id, person_id, vector, quality_score,
                        source_image, crop_path, created_at
-                FROM embeddings WHERE person_id = ?
-                {"" if include_deleted else "AND deleted_at IS NULL"}
+                FROM embeddings
+                {"" if include_deleted else "WHERE deleted_at IS NULL"}
                 ORDER BY created_at ASC
-                """,
-                (person_id,),
+                """
             ).fetchall()
-            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
             return [
-                _embedding_from_row(row, canonical_person_id=canonical_person_id)
+                _embedding_from_row(
+                    row,
+                    raw_person_id=_raw_embedding_owner_person_id(conn, row),
+                    canonical_person_id=_effective_embedding_owner_person_id(conn, row),
+                )
                 for row in rows
+                if _raw_embedding_owner_person_id(conn, row) == person_id
             ]
 
     def _legacy_rename_person(self, person_id: str, name: str) -> None:
@@ -1071,13 +1075,11 @@ class SQLiteIdentityStore:
             ).fetchone()
             if row is None:
                 raise KeyError("This person no longer exists")
-            current_notes = row["notes"] or ""
-            if current_notes != expected_previous_notes:
-                raise KeyError("Notes were changed elsewhere. Reopen this profile and try again.")
             active_note_row = conn.execute(
                 """
                 SELECT note_id FROM notes
                 WHERE owner_person_id = ? AND is_profile_note = 1 AND status = 'ACTIVE'
+                ORDER BY updated_at DESC, note_id LIMIT 1
                 """,
                 (person_id,),
             ).fetchone()
@@ -1086,6 +1088,9 @@ class SQLiteIdentityStore:
                 if active_note_row is not None else None
             )
             current_note = _note_from_row(conn, note_row) if note_row is not None else None
+            current_notes = current_note.content if current_note is not None else ""
+            if current_notes != expected_previous_notes:
+                raise KeyError("Notes were changed elsewhere. Reopen this profile and try again.")
             mentions = _normalize_note_mentions(
                 conn,
                 person_id,
@@ -1276,21 +1281,23 @@ class SQLiteIdentityStore:
     ) -> list[dict]:
         rows = conn.execute(
             """
-            SELECT operation_id, operation_type, result, created_at
-            FROM person_operations
-            ORDER BY created_at DESC
+            SELECT operation_id FROM operation_journal
+            WHERE status IN ('COMMITTED', 'REVERTED')
+            ORDER BY created_at DESC, operation_id DESC
             """
         ).fetchall()
         operations: list[dict] = []
         for row in rows:
-            result = json.loads(row["result"])
+            operation = _get_journal_operation(conn, str(row["operation_id"]))
+            if operation is None:
+                continue
             involved_ids = {
-                result.get("person_id"),
-                result.get("source_person_id"),
-                result.get("target_person_id"),
+                str(item.get("entity_id"))
+                for item in operation["affected_entities"]
+                if isinstance(item, dict)
+                and item.get("entity_type") == "person"
+                and item.get("entity_id")
             }
-            involved_ids.update(result.get("person_ids") or [])
-            involved_ids.discard(None)
             if canonical_person_id is None:
                 matches = person_id in involved_ids
             else:
@@ -1304,11 +1311,17 @@ class SQLiteIdentityStore:
                 )
             if not matches:
                 continue
+            history = operation.get("status_history") or []
+            result = dict(history[-1].get("details") or {}) if history else {}
             operations.append(
                 {
-                    "operation_id": row["operation_id"],
-                    "operation_type": row["operation_type"],
-                    "created_at": row["created_at"],
+                    "operation_id": operation["operation_id"],
+                    "operation_type": operation["operation_type"],
+                    "status": operation["status"],
+                    "actor": operation["actor"],
+                    "source": operation["source"],
+                    "created_at": operation["created_at"],
+                    "completed_at": operation["completed_at"],
                     "result": result,
                 }
             )
@@ -2287,20 +2300,25 @@ class SQLiteIdentityStore:
             )
             embedding = conn.execute(
                 """
-                SELECT e.person_id, e.deleted_at, source.metadata AS source_metadata
+                SELECT e.embedding_id, e.person_id, e.deleted_at
                 FROM embeddings e
-                JOIN persons source ON source.person_id = e.person_id
                 WHERE e.embedding_id = ?
                   AND e.deleted_at IS NULL
-                  AND source.lifecycle_status = 'ACTIVE' AND source.deleted_at IS NULL
                 """,
                 (embedding_id,),
             ).fetchone()
             if embedding is None:
                 raise KeyError(f"Unknown active embedding: {embedding_id}")
-            from_person_id = str(embedding["person_id"])
+            raw_from_person_id = _raw_embedding_owner_person_id(conn, embedding)
+            from_person_id = _effective_embedding_owner_person_id(conn, embedding)
             if from_person_id == target_person_id:
                 raise ValueError("Face already belongs to the selected person")
+            source = conn.execute(
+                "SELECT metadata FROM persons WHERE person_id = ?",
+                (from_person_id,),
+            ).fetchone()
+            if source is None:
+                raise KeyError(f"Unknown current embedding owner: {from_person_id}")
             assignments = conn.execute(
                 """
                 SELECT observation_id FROM observation_face_assignments
@@ -2325,6 +2343,7 @@ class SQLiteIdentityStore:
                     ],
                 ],
                 details={
+                    "raw_owner_person_id": raw_from_person_id,
                     "from_person_id": from_person_id,
                     "to_person_id": target_person_id,
                 },
@@ -2339,15 +2358,13 @@ class SQLiteIdentityStore:
                 to_person_id=target_person_id,
                 operation_id=operation_id,
             )]
-            conn.execute(
-                "UPDATE embeddings SET person_id = ? WHERE embedding_id = ?",
-                (target_person_id, embedding_id),
-            )
             for observation_id in affected_observation_ids:
                 for assignment in _effective_face_assignments(conn, observation_id):
                     if (
                         assignment["embedding_id"] == embedding_id
-                        and assignment["current_person_id"] == from_person_id
+                        and _resolve_canonical_person_id(
+                            conn, assignment["current_person_id"],
+                        ) == from_person_id
                     ):
                         correction_ids.append(_insert_identity_correction(
                             conn,
@@ -2355,22 +2372,24 @@ class SQLiteIdentityStore:
                             observation_id=observation_id,
                             face_assignment_id=assignment["assignment_id"],
                             embedding_id=embedding_id,
-                            from_person_id=from_person_id,
+                            from_person_id=assignment["current_person_id"],
                             to_person_id=target_person_id,
                             operation_id=operation_id,
                         ))
-            source_metadata = json.loads(embedding["source_metadata"] or "{}")
+            source_metadata = json.loads(source["metadata"] or "{}")
             if source_metadata.get("representative_embedding_id") == embedding_id:
                 source_metadata.pop("representative_embedding_id", None)
                 conn.execute(
                     "UPDATE persons SET metadata = ? WHERE person_id = ?",
                     (json.dumps(source_metadata, separators=(",", ":")), from_person_id),
                 )
-            remaining = conn.execute(
-                "SELECT 1 FROM embeddings WHERE person_id = ? AND deleted_at IS NULL LIMIT 1",
-                (from_person_id,),
-            ).fetchone()
-            if remaining is None:
+            remaining = any(
+                _effective_embedding_owner_person_id(conn, item) == from_person_id
+                for item in conn.execute(
+                    "SELECT embedding_id, person_id FROM embeddings WHERE deleted_at IS NULL"
+                ).fetchall()
+            )
+            if not remaining:
                 conn.execute(
                     """
                     UPDATE persons
@@ -2398,6 +2417,7 @@ class SQLiteIdentityStore:
                 )
             result = {
                 "embedding_id": embedding_id,
+                "raw_owner_person_id": raw_from_person_id,
                 "source_person_id": from_person_id,
                 "target_person_id": target_person_id,
                 "moved": True,
@@ -2447,7 +2467,10 @@ class SQLiteIdentityStore:
             accepted = [row for row in faces if row["decision"] == "ACCEPT_EXISTING_PERSON"]
             if not accepted:
                 raise ValueError("Add Face requires at least one accepted face")
-            if any(str(row["person_id"] or "") != person_id for row in accepted):
+            if any(
+                _resolve_canonical_person_id(conn, str(row["person_id"] or "")) != person_id
+                for row in accepted
+            ):
                 raise ValueError("Every accepted face must target the selected existing person")
             if any(row["decision"] == "ACCEPT_NEW_PERSON" for row in faces):
                 raise ValueError("Add Face cannot create another identity")
@@ -3284,10 +3307,15 @@ class SQLiteIdentityStore:
             if row is None:
                 return None
             result = dict(row)
-            result["raw_person_id"] = str(row["person_id"])
-            result["canonical_person_id"] = _resolve_canonical_person_id(
-                conn, str(row["person_id"]),
-            )
+            result["raw_person_id"] = _raw_embedding_owner_person_id(conn, row)
+            result["canonical_person_id"] = _effective_embedding_owner_person_id(conn, row)
+            effective_person = conn.execute(
+                "SELECT name, deleted_at FROM persons WHERE person_id = ?",
+                (result["canonical_person_id"],),
+            ).fetchone()
+            if effective_person is not None:
+                result["person_name"] = effective_person["name"]
+                result["person_deleted_at"] = effective_person["deleted_at"]
             return result
 
     def get_person_lifecycle(self, person_id: str) -> dict | None:
@@ -3313,6 +3341,172 @@ class SQLiteIdentityStore:
     def get_merge_operation(self, merge_operation_id: str) -> MergeOperation | None:
         with self._connect() as conn:
             return _get_merge_operation(conn, merge_operation_id)
+
+    def preview_identity_merge(
+        self, source_person_id: str, target_person_id: str,
+    ) -> dict:
+        with self._connect() as conn:
+            return _preview_identity_merge(conn, source_person_id, target_person_id)
+
+    def execute_identity_merge(
+        self,
+        source_person_id: str,
+        target_person_id: str,
+        operation_id: str,
+        *,
+        conflict_resolutions: list[dict] | dict[str, dict | str] | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
+        reason: str | None = None,
+        context: dict | None = None,
+        publish_index: Callable[[list[EmbeddingRecord]], None] | None = None,
+        failure_injector: Callable[[str], None] | None = None,
+    ) -> dict:
+        normalized_operation_id = str(operation_id).strip()
+        if not normalized_operation_id:
+            raise ValueError("Merge operation ID is required")
+        normalized_source_id = str(source_person_id).strip()
+        normalized_requested_target_id = str(target_person_id).strip()
+        with self._connect() as conn:
+            existing = _get_journal_operation(conn, normalized_operation_id)
+            if existing is not None:
+                if existing["operation_type"] != "identity.merge":
+                    raise KeyError(f"Operation ID already exists: {normalized_operation_id}")
+                prior = existing.get("details", {})
+                if (
+                    prior.get("source_person_id") != normalized_source_id
+                    or prior.get("requested_target_person_id") != normalized_requested_target_id
+                ):
+                    raise ValueError("Merge operation ID belongs to a different request")
+                if existing["status"] == "COMMITTED":
+                    history = existing.get("status_history") or []
+                    return dict(history[-1]["details"]) if history else {}
+                if existing["status"] in {"FAILED", "ROLLED_BACK"}:
+                    raise ValueError(
+                        "A failed merge operation ID cannot be reused; retry with a new operation ID"
+                    )
+        preview = self.preview_identity_merge(source_person_id, target_person_id)
+        requested = {
+            "source_person_id": preview["source_person_id"],
+            "requested_target_person_id": preview["requested_target_person_id"],
+            "target_person_id": preview["target_person_id"],
+        }
+        with self._connect() as conn:
+            existing = _get_journal_operation(conn, normalized_operation_id)
+            if existing is not None:
+                prior = existing.get("details", {})
+                for key, value in requested.items():
+                    if prior.get(key) != value:
+                        raise ValueError("Merge operation ID belongs to a different request")
+            else:
+                _begin_journal_operation(
+                    conn,
+                    "identity.merge",
+                    operation_id=normalized_operation_id,
+                    actor=actor,
+                    source=_optional_text(source) or "identity-merge-service",
+                    context=context,
+                    affected_entities=[
+                        {"entity_type": "person", "entity_id": preview["source_person_id"]},
+                        {"entity_type": "person", "entity_id": preview["target_person_id"]},
+                    ],
+                    details=requested,
+                )
+        try:
+            with self._connect() as conn:
+                current = _get_journal_operation(conn, normalized_operation_id)
+                if current is None or current["status"] != "STARTED":
+                    raise RuntimeError("Merge journal is not in STARTED state")
+                preview = _preview_identity_merge(
+                    conn, source_person_id, target_person_id,
+                    exclude_operation_id=normalized_operation_id,
+                )
+                conflicts = _resolve_merge_conflicts(
+                    preview["conflicts"], conflict_resolutions,
+                )
+                affected_items = _merge_inventory_with_profile_changes(
+                    preview["affected_items"], conflicts,
+                    preview["source_person_id"], preview["target_person_id"],
+                )
+                _insert_merge_manifest_in_transaction(
+                    conn,
+                    merge_operation_id=normalized_operation_id,
+                    source_person_id=preview["source_person_id"],
+                    target_person_id=preview["target_person_id"],
+                    operation_journal_id=normalized_operation_id,
+                    actor=actor,
+                    reason=reason,
+                    context={
+                        **(context or {}),
+                        "requested_target_person_id": preview["requested_target_person_id"],
+                        "source_component_person_ids": preview["source_component_person_ids"],
+                    },
+                    affected_items=affected_items,
+                    conflicts=conflicts,
+                )
+                _apply_merge_profile_resolutions(
+                    conn,
+                    preview["source_person_id"],
+                    preview["target_person_id"],
+                    conflicts,
+                    operation_id=normalized_operation_id,
+                    actor=actor,
+                    source=_optional_text(source) or "identity-merge-service",
+                )
+                _set_canonical_person_id_in_transaction(
+                    conn, preview["source_person_id"], preview["target_person_id"],
+                )
+                if failure_injector is not None:
+                    failure_injector("after_canonical_update")
+                _synchronize_survivor_biometric_state(conn, preview["target_person_id"])
+                _replace_graph_projection(conn)
+                if failure_injector is not None:
+                    failure_injector("after_graph_rebuild")
+                validation = _validate_merge_state(
+                    conn, preview["source_person_id"], preview["target_person_id"],
+                )
+                if not validation["valid"]:
+                    raise RuntimeError(
+                        "Merge validation failed: " + "; ".join(validation["errors"])
+                    )
+                embeddings = _list_embeddings_in_transaction(conn)
+                if publish_index is not None:
+                    publish_index(embeddings)
+                if failure_injector is not None:
+                    failure_injector("after_index_publication")
+                result = {
+                    "merge_operation_id": normalized_operation_id,
+                    "source_person_id": preview["source_person_id"],
+                    "requested_target_person_id": preview["requested_target_person_id"],
+                    "target_person_id": preview["target_person_id"],
+                    "canonical_person_id": preview["target_person_id"],
+                    "merged": True,
+                    "affected_item_count": len(affected_items),
+                    "conflict_count": len(conflicts),
+                    "graph_validation": validation["graph"],
+                    "undo_supported": False,
+                }
+                _transition_journal_operation(
+                    conn, normalized_operation_id, "COMMITTED", result,
+                )
+                return result
+        except Exception as exc:
+            self.record_merge_attempt_failed(
+                normalized_operation_id,
+                actor=actor,
+                source=_optional_text(source) or "identity-merge-service",
+                context=context,
+                affected_entities=[
+                    {"entity_type": "person", "entity_id": preview["source_person_id"]},
+                    {"entity_type": "person", "entity_id": preview["target_person_id"]},
+                ],
+                details={
+                    **requested,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )
+            raise
 
     def list_historical_persons(self) -> list[PersonSummary]:
         return self.list_persons(archived=True)
@@ -3615,7 +3809,7 @@ class SQLiteIdentityStore:
                 return existing
             row = conn.execute(
                 """
-                SELECT e.person_id, e.source_image, e.crop_path, e.deleted_at,
+                SELECT e.embedding_id, e.person_id, e.source_image, e.crop_path, e.deleted_at,
                        e.purge_after, p.metadata
                 FROM embeddings e
                 JOIN persons p ON p.person_id = e.person_id
@@ -3627,12 +3821,20 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown embedding: {embedding_id}")
             if row["deleted_at"]:
                 raise KeyError("Face is already in Deleted Faces")
+            raw_person_id = _raw_embedding_owner_person_id(conn, row)
+            effective_person_id = _effective_embedding_owner_person_id(conn, row)
+            effective_person = conn.execute(
+                "SELECT metadata FROM persons WHERE person_id = ?",
+                (effective_person_id,),
+            ).fetchone()
+            if effective_person is None:
+                raise KeyError(f"Unknown effective person: {effective_person_id}")
             _begin_journal_operation(
                 conn, "biometric.face.delete", operation_id=operation_id,
                 actor=actor, source=_optional_text(source) or "identity-service",
                 affected_entities=[
                     {"entity_type": "embedding", "entity_id": embedding_id},
-                    {"entity_type": "person", "entity_id": row["person_id"]},
+                    {"entity_type": "person", "entity_id": effective_person_id},
                 ],
             )
             detail_count = conn.execute(
@@ -3652,16 +3854,17 @@ class SQLiteIdentityStore:
                 """,
                 (deleted_at, purge_after, embedding_id),
             )
-            metadata = json.loads(row["metadata"])
+            metadata = json.loads(effective_person["metadata"])
             if metadata.get("representative_embedding_id") == embedding_id:
                 metadata.pop("representative_embedding_id", None)
                 conn.execute(
                     "UPDATE persons SET metadata = ? WHERE person_id = ?",
-                    (json.dumps(metadata, separators=(",", ":")), row["person_id"]),
+                    (json.dumps(metadata, separators=(",", ":")), effective_person_id),
                 )
             result = {
                 "embedding_id": embedding_id,
-                "person_id": row["person_id"],
+                "person_id": effective_person_id,
+                "raw_person_id": raw_person_id,
                 "deleted": True,
                 "permanent": False,
                 "retained_sightings": detail_count,
@@ -3693,7 +3896,24 @@ class SQLiteIdentityStore:
                 ORDER BY e.deleted_at DESC
                 """
             ).fetchall()
-        return [dict(row) for row in rows]
+            result: list[dict] = []
+            for row in rows:
+                item = dict(row)
+                raw_person_id = _raw_embedding_owner_person_id(conn, row)
+                effective_person_id = _effective_embedding_owner_person_id(conn, row)
+                effective_person = conn.execute(
+                    "SELECT name, lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
+                    (effective_person_id,),
+                ).fetchone()
+                item["raw_person_id"] = raw_person_id
+                item["person_id"] = effective_person_id
+                item["canonical_person_id"] = effective_person_id
+                if effective_person is not None:
+                    item["name"] = effective_person["name"]
+                    item["person_lifecycle_status"] = effective_person["lifecycle_status"]
+                    item["person_deleted_at"] = effective_person["deleted_at"]
+                result.append(item)
+            return result
 
     def restore_deleted_embedding(
         self, embedding_id: str, operation_id: str,
@@ -3705,11 +3925,8 @@ class SQLiteIdentityStore:
                 return existing
             row = conn.execute(
                 """
-                SELECT e.person_id, e.deleted_at, e.purge_after,
-                       p.deleted_at AS person_deleted_at, p.lifecycle_status,
-                       p.metadata
+                SELECT e.embedding_id, e.person_id, e.deleted_at, e.purge_after
                 FROM embeddings e
-                JOIN persons p ON p.person_id = e.person_id
                 WHERE e.embedding_id = ?
                 """,
                 (embedding_id,),
@@ -3718,14 +3935,24 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown deleted face: {embedding_id}")
             if row["deleted_at"] is None:
                 raise KeyError("Face is not deleted")
-            if row["lifecycle_status"] != "ACTIVE" or row["person_deleted_at"] is not None:
+            raw_person_id = _raw_embedding_owner_person_id(conn, row)
+            effective_person_id = _effective_embedding_owner_person_id(conn, row)
+            effective_person = conn.execute(
+                "SELECT lifecycle_status, deleted_at, metadata FROM persons WHERE person_id = ?",
+                (effective_person_id,),
+            ).fetchone()
+            if (
+                effective_person is None
+                or effective_person["lifecycle_status"] != "ACTIVE"
+                or effective_person["deleted_at"] is not None
+            ):
                 raise KeyError("Only an active identity can receive a restored face")
             _begin_journal_operation(
                 conn, "biometric.face.restore", operation_id=operation_id,
                 actor=actor, source=_optional_text(source) or "identity-service",
                 affected_entities=[
                     {"entity_type": "embedding", "entity_id": embedding_id},
-                    {"entity_type": "person", "entity_id": row["person_id"]},
+                    {"entity_type": "person", "entity_id": effective_person_id},
                 ],
             )
             conn.execute(
@@ -3736,16 +3963,17 @@ class SQLiteIdentityStore:
                 """,
                 (embedding_id,),
             )
-            metadata = json.loads(row["metadata"])
+            metadata = json.loads(effective_person["metadata"])
             if not metadata.get("representative_embedding_id"):
                 metadata["representative_embedding_id"] = embedding_id
                 conn.execute(
                     "UPDATE persons SET metadata = ? WHERE person_id = ?",
-                    (json.dumps(metadata, separators=(",", ":")), row["person_id"]),
+                    (json.dumps(metadata, separators=(",", ":")), effective_person_id),
                 )
             result = {
                 "embedding_id": embedding_id,
-                "person_id": row["person_id"],
+                "person_id": effective_person_id,
+                "raw_person_id": raw_person_id,
                 "restored": True,
                 "previously_deleted_at": row["deleted_at"],
             }
@@ -4303,12 +4531,16 @@ class SQLiteIdentityStore:
             if representative_embedding_id is not None:
                 owned = conn.execute(
                     """
-                    SELECT 1 FROM embeddings
-                    WHERE embedding_id = ? AND person_id = ? AND deleted_at IS NULL
+                    SELECT embedding_id, person_id FROM embeddings
+                    WHERE embedding_id = ? AND deleted_at IS NULL
                     """,
-                    (representative_embedding_id, person_id),
+                    (representative_embedding_id,),
                 ).fetchone()
-                if owned is None:
+                if (
+                    owned is None
+                    or _effective_embedding_owner_person_id(conn, owned)
+                    != _resolve_canonical_person_id(conn, person_id)
+                ):
                     raise KeyError(
                         f"Embedding {representative_embedding_id} does not belong to person {person_id}"
                     )
@@ -4498,8 +4730,14 @@ class SQLiteIdentityStore:
             ).fetchall()
             return [
                 _recognition_detail_from_row(row) for row in rows
-                if _resolve_canonical_person_id(conn, str(row["person_id"]))
-                == canonical_person_id
+                if (
+                    (embedding := conn.execute(
+                        "SELECT embedding_id, person_id FROM embeddings WHERE embedding_id = ?",
+                        (row["embedding_id"],),
+                    ).fetchone()) is not None
+                    and _effective_embedding_owner_person_id(conn, embedding)
+                    == canonical_person_id
+                )
             ]
 
     def list_raw_recognition_details_for_person(
@@ -4587,7 +4825,7 @@ class SQLiteIdentityStore:
             ).fetchall()
             records: list[EmbeddingRecord] = []
             for row in rows:
-                canonical_person_id = _resolve_canonical_person_id(conn, row["person_id"])
+                canonical_person_id = _effective_embedding_owner_person_id(conn, row)
                 canonical = conn.execute(
                     "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
                     (canonical_person_id,),
@@ -4598,7 +4836,9 @@ class SQLiteIdentityStore:
                     and canonical["deleted_at"] is None
                 ):
                     records.append(_embedding_from_row(
-                        row, canonical_person_id=canonical_person_id,
+                        row,
+                        raw_person_id=_raw_embedding_owner_person_id(conn, row),
+                        canonical_person_id=canonical_person_id,
                     ))
             return records
 
@@ -4622,7 +4862,7 @@ class SQLiteIdentityStore:
             ).fetchall()
             result: dict[str, str] = {}
             for row in rows:
-                canonical_person_id = _resolve_canonical_person_id(conn, row["person_id"])
+                canonical_person_id = _effective_embedding_owner_person_id(conn, row)
                 canonical = conn.execute(
                     "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
                     (canonical_person_id,),
@@ -8386,6 +8626,620 @@ def _has_meaningful_identity_context(name: str, metadata: dict, notes: str) -> b
     return any(value not in (None, "", [], {}, ()) for value in metadata.values())
 
 
+def _profile_note_snapshot(conn: sqlite3.Connection, person_id: str) -> dict:
+    row = conn.execute(
+        """
+        SELECT note_id FROM notes
+        WHERE owner_person_id = ? AND is_profile_note = 1 AND status = 'ACTIVE'
+        ORDER BY updated_at DESC, note_id LIMIT 1
+        """,
+        (person_id,),
+    ).fetchone()
+    if row is None:
+        return {"note_id": None, "content": "", "revision_number": 0, "mentions": ()}
+    note = _note_from_row(conn, _note_row(conn, str(row["note_id"])))
+    return {
+        "note_id": note.note_id,
+        "content": note.content,
+        "revision_number": note.revision_number,
+        "mentions": note.mentioned_person_ids,
+    }
+
+
+def _write_merge_profile_note_revision(
+    conn: sqlite3.Connection,
+    source_person_id: str,
+    target_person_id: str,
+    content: str,
+    strategy: str,
+    *,
+    operation_id: str,
+    actor: dict | None,
+    source: str | None,
+) -> None:
+    source_note = _profile_note_snapshot(conn, source_person_id)
+    target_note = _profile_note_snapshot(conn, target_person_id)
+    if strategy == MergeConflictStrategy.KEEP_SOURCE.value:
+        mention_ids = source_note["mentions"]
+    elif strategy == MergeConflictStrategy.COMBINE.value:
+        mention_ids = tuple(dict.fromkeys([
+            *target_note["mentions"], *source_note["mentions"],
+        ]))
+    else:
+        # USER_SELECTED content has no reliable parsed mention provenance.
+        mention_ids = target_note["mentions"]
+    mentions = _normalize_note_mentions(
+        conn,
+        target_person_id,
+        list(mention_ids),
+        historical_person_ids=set(mention_ids),
+    )
+    created_at = utc_now()
+    note_id = target_note["note_id"] or str(uuid.uuid4())
+    if target_note["note_id"] is None:
+        conn.execute(
+            """
+            INSERT INTO notes(
+                note_id, owner_person_id, subject_type, subject_id,
+                is_profile_note, status, created_operation_id, created_at, updated_at
+            ) VALUES (?, ?, 'PERSON', ?, 1, 'ACTIVE', ?, ?, ?)
+            """,
+            (note_id, target_person_id, target_person_id, operation_id, created_at, created_at),
+        )
+    revision_number = int(target_note["revision_number"]) + 1
+    revision_id = _insert_note_revision(
+        conn,
+        note_id=note_id,
+        revision_number=revision_number,
+        content=content,
+        mentions=mentions,
+        actor=actor,
+        author_name=str((actor or {}).get("display_name") or ""),
+        operation_id=operation_id,
+        created_at=created_at,
+    )
+    _sync_note_reference_evidence(
+        conn,
+        note_id=note_id,
+        owner_person_id=target_person_id,
+        revision_id=revision_id,
+        mentions=mentions,
+        operation_id=operation_id,
+        source=source,
+        created_at=created_at,
+    )
+    conn.execute("UPDATE notes SET updated_at = ? WHERE note_id = ?", (created_at, note_id))
+    # Compatibility mirror is deliberately last: normalized revision is current truth.
+    conn.execute("UPDATE persons SET notes = ? WHERE person_id = ?", (content, target_person_id))
+
+
+def _preview_identity_merge(
+    conn: sqlite3.Connection,
+    source_person_id: str,
+    target_person_id: str,
+    *,
+    exclude_operation_id: str | None = None,
+) -> dict:
+    source_id = str(source_person_id).strip()
+    requested_target_id = str(target_person_id).strip()
+    if not source_id or not requested_target_id:
+        raise ValueError("Merge source and target IDs are required")
+    source_row = conn.execute(
+        "SELECT * FROM persons WHERE person_id = ?", (source_id,),
+    ).fetchone()
+    if source_row is None:
+        raise KeyError(f"Unknown source person: {source_id}")
+    if source_row["lifecycle_status"] not in {"ACTIVE", "ARCHIVED"}:
+        raise KeyError("Merge source must be an active or archived identity")
+    if source_row["deleted_at"] is not None and source_row["lifecycle_status"] != "ARCHIVED":
+        raise KeyError("Deleted identities cannot be merged")
+    try:
+        terminal_target_id = _resolve_canonical_person_id(conn, requested_target_id)
+    except KeyError as exc:
+        raise KeyError(f"Unknown target person: {requested_target_id}") from exc
+    if terminal_target_id == source_id:
+        raise ValueError("Merge source and survivor must be different; cycle/self merge rejected")
+    target_row = conn.execute(
+        "SELECT * FROM persons WHERE person_id = ?", (terminal_target_id,),
+    ).fetchone()
+    if (
+        target_row is None
+        or target_row["lifecycle_status"] != "ACTIVE"
+        or target_row["deleted_at"] is not None
+        or target_row["canonical_person_id"] is not None
+    ):
+        raise KeyError("Merge target must resolve to a terminal active canonical survivor")
+    component_ids = sorted(
+        str(row["person_id"])
+        for row in conn.execute("SELECT person_id FROM persons ORDER BY person_id").fetchall()
+        if _resolve_canonical_person_id(conn, str(row["person_id"])) == source_id
+    )
+    if source_id not in component_ids:
+        component_ids.append(source_id)
+        component_ids.sort()
+    conflicts = _proposed_merge_conflicts(conn, source_row, target_row)
+    affected_items = _discover_merge_affected_items(
+        conn, component_ids, source_id, terminal_target_id,
+        exclude_operation_id=exclude_operation_id,
+    )
+    return {
+        "source_person_id": source_id,
+        "requested_target_person_id": requested_target_id,
+        "target_person_id": terminal_target_id,
+        "canonical_person_id": terminal_target_id,
+        "source_lifecycle_status": str(source_row["lifecycle_status"]),
+        "target_lifecycle_status": str(target_row["lifecycle_status"]),
+        "source_component_person_ids": component_ids,
+        "conflicts": conflicts,
+        "proposed_conflict_resolutions": conflicts,
+        "affected_items": affected_items,
+        "affected_item_count": len(affected_items),
+        "will_mutate": False,
+    }
+
+
+def _proposed_merge_conflicts(
+    conn: sqlite3.Connection, source_row: sqlite3.Row, target_row: sqlite3.Row,
+) -> list[dict]:
+    source_metadata = json.loads(source_row["metadata"] or "{}")
+    target_metadata = json.loads(target_row["metadata"] or "{}")
+    ignored_metadata = {"merged_into", "merged_at"}
+    source_note = _profile_note_snapshot(conn, str(source_row["person_id"]))
+    target_note = _profile_note_snapshot(conn, str(target_row["person_id"]))
+    fields: dict[str, tuple[object, object]] = {
+        "name": (str(source_row["name"]), str(target_row["name"])),
+        "notes": (source_note["content"], target_note["content"]),
+    }
+    for key in sorted((set(source_metadata) | set(target_metadata)) - ignored_metadata):
+        fields[key] = (source_metadata.get(key), target_metadata.get(key))
+    conflicts: list[dict] = []
+    for field_name, (source_value, target_value) in fields.items():
+        if source_value == target_value:
+            continue
+        combine_valid = field_name in {"tags", "favorite", "notes"}
+        if field_name == "tags":
+            strategy = MergeConflictStrategy.COMBINE.value
+            selected_value = _normalize_tags([
+                *(target_value or []), *(source_value or []),
+            ])
+        elif field_name == "favorite":
+            strategy = MergeConflictStrategy.COMBINE.value
+            selected_value = bool(source_value or target_value)
+        elif field_name == "notes" and source_value and target_value:
+            strategy = MergeConflictStrategy.COMBINE.value
+            selected_value = (
+                target_value if source_value == target_value
+                else f"{target_value}\n\n{source_value}"
+            )
+        elif target_value in (None, "", [], {}):
+            strategy = MergeConflictStrategy.KEEP_SOURCE.value
+            selected_value = source_value
+        else:
+            strategy = MergeConflictStrategy.KEEP_TARGET.value
+            selected_value = target_value
+        conflicts.append({
+            "conflict_id": str(uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"sentriface:merge-preview:{source_row['person_id']}:{target_row['person_id']}:{field_name}",
+            )),
+            "category": "PROFILE",
+            "field_name": field_name,
+            "source_value": source_value,
+            "target_value": target_value,
+            "strategy": strategy,
+            "selected_value": selected_value,
+            "combine_valid": combine_valid,
+            "inverse_data": {
+                "source_value": source_value,
+                "target_value": target_value,
+                "target_field_existed": (
+                    field_name in {"name", "notes"} or field_name in target_metadata
+                ),
+            },
+        })
+    return conflicts
+
+
+def _discover_merge_affected_items(
+    conn: sqlite3.Connection,
+    source_component_ids: list[str],
+    source_person_id: str,
+    target_person_id: str,
+    *,
+    exclude_operation_id: str | None = None,
+) -> list[dict]:
+    component = set(source_component_ids)
+    items: dict[tuple[str, str], dict] = {}
+
+    def add(
+        item_type: str,
+        item_id: object,
+        raw_owner: str | None = None,
+        *,
+        action: str = MergeAffectedAction.UNION_IN_CURRENT_VIEW.value,
+        before: dict | None = None,
+        after: dict | None = None,
+        context: dict | None = None,
+    ) -> None:
+        normalized_id = str(item_id)
+        key = (item_type, normalized_id)
+        items[key] = {
+            "item_type": item_type,
+            "item_id": normalized_id,
+            "raw_owner_person_id": raw_owner,
+            "effective_owner_person_id": target_person_id,
+            "action": action,
+            "before_state": before or ({"raw_owner_person_id": raw_owner} if raw_owner else {}),
+            "after_state": after or {"canonical_person_id": target_person_id},
+            "context": {"raw_provenance_retained": True, **(context or {})},
+        }
+
+    source = conn.execute(
+        "SELECT lifecycle_status, canonical_person_id FROM persons WHERE person_id = ?",
+        (source_person_id,),
+    ).fetchone()
+    add(
+        "PERSON", source_person_id, source_person_id,
+        action=MergeAffectedAction.REINTERPRET_CANONICAL_OWNER.value,
+        before={
+            "lifecycle_status": source["lifecycle_status"],
+            "canonical_person_id": source["canonical_person_id"],
+        },
+        after={"lifecycle_status": "MERGED", "canonical_person_id": target_person_id},
+    )
+    placeholders = ",".join("?" for _ in source_component_ids)
+    args = tuple(source_component_ids)
+
+    for row in conn.execute(
+        f"SELECT * FROM embeddings WHERE person_id IN ({placeholders}) ORDER BY embedding_id", args,
+    ).fetchall():
+        owner = _raw_embedding_owner_person_id(conn, row)
+        add("EMBEDDING", row["embedding_id"], owner, context={"deleted_at": row["deleted_at"]})
+        for path_kind in ("source_image", "crop_path"):
+            if row[path_kind]:
+                add(
+                    "PHOTO", f"{row['embedding_id']}:{path_kind}", owner,
+                    context={"path_kind": path_kind, "path": row[path_kind]},
+                )
+    target_state = conn.execute(
+        "SELECT biometric_status, enrollment_status FROM persons WHERE person_id = ?",
+        (target_person_id,),
+    ).fetchone()
+    component_has_active_embedding = conn.execute(
+        f"SELECT 1 FROM embeddings WHERE person_id IN ({placeholders}) AND deleted_at IS NULL LIMIT 1",
+        args,
+    ).fetchone() is not None
+    if component_has_active_embedding and target_state["biometric_status"] != "ENROLLED":
+        add(
+            "CURRENT_STATE", "survivor-biometric-status", target_person_id,
+            action=MergeAffectedAction.SELECT_VALUE.value,
+            before={
+                "biometric_status": target_state["biometric_status"],
+                "enrollment_status": target_state["enrollment_status"],
+            },
+            after={"biometric_status": "ENROLLED", "enrollment_status": "enrolled"},
+            context={"derived_from_preserved_embeddings": True},
+        )
+    for row in conn.execute(
+        f"SELECT * FROM init_face_person_exclusions WHERE person_id IN ({placeholders}) ORDER BY session_id, init_face_id, person_id",
+        args,
+    ).fetchall():
+        add(
+            "RECOGNITION_EXCLUSION",
+            f"{row['session_id']}:{row['init_face_id']}:{row['person_id']}",
+            str(row["person_id"]), action=MergeAffectedAction.REINTERPRET_CANONICAL_OWNER.value,
+        )
+    for row in conn.execute(
+        f"SELECT * FROM recognition_details WHERE person_id IN ({placeholders}) ORDER BY detail_id", args,
+    ).fetchall():
+        add("RECOGNITION_HISTORY", row["detail_id"], str(row["person_id"]))
+    for row in conn.execute(
+        f"SELECT * FROM person_change_history WHERE person_id IN ({placeholders}) ORDER BY change_id", args,
+    ).fetchall():
+        add("PROFILE_HISTORY", row["change_id"], str(row["person_id"]), action=MergeAffectedAction.PRESERVE.value)
+    for row in conn.execute(
+        f"SELECT * FROM biometric_enrollment_history WHERE person_id IN ({placeholders}) ORDER BY enrollment_id", args,
+    ).fetchall():
+        add("ENROLLMENT_HISTORY", row["enrollment_id"], str(row["person_id"]), action=MergeAffectedAction.PRESERVE.value)
+    affected_observation_ids: set[str] = set()
+    for row in conn.execute("SELECT * FROM observations ORDER BY observation_id").fetchall():
+        corrected = _corrected_observation_person_ids(conn, str(row["observation_id"]))
+        if any(person_id in component for person_id in corrected):
+            affected_observation_ids.add(str(row["observation_id"]))
+            add("OBSERVATION", row["observation_id"], context={"corrected_person_ids": corrected})
+    for row in conn.execute("SELECT * FROM observation_media ORDER BY observation_id, media_id").fetchall():
+        if str(row["observation_id"]) in affected_observation_ids:
+            add(
+                "OBSERVATION_MEDIA", f"{row['observation_id']}:{row['media_id']}",
+                action=MergeAffectedAction.PRESERVE.value,
+            )
+    for row in conn.execute(
+        f"SELECT * FROM observation_participants WHERE person_id IN ({placeholders}) ORDER BY observation_id, person_id",
+        args,
+    ).fetchall():
+        add(
+            "OBSERVATION_PARTICIPANT",
+            f"{row['observation_id']}:{row['person_id']}",
+            str(row["person_id"]),
+            context={"observation_id": row["observation_id"]},
+        )
+    for row in conn.execute("SELECT * FROM identity_corrections ORDER BY correction_id").fetchall():
+        if str(row["from_person_id"]) in component or str(row["to_person_id"]) in component:
+            add("CORRECTION", row["correction_id"], action=MergeAffectedAction.PRESERVE.value)
+    for row in conn.execute("SELECT * FROM observation_face_assignments ORDER BY assignment_id").fetchall():
+        if str(row["original_person_id"]) in component:
+            add(
+                "OBSERVATION_FACE_ASSIGNMENT", row["assignment_id"],
+                str(row["original_person_id"]), action=MergeAffectedAction.PRESERVE.value,
+            )
+    for row in conn.execute("SELECT * FROM photo_review_faces ORDER BY review_id, face_id").fetchall():
+        if row["person_id"] is not None and str(row["person_id"]) in component:
+            add(
+                "PHOTO_REVIEW_DECISION", f"{row['review_id']}:{row['face_id']}",
+                str(row["person_id"]), action=MergeAffectedAction.PRESERVE.value,
+            )
+    note_ids: set[str] = set()
+    for row in conn.execute("SELECT * FROM notes ORDER BY note_id").fetchall():
+        owner = str(row["owner_person_id"])
+        if owner in component or (row["subject_type"] == "PERSON" and str(row["subject_id"]) in component):
+            note_ids.add(str(row["note_id"]))
+            add("NOTE", row["note_id"], owner)
+    for row in conn.execute("SELECT * FROM note_mentions ORDER BY mention_id").fetchall():
+        if str(row["referenced_person_id"]) in component or str(row["note_id"]) in note_ids:
+            note_id = str(row["note_id"])
+            if note_id not in note_ids:
+                note = conn.execute(
+                    "SELECT owner_person_id FROM notes WHERE note_id = ?", (note_id,),
+                ).fetchone()
+                if note is not None:
+                    note_ids.add(note_id)
+                    add("NOTE", note_id, str(note["owner_person_id"]))
+            add("NOTE_MENTION", row["mention_id"], str(row["referenced_person_id"]))
+    if note_ids:
+        note_placeholders = ",".join("?" for _ in note_ids)
+        for row in conn.execute(
+            f"SELECT * FROM note_revisions WHERE note_id IN ({note_placeholders}) ORDER BY revision_id",
+            tuple(sorted(note_ids)),
+        ).fetchall():
+            add("NOTE_REVISION", row["revision_id"], action=MergeAffectedAction.PRESERVE.value)
+    for row in conn.execute("SELECT * FROM note_revision_mentions ORDER BY revision_id, referenced_person_id").fetchall():
+        if str(row["referenced_person_id"]) in component:
+            add(
+                "NOTE_REVISION_MENTION",
+                f"{row['revision_id']}:{row['referenced_person_id']}",
+                str(row["referenced_person_id"]), action=MergeAffectedAction.PRESERVE.value,
+            )
+    affected_graph_people = component | {target_person_id}
+    for row in conn.execute("SELECT * FROM relationship_evidence ORDER BY evidence_id").fetchall():
+        if str(row["source_person_id"]) in affected_graph_people or str(row["target_person_id"]) in affected_graph_people:
+            add("GRAPH_EVIDENCE", row["evidence_id"], action=MergeAffectedAction.PRESERVE.value)
+    for row in conn.execute("SELECT * FROM person_associations ORDER BY association_id").fetchall():
+        if str(row["source_person_id"]) in component or str(row["target_person_id"]) in component:
+            add("MANUAL_ASSOCIATION", row["association_id"], action=MergeAffectedAction.PRESERVE.value)
+    for row in conn.execute("SELECT * FROM merge_operations ORDER BY merge_operation_id").fetchall():
+        if str(row["source_person_id"]) in component or str(row["target_person_id"]) in component:
+            add("MERGE_HISTORY", row["merge_operation_id"], action=MergeAffectedAction.PRESERVE.value)
+    for row in conn.execute("SELECT operation_id, affected_entities FROM operation_journal ORDER BY operation_id").fetchall():
+        if str(row["operation_id"]) == exclude_operation_id:
+            continue
+        entities = json.loads(row["affected_entities"] or "[]")
+        if any(str(item.get("entity_id")) in component for item in entities if isinstance(item, dict)):
+            add("OPERATION_HISTORY", row["operation_id"], action=MergeAffectedAction.PRESERVE.value)
+    for row in conn.execute("SELECT operation_id, result FROM person_operations ORDER BY operation_id").fetchall():
+        payload = json.loads(row["result"] or "{}")
+        if any(
+            value in component
+            for key, value in payload.items()
+            if key.endswith("person_id") and isinstance(value, str)
+        ):
+            add("LEGACY_OPERATION_HISTORY", row["operation_id"], action=MergeAffectedAction.PRESERVE.value)
+    return [items[key] for key in sorted(items)]
+
+
+def _resolve_merge_conflicts(
+    proposed: list[dict],
+    requested: list[dict] | dict[str, dict | str] | None,
+) -> list[dict]:
+    overrides: dict[str, dict] = {}
+    if isinstance(requested, dict):
+        for field_name, value in requested.items():
+            overrides[str(field_name)] = (
+                dict(value) if isinstance(value, dict) else {"strategy": str(value)}
+            )
+    elif requested is not None:
+        if not isinstance(requested, list):
+            raise ValueError("Conflict resolutions must be a list or field mapping")
+        for item in requested:
+            if not isinstance(item, dict) or not str(item.get("field_name") or "").strip():
+                raise ValueError("Each conflict resolution requires field_name")
+            overrides[str(item["field_name"])] = dict(item)
+    result: list[dict] = []
+    known_fields = {str(item["field_name"]) for item in proposed}
+    unknown_fields = set(overrides) - known_fields
+    if unknown_fields:
+        raise ValueError("Unknown merge conflict fields: " + ", ".join(sorted(unknown_fields)))
+    for conflict in proposed:
+        resolved = dict(conflict)
+        override = overrides.get(str(conflict["field_name"]), {})
+        strategy = str(override.get("strategy") or resolved["strategy"]).strip().upper()
+        try:
+            typed_strategy = MergeConflictStrategy(strategy)
+        except ValueError as exc:
+            raise ValueError(f"Unsupported merge conflict strategy: {strategy}") from exc
+        if typed_strategy is MergeConflictStrategy.KEEP_SOURCE:
+            selected = conflict["source_value"]
+        elif typed_strategy is MergeConflictStrategy.KEEP_TARGET:
+            selected = conflict["target_value"]
+        elif typed_strategy is MergeConflictStrategy.COMBINE:
+            if not conflict.get("combine_valid"):
+                raise ValueError(f"COMBINE is not valid for profile field {conflict['field_name']}")
+            selected = _combine_merge_value(
+                str(conflict["field_name"]), conflict["source_value"], conflict["target_value"],
+            )
+        else:
+            if "selected_value" not in override:
+                raise ValueError(
+                    f"USER_SELECTED requires selected_value for {conflict['field_name']}"
+                )
+            selected = override["selected_value"]
+        resolved["strategy"] = typed_strategy.value
+        resolved["selected_value"] = selected
+        resolved.pop("combine_valid", None)
+        result.append(resolved)
+    return result
+
+
+def _combine_merge_value(field_name: str, source_value, target_value):
+    if field_name == "tags":
+        return _normalize_tags([*(target_value or []), *(source_value or [])])
+    if field_name == "favorite":
+        return bool(source_value or target_value)
+    if field_name == "notes":
+        parts = [str(value).strip() for value in (target_value, source_value) if str(value or "").strip()]
+        return "\n\n".join(dict.fromkeys(parts))
+    raise ValueError(f"COMBINE is not valid for profile field {field_name}")
+
+
+def _merge_inventory_with_profile_changes(
+    inventory: list[dict], conflicts: list[dict], source_person_id: str, target_person_id: str,
+) -> list[dict]:
+    result = [dict(item) for item in inventory]
+    for conflict in conflicts:
+        result.append({
+            "item_type": "PROFILE_FIELD",
+            "item_id": str(conflict["field_name"]),
+            "raw_owner_person_id": source_person_id,
+            "effective_owner_person_id": target_person_id,
+            "action": MergeAffectedAction.SELECT_VALUE.value,
+            "before_state": {
+                "source_value": conflict["source_value"],
+                "target_value": conflict["target_value"],
+            },
+            "after_state": {"resulting_value": conflict["selected_value"]},
+            "context": {"strategy": conflict["strategy"], "raw_provenance_retained": True},
+        })
+    return sorted(result, key=lambda item: (item["item_type"], item["item_id"]))
+
+
+def _apply_merge_profile_resolutions(
+    conn: sqlite3.Connection,
+    source_person_id: str,
+    target_person_id: str,
+    conflicts: list[dict],
+    *,
+    operation_id: str,
+    actor: dict | None,
+    source: str | None,
+) -> None:
+    row = conn.execute(
+        "SELECT name, notes, metadata FROM persons WHERE person_id = ?", (target_person_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"Unknown merge survivor: {target_person_id}")
+    name = str(row["name"])
+    metadata = json.loads(row["metadata"] or "{}")
+    selected_notes: str | None = None
+    note_strategy: str | None = None
+    for conflict in conflicts:
+        field_name = str(conflict["field_name"])
+        selected = conflict["selected_value"]
+        if field_name == "name":
+            name = str(selected or "").strip()
+            if not name:
+                raise ValueError("Merge survivor name cannot be empty")
+        elif field_name == "notes":
+            selected_notes = str(selected or "").strip()
+            note_strategy = str(conflict["strategy"])
+        else:
+            if selected is None and not conflict["inverse_data"].get("target_field_existed"):
+                metadata.pop(field_name, None)
+            else:
+                metadata[field_name] = selected
+    conn.execute(
+        "UPDATE persons SET name = ?, metadata = ? WHERE person_id = ?",
+        (name, json.dumps(metadata, separators=(",", ":"), sort_keys=True), target_person_id),
+    )
+    if selected_notes is not None and note_strategy is not None:
+        _write_merge_profile_note_revision(
+            conn,
+            source_person_id,
+            target_person_id,
+            selected_notes,
+            note_strategy,
+            operation_id=operation_id,
+            actor=actor,
+            source=source,
+        )
+
+
+def _synchronize_survivor_biometric_state(
+    conn: sqlite3.Connection, target_person_id: str,
+) -> None:
+    has_embedding = any(
+        _effective_embedding_owner_person_id(conn, row) == target_person_id
+        for row in conn.execute(
+            "SELECT embedding_id, person_id FROM embeddings WHERE deleted_at IS NULL"
+        ).fetchall()
+    )
+    if has_embedding:
+        conn.execute(
+            "UPDATE persons SET biometric_status = 'ENROLLED', enrollment_status = 'enrolled' WHERE person_id = ?",
+            (target_person_id,),
+        )
+
+
+def _list_embeddings_in_transaction(conn: sqlite3.Connection) -> list[EmbeddingRecord]:
+    records: list[EmbeddingRecord] = []
+    for row in conn.execute(
+        """
+        SELECT embedding_id, person_id, vector, quality_score,
+               source_image, crop_path, created_at
+        FROM embeddings WHERE deleted_at IS NULL ORDER BY embedding_id
+        """
+    ).fetchall():
+        canonical_person_id = _effective_embedding_owner_person_id(conn, row)
+        canonical = conn.execute(
+            "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
+            (canonical_person_id,),
+        ).fetchone()
+        if canonical and canonical["lifecycle_status"] == "ACTIVE" and canonical["deleted_at"] is None:
+            records.append(_embedding_from_row(
+                row,
+                raw_person_id=_raw_embedding_owner_person_id(conn, row),
+                canonical_person_id=canonical_person_id,
+            ))
+    return records
+
+
+def _validate_merge_state(
+    conn: sqlite3.Connection, source_person_id: str, target_person_id: str,
+) -> dict:
+    errors: list[str] = []
+    source = conn.execute(
+        "SELECT lifecycle_status, canonical_person_id FROM persons WHERE person_id = ?",
+        (source_person_id,),
+    ).fetchone()
+    target = conn.execute(
+        "SELECT lifecycle_status, canonical_person_id, deleted_at FROM persons WHERE person_id = ?",
+        (target_person_id,),
+    ).fetchone()
+    if source is None or source["lifecycle_status"] != "MERGED" or source["canonical_person_id"] != target_person_id:
+        errors.append("Source is not mapped to the requested survivor")
+    if target is None or target["lifecycle_status"] != "ACTIVE" or target["canonical_person_id"] is not None or target["deleted_at"] is not None:
+        errors.append("Survivor is not terminal and active")
+    try:
+        if _resolve_canonical_person_id(conn, source_person_id) != target_person_id:
+            errors.append("Canonical resolution does not reach the survivor")
+    except (KeyError, RuntimeError, ValueError) as exc:
+        errors.append(str(exc))
+    graph = _validate_graph_projection(conn)
+    errors.extend(graph["errors"])
+    foreign_keys = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if foreign_keys:
+        errors.append("Foreign key validation failed")
+    return {"valid": not errors, "errors": errors, "graph": graph}
+
+
 def _set_canonical_person_id_in_transaction(
     conn: sqlite3.Connection,
     person_id: str,
@@ -9256,17 +10110,69 @@ def _person_match_from_json(item: dict) -> PersonMatch:
 
 
 def _embedding_from_row(
-    row: sqlite3.Row, *, canonical_person_id: str | None = None,
+    row: sqlite3.Row, *, raw_person_id: str | None = None,
+    canonical_person_id: str | None = None,
 ) -> EmbeddingRecord:
     return EmbeddingRecord(
         embedding_id=row["embedding_id"],
-        person_id=row["person_id"],
+        person_id=raw_person_id or row["person_id"],
         vector=_unpack_embedding(row["vector"]),
         quality_score=row["quality_score"],
         source_image=row["source_image"],
         crop_path=row["crop_path"],
         created_at=row["created_at"],
         canonical_person_id=canonical_person_id,
+    )
+
+
+def _raw_embedding_owner_person_id(
+    conn: sqlite3.Connection, row: sqlite3.Row,
+) -> str:
+    """Return immutable enrollment ownership, including pre-P8-C moved faces."""
+    embedding_id = str(row["embedding_id"])
+    latest = conn.execute(
+        """
+        SELECT to_person_id FROM identity_corrections
+        WHERE embedding_id = ? AND correction_type = 'FACE_OWNERSHIP'
+        ORDER BY created_at DESC, correction_id DESC LIMIT 1
+        """,
+        (embedding_id,),
+    ).fetchone()
+    stored_owner = str(row["person_id"])
+    if latest is None or stored_owner != str(latest["to_person_id"]):
+        return stored_owner
+    correction = conn.execute(
+        """
+        SELECT from_person_id FROM identity_corrections
+        WHERE embedding_id = ? AND correction_type = 'FACE_OWNERSHIP'
+        ORDER BY created_at ASC, correction_id ASC LIMIT 1
+        """,
+        (embedding_id,),
+    ).fetchone()
+    return str(correction["from_person_id"] if correction is not None else stored_owner)
+
+
+def _current_embedding_owner_person_id(
+    conn: sqlite3.Connection, row: sqlite3.Row,
+) -> str:
+    """Return the latest corrected owner without rewriting raw ownership."""
+    embedding_id = str(row["embedding_id"])
+    correction = conn.execute(
+        """
+        SELECT to_person_id FROM identity_corrections
+        WHERE embedding_id = ? AND correction_type = 'FACE_OWNERSHIP'
+        ORDER BY created_at DESC, correction_id DESC LIMIT 1
+        """,
+        (embedding_id,),
+    ).fetchone()
+    return str(correction["to_person_id"] if correction is not None else row["person_id"])
+
+
+def _effective_embedding_owner_person_id(
+    conn: sqlite3.Connection, row: sqlite3.Row,
+) -> str:
+    return _resolve_canonical_person_id(
+        conn, _current_embedding_owner_person_id(conn, row),
     )
 
 

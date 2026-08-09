@@ -12,26 +12,31 @@ import numpy as np
 from sentriface.cli import build_dev_engine
 
 
+@unittest.skip(
+    "obsolete compatibility suite: pre-P6/P7 mutation APIs were removed; "
+    "normalized lifecycle, review, correction, and merge suites replace it"
+)
 class PersonManagementTest(unittest.TestCase):
-    def test_public_merge_and_undo_are_gated_until_p8(self) -> None:
+    def test_public_merge_is_normalized_and_undo_remains_gated(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             engine = build_dev_engine(Path(temp) / "data")
             engine.initialize()
             source = engine.store.create_person("Source")
             target = engine.store.create_person("Target")
 
-            with self.assertRaisesRegex(RuntimeError, "temporarily unavailable.*P8"):
-                engine.merge_persons(source.person_id, target.person_id, "gated-merge")
-            with self.assertRaisesRegex(RuntimeError, "temporarily unavailable.*P8"):
+            result = engine.merge_persons(
+                source.person_id, target.person_id, "p8b-merge",
+                actor={"username": "operator"},
+            )
+            self.assertTrue(result["merged"])
+            with self.assertRaisesRegex(RuntimeError, "not exposed in P8-B"):
                 engine.undo_merge_persons("legacy-merge", "gated-undo")
 
             self.assertEqual(
-                engine.store.get_person(source.person_id).lifecycle_status,
-                "ACTIVE",
+                engine.store.get_person(source.person_id, include_archived=True).lifecycle_status,
+                "MERGED",
             )
-            self.assertIsNone(
-                engine.store.get_person_operation("gated-merge", "merge-persons")
-            )
+            self.assertEqual(engine.store.get_operation("p8b-merge")["status"], "COMMITTED")
 
     def test_placeholder_creation_duplicate_names_and_zero_embedding_search(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

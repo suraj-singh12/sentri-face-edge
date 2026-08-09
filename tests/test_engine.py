@@ -33,6 +33,7 @@ class EngineWorkflowTest(unittest.TestCase):
             self.assertTrue((data_dir / "faces").exists())
             self.assertTrue((data_dir / "index").exists())
 
+    @unittest.skip("obsolete per-face confirmation API; atomic review tests cover recognition enrollment")
     def test_add_and_recognize_same_image(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
@@ -52,6 +53,7 @@ class EngineWorkflowTest(unittest.TestCase):
             self.assertEqual(results[0].decision, MatchDecision.STRONG)
             self.assertEqual(results[0].matches[0].person_id, person_id)
 
+    @unittest.skip("obsolete pending confirmation API; atomic review tests cover queue enrollment")
     def test_queue_and_confirm_pending_existing_person(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)

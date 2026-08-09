@@ -1126,12 +1126,12 @@ function PeopleGalleryView({
     && activeMentionQuery.length >= 3
     && !noteMentionHasExactPerson;
   const mergeEvent = managementEvents.find((event) => (
-    event.operation_type === "merge-persons"
+    event.operation_type === "identity.merge"
     && event.result?.source_person_id === payload.person.person_id
     && event.result?.target_person_id === mergedInto
   ));
   const mergeWasUndone = managementEvents.some((event) => (
-    event.operation_type === "undo-merge-persons"
+    event.operation_type === "identity.merge.revert"
     && event.result?.merge_operation_id === mergeEvent?.operation_id
   ));
   const canUndoMerge = Boolean(mergeEvent?.result?.undo_supported && !mergeWasUndone);
@@ -1654,7 +1654,7 @@ function PeopleGalleryView({
       >
         <Stack>
           <Text size="sm">
-            All photos and sightings from <strong>{payload.person.name}</strong> will move to the selected person. This profile will then be archived as a merge record.
+            <strong>{payload.person.name}</strong> will resolve to the selected person. Photos, sightings, notes, and other history keep their original provenance.
           </Text>
           <Select
             label="Keep this person"
@@ -2732,7 +2732,7 @@ function profileImageRecords(payload) {
 }
 
 function managementEventLabel(event) {
-  if (event.operation_type === "person-preferences") {
+  if (event.operation_type === "person-preferences" || event.operation_type === "identity.preferences.update") {
     const changed = event.result?.changed_preferences || [];
     if (changed.includes("representative_photo") && changed.includes("favorite")) return "Profile photo and favorite updated";
     if (changed.includes("representative_photo")) return "Profile photo updated";
@@ -2740,13 +2740,15 @@ function managementEventLabel(event) {
     return "Favorite or profile photo changed";
   }
   return {
-    "archive-person": "Person archived",
-    "restore-person": "Person restored",
-    "merge-persons": "People merged",
-    "undo-merge-persons": "People merge undone",
-    "move-embedding": "Photo moved",
-    "delete-embedding": "Photo removed",
-    "update-profile": "Profile updated",
+    "identity.archive": "Person archived",
+    "identity.restore": "Person restored",
+    "identity.merge": "People merged",
+    "identity.merge.revert": "People merge undone",
+    "identity.face.move": "Photo moved",
+    "biometric.face.delete": "Photo removed",
+    "identity.profile.update": "Profile updated",
+    "identity.preferences.update": "Favorite or profile photo changed",
+    "identity.observation.correct": "Recognition identity corrected",
     "create-person-association": "Person association added",
     "create-placeholder-association": "Placeholder created and associated",
     "remove-person-association": "Person association removed",
@@ -2755,19 +2757,19 @@ function managementEventLabel(event) {
 
 function managementEventDetail(event) {
   const result = event.result || {};
-  if (event.operation_type === "merge-persons") {
+  if (event.operation_type === "identity.merge") {
     return `${result.moved_embeddings || 0} photos and ${result.moved_sightings || 0} sightings moved`;
   }
-  if (event.operation_type === "undo-merge-persons") {
+  if (event.operation_type === "identity.merge.revert") {
     return `${result.restored_embeddings || 0} photos and ${result.restored_sightings || 0} sightings restored`;
   }
-  if (event.operation_type === "move-embedding") {
+  if (event.operation_type === "identity.face.move") {
     return `${result.moved_sightings || 0} linked sightings moved with the photo`;
   }
-  if (event.operation_type === "delete-embedding") {
+  if (event.operation_type === "biometric.face.delete") {
     return `${result.deleted_sightings || 0} linked sightings removed with the photo`;
   }
-  if (event.operation_type === "person-preferences") {
+  if (event.operation_type === "person-preferences" || event.operation_type === "identity.preferences.update") {
     const changed = result.changed_preferences || [];
     if (changed.includes("representative_photo") && changed.includes("favorite")) return "The representative photo and favorite status were changed";
     if (changed.includes("representative_photo")) return "The representative photo shown for this person was changed";

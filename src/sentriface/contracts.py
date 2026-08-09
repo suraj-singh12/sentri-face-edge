@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 from sentriface.models import (
     DetectedFace,
@@ -432,6 +432,27 @@ class IdentityStore(Protocol):
 
     def get_merge_operation(self, merge_operation_id: str) -> MergeOperation | None:
         """Load immutable normalized merge provenance, when present."""
+
+    def preview_identity_merge(
+        self, source_person_id: str, target_person_id: str,
+    ) -> dict:
+        """Validate and inventory a merge without changing authoritative state."""
+
+    def execute_identity_merge(
+        self,
+        source_person_id: str,
+        target_person_id: str,
+        operation_id: str,
+        *,
+        conflict_resolutions: list[dict] | dict[str, dict | str] | None = None,
+        actor: dict | None = None,
+        source: str | None = None,
+        reason: str | None = None,
+        context: dict | None = None,
+        publish_index: Callable[[list[EmbeddingRecord]], None] | None = None,
+        failure_injector: Callable[[str], None] | None = None,
+    ) -> dict:
+        """Execute one approved, journaled merge atomically."""
 
     def list_historical_persons(self) -> list[PersonSummary]:
         """List archived, deleted, and merged historical identities."""

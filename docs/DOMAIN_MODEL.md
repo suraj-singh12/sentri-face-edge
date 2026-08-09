@@ -6,23 +6,25 @@ SentriFace owns one global identity graph. **Person Graph** is an identity-centr
 
 Recognition output is non-authoritative proposal data. Only explicit operator finalisation may create or change persons, observations/events, accepted participants, notes/mentions, relationship evidence, corrections, or merge state. A multi-person review becomes authoritative only after every detected face has a final decision and the review is explicitly completed in one transaction.
 
-## Target authoritative model
+## Current authoritative model
 
 ### Person and canonical identity
 
-`Person` is a stable historical identity node. It has a lifecycle state such as active, archived, or tombstoned. Archived and tombstoned nodes remain in graph history; UI projections render them inactive/non-clickable.
+`Person` is a stable historical identity node with one explicit lifecycle state: `ACTIVE`, `ARCHIVED`, `DELETED`, or `MERGED`. Archived and deleted nodes remain in graph history; UI projections render them inactive/non-clickable. A merged source also remains historically addressable.
 
-Canonical resolution is explicit and transitive: a merged source remains addressable but resolves to one surviving canonical person. Merge records preserve source, target, actor, time, reason, and affected-record provenance. Merges never delete source history or rewrite away the identity under which evidence was originally recorded.
+Raw identity is the person ID stored on the authoritative historical record. Effective identity is that raw ID resolved through the explicit, transitive canonical mapping. A merged source resolves to one active canonical survivor. Current-view reads may group by effective identity, but they do not rewrite the raw owner or participant ID.
+
+Canonical resolution is explicit and transitive. Merge records preserve source, target, actor, time, reason, and affected-record provenance. Merges never delete source history or rewrite away the identity under which evidence was originally recorded.
 
 ### Observation/Event
 
-`Observation` (or Event) is the preferred co-occurrence unit. It holds event time/place/context and may reference multiple existing photos without duplicating their media storage. `ObservationParticipant` retains the originally selected person ID; reads also expose its current canonical resolution without rewriting historical ownership.
+`Observation` (or Event) is the immutable event-history and preferred co-occurrence unit after finalisation. It holds event time/place/context and may reference multiple existing photos without duplicating their media storage. Raw participants retain the originally accepted person IDs. Effective participant reads apply correction history and then canonical resolution, without rewriting the raw participant rows.
 
 Within one event, a canonical person appears at most once as a participant. Repeated recognition across photos or faces must not create duplicate participants or self-links. Rejected/ignored/unknown decisions remain review history but do not become accepted participants.
 
 ### Notes and mentions
 
-Notes are revisioned authoritative records. A parsed `@Person` mention becomes graph evidence only when its note revision is saved. Editing/removing a mention retires only evidence originating from that mention/revision. Other mention, co-observation, or manual evidence remains intact.
+Notes are revisioned authoritative records. Mentions are explicit saved occurrences referencing person IDs; display-name parsing alone is not authoritative. A saved `@Person` mention becomes directed `NOTE_REFERENCE` evidence only when its note revision is committed. Editing/removing a mention retires only evidence originating from that occurrence/revision. Other mention, co-observation, or manual evidence remains intact.
 
 ### Relationship assertions, evidence, and projection
 
@@ -32,11 +34,19 @@ A manual relationship assertion is an authoritative record, not an edge owned by
 - `NOTE_REFERENCE`: derived from a saved note revision and exact mention occurrence.
 - `MANUAL_ASSOCIATION`: an operator-created association.
 
-A projected relationship exists while at least one active evidence record supports the canonical pair. Evidence types never overwrite each other. The projection can be cached, but must be fully rebuildable from authoritative persons, events/participants, note revisions/mentions, manual assertions, corrections, and merge history.
+A projected relationship exists while at least one active evidence record supports the canonical pair. Evidence is authoritative; `graph_connections` and graph API results are derived projections. Evidence types never overwrite each other. The projection can be cached, but must be fully rebuildable from authoritative persons, events/participants, note revisions/mentions, manual assertions, corrections, and merge history.
 
 ### Corrections and operation journal
 
-Identity corrections (move face, add face, change a participant decision) are first-class historical operations; they do not silently rewrite provenance. Every important write has an immutable operation-journal entry with operation/idempotency ID, type, actor, timestamp, affected entities, before/after or inverse data, and status. A graph-affecting write and its journal entry commit in the same SQLite transaction.
+Identity corrections (Move Face, Add Face, and effective participant changes) are first-class historical operations. Original review decisions, raw participants, face assignments, and prior evidence revisions remain preserved; corrections append provenance and rebuild only the affected current projections. Every important write has an immutable operation-journal entry with operation/idempotency ID, type, actor, timestamp, affected entities, before/after or inverse data, and status. A graph-affecting write and its journal entry commit in the same SQLite transaction.
+
+Embedding enrollment ownership is raw provenance. Move Face appends ownership corrections rather than rewriting that original owner. The latest ownership correction, followed by terminal canonical resolution, determines effective embedding ownership for recognition, browse ranking, representative-photo selection, deletion, restoration, and subsequent moves.
+
+### Merge foundation and orchestration
+
+P8-A provides the merge infrastructure. A normalized merge manifest links one source identity and its terminal active canonical survivor to the operation journal. Immutable affected-item records describe what is preserved, reinterpreted under canonical ownership, unioned in the current view, or selected. Typed conflict records retain source and target values, the chosen strategy (`KEEP_SOURCE`, `KEEP_TARGET`, `COMBINE`, or `USER_SELECTED`), the selected value, and inverse data.
+
+P8-B adds a read-only preview and one normalized execution command through the backend service boundary. Canonical survivor rules reject self-maps, missing targets, cycles, deleted identities, and inactive survivors. Execution applies explicit conflict strategies, writes the manifest and canonical mapping, rebuilds and validates the graph projection, publishes canonical index ownership, and commits the journal atomically. Raw ownership and provenance remain unchanged while effective reads resolve to the survivor. Merge undo remains gated for the guarded P11 revert phase.
 
 ## Current repository map (schema version 26)
 
@@ -48,16 +58,17 @@ Identity corrections (move face, add face, change a participant decision) are fi
 | Current tables | `persons`, `notes`, `note_revisions`, `note_revision_mentions`, `note_mentions`, `observations`, `observation_media`, historical `observation_participants`, immutable `observation_face_assignments`, `identity_corrections`, `biometric_enrollment_history`, normalized `merge_operations`, `merge_affected_items`, and `merge_conflict_resolutions`, revisioned `relationship_evidence`, derived `graph_connections`, plus existing biometric, queue, sighting, journal, auth, settings, and legacy `person_associations` tables |
 | Application service | `src/sentriface/graph_service.py::GlobalIdentityGraphService` is the single normalized evidence/projection boundary; `src/sentriface/engine.py::FaceEngine` owns it as `graph` alongside existing recognition and identity services |
 | Correction service | `src/sentriface/correction_service.py::IdentityCorrectionService` centralizes P7 observation correction, Move Face, and Add Face commands and routes graph-affecting work through `GlobalIdentityGraphService` |
+| Merge service | `src/sentriface/merge_service.py::IdentityMergeService` is the P8-B preview/execution boundary and coordinates transactional storage execution with derived-index publication/reconciliation |
 | Recognition/index | `FaceEngine.recognize()` returns proposals; `linear_index.py`/`hnsw_index.py` are rebuilt from active embeddings and are derived caches |
-| API | `src/sentriface/api_server.py`; relevant routes include `/api/recognize`, `/api/recognition-*`, `/api/queue-*`, `/api/person*`, `/api/person-association*`, photo lifecycle, merge/undo, and backups |
+| API | `src/sentriface/api_server.py`; relevant routes include `/api/recognize`, `/api/recognition-*`, `/api/queue-*`, `/api/person*`, `/api/person-association*`, photo lifecycle, `/api/person-merge-preview`, `/api/person-merge`, and backups; merge undo remains gated |
 | React shell/controllers | `frontend/src/SentriFaceApp.jsx`; `useRecognizeController.js`, `useQueueController.js`, `usePeopleController.js`, `useAppData.js` |
 | React views | `frontend/src/views/RecognizeView.jsx`, `QueueView.jsx`, `PeopleView.jsx`; no World view exists |
 | Current graph UI | `frontend/src/views/PeopleView.jsx::RelationshipGraphModal` expands neighbor requests; `frontend/src/utils/relationshipGraph.js` stores/layouts client-side nodes and edges for display |
 | Backup/offline | `src/sentriface/backup_service.py`, `backup_crypto.py`, `secure_storage.py`, `offline_guard.py`, `os_network_policy.py`; packaging policies under `packaging/` |
-| Relevant backend tests | `tests/test_graph_evidence.py`, `test_observations.py`, `test_storage.py`, `test_operation_journal.py`, `test_identity_lifecycle.py`, plus existing engine, queue, person, notes, backup, and offline-packaging tests |
+| Relevant backend tests | `tests/test_graph_evidence.py`, `test_observations.py`, `test_storage.py`, `test_operation_journal.py`, `test_identity_lifecycle.py`, `test_merge_foundation.py`, `test_identity_merge_orchestration.py`, plus existing engine, queue, person, notes, backup, and offline-packaging tests |
 | Relevant frontend tests | `frontend/tests/relationship-graph.test.mjs`, `queue-layout.test.mjs`, `people-layout.test.mjs`, `backend-call-discipline.test.mjs` |
 
-## Current semantics and conflicts to resolve
+## Current semantics and compatibility boundaries
 
 - `persons` now has explicit `lifecycle_status`, `canonical_person_id`, `identity_status`, `biometric_status`, and `lifecycle_changed_at`. Existing live rows migrate to `ACTIVE`; legacy archived rows remain historical, and valid `metadata.merged_into` sources migrate to `MERGED` mappings.
 - Ordinary archive, restore, and delete paths now use atomic lifecycle transitions plus the global operation journal. The compatibility `permanently_delete_person()` entry point tombstones as `DELETED` and retains linked history; the former destructive implementation remains isolated as the storage-only `physically_purge_person()` exceptional capability.
@@ -65,22 +76,23 @@ Identity corrections (move face, add face, change a participant decision) are fi
 - Existing `recognition_details` rows remain unchanged and accessible. Their nullable `observation_id` remains the compatibility bridge; migration does not invent or backfill events from ambiguous legacy rows.
 - `photo_reviews` and `photo_review_faces` hold non-authoritative staged face decisions. `SQLiteIdentityStore.complete_photo_review()` is the single P6 transaction that creates accepted identities/embeddings, finalizes the observation and media/participants, saves review notes, records co-observation evidence, rebuilds/validates the projection, commits one `review.complete` journal operation, and only then marks the review complete. `FaceEngine` gates the legacy per-face pending/Queue confirmation paths.
 - Completed P6 reviews also retain immutable face-to-observation assignments. P7 corrections leave original review decisions and `observation_participants` untouched, append `identity_corrections`, expose effective participants on current reads, retire only the affected observation's active co-observation evidence, and create a new evidence revision before rebuilding the global projection.
-- Profile notes now retain immutable revisions and explicit person-ID mention snapshots. Active mention occurrences own directed `NOTE_REFERENCE` evidence; edit or retirement deactivates only evidence from that occurrence. `persons.notes` remains a compatibility projection for the existing API/UI.
+- Profile notes retain immutable revisions and explicit person-ID mention snapshots. Active mention occurrences own directed `NOTE_REFERENCE` evidence; edit or retirement deactivates only evidence from that occurrence. Merge conflict resolution appends a survivor note revision in the merge transaction. `persons.notes` is refreshed only afterward as a compatibility mirror; profile reads use normalized notes.
 - Legacy profile and recognition-detail note text migrates into revision history without parsing `@` text or fabricating mention records/evidence. Existing legacy `automatic_mention` associations are not promoted when their exact note provenance cannot be established.
-- Queue identity confirmation is atomic per selected group subset in `confirm_init_faces_atomic()`, but `useQueueController.js::confirmQueueFollowup()` then creates one `/api/recognition-followup` write per accepted face. There is no explicit all-faces-final event completion transaction, so identity, sighting, mention, and future graph writes can partially commit.
-- Check Photo similarly performs identity confirmation and recognition follow-up as separate API operations in `useRecognizeController.js`.
+- Queue confirmation routes selected faces through the same P6 `review.complete` transaction boundary; the controller sends one intent for the selected group subset rather than maintaining durable participant or graph state.
+- Check Photo stages decisions and sends one explicit `/api/photo-review-complete` intent after every face has a final decision.
 - `relationship_evidence` now retains every immutable raw participant pair and source provenance for `CO_OBSERVED`, `NOTE_REFERENCE`, and `MANUAL_ASSOCIATION`; only finalized-observation evidence is produced in P4. Canonical resolution and self-edge suppression happen only in the replaceable `graph_connections` projection.
-- Legacy `person_associations` remains unchanged for compatibility with the current UI. Its manual/automatic rows are not speculatively copied into normalized evidence before P5 and the later manual-association owning phase can establish accurate provenance.
+- Legacy `person_associations` remains unchanged for historical/raw compatibility. Current profile and relationship-graph reads use the normalized `graph_connections` projection. Legacy rows are not speculatively copied into evidence when accurate provenance cannot be established.
 - `_create_note_associations()` remains only for explicit-ID legacy compatibility paths; name matching no longer infers new associations. Normal profile-note saves use the global graph service and normalized evidence instead.
 - Removing a current association deletes the whole row even if multiple underlying reasons should support the relationship.
-- The current Relationship Graph UI still reads legacy `person_associations`, but the backend global graph now has explainable evidence queries, canonical neighbor/global projection reads, deterministic rebuild, and projection validation. Person Graph/World UI adoption remains P10.
-- The P2 canonical resolver and constrained `MERGED` mapping are present. Public merge and undo-merge workflows are gated until P8; the private legacy implementation remains only for compatibility with existing merge history and tests.
-- P8-A adds a caller-owned, connection-scoped canonical update primitive and immutable normalized `merge_operations` / `merge_affected_items` manifests linked to the global operation journal. These primitives do not expose or execute Merge; legacy merge snapshots are not imported as normalized truth.
+- The current Relationship Graph UI reads canonical neighbors from the evidence-derived `graph_connections` projection. Person Graph/World UI expansion remains P10.
+- The P2 canonical resolver and constrained `MERGED` mapping are present. P8-B exposes normalized merge preview and execution through `IdentityMergeService`, `FaceEngine`, and the loopback API. Undo remains gated for P11.
+- P8-A provides the caller-owned, connection-scoped canonical update primitive and immutable normalized `merge_operations` / `merge_affected_items` manifests linked to the global operation journal. P8-B executes those primitives in one transaction; legacy merge snapshots are not imported as normalized truth.
+- Merge execution preserves source-owned embeddings, recognition history, raw participants, corrections, notes/revisions/mentions, evidence, and prior operation history. It changes the source lifecycle/canonical mapping, applies selected survivor profile values, rebuilds the derived graph projection, and publishes canonical index ownership. A failed transaction leaves no manifest or canonical/profile/graph change and records a durable failed attempt under a non-reusable operation ID.
 - Identity, embedding, note, and observation read models retain raw IDs while exposing current canonical resolution. Observation APIs now separate immutable raw participants from corrected/canonical effective participants, and existing raw note mentions remain editable after their referenced identity becomes merged while new mentions remain active-only.
-- Move Face now changes only current embedding ownership, appends ownership and affected face-assignment corrections, and recalculates only affected observations. Historical `photo_review_faces`, `recognition_details`, base participants, and inactive evidence revisions retain their original person IDs. The former destructive reassignment remains private as `_legacy_move_embedding()` with no production caller.
+- Move Face appends current embedding-ownership and affected face-assignment corrections and recalculates only affected observations. It does not rewrite raw embedding enrollment ownership. Historical `photo_review_faces`, `recognition_details`, base participants, and inactive evidence revisions retain their original person IDs. The former destructive reassignment remains private as `_legacy_move_embedding()` with no production caller.
 - Add Face uses a completed staged review targeting one active existing identity. It creates no person, observation, participant, or graph evidence, records immutable enrollment history, and atomically transitions the existing identity to `ENROLLED`.
-- `person_operations` remains unchanged as the legacy idempotency/result table because its rows lack reliable actor and lifecycle data. New work uses the global `operation_journal` API; existing writes are not speculatively backfilled or automatically bridged, so important legacy paths remain unjournaled until their owning phase adopts the API.
-- Storage methods are generally transaction-scoped through `_connect()`, which is a useful foundation, but workflows spanning several engine/API calls are not atomic.
+- `operation_journal` is the current activity authority and profile activity resolves affected person entities canonically. `person_operations` remains unchanged only for historical compatibility and legacy idempotency; it is not merged into the current activity feed because its rows lack reliable actor and lifecycle data.
+- Storage methods are generally transaction-scoped through `_connect()`. Normalized review, correction, and merge commands provide their phase-owned atomic boundaries; remaining legacy workflows that span several engine/API calls are not implicitly atomic.
 - Sightings metrics count `recognition_details` joined through live embeddings; archive/delete/merge/move behavior can therefore change counts rather than report stable event participation.
 
 ## Projection rules

@@ -310,6 +310,10 @@ def main() -> int:
     merge_persons.add_argument("source_person_id")
     merge_persons.add_argument("target_person_id")
 
+    merge_preview = subcommands.add_parser("merge-preview", help="Preview source-to-target identity merge")
+    merge_preview.add_argument("source_person_id")
+    merge_preview.add_argument("target_person_id")
+
     benchmark = subcommands.add_parser("benchmark", help="Run repeated recognition benchmark")
     benchmark.add_argument("source", type=Path)
     benchmark.add_argument("--repeat", type=int, default=1)
@@ -384,7 +388,6 @@ def main() -> int:
             "confirm-existing": "Pending faces can only be confirmed through atomic review finalisation",
             "init-confirm": "Queue faces can only be confirmed through atomic review finalisation",
             "init-confirm-existing": "Queue faces can only be confirmed through atomic review finalisation",
-            "merge-persons": "Identity Merge is temporarily unavailable until P8",
         }
         if args.command in gated_commands:
             raise DomainWorkflowUnavailableError(gated_commands[args.command])
@@ -569,6 +572,29 @@ def main() -> int:
                 str(uuid.uuid4()),
                 actor=cli_actor,
                 source="cli.move-embedding",
+            )
+            return _emit_engine(args, engine, result)
+
+        if args.command == "merge-preview":
+            return _emit_engine(
+                args,
+                engine,
+                engine.preview_merge_persons(
+                    args.source_person_id, args.target_person_id,
+                ),
+            )
+
+        if args.command == "merge-persons":
+            preview = engine.preview_merge_persons(
+                args.source_person_id, args.target_person_id,
+            )
+            result = engine.merge_persons(
+                args.source_person_id,
+                args.target_person_id,
+                str(uuid.uuid4()),
+                conflict_resolutions=preview["proposed_conflict_resolutions"],
+                actor=cli_actor,
+                source="cli.merge-persons",
             )
             return _emit_engine(args, engine, result)
 

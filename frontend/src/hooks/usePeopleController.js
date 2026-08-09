@@ -238,11 +238,35 @@ export function usePeopleController({
   };
 
   const mergePeople = async (sourcePersonId, targetPersonId) => {
-    throw new Error("Identity Merge is temporarily unavailable until P8");
+    const preview = await apiPost("/api/person-merge-preview", {
+      source_person_id: sourcePersonId,
+      target_person_id: targetPersonId,
+    });
+    const result = await apiPost("/api/person-merge", {
+      source_person_id: sourcePersonId,
+      target_person_id: targetPersonId,
+      operation_id: operationId(),
+      conflict_resolutions: preview.proposed_conflict_resolutions,
+    });
+    setPeopleGallery(null);
+    setPeopleGalleryImage(null);
+    archivePersonLocally(sourcePersonId, undefined, {
+      merged_into: result.target_person_id,
+    });
+    updatePerson(sourcePersonId, (person) => ({
+      ...person,
+      lifecycle_status: "MERGED",
+      merged: true,
+      canonical_person_id: result.target_person_id,
+    }));
+    const survivor = await loadPerson(result.target_person_id);
+    upsertPerson(survivor.person);
+    showToast("People merged; history and provenance were preserved");
+    return result;
   };
 
   const undoPeopleMerge = async (mergeOperationId) => {
-    throw new Error("Undo Merge is temporarily unavailable until P8");
+    throw new Error("Undo Merge is not available in P8-B");
   };
 
   const movePersonPhoto = async (personId, embeddingId, targetPersonId) => {

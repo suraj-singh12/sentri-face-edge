@@ -57,6 +57,7 @@ from sentriface.model_setup import MODEL_COMBINATIONS, install_local_model_bundl
 from sentriface.models import (
     EmbeddingRecord,
     FaceBox,
+    GraphConnection,
     InitGroup,
     InitSession,
     MatchDecision,
@@ -153,7 +154,7 @@ def _required_capability(method: str, path: str) -> str | None:
     if path == "/api/support-package":
         return "technical"
     if path in {
-        "/api/person-archive", "/api/person-restore", "/api/person-merge", "/api/person-merge-undo", "/api/person-purge",
+        "/api/person-archive", "/api/person-restore", "/api/person-merge-preview", "/api/person-merge", "/api/person-merge-undo", "/api/person-purge",
         "/api/person-photo-move", "/api/observation-correct", "/api/person-photo-delete",
         "/api/person-photo-restore", "/api/person-photo-purge",
     }:
@@ -1001,13 +1002,18 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     raw=raw_view,
                 )
                 notes = self.server.engine.list_person_notes(person_id, raw=raw_view)
+                profile_note = self.server.engine.get_person_note(person.person_id)
                 observations = (
                     self.server.engine.list_raw_observations_for_person(person_id)
                     if raw_view else self.server.engine.list_observations_for_person(person_id)
                 )
-                associations = self.server.engine.list_person_associations(
-                    person_id if raw_view else person.person_id,
-                    include_archived=include_archived or raw_view,
+                associations = (
+                    self.server.engine.list_person_associations(
+                        person_id,
+                        include_archived=True,
+                    )
+                    if raw_view
+                    else self.server.engine.get_person_graph_neighbors(person.person_id)
                 )
                 person_summaries = {
                     item.person.person_id: item
@@ -1020,6 +1026,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     {
                         "person": {
                             **_person(person),
+                            "notes": profile_note.content if profile_note is not None else "",
                             "favorite": bool(person.metadata.get("favorite")),
                             "tags": list(person.metadata.get("tags", [])),
                             "representative_image": _representative_image(
@@ -1044,11 +1051,14 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         "changes": [_person_change(change) for change in changes],
                         "management_events": management_events,
                         "associations": [
-                            _person_association(
-                                association,
-                                person_id if raw_view else person.person_id,
-                                person_summaries,
-                                self.server.engine,
+                            (
+                                _person_association(
+                                    association, person_id, person_summaries, self.server.engine,
+                                )
+                                if raw_view
+                                else _graph_connection_association(
+                                    association, person.person_id, person_summaries, self.server.engine,
+                                )
                             )
                             for association in associations
                         ],
@@ -1060,14 +1070,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 include_archived = _query_bool(parsed.query, "include_archived")
                 requested_limit = _safe_count(_query_value(parsed.query, "limit") or "30", "graph limit")
                 limit = max(1, min(requested_limit, 50))
-                person = self.server.engine.get_person(person_id, include_archived=include_archived)
+                person = self.server.engine.get_effective_person(person_id)
                 if person is None:
                     raise KeyError("This person no longer exists")
-                associations = self.server.engine.list_person_associations(
-                    person_id,
-                    include_archived=include_archived,
-                    limit=limit + 1,
-                )
+                associations = self.server.engine.get_person_graph_neighbors(person.person_id)
                 person_summaries = {
                     item.person.person_id: item
                     for item in [
@@ -1088,7 +1094,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         ),
                     },
                     "associations": [
-                        _person_association(item, person_id, person_summaries, self.server.engine)
+                        _graph_connection_association(
+                            item, person.person_id, person_summaries, self.server.engine,
+                        )
                         for item in associations[:limit]
                     ],
                     "truncated": len(associations) > limit,
@@ -1306,14 +1314,14 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     result = self.server.engine.add_face_to_person(
                         _required(payload, "review_id"),
                         target_person_id,
-                        _optional_operation_id(payload),
+                        _operation_id(payload),
                         actor=self._operation_actor(),
                         source=str(payload.get("source") or "add-face-review"),
                     )
                 else:
                     result = self.server.engine.complete_photo_review(
                         _required(payload, "review_id"),
-                        _optional_operation_id(payload),
+                        _operation_id(payload),
                         actor=self._operation_actor(),
                         source=str(payload.get("source") or "review-finalisation"),
                     )
@@ -1356,9 +1364,36 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self.server.log_event("observation-identity-corrected", **result)
                 self._json(result)
                 return
-            if parsed.path in {"/api/person-merge", "/api/person-merge-undo"}:
+            if parsed.path == "/api/person-merge-preview":
+                result = self.server.engine.preview_merge_persons(
+                    _required(payload, "source_person_id"),
+                    _required(payload, "target_person_id"),
+                )
+                self._json(result)
+                return
+            if parsed.path == "/api/person-merge":
+                resolutions = payload.get("conflict_resolutions")
+                if resolutions is not None and not isinstance(resolutions, (list, dict)):
+                    raise KeyError("conflict_resolutions must be a list or object")
+                result = self.server.engine.merge_persons(
+                    _required(payload, "source_person_id"),
+                    _required(payload, "target_person_id"),
+                    _operation_id(payload),
+                    conflict_resolutions=resolutions,
+                    actor=self._operation_actor(),
+                    source=parsed.path,
+                    reason=str(payload.get("reason") or "").strip() or None,
+                    context=(
+                        payload.get("context")
+                        if isinstance(payload.get("context"), dict) else None
+                    ),
+                )
+                self.server.log_event("person-merged", **result)
+                self._json(result)
+                return
+            if parsed.path == "/api/person-merge-undo":
                 raise DomainWorkflowUnavailableError(
-                    "Identity Merge is temporarily unavailable until P8 provides normalized merge support"
+                    "Identity Merge undo is not exposed in P8-B"
                 )
             if parsed.path in {
                 "/api/person-association", "/api/person-association-placeholder",
@@ -1697,7 +1732,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     actor=self._operation_actor(),
                     source=parsed.path,
                 )
-                associations = self.server.engine.list_person_associations(person.person_id)
+                associations = self.server.engine.get_person_graph_neighbors(person.person_id)
                 person_summaries = {item.person.person_id: item for item in self.server.engine.list_persons()}
                 self.server.log_event("person-notes-update", person_id=person.person_id, changed=changed)
                 self._json({
@@ -1705,7 +1740,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     "notes": person.notes,
                     "change": _person_change(change) if change else None,
                     "associations": [
-                        _person_association(item, person.person_id, person_summaries, self.server.engine)
+                        _graph_connection_association(
+                            item, person.person_id, person_summaries, self.server.engine,
+                        )
                         for item in associations
                     ],
                 })
@@ -2029,10 +2066,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _required(payload, "group_id"),
                     _queue_face_ids(self.server.engine, payload),
                     _required(payload, "name"),
-                    _optional_operation_id(payload),
+                    _operation_id(payload),
                     notes=str(payload.get("notes") or ""),
                     mentioned_person_ids=[str(item) for item in mentioned_person_ids],
                     recognition_detail=_review_detail_payload(payload),
+                    actor=self._operation_actor(),
                 )
                 try:
                     changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
@@ -2065,10 +2103,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     _required(payload, "group_id"),
                     _queue_face_ids(self.server.engine, payload),
                     person_id,
-                    _optional_operation_id(payload),
+                    _operation_id(payload),
                     notes=str(payload.get("notes") or ""),
                     mentioned_person_ids=[str(item) for item in payload.get("mentioned_person_ids", [])],
                     recognition_detail=_review_detail_payload(payload),
+                    actor=self._operation_actor(),
                 )
                 try:
                     changed = self.server.engine.changed_init_groups_for_person(session_id, person_id)
@@ -2738,11 +2777,6 @@ def _safe_rejection_reasons(value: Any) -> dict[str, int]:
     return reasons or {"invalid_input": 1}
 
 
-def _optional_operation_id(payload: dict[str, Any]) -> str:
-    if not str(payload.get("operation_id") or "").strip():
-        return str(uuid.uuid4())
-    return _operation_id(payload)
-
 def _operation_id(payload: dict[str, Any]) -> str:
     value = _required(payload, "operation_id")
     try:
@@ -3231,6 +3265,37 @@ def _person_association(
         "updated_at": association.updated_at,
         "created_by": association.created_by,
         "association_origin": association.association_origin,
+        "person": _person_summary(summary, engine),
+    }
+
+
+def _graph_connection_association(
+    connection: GraphConnection,
+    current_person_id: str,
+    person_summaries: dict[str, PersonSummary],
+    engine: FaceEngine,
+) -> dict[str, Any]:
+    associated_person_id = (
+        connection.target_person_id
+        if connection.source_person_id == current_person_id
+        else connection.source_person_id
+    )
+    summary = person_summaries.get(associated_person_id)
+    if summary is None:
+        raise RuntimeError("A graph person record is unavailable")
+    return {
+        "association_id": (
+            f"graph:{connection.source_person_id}:{connection.target_person_id}:"
+            f"{connection.relationship_type}:{connection.directionality}"
+        ),
+        "source_person_id": connection.source_person_id,
+        "target_person_id": connection.target_person_id,
+        "relationship_type": connection.relationship_type,
+        "created_at": connection.last_evidence_at,
+        "updated_at": connection.last_evidence_at,
+        "created_by": "Normalized evidence",
+        "association_origin": "+".join(connection.evidence_types),
+        "evidence_count": connection.evidence_count,
         "person": _person_summary(summary, engine),
     }
 
