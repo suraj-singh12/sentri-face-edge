@@ -429,6 +429,17 @@ class WorldDetailLevel(str, Enum):
     EVIDENCE = "EVIDENCE"
 
 
+class WorldCollection(str, Enum):
+    PEOPLE = "PEOPLE"
+    CLUSTERS = "CLUSTERS"
+    MEMBERS = "MEMBERS"
+    RELATIONSHIPS = "RELATIONSHIPS"
+    EVENTS = "EVENTS"
+    PARTICIPANTS = "PARTICIPANTS"
+    EVIDENCE = "EVIDENCE"
+    MEDIA = "MEDIA"
+
+
 @dataclass(frozen=True)
 class WorldReadFilter:
     """World filter intent; the response carries the normalized effective value."""
@@ -457,6 +468,7 @@ class WorldReadLimits:
     clusters: int = 10
     events: int = 25
     evidence: int = 25
+    media: int = 25
     relationships: int = 50
     patterns: int = 10
 
@@ -466,6 +478,7 @@ class WorldGraphRequest:
     detail_level: WorldDetailLevel = WorldDetailLevel.WORLD_SCOPE
     focus_type: str | None = None
     focus_id: str | None = None
+    collection: WorldCollection | None = None
     filters: WorldReadFilter = field(default_factory=WorldReadFilter)
     ranking: str = "SALIENCE"
     limits: WorldReadLimits = field(default_factory=WorldReadLimits)
@@ -486,6 +499,12 @@ class WorldExplanation:
     first_occurrence_at: str | None = None
     last_occurrence_at: str | None = None
     evidence_expansion_token: str | None = None
+    calculation_scope: dict[str, Any] = field(default_factory=dict)
+    strongest_factors: tuple[dict[str, Any], ...] = ()
+    method: str | None = None
+    threshold: dict[str, Any] | None = None
+    sample: dict[str, Any] | None = None
+    limitations: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -500,6 +519,7 @@ class WorldPerson:
     intelligence_summary: dict[str, Any]
     importance_indicators: tuple[dict[str, Any], ...]
     activity_summary: dict[str, Any]
+    ranking: dict[str, Any]
     allowed_actions: tuple[str, ...]
     explanation: WorldExplanation
 
@@ -525,10 +545,12 @@ class WorldEvent:
     finalized_at: str
     occurred_at: str
     location: str | None
-    context: dict[str, Any]
+    context_summary: dict[str, Any]
     source: str | None
     participants: tuple[dict[str, Any], ...]
-    evidence_references: tuple[str, ...]
+    participant_provenance: tuple[dict[str, Any], ...]
+    participant_summary: dict[str, Any]
+    evidence_summary: dict[str, Any]
     media_summary: dict[str, Any]
     explanation: WorldExplanation
 
@@ -572,6 +594,25 @@ class WorldPattern:
 
 
 @dataclass(frozen=True)
+class WorldMediaReference:
+    media_id: str
+    media_reference: str | None
+    source: str | None
+    occurred_at: str
+
+
+@dataclass(frozen=True)
+class WorldPageState:
+    collection: str
+    total_count: int
+    returned_count: int
+    has_more: bool
+    next_cursor: str | None
+    truncated: bool
+    truncation_reason: str | None = None
+
+
+@dataclass(frozen=True)
 class WorldGraphV2ReadModel:
     graph_revision: str
     as_of: str
@@ -586,6 +627,7 @@ class WorldGraphV2ReadModel:
     scope_totals: dict[str, int]
     available_facets: dict[str, Any]
     returned_counts: dict[str, int]
+    pagination: dict[str, WorldPageState]
     truncated: bool
     has_more: bool
     next_cursor: str | None
@@ -596,6 +638,7 @@ class WorldGraphV2ReadModel:
     evidence: tuple[WorldEvidence, ...] = ()
     relationships: tuple[WorldRelationship, ...] = ()
     patterns: tuple[WorldPattern, ...] = ()
+    media: tuple[WorldMediaReference, ...] = ()
 
 
 @dataclass(frozen=True)

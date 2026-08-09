@@ -82,6 +82,7 @@ from sentriface.models import (
     Sighting,
     WorldGraphReadModel,
     WorldDetailLevel,
+    WorldCollection,
     WorldGraphRequest,
     WorldGraphV2ReadModel,
     WorldReadFilter,
@@ -3757,6 +3758,7 @@ def _world_graph_v2_request_from_query(query: str) -> WorldGraphRequest:
         raise ValueError(f"Unsupported World detail level: {level_text}") from exc
     return WorldGraphRequest(
         detail_level=level,
+        collection=(WorldCollection(one("collection").upper()) if one("collection") else None),
         focus_type=one("focus_type"), focus_id=one("focus_id"),
         filters=WorldReadFilter(
             date_from=one("date_from"), date_to=one("date_to"),
@@ -3773,6 +3775,7 @@ def _world_graph_v2_request_from_query(query: str) -> WorldGraphRequest:
         limits=WorldReadLimits(
             people=integer("people_limit", 25), clusters=integer("cluster_limit", 10),
             events=integer("event_limit", 25), evidence=integer("evidence_limit", 25),
+            media=integer("media_limit", 25),
             relationships=integer("relationship_limit", 50), patterns=integer("pattern_limit", 10),
         ),
         cursor=one("cursor"), revision=one("revision"), as_of=one("as_of"),
