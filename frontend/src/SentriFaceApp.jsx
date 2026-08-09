@@ -268,15 +268,13 @@ function SentriFaceShell({ user, logout, changePassword }) {
               canDestroy={can("destroy")}
               people={state.people}
               archivedPeople={state.archivedPeople}
+              peopleReadModel={state.peopleReadModel}
               deletedFaces={state.deletedFaces}
               peopleGallery={state.peopleGallery}
               peopleGalleryImage={state.peopleGalleryImage}
-              onRefresh={guarded(actions.refreshAll)}
+              onRefresh={guarded(() => actions.refreshAll({ force: true }))}
               onOpen={guarded(actions.peopleOpen)}
               onCreateIdentifiedPerson={guarded(actions.createIdentifiedPerson)}
-              onCreateAssociation={guarded(actions.createPersonAssociation)}
-              onCreatePlaceholderAssociation={guarded(actions.createPlaceholderAssociation)}
-              onRemoveAssociation={guarded(actions.removePersonAssociation)}
               onLoadGraphPerson={guarded(actions.loadRelationshipGraphPerson)}
               onImage={actions.setPeopleGalleryImage}
               onBack={actions.peopleBack}
@@ -289,7 +287,6 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onRestore={actions.restorePerson}
               onDelete={actions.permanentlyDeletePerson}
               onMerge={actions.mergePeople}
-              onUndoMerge={guarded(actions.undoPeopleMerge)}
               onMovePhoto={actions.movePersonPhoto}
               onDeletePhoto={actions.deletePersonPhoto}
               onRestoreDeletedFace={actions.restoreDeletedFace}

@@ -949,18 +949,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json(self.server.recovery.status())
                 return
             if parsed.path == "/api/persons":
-                self._json(
-                    {
-                        "persons": [
-                            _person_summary(item, self.server.engine)
-                            for item in self.server.engine.list_persons()
-                        ],
-                        "archived_persons": [
-                            _person_summary(item, self.server.engine)
-                            for item in self.server.engine.list_persons(archived=True)
-                        ],
-                    }
-                )
+                self._json(_people_collection_payload(self.server.engine))
                 return
             if parsed.path == "/api/deleted-faces":
                 self.server.purge_expired_deleted_faces()
@@ -1051,9 +1040,17 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                             for detail in details
                         ],
                         "notes_records": [_note_record(note) for note in notes],
+                        "profile_note": _profile_note_record(
+                            profile_note, person_summaries, self.server.engine,
+                        ),
                         "observations": [_observation_record(item) for item in observations],
                         "sightings": [_sighting_record(item) for item in sightings],
                         "intelligence": _person_intelligence(intelligence),
+                        "relationships": _person_relationships(
+                            intelligence, person_summaries, self.server.engine,
+                        ),
+                        "relationship_count": len(intelligence.relationships),
+                        "activity": list(intelligence.activity),
                         "changes": [_person_change(change) for change in changes],
                         "management_events": management_events,
                         "associations": [
@@ -1078,6 +1075,17 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         self.server.engine.get_person_intelligence(person_id)
                     )
                 })
+                return
+            if parsed.path == "/api/person-relationship-graph":
+                person_id = _query_value(parsed.query, "person_id")
+                requested_limit = _safe_count(
+                    _query_value(parsed.query, "limit") or "60", "graph limit",
+                )
+                self._json(_person_relationship_graph(
+                    self.server.engine,
+                    person_id,
+                    limit=max(1, min(requested_limit, 100)),
+                ))
                 return
             if parsed.path == "/api/person-sightings":
                 person_id = _query_value(parsed.query, "person_id")
@@ -3215,6 +3223,7 @@ def _rejected(rejected: RejectedFace, index: int) -> dict[str, Any]:
 
 def _person(person: Person) -> dict[str, Any]:
     lifecycle_status = person.lifecycle_status
+    effective_person_id = person.canonical_person_id or person.person_id
     return {
         "person_id": person.person_id,
         "name": person.name,
@@ -3223,6 +3232,7 @@ def _person(person: Person) -> dict[str, Any]:
         "deleted_at": person.deleted_at,
         "lifecycle_status": lifecycle_status,
         "canonical_person_id": person.canonical_person_id,
+        "effective_person_id": effective_person_id,
         "identity_status": person.identity_status,
         "biometric_status": person.biometric_status,
         "archived": lifecycle_status == "ARCHIVED",
@@ -3232,6 +3242,7 @@ def _person(person: Person) -> dict[str, Any]:
         "enrollment_status": person.enrollment_status,
         "is_placeholder": person.enrollment_status == "placeholder",
         "notes": person.notes,
+        "allowed_actions": _allowed_person_actions(lifecycle_status),
     }
 
 
@@ -3251,7 +3262,7 @@ def _person_summary_from_embeddings(
     summary: PersonSummary,
     embeddings: list[EmbeddingRecord] | tuple[EmbeddingRecord, ...],
 ) -> dict[str, Any]:
-    return {
+    payload = {
         **_person(summary.person),
         "embedding_count": summary.embedding_count,
         "sighting_count": summary.sighting_count,
@@ -3265,6 +3276,134 @@ def _person_summary_from_embeddings(
             embeddings,
             summary.person.metadata.get("representative_embedding_id"),
         ),
+    }
+    payload["presentation"] = {
+        "priority_rank": _priority_rank(summary.person.metadata.get("importance")),
+        "priority_label": _priority_label(summary.person.metadata.get("importance")),
+        "group_labels": {
+            "country": str(summary.person.metadata.get("country") or "Unknown Country"),
+            "rank": str(summary.person.metadata.get("rank") or "Unspecified Rank"),
+            "priority": f"{_priority_label(summary.person.metadata.get('importance'), long=True)} Priority",
+            "frequency": summary.frequency_label,
+            "frequent": (
+                "Not Seen Yet" if summary.sighting_count == 0
+                else "Frequently Seen" if summary.frequency_label in {"Very Frequent", "Frequent"}
+                else "Seen Occasionally"
+            ),
+        },
+    }
+    return payload
+
+
+def _allowed_person_actions(lifecycle_status: str) -> list[str]:
+    return {
+        "ACTIVE": [
+            "OPEN", "EDIT", "EDIT_NOTES", "FAVORITE", "MANAGE_FACES",
+            "ARCHIVE", "DELETE", "MERGE",
+        ],
+        "ARCHIVED": ["VIEW_HISTORY", "RESTORE", "DELETE"],
+        "DELETED": ["VIEW_HISTORY"],
+        "MERGED": ["VIEW_HISTORY", "OPEN_CANONICAL"],
+    }.get(lifecycle_status, [])
+
+
+def _priority_rank(value: Any) -> int:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"important", "high"}:
+        return 3
+    if normalized in {"suspicious", "watch"}:
+        return 2
+    if normalized in {"regular", "medium"}:
+        return 1
+    return 0
+
+
+def _priority_label(value: Any, *, long: bool = False) -> str:
+    rank = _priority_rank(value)
+    labels = {
+        3: ("HIGH", "High"),
+        2: ("WATCH", "Watch"),
+        1: ("REGULAR", "Regular"),
+        0: ("UNSPECIFIED", "Unspecified"),
+    }
+    return labels[rank][1 if long else 0]
+
+
+def _people_collection_payload(engine: FaceEngine) -> dict[str, Any]:
+    active_summaries = engine.list_persons()
+    historical_summaries = engine.list_persons(archived=True)
+    active = [_person_summary(item, engine) for item in active_summaries]
+    historical = [_person_summary(item, engine) for item in historical_summaries]
+    return {
+        "contract_version": 1,
+        "persons": active,
+        "archived_persons": historical,
+        "statistics": {
+            "active": _people_statistics(active),
+            "historical": _people_statistics(historical),
+        },
+        "sort_orders": {
+            "active": _people_sort_orders(active),
+            "historical": _people_sort_orders(historical),
+        },
+    }
+
+
+def _people_statistics(people: list[dict[str, Any]]) -> dict[str, int]:
+    now = datetime.now(timezone.utc)
+
+    def parsed(value: Any) -> datetime | None:
+        try:
+            result = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+            return result.replace(tzinfo=result.tzinfo or timezone.utc)
+        except ValueError:
+            return None
+
+    def today(value: Any) -> bool:
+        result = parsed(value)
+        return bool(result and result.astimezone(timezone.utc).date() == now.date())
+
+    def recent(value: Any) -> bool:
+        result = parsed(value)
+        return bool(result and 0 <= (now - result.astimezone(timezone.utc)).total_seconds() <= 7 * 86_400)
+
+    return {
+        "people_count": len(people),
+        "embedding_count": sum(int(item.get("embedding_count") or 0) for item in people),
+        "favorite_count": sum(bool(item.get("favorite")) for item in people),
+        "with_photos_count": sum(int(item.get("embedding_count") or 0) > 0 for item in people),
+        "without_photos_count": sum(int(item.get("embedding_count") or 0) == 0 for item in people),
+        "seen_last_7_days_count": sum(recent(item.get("last_seen_at")) for item in people),
+        "added_today_count": sum(today(item.get("created_at")) for item in people),
+        "archived_today_count": sum(today(item.get("deleted_at")) for item in people),
+        "merged_count": sum(item.get("lifecycle_status") == "MERGED" for item in people),
+    }
+
+
+def _people_sort_orders(people: list[dict[str, Any]]) -> dict[str, list[str]]:
+    def text(item: dict[str, Any], key: str) -> str:
+        return str(item.get("metadata", {}).get(key) or "").casefold()
+
+    def timestamp(value: Any) -> float:
+        try:
+            return datetime.fromisoformat(str(value or "").replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return 0.0
+
+    def ordered(key: Callable[[dict[str, Any]], Any]) -> list[str]:
+        return [item["person_id"] for item in sorted(people, key=key)]
+
+    name_key = lambda item: str(item.get("name") or "").casefold()
+    return {
+        "name": ordered(name_key),
+        "country": ordered(lambda item: (text(item, "country"), name_key(item))),
+        "rank": ordered(lambda item: (text(item, "rank"), name_key(item))),
+        "priority": ordered(lambda item: (-item["presentation"]["priority_rank"], name_key(item))),
+        "sightings": ordered(lambda item: (-int(item.get("sighting_count") or 0), name_key(item))),
+        "frequency": ordered(lambda item: (-float(item.get("frequency_per_30_days") or 0), name_key(item))),
+        "seen": ordered(lambda item: (-timestamp(item.get("last_seen_at")), name_key(item))),
+        "frequent": ordered(lambda item: (-float(item.get("frequency_per_30_days") or 0), name_key(item))),
+        "newest": ordered(lambda item: (-timestamp(item.get("created_at")), name_key(item))),
     }
 
 
@@ -3343,6 +3482,188 @@ def _note_record(note: Note) -> dict[str, Any]:
     }
 
 
+def _profile_note_record(
+    note: Note | None,
+    person_summaries: dict[str, PersonSummary],
+    engine: FaceEngine,
+) -> dict[str, Any]:
+    if note is None:
+        return {
+            "note_id": None,
+            "content": "",
+            "revision_number": 0,
+            "mentioned_person_ids": [],
+            "mentions": [],
+        }
+    mentions = []
+    for raw_person_id in note.mentioned_person_ids:
+        effective_person_id = engine.resolve_canonical_person_id(raw_person_id)
+        summary = person_summaries.get(effective_person_id) or person_summaries.get(raw_person_id)
+        person_payload = _person_summary(summary, engine) if summary is not None else None
+        mentions.append({
+            "occurrence_id": f"{note.note_id}:{raw_person_id}",
+            "raw_person_id": raw_person_id,
+            "effective_person_id": effective_person_id,
+            "display_name": person_payload["name"] if person_payload else raw_person_id,
+            "person": person_payload,
+        })
+    return {
+        "note_id": note.note_id,
+        "content": note.content,
+        "revision_number": note.revision_number,
+        "mentioned_person_ids": list(note.mentioned_person_ids),
+        "effective_mentioned_person_ids": list(note.effective_mentioned_person_ids),
+        "mentions": mentions,
+    }
+
+
+def _person_relationships(
+    intelligence: PersonIntelligence,
+    person_summaries: dict[str, PersonSummary],
+    engine: FaceEngine,
+) -> list[dict[str, Any]]:
+    relationships = []
+    for item in intelligence.relationships:
+        summary = person_summaries.get(item.person_id)
+        if summary is None:
+            raise RuntimeError("A related person record is unavailable")
+        relationships.append({
+            "relationship_id": (
+                f"relationship:{item.source_person_id}:{item.target_person_id}:"
+                f"{item.relationship_type}:{item.directionality}"
+            ),
+            "person_id": item.person_id,
+            "source_person_id": item.source_person_id,
+            "target_person_id": item.target_person_id,
+            "relationship_type": item.relationship_type,
+            "directionality": item.directionality,
+            "evidence_count": item.evidence_count,
+            "evidence_type_counts": item.evidence_type_counts,
+            "co_observation_count": item.co_observation_count,
+            "first_evidence_at": item.first_evidence_at,
+            "last_evidence_at": item.last_evidence_at,
+            "presentation_label": _relationship_label(item.evidence_type_counts),
+            "person": _person_summary(summary, engine),
+        })
+    return relationships
+
+
+def _relationship_label(evidence_counts: dict[str, int] | set[str] | tuple[str, ...]) -> str:
+    types = set(evidence_counts)
+    if len(types) > 1:
+        return "Multiple evidence types"
+    if "NOTE_REFERENCE" in types:
+        return "Mention-linked"
+    if "CO_OBSERVED" in types:
+        return "Co-observed"
+    if "MANUAL_ASSOCIATION" in types:
+        return "Manually linked"
+    return "Related"
+
+
+def _person_relationship_graph(
+    engine: FaceEngine,
+    requested_person_id: str,
+    *,
+    limit: int,
+) -> dict[str, Any]:
+    root = engine.get_effective_person(requested_person_id)
+    if root is None:
+        raise KeyError("This person no longer exists")
+    projection = engine.get_global_graph_projection()
+    nodes_by_id = {node.person_id: node for node in projection.nodes}
+    root_id = root.person_id
+    if root_id not in nodes_by_id:
+        raise RuntimeError("The requested person is missing from the graph projection")
+
+    adjacency: dict[str, set[str]] = {person_id: set() for person_id in nodes_by_id}
+    for connection in projection.connections:
+        adjacency.setdefault(connection.source_person_id, set()).add(connection.target_person_id)
+        adjacency.setdefault(connection.target_person_id, set()).add(connection.source_person_id)
+
+    selected_ids: list[str] = []
+    depths = {root_id: 0}
+    queue = [root_id]
+    while queue and len(selected_ids) < limit:
+        person_id = queue.pop(0)
+        selected_ids.append(person_id)
+        for neighbor_id in sorted(adjacency.get(person_id, set())):
+            if neighbor_id in depths:
+                continue
+            depths[neighbor_id] = depths[person_id] + 1
+            queue.append(neighbor_id)
+
+    selected = set(selected_ids)
+    summaries = {
+        item.person.person_id: item
+        for item in [*engine.list_persons(), *engine.list_persons(archived=True)]
+    }
+    nodes = []
+    for person_id in selected_ids:
+        graph_node = nodes_by_id[person_id]
+        summary = summaries.get(person_id)
+        person_payload = _person_summary(summary, engine) if summary is not None else {
+            "person_id": person_id,
+            "name": graph_node.name,
+            "lifecycle_status": graph_node.lifecycle_status,
+            "canonical_person_id": graph_node.canonical_person_id,
+            "effective_person_id": graph_node.canonical_person_id or person_id,
+            "allowed_actions": _allowed_person_actions(graph_node.lifecycle_status),
+            "representative_image": "",
+            "metadata": {},
+            "is_placeholder": True,
+        }
+        nodes.append({
+            **person_payload,
+            "layout": {"depth": depths[person_id]},
+        })
+
+    edges = [
+        {
+            "edge_id": (
+                f"graph:{item.source_person_id}:{item.target_person_id}:"
+                f"{item.relationship_type}:{item.directionality}"
+            ),
+            "source_person_id": item.source_person_id,
+            "target_person_id": item.target_person_id,
+            "relationship_type": item.relationship_type,
+            "directionality": item.directionality,
+            "evidence_count": item.evidence_count,
+            "evidence_types": list(item.evidence_types),
+            "last_evidence_at": item.last_evidence_at,
+            "presentation_label": _relationship_label(item.evidence_types),
+        }
+        for item in projection.connections
+        if item.source_person_id in selected and item.target_person_id in selected
+    ]
+    revision_payload = {
+        "nodes": [
+            [item["person_id"], item["canonical_person_id"], item["lifecycle_status"]]
+            for item in nodes
+        ],
+        "edges": [
+            [item["edge_id"], item["evidence_count"], item["last_evidence_at"]]
+            for item in edges
+        ],
+    }
+    graph_revision = hashlib.sha256(
+        json.dumps(revision_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {
+        "contract": "sentriface.relationship-subgraph",
+        "contract_version": 1,
+        "graph_revision": graph_revision,
+        "requested_person_id": requested_person_id,
+        "root_person_id": root_id,
+        "nodes": nodes,
+        "edges": edges,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "truncated": len(selected_ids) < len(nodes_by_id) and bool(queue),
+        "limit": limit,
+    }
+
+
 def _observation_record(observation: Observation) -> dict[str, Any]:
     return {
         "observation_id": observation.observation_id,
@@ -3402,6 +3723,7 @@ def _person_intelligence(intelligence: PersonIntelligence) -> dict[str, Any]:
         "biometric_status": intelligence.biometric_status,
         "embedding_count": intelligence.embedding_count,
         "confidence_summary": intelligence.confidence_summary,
+        "relationship_count": len(intelligence.relationships),
         "presence": {
             "observation_count": presence.observation_count,
             "first_seen_at": presence.first_seen_at,

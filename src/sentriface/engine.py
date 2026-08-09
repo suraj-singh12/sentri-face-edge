@@ -498,6 +498,10 @@ class FaceEngine:
     def get_person_graph_neighbors(self, person_id: str):
         return self.graph.get_person_neighbors(person_id)
 
+    def get_global_graph_projection(self):
+        """Return the normalized derived graph projection for read contracts."""
+        return self.graph.get_global_projection()
+
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         return self.store.get_person_operation(operation_id, operation_type)
 

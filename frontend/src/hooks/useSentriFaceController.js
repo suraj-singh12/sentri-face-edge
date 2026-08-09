@@ -14,19 +14,13 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
   const appData = useAppData({ activeView, capabilities, ...api });
   const people = usePeopleController({
     ...api,
-    updatePerson: appData.updatePerson,
-    upsertPerson: appData.upsertPerson,
-    archivePersonLocally: appData.archivePersonLocally,
-    restorePersonLocally: appData.restorePersonLocally,
-    removePersonLocally: appData.removePersonLocally,
-    addDeletedFace: appData.addDeletedFace,
-    removeDeletedFace: appData.removeDeletedFace,
+    loadPeople: appData.loadPeople,
+    loadDeletedFaces: appData.loadDeletedFaces,
   });
   const recognize = useRecognizeController({
     ...api,
     ...uploads,
-    updatePerson: appData.updatePerson,
-    upsertPerson: appData.upsertPerson,
+    loadPeople: appData.loadPeople,
     onExistingPersonEnrolled: async (personId) => {
       await people.actions.refreshPeopleProfile(personId);
       setActiveView("people");
@@ -36,8 +30,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
     enabled: canAdd && activeView === "queue",
     ...api,
     ...uploads,
-    updatePerson: appData.updatePerson,
-    upsertPerson: appData.upsertPerson,
+    loadPeople: appData.loadPeople,
   });
 
   return {
@@ -48,6 +41,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       refreshing: appData.refreshing,
       people: appData.people,
       archivedPeople: appData.archivedPeople,
+      peopleReadModel: appData.peopleReadModel,
       deletedFaces: appData.deletedFaces,
       events: appData.events,
       backups: appData.backups,

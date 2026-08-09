@@ -4,7 +4,7 @@ This document is a concise checkpoint of the stable implemented architecture. De
 
 ## Current phase
 
-P9 Intelligence, Sightings, Analytics, and Derived Read Models is complete. P0 through P8-C remain frozen; P10 Person Graph + World is the next planned phase.
+P9 Intelligence, Sightings, Analytics, and Derived Read Models and the P9.5 frontend-normalization pass are complete. P0 through P9 remain frozen; P10 Person Graph + World is the next planned phase.
 
 ## Core principles
 
@@ -56,6 +56,9 @@ Compatibility stores are not current truth: `persons.notes` mirrors the latest n
 - Relationship analytics read active `relationship_evidence`, including independent type counts and first/last occurrence. Evidence count is reported as strength; no unsupported probability is invented.
 - Profile activity comes only from `operation_journal`. No-face identities use the same read models without automatic identity or enrollment creation.
 - The backend computes these values. The React People view renders them and retains `recognition_details` only for legacy face/photo-detail presentation.
+- `/api/persons` supplies versioned collection statistics, presentation fields, and sort orders. `/api/person` supplies normalized profile notes/mention occurrences, relationship rows, relationship counts, and operation-journal activity.
+- `/api/person-relationship-graph` is the bounded, versioned subgraph read contract for the existing relationship modal. It owns graph membership, canonical endpoints, lifecycle state, evidence/counts, breadth-first depth, truncation, and revision metadata; React owns only coordinates and visual interaction state.
+- Current identity mutations trigger authoritative People/profile/deleted-face reads. React does not synthesize lifecycle, canonical ownership, embeddings, activity, or aggregate intelligence after a write.
 
 ## Known deferred work
 
@@ -63,3 +66,4 @@ Compatibility stores are not current truth: `persons.notes` mirrors the latest n
 - P12 backup/restore hardening for normalized authoritative, journal, and projection records.
 - P13 fully offline BYOM/model-management work.
 - P10 and later graph UI, integrity/rebuild/revert, packaging, and release work remain governed by the implementation plan.
+- P10 still requires the full global Person Graph contract, World spatial/temporal projection, enriched graph filtering/collection contracts, and cross-view revision/invalidation metadata. The P9.5 bounded relationship subgraph is not the P10 contract.

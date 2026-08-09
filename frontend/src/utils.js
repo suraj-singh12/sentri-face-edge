@@ -30,16 +30,8 @@ export function recognitionText(match) {
   return `${match.name} - No Match`;
 }
 
-export function hasCertainMatch(match) {
-  return Boolean(match && ["strong", "duplicate"].includes(match.classification));
-}
-
 export function isNewPersonSuggestion(match) {
   return !match || !match.is_known;
-}
-
-export function scoreColor(match) {
-  return matchDisplay(match).color;
 }
 
 export function matchDisplay(match) {
@@ -82,47 +74,39 @@ export function galleryImages(payload) {
   return payload.embeddings.map((record) => record.crop_path || record.source_image).filter(Boolean);
 }
 
-export function galleryImageRecords(payload) {
-  return payload.embeddings
-    .map((record) => ({
-      embeddingId: record.embedding_id,
-      path: record.crop_path || record.source_image,
-    }))
-    .filter((record) => record.path);
-}
-
 export function detailsForEmbedding(details, embeddingId) {
   return (details || []).filter((detail) => detail.embedding_id === embeddingId);
 }
 
-export function personProfile(payload, scopedDetails = payload.details || [], imageSelected = false) {
-  const details = scopedDetails.length ? scopedDetails : payload.details || [];
+export function personProfile(payload, imageSelected = false) {
+  const person = requirePersonContract(payload.person);
   const metadata = payload.person.metadata || {};
-  const latestDetail = details.find((detail) => detail.rank || detail.country || detail.importance || detail.name) || {};
-  const creatorDetail = [...(payload.details || [])]
-    .filter((detail) => detail.added_by)
-    .sort((left, right) => String(left.created_at || "").localeCompare(String(right.created_at || "")))[0] || {};
-  const hasScopedDetails = scopedDetails.length > 0;
   return {
-    personId: payload.person.person_id,
-    rank: hasScopedDetails ? latestDetail.rank || metadata.rank || "" : metadata.rank || latestDetail.rank || "",
-    name: payload.person.name || latestDetail.name || "",
-    country: hasScopedDetails ? latestDetail.country || metadata.country || "" : metadata.country || latestDetail.country || "",
-    importance: hasScopedDetails ? latestDetail.importance || metadata.importance || "Regular" : metadata.importance || latestDetail.importance || "Regular",
-    tags: Array.isArray(payload.person.tags) ? payload.person.tags : Array.isArray(metadata.tags) ? metadata.tags : [],
-    createdAt: payload.person.created_at || "",
-    addedBy: metadata.added_by || creatorDetail.added_by || "",
-    scopeLabel: hasScopedDetails ? "Selected image details" : imageSelected ? "Selected image has no saved details" : "Person summary",
+    personId: person.person_id,
+    rank: metadata.rank || "",
+    name: person.name,
+    country: metadata.country || "",
+    importance: metadata.importance || "Regular",
+    tags: Array.isArray(person.tags) ? person.tags : Array.isArray(metadata.tags) ? metadata.tags : [],
+    createdAt: person.created_at || "",
+    addedBy: metadata.added_by || "",
+    scopeLabel: imageSelected ? "Person summary · selected face shown" : "Person summary",
   };
 }
 
-export function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+export function requirePersonContract(person) {
+  if (!person || !person.person_id || !person.name) throw new Error("Invalid person read contract");
+  if (!["ACTIVE", "ARCHIVED", "DELETED", "MERGED"].includes(person.lifecycle_status)) {
+    throw new Error(`Invalid person lifecycle contract for ${person.person_id}`);
+  }
+  if (!("canonical_person_id" in person) || !person.effective_person_id || !Array.isArray(person.allowed_actions)) {
+    throw new Error(`Incomplete person identity contract for ${person.person_id}`);
+  }
+  return person;
+}
+
+export function personAllows(person, action) {
+  return requirePersonContract(person).allowed_actions.includes(action);
 }
 
 export async function droppedImageFiles(dataTransfer) {

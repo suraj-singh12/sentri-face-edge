@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { requirePersonContract } from "../utils.js";
+
 export function useAppData({ activeView, capabilities = [], apiGet, apiPost, apiUpload, apiDownload, apiDelete, showToast }) {
   const canTechnical = capabilities.includes("technical");
   const canDestroy = capabilities.includes("destroy");
@@ -10,6 +12,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const [refreshing, setRefreshing] = useState(false);
   const [people, setPeople] = useState([]);
   const [archivedPeople, setArchivedPeople] = useState([]);
+  const [peopleReadModel, setPeopleReadModel] = useState({ statistics: {}, sort_orders: {} });
   const [deletedFaces, setDeletedFaces] = useState([]);
   const [events, setEvents] = useState([]);
   const [backups, setBackups] = useState([]);
@@ -26,8 +29,16 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const loadProfile = useCallback(async (options = {}) => setProfile(await apiGet("/api/profile", options)), [apiGet]);
   const loadPeople = useCallback(async (options = {}) => {
     const payload = await apiGet("/api/persons", options);
-    setPeople(payload.persons || []);
-    setArchivedPeople(payload.archived_persons || []);
+    const active = (payload.persons || []).map(requirePersonContract);
+    const historical = (payload.archived_persons || []).map(requirePersonContract);
+    setPeople(active);
+    setArchivedPeople(historical);
+    setPeopleReadModel({
+      contract_version: payload.contract_version,
+      statistics: payload.statistics || {},
+      sort_orders: payload.sort_orders || {},
+    });
+    return payload;
   }, [apiGet]);
   const loadEvents = useCallback(async (options = {}) => {
     if (!canTechnical) { setEvents([]); return { events: [] }; }
@@ -70,66 +81,6 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     }
   }, [activeView, loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups]);
 
-  const updatePerson = useCallback((personId, updater) => {
-    const update = (items) => items.map((person) => (
-      person.person_id === personId ? updater(person) : person
-    ));
-    setPeople(update);
-    setArchivedPeople(update);
-  }, []);
-
-  const upsertPerson = useCallback((person) => {
-    if (!person?.person_id) return;
-    setPeople((current) => [person, ...current.filter((item) => item.person_id !== person.person_id)]);
-    setArchivedPeople((current) => current.filter((item) => item.person_id !== person.person_id));
-  }, []);
-
-  const archivePersonLocally = useCallback((personId, archivedAt, metadata = {}) => {
-    const person = people.find((item) => item.person_id === personId);
-    if (!person) return;
-    const archived = {
-      ...person,
-      lifecycle_status: "ARCHIVED",
-      archived: true,
-      deleted: false,
-      merged: false,
-      deleted_at: archivedAt || new Date().toISOString(),
-      metadata: { ...(person.metadata || {}), ...metadata },
-    };
-    setPeople((current) => current.filter((item) => item.person_id !== personId));
-    setArchivedPeople((current) => [archived, ...current.filter((item) => item.person_id !== personId)]);
-  }, [people]);
-
-  const restorePersonLocally = useCallback((personId) => {
-    const person = archivedPeople.find((item) => item.person_id === personId);
-    if (!person) return;
-    const restored = {
-      ...person,
-      lifecycle_status: "ACTIVE",
-      archived: false,
-      deleted: false,
-      merged: false,
-      canonical_person_id: null,
-      deleted_at: null,
-    };
-    setArchivedPeople((current) => current.filter((item) => item.person_id !== personId));
-    setPeople((current) => [restored, ...current.filter((item) => item.person_id !== personId)]);
-  }, [archivedPeople]);
-
-  const removePersonLocally = useCallback((personId) => {
-    setPeople((current) => current.filter((item) => item.person_id !== personId));
-    setArchivedPeople((current) => current.filter((item) => item.person_id !== personId));
-    setDeletedFaces((current) => current.filter((item) => item.person_id !== personId));
-  }, []);
-
-  const addDeletedFace = useCallback((face) => {
-    if (!face?.embedding_id) return;
-    setDeletedFaces((current) => [face, ...current.filter((item) => item.embedding_id !== face.embedding_id)]);
-  }, []);
-
-  const removeDeletedFace = useCallback((embeddingId) => {
-    setDeletedFaces((current) => current.filter((item) => item.embedding_id !== embeddingId));
-  }, []);
   const reloadAppData = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -380,9 +331,11 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
 
   return {
     profile,
+    connectionError,
     refreshing,
-      people,
+    people,
     archivedPeople,
+    peopleReadModel,
     deletedFaces,
     events,
     backups,
@@ -395,13 +348,6 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     loadEvents,
     loadDeletedFaces,
     loadBackups,
-    updatePerson,
-    upsertPerson,
-    archivePersonLocally,
-    restorePersonLocally,
-    removePersonLocally,
-    addDeletedFace,
-    removeDeletedFace,
     refreshAll,
     reloadAppData,
     configureRecovery,

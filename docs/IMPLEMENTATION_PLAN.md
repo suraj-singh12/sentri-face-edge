@@ -2,7 +2,7 @@
 
 Implement in order. Each phase must preserve offline operation, use additive migrations where possible, keep important writes transactional and journaled, and add upgrade/failure tests before moving on.
 
-Status at this checkpoint: P0 through P9 are complete. P10 is the next planned phase; P10 and later remain future work.
+Status at this checkpoint: P0 through P9 and the P9.5 frontend-normalization pass are complete. P10 is the next planned phase; P10 and later remain future work.
 
 ## P0 Database migration/version foundation — Complete
 
@@ -55,6 +55,10 @@ Remove compatibility stores from current-truth decisions without deleting their 
 ## P9 Intelligence, Sightings, Analytics, and Derived Read Models — Complete
 
 Added a read-only intelligence service and normalized backend models for effective sightings, presence, monthly/location trends, evidence-derived relationship analytics, and profile intelligence. Sightings now come only from finalized observations and corrected/canonical effective participants, collapse duplicate faces within an observation, retain raw provenance, and aggregate merge history under the survivor. People summaries and sort/group fields use backend-provided observation counts, first/last seen, frequency values, and labels; the profile renders normalized sighting rows. Relationship strength and history come only from active `relationship_evidence`, and activity comes only from `operation_journal`. `recognition_details`, `person_associations`, `persons.notes`, and `person_operations` remain compatibility data rather than analytics truth. No-face identities are supported without biometric enrollment. No authoritative table, graph mutation, dependency, or schema migration was added. Exit: photo/embedding deletion cannot erase event participation, corrections move the effective current sighting while preserving raw history, merges union canonical history, and focused plus full regression suites verify the behavior.
+
+## P9.5 Frontend normalization — Complete
+
+Converted React into a rendering and interaction layer over explicit backend read contracts. People collection statistics, intelligence ordering, lifecycle/canonical identity, allowed actions, normalized notes and mention occurrences, relationship rows, and journal activity now arrive from backend services. The existing relationship modal consumes a versioned backend subgraph with canonical endpoints, depth, counts, evidence, lifecycle, and revision metadata; the client computes coordinates only. Identity mutations invalidate and refetch authoritative collections/profiles instead of synthesizing final state. Legacy recognition detail remains available only inside historical face/photo presentation. No P10 Person Graph or World projection was implemented.
 
 ## P10 Person Graph + World — Future
 

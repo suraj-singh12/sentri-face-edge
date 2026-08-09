@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
-import { currentDateTimeParts, droppedImageFiles, isNewPersonSuggestion } from "../utils.js";
+import { currentDateTimeParts, droppedImageFiles, isNewPersonSuggestion, requirePersonContract } from "../utils.js";
 import { usePersistentState } from "./usePersistentState.js";
 
 export function useQueueController({
@@ -9,8 +9,7 @@ export function useQueueController({
   apiDelete,
   apiGet,
   apiPost,
-  updatePerson,
-  upsertPerson,
+  loadPeople,
   notifySkippedInputs,
   prepareImageFiles,
   showToast,
@@ -540,7 +539,6 @@ export function useQueueController({
         event_occasion: queueFollowup.eventOccasion,
         added_by: queueFollowup.addedBy,
       });
-    const personId = payload.person_id || queueFollowup.personId;
     const entries = payload.accepted || [];
     if (payload.session_closed) removeClosedQueueSession(confirmedSessionId);
     else {
@@ -567,34 +565,7 @@ export function useQueueController({
         },
       ],
     }));
-    if (queueFollowup.action === "new") {
-      upsertPerson({
-        person_id: personId,
-        name: queueFollowup.name,
-        enrollment_status: "enrolled",
-        is_placeholder: false,
-        embedding_count: entries.length,
-        representative_image: entries[0]?.image_path || "",
-        favorite: false,
-        tags: [],
-        notes: queueFollowup.notes?.trim() || "",
-        created_at: new Date().toISOString(),
-        metadata: {
-          rank: queueFollowup.rank || "",
-          country: queueFollowup.country || "",
-          importance: queueFollowup.importance || "",
-          added_by: queueFollowup.addedBy || "",
-        },
-      });
-    } else {
-      updatePerson(personId, (person) => ({
-        ...person,
-        enrollment_status: "enrolled",
-        is_placeholder: false,
-        embedding_count: Number(person.embedding_count || 0) + entries.length,
-        representative_image: person.representative_image || entries[0]?.image_path || "",
-      }));
-    }
+    await loadPeople({ dedupe: false });
     showToast(`Queue details confirmed for ${entries.length} face(s)`);
     window.setTimeout(() => {
       setQueueFollowup(null);
@@ -661,7 +632,9 @@ export function useQueueController({
 
   const openQueueGallery = async (personId) => {
     if (!personId) return;
-    setQueueGallery(await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`));
+    const payload = await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`, { dedupe: false });
+    requirePersonContract(payload.person);
+    setQueueGallery(payload);
   };
 
   const queueGalleryBack = () => {
@@ -707,7 +680,6 @@ export function useQueueController({
       action,
       faceIds,
       identityOperationId: crypto.randomUUID(),
-      followupOperationIds: Object.fromEntries(faceIds.map((faceId) => [faceId, crypto.randomUUID()])),
     });
     setQueueFollowupDone(false);
   }

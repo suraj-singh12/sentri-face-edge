@@ -32,7 +32,6 @@ import {
 } from "@mantine/core";
 import {
   IconArrowLeft,
-  IconAt,
   IconArchive,
   IconCalendar,
   IconChartDots,
@@ -47,12 +46,10 @@ import {
   IconGridDots,
   IconImageInPicture,
   IconLayoutList,
-  IconLink,
   IconMapPin,
   IconNotes,
   IconPhoto,
   IconPhotoStar,
-  IconPlus,
   IconRefresh,
   IconSearch,
   IconSortDescending,
@@ -61,11 +58,9 @@ import {
   IconSwitchHorizontal,
   IconTrash,
   IconShield,
-  IconTag,
   IconUser,
   IconUserPlus,
   IconUsers,
-  IconUnlink,
 } from "@tabler/icons-react";
 
 import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
@@ -76,13 +71,12 @@ import {
   formatSeenDateTime,
   mediaUrl,
   personProfile,
+  personAllows,
+  requirePersonContract,
 } from "../utils.js";
 import {
-  createRelationshipGraph,
   layoutRelationshipGraph,
-  mergeRelationshipGraph,
-  relationshipGraphCollections,
-  RELATIONSHIP_GRAPH_NEIGHBOR_LIMIT,
+  RELATIONSHIP_GRAPH_NODE_LIMIT,
 } from "../utils/relationshipGraph.js";
 
 export function PeopleView({
@@ -90,15 +84,13 @@ export function PeopleView({
   canDestroy = false,
   people,
   archivedPeople,
+  peopleReadModel,
   deletedFaces = [],
   peopleGallery,
   peopleGalleryImage,
   onRefresh,
   onOpen,
   onCreateIdentifiedPerson,
-  onCreateAssociation,
-  onCreatePlaceholderAssociation,
-  onRemoveAssociation,
   onLoadGraphPerson,
   onImage,
   onBack,
@@ -111,7 +103,6 @@ export function PeopleView({
   onRestore,
   onDelete,
   onMerge,
-  onUndoMerge,
   onMovePhoto,
   onDeletePhoto,
   onRestoreDeletedFace,
@@ -132,15 +123,11 @@ export function PeopleView({
   const [placeholderValues, setPlaceholderValues] = useState(() => newPlaceholderValues());
   const resultsRef = useRef(null);
   const normalizedQuery = query.trim().toLowerCase();
-  const statsCollection = filter === "archived" ? archivedPeople : people;
-  const peopleStats = useMemo(() => {
-    const totalPhotos = statsCollection.reduce((sum, person) => sum + Number(person.embedding_count || 0), 0);
-    const addedToday = statsCollection.filter((person) => isTodayLike(person.created_at)).length;
-    return { totalPhotos, addedToday };
-  }, [statsCollection]);
+  const collectionKey = filter === "archived" ? "historical" : "active";
+  const collectionStats = peopleReadModel?.statistics?.[collectionKey] || {};
   const visiblePeople = useMemo(() => {
     const collection = filter === "archived" ? archivedPeople : people;
-    return collection
+    const filtered = collection
       .filter((person) => {
         if (filter === "favorites" && !person.favorite) return false;
         if (filter === "withPhotos" && !Number(person.embedding_count || 0)) return false;
@@ -156,19 +143,14 @@ export function PeopleView({
         ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-      })
-      .sort((left, right) => {
-        if (sort === "name") return compareText(left.name, right.name);
-        if (sort === "country") return compareText(profileValue(left, "country"), profileValue(right, "country")) || compareText(left.name, right.name);
-        if (sort === "rank") return compareText(profileValue(left, "rank"), profileValue(right, "rank")) || compareText(left.name, right.name);
-        if (sort === "priority") return priorityScore(right) - priorityScore(left) || compareText(left.name, right.name);
-        if (sort === "sightings") return sightingCount(right) - sightingCount(left) || compareText(left.name, right.name);
-        if (sort === "frequency") return sightingFrequencyScore(right) - sightingFrequencyScore(left) || compareText(left.name, right.name);
-        if (sort === "seen") return dateValue(right.last_seen_at) - dateValue(left.last_seen_at) || compareText(left.name, right.name);
-        if (sort === "frequent") return frequentlySeenScore(right) - frequentlySeenScore(left) || compareText(left.name, right.name);
-        return dateValue(right.created_at) - dateValue(left.created_at);
       });
-  }, [archivedPeople, filter, normalizedQuery, people, sort]);
+    const order = peopleReadModel?.sort_orders?.[collectionKey]?.[sort] || [];
+    const rank = new Map(order.map((personId, index) => [personId, index]));
+    return [...filtered].sort((left, right) => (
+      (rank.get(left.person_id) ?? Number.MAX_SAFE_INTEGER)
+      - (rank.get(right.person_id) ?? Number.MAX_SAFE_INTEGER)
+    ));
+  }, [archivedPeople, collectionKey, filter, normalizedQuery, people, peopleReadModel, sort]);
   const pageCount = Number(pageSize);
   const totalPages = Math.max(1, Math.ceil(visiblePeople.length / pageCount));
   const safePage = Math.min(page, totalPages);
@@ -213,9 +195,6 @@ export function PeopleView({
           onSaveNotes={onSaveNotes}
           onAddPhoto={onAddPhoto}
           onCreateIdentifiedPerson={onCreateIdentifiedPerson}
-          onCreateAssociation={onCreateAssociation}
-          onCreatePlaceholderAssociation={onCreatePlaceholderAssociation}
-          onRemoveAssociation={onRemoveAssociation}
           onLoadGraphPerson={onLoadGraphPerson}
           onFavorite={onFavorite}
           onSetRepresentative={onSetRepresentative}
@@ -223,7 +202,6 @@ export function PeopleView({
           onRestore={onRestore}
           onDelete={onDelete}
           onMerge={onMerge}
-          onUndoMerge={onUndoMerge}
           onMovePhoto={onMovePhoto}
           onDeletePhoto={onDeletePhoto}
         />
@@ -304,10 +282,7 @@ export function PeopleView({
               ) : (
                 <>
                   <PeopleStatsStrip
-                    people={statsCollection}
-                    totalPhotos={peopleStats.totalPhotos}
-                    favoriteCount={statsCollection.filter((person) => person.favorite).length}
-                    addedToday={peopleStats.addedToday}
+                    statistics={collectionStats}
                     archived={filter === "archived"}
                   />
                   <Box ref={resultsRef} className="people-results-scroll">
@@ -386,8 +361,8 @@ export function PeopleView({
         centered
       >
         <Stack>
-          <Alert color="red" icon={<IconShield size={18} />} title="This removes the live profile">
-            {deleteTarget?.name} and all linked photos, deleted faces, sightings, associations, and profile history will be removed from the live library. Associated people themselves are not deleted. A verified safety backup is created first.
+          <Alert color="red" icon={<IconShield size={18} />} title="This tombstones the identity">
+            {deleteTarget?.name} will leave active use. Historical identity, sightings, relationships, and operation provenance remain represented. A verified safety backup is created first.
           </Alert>
           <TextInput
             label="Type DELETE to confirm"
@@ -718,19 +693,19 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
   );
 }
 
-function PeopleStatsStrip({ people, totalPhotos, favoriteCount, addedToday, archived }) {
+function PeopleStatsStrip({ statistics, archived }) {
   const stats = archived ? [
-    { label: "Archived Records", value: people.length, icon: IconArchive, color: "gray" },
-    { label: "Retained Photos", value: totalPhotos.toLocaleString(), icon: IconImageInPicture, color: "violet" },
-    { label: "Merged Records", value: people.filter((person) => person.metadata?.merged_into).length, icon: IconSwitchHorizontal, color: "blue" },
-    { label: "Archived Today", value: people.filter((person) => isTodayLike(person.deleted_at)).length, icon: IconRefresh, color: "green" },
+    { label: "Archived Records", value: statistics.people_count || 0, icon: IconArchive, color: "gray" },
+    { label: "Retained Photos", value: Number(statistics.embedding_count || 0).toLocaleString(), icon: IconImageInPicture, color: "violet" },
+    { label: "Merged Records", value: statistics.merged_count || 0, icon: IconSwitchHorizontal, color: "blue" },
+    { label: "Archived Today", value: statistics.archived_today_count || 0, icon: IconRefresh, color: "green" },
   ] : [
-    { label: "Total People", value: people.length, icon: IconUser, color: "teal" },
-    { label: "With Photos", value: people.filter((person) => Number(person.embedding_count || 0)).length, icon: IconImageInPicture, color: "violet" },
-    { label: "No Photos", value: people.filter((person) => !Number(person.embedding_count || 0)).length, icon: IconUser, color: "indigo" },
-    { label: "Favorites", value: favoriteCount, icon: IconStar, color: "yellow" },
-    { label: "Seen in last 7 days", value: people.filter((person) => daysSince(person.last_seen_at) <= 7).length, icon: IconEye, color: "blue" },
-    { label: "Added Today", value: addedToday, icon: IconRefresh, color: "blue" },
+    { label: "Total People", value: statistics.people_count || 0, icon: IconUser, color: "teal" },
+    { label: "With Photos", value: statistics.with_photos_count || 0, icon: IconImageInPicture, color: "violet" },
+    { label: "No Photos", value: statistics.without_photos_count || 0, icon: IconUser, color: "indigo" },
+    { label: "Favorites", value: statistics.favorite_count || 0, icon: IconStar, color: "yellow" },
+    { label: "Seen in last 7 days", value: statistics.seen_last_7_days_count || 0, icon: IconEye, color: "blue" },
+    { label: "Added Today", value: statistics.added_today_count || 0, icon: IconRefresh, color: "blue" },
   ];
   return (
     <SimpleGrid cols={{ base: 2, sm: 3, lg: archived ? 4 : 6 }} spacing="sm" className="people-stats-strip">
@@ -764,7 +739,7 @@ function PeopleResults({ people, groupBy, viewMode, archived, canDestroy, onOpen
   const cards = (items) => (
     <Box className={viewMode === "list" ? "people-card-list" : "people-card-grid"}>
       {items.map((person) => {
-        const lifecycleStatus = personLifecycleStatus(person);
+        const lifecycleStatus = requirePersonContract(person).lifecycle_status;
         const isHistorical = lifecycleStatus !== "ACTIVE";
         return (
           <PersonCard
@@ -821,7 +796,7 @@ function PeopleResults({ people, groupBy, viewMode, archived, canDestroy, onOpen
 
 function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, onFavorite, onDelete }) {
   const cardClass = viewMode === "list" ? "people-person-card people-person-card--list" : "people-person-card";
-  const lifecycleStatus = personLifecycleStatus(person);
+  const lifecycleStatus = requirePersonContract(person).lifecycle_status;
   const historical = lifecycleStatus !== "ACTIVE";
   const openPerson = () => {
     if (!historical) onOpen(person.person_id);
@@ -961,16 +936,7 @@ function groupPeople(people, groupBy) {
 }
 
 function groupLabelForPerson(person, groupBy) {
-  if (groupBy === "country") return profileValue(person, "country") || "Unknown Country";
-  if (groupBy === "rank") return profileValue(person, "rank") || "Unspecified Rank";
-  if (groupBy === "priority") return `${priorityDetails(person).longLabel} Priority`;
-  if (groupBy === "frequency") return sightingFrequencyLabel(person);
-  if (groupBy === "frequent") {
-    if (!sightingCount(person)) return "Not Seen Yet";
-    return ["Very Frequent", "Frequent"].includes(sightingFrequencyLabel(person))
-      ? "Frequently Seen"
-      : "Seen Occasionally";
-  }
+  if (groupBy !== "none") return person.presentation?.group_labels?.[groupBy] || "Unspecified";
   return "All People";
 }
 
@@ -982,13 +948,8 @@ function compareText(left, right) {
   return String(left || "").localeCompare(String(right || ""), undefined, { sensitivity: "base" });
 }
 
-function dateValue(value) {
-  const parsed = new Date(value || 0).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function daysSince(value) {
-  const timestamp = dateValue(value);
+  const timestamp = new Date(value || 0).getTime();
   if (!timestamp) return Number.POSITIVE_INFINITY;
   return Math.max(0, (Date.now() - timestamp) / 86_400_000);
 }
@@ -997,32 +958,10 @@ function sightingCount(person) {
   return Number(person?.sighting_count || 0);
 }
 
-function sightingFrequencyScore(person) {
-  return Number(person?.frequency_per_30_days || 0);
-}
-
-function frequentlySeenScore(person) {
-  return sightingFrequencyScore(person);
-}
-
-function sightingFrequencyLabel(person) {
-  return person?.frequency_label || "Never Seen";
-}
-
-function priorityScore(person) {
-  const value = profileValue(person, "importance").toLowerCase();
-  if (value === "important" || value === "high") return 3;
-  if (value === "suspicious" || value === "watch") return 2;
-  if (value === "regular" || value === "medium") return 1;
-  return 0;
-}
-
 function priorityDetails(person) {
-  const score = priorityScore(person);
-  if (score === 3) return { label: "HIGH", longLabel: "High", color: "red" };
-  if (score === 2) return { label: "WATCH", longLabel: "Watch", color: "orange" };
-  if (score === 1) return { label: "REGULAR", longLabel: "Regular", color: "yellow" };
-  return { label: "UNSPECIFIED", longLabel: "Unspecified", color: "gray" };
+  const label = person.presentation?.priority_label || "UNSPECIFIED";
+  const color = { HIGH: "red", WATCH: "orange", REGULAR: "yellow" }[label] || "gray";
+  return { label, color };
 }
 
 function lastSeenLabelForCard(value) {
@@ -1031,13 +970,6 @@ function lastSeenLabelForCard(value) {
   if (days < 1) return "Seen today";
   const rounded = Math.floor(days);
   return `Seen ${rounded} day${rounded === 1 ? "" : "s"} ago`;
-}
-
-function isTodayLike(value) {
-  if (!value) return false;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return false;
-  return parsed.toDateString() === new Date().toDateString();
 }
 
 function PeopleGalleryView({
@@ -1053,9 +985,6 @@ function PeopleGalleryView({
   onSaveNotes,
   onAddPhoto,
   onCreateIdentifiedPerson,
-  onCreateAssociation,
-  onCreatePlaceholderAssociation,
-  onRemoveAssociation,
   onLoadGraphPerson,
   onFavorite,
   onSetRepresentative,
@@ -1063,7 +992,6 @@ function PeopleGalleryView({
   onRestore,
   onDelete,
   onMerge,
-  onUndoMerge,
   onMovePhoto,
   onDeletePhoto,
 }) {
@@ -1076,37 +1004,38 @@ function PeopleGalleryView({
   const [targetPersonId, setTargetPersonId] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [profileDeleteConfirmation, setProfileDeleteConfirmation] = useState("");
-  const [notesDraft, setNotesDraft] = useState(payload.person.notes || "");
+  const normalizedPerson = requirePersonContract(payload.person);
+  const profileNote = payload.profile_note || { content: "", mentioned_person_ids: [], mentions: [] };
+  const [notesDraft, setNotesDraft] = useState(profileNote.content);
   const [notesBusy, setNotesBusy] = useState(false);
-  const [selectedNoteMentionIds, setSelectedNoteMentionIds] = useState([]);
+  const [selectedNoteMentionIds, setSelectedNoteMentionIds] = useState(profileNote.mentioned_person_ids || []);
   const [notePlaceholderOpen, setNotePlaceholderOpen] = useState(false);
   const [notePlaceholderBusy, setNotePlaceholderBusy] = useState(false);
   const [notePlaceholderValues, setNotePlaceholderValues] = useState(() => newPlaceholderValues());
-  const lifecycleStatus = personLifecycleStatus(payload.person);
+  const lifecycleStatus = normalizedPerson.lifecycle_status;
   const archived = lifecycleStatus !== "ACTIVE";
   const canRestore = lifecycleStatus === "ARCHIVED";
-  const mergedInto = payload.person.canonical_person_id || payload.person.metadata?.merged_into || "";
+  const mergedInto = normalizedPerson.canonical_person_id || "";
   const favorite = Boolean(payload.person.favorite || payload.person.metadata?.favorite);
   const selectedRecord = selectedImage
     ? imageRecords.find((record) => record.path === selectedImage || record.thumbPath === selectedImage) || imageRecords[0]
     : imageRecords[0] || null;
   const selectedPath = selectedRecord?.path || "";
   const selectedDetails = selectedRecord ? detailsForEmbedding(payload.details || [], selectedRecord.embeddingId) : [];
-  const profile = personProfile(payload, selectedDetails, Boolean(selectedRecord));
+  const profile = personProfile(payload, Boolean(selectedRecord));
   const summaryProfile = personProfile(payload);
-  const latestSightings = [...(payload.sightings || [])].sort(compareSightingsNewestFirst);
+  const latestSightings = payload.sightings || [];
   const recentSightings = latestSightings.slice(0, 3);
   const latestSightingLabel = lastSeenLabel(latestSightings[0]);
-  const changes = payload.changes || [];
-  const managementEvents = payload.management_events || [];
-  const associations = payload.associations || [];
+  const activity = payload.activity || [];
+  const relationships = payload.relationships || [];
   const activeMentionQuery = noteMentionQuery(notesDraft);
   const noteMentionSuggestions = useMemo(() => {
     if (!notesEditOpen || activeMentionQuery.length < 3) return [];
     const normalized = activeMentionQuery.toLocaleLowerCase();
     return people.filter((candidate) => (
       candidate.person_id !== payload.person.person_id
-      && personLifecycleStatus(candidate) === "ACTIVE"
+      && personAllows(candidate, "OPEN")
       && [candidate.name, candidate.person_id, candidate.metadata?.rank, candidate.metadata?.country]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase().includes(normalized))
@@ -1118,16 +1047,6 @@ function PeopleGalleryView({
   const noteMentionCanCreate = notesEditOpen
     && activeMentionQuery.length >= 3
     && !noteMentionHasExactPerson;
-  const mergeEvent = managementEvents.find((event) => (
-    event.operation_type === "identity.merge"
-    && event.result?.source_person_id === payload.person.person_id
-    && event.result?.target_person_id === mergedInto
-  ));
-  const mergeWasUndone = managementEvents.some((event) => (
-    event.operation_type === "identity.merge.revert"
-    && event.result?.merge_operation_id === mergeEvent?.operation_id
-  ));
-  const canUndoMerge = Boolean(mergeEvent?.result?.undo_supported && !mergeWasUndone);
   const [editValues, setEditValues] = useState(summaryProfile);
 
   useEffect(() => {
@@ -1138,25 +1057,26 @@ function PeopleGalleryView({
     setManagementDialog(null);
     setTargetPersonId("");
     setProfileDeleteConfirmation("");
-    setSelectedNoteMentionIds([]);
+    setSelectedNoteMentionIds(profileNote.mentioned_person_ids || []);
   }, [payload.person.person_id]);
 
   useEffect(() => {
-    setNotesDraft(payload.person.notes || "");
-  }, [payload.person.person_id, payload.person.notes]);
+    setNotesDraft(profileNote.content);
+    setSelectedNoteMentionIds(profileNote.mentioned_person_ids || []);
+  }, [payload.person.person_id, profileNote.content, JSON.stringify(profileNote.mentioned_person_ids || [])]);
 
   const openProfileEdit = () => {
     setEditValues({ ...summaryProfile, editorName: "" });
     setEditOpen(true);
   };
   const openNotesEdit = () => {
-    setNotesDraft(payload.person.notes || "");
-    setSelectedNoteMentionIds([]);
+    setNotesDraft(profileNote.content);
+    setSelectedNoteMentionIds(profileNote.mentioned_person_ids || []);
     setNotesEditOpen(true);
   };
   const cancelNotesEdit = () => {
-    setNotesDraft(payload.person.notes || "");
-    setSelectedNoteMentionIds([]);
+    setNotesDraft(profileNote.content);
+    setSelectedNoteMentionIds(profileNote.mentioned_person_ids || []);
     setNotesEditOpen(false);
   };
   const openNotePlaceholder = () => {
@@ -1186,8 +1106,9 @@ function PeopleGalleryView({
   };
   const saveNotes = async () => {
     if (notesBusy) return false;
-    const previousNotes = payload.person.notes || "";
-    if (notesDraft.trim() === previousNotes && selectedNoteMentionIds.length === 0) {
+    const previousNotes = profileNote.content;
+    const previousMentionIds = profileNote.mentioned_person_ids || [];
+    if (notesDraft.trim() === previousNotes && sameIds(selectedNoteMentionIds, previousMentionIds)) {
       setNotesEditOpen(false);
       return false;
     }
@@ -1198,7 +1119,7 @@ function PeopleGalleryView({
       );
       if (result?.updated) {
         setNotesDraft(result.notes);
-        setSelectedNoteMentionIds([]);
+        setSelectedNoteMentionIds(result.mentioned_person_ids || []);
         setNotesEditOpen(false);
       }
       return Boolean(result?.updated);
@@ -1227,7 +1148,7 @@ function PeopleGalleryView({
     }
   };
   const targetOptions = people
-    .filter((person) => person.person_id !== payload.person.person_id)
+    .filter((person) => person.person_id !== payload.person.person_id && personAllows(person, "OPEN"))
     .map((person) => ({
       value: person.person_id,
       label: `${person.name} · ${person.embedding_count || 0} photos`,
@@ -1256,7 +1177,7 @@ function PeopleGalleryView({
           <Text size="xs">{payload.person.name}</Text>
         </Group>
         <Group gap="xs">
-          {!archived && (
+          {personAllows(payload.person, "EDIT") && (
             <>
               {payload.person.is_placeholder && (
                 <Button size="xs" leftSection={<IconPhoto size={14} />} disabled={!canEdit} onClick={() => onAddPhoto(payload.person)}>
@@ -1287,25 +1208,12 @@ function PeopleGalleryView({
               </Button>
             </>
           )}
-          {canRestore && (
+          {canRestore && personAllows(payload.person, "RESTORE") && (
             <Button size="xs" leftSection={<IconRestore size={14} />} disabled={!canDestroy} onClick={() => setManagementDialog("restore")}>
               Restore
             </Button>
           )}
           {lifecycleStatus === "MERGED" && mergedInto && (
-            <>
-              {canUndoMerge && (
-                <Button
-                  size="xs"
-                  color="orange"
-                  variant="light"
-                  leftSection={<IconRestore size={14} />}
-                  disabled={!canDestroy}
-                  onClick={() => setManagementDialog("undo-merge")}
-                >
-                  Undo merge
-                </Button>
-              )}
               <Button
                 size="xs"
                 variant="default"
@@ -1314,7 +1222,6 @@ function PeopleGalleryView({
               >
                 View merged person
               </Button>
-            </>
           )}
           <Menu withinPortal position="bottom-end">
             <Menu.Target>
@@ -1322,7 +1229,7 @@ function PeopleGalleryView({
             </Menu.Target>
             <Menu.Dropdown>
               <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => navigator.clipboard?.writeText(payload.person.person_id)}>Copy ID</Menu.Item>
-              {!archived && (
+              {personAllows(payload.person, "FAVORITE") && (
                 <>
                   <Menu.Item leftSection={<IconStar size={14} />} disabled={!canEdit} onClick={() => onFavorite(payload.person.person_id, !favorite)}>
                     {favorite ? "Remove favorite" : "Add favorite"}
@@ -1337,7 +1244,7 @@ function PeopleGalleryView({
                 </>
               )}
               {archived && <Menu.Divider />}
-              {(lifecycleStatus === "ACTIVE" || lifecycleStatus === "ARCHIVED") && (
+              {personAllows(payload.person, "DELETE") && (
                 <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={() => {
                   setProfileDeleteConfirmation("");
                   setManagementDialog("delete-profile");
@@ -1391,7 +1298,7 @@ function PeopleGalleryView({
         </Box>
         <Card withBorder radius="md" p="sm" className="people-profile-notes">
           <Text size="sm" fw={800} mb="xs">Notes</Text>
-          <ProfileNoteSummary notes={payload.person.notes || ""} associations={associations} onOpen={onOpen} />
+          <ProfileNoteSummary note={profileNote} onOpen={onOpen} />
         </Card>
       </Group>
 
@@ -1400,8 +1307,8 @@ function PeopleGalleryView({
           <Tabs.Tab value="overview">Overview</Tabs.Tab>
           <Tabs.Tab value="photos">Photos ({imageRecords.length})</Tabs.Tab>
           <Tabs.Tab value="sightings">Sightings ({latestSightings.length})</Tabs.Tab>
-          <Tabs.Tab value="associations">Associations ({associations.length})</Tabs.Tab>
-          <Tabs.Tab value="changes">Activity ({changes.length + managementEvents.length})</Tabs.Tab>
+          <Tabs.Tab value="associations">Associations ({relationships.length})</Tabs.Tab>
+          <Tabs.Tab value="changes">Activity ({activity.length})</Tabs.Tab>
         </Tabs.List>
         <Box ref={tabContentRef} className="people-profile-tab-content">
         <Tabs.Panel value="overview">
@@ -1440,18 +1347,13 @@ function PeopleGalleryView({
         <Tabs.Panel value="associations">
           <PeopleProfileAssociations
             person={payload.person}
-            people={people}
-            associations={associations}
-            canEdit={canEdit && !archived}
+            associations={relationships}
             onOpen={onOpen}
-            onCreate={onCreateAssociation}
-            onCreatePlaceholder={onCreatePlaceholderAssociation}
-            onRemove={onRemoveAssociation}
             onLoadGraphPerson={onLoadGraphPerson}
           />
         </Tabs.Panel>
         <Tabs.Panel value="changes">
-          <PeopleProfileChanges changes={changes} managementEvents={managementEvents} currentProfile={summaryProfile} />
+          <PeopleProfileChanges activity={activity} currentProfile={summaryProfile} />
         </Tabs.Panel>
         </Box>
       </Tabs>
@@ -1577,7 +1479,7 @@ function PeopleGalleryView({
       >
         <Stack>
           <Text size="sm">
-            {payload.person.name} will stop appearing in recognition results. Their {imageRecords.length} photos, {latestSightings.length} sightings, and {associations.length} associations will be retained and can be restored later.
+            {payload.person.name} will stop appearing in recognition results. Their {imageRecords.length} photos, {latestSightings.length} sightings, and {relationships.length} relationships will be retained and can be restored later.
           </Text>
           <Text size="xs" c="dimmed">A named database backup is created and verified before archiving.</Text>
           <Group justify="flex-end">
@@ -1615,8 +1517,8 @@ function PeopleGalleryView({
         centered
       >
         <Stack>
-          <Alert color="red" icon={<IconShield size={18} />} title="This cannot be undone in the live library">
-            <strong>{payload.person.name}</strong>, {imageRecords.length} photo record{imageRecords.length === 1 ? "" : "s"}, {latestSightings.length} sighting{latestSightings.length === 1 ? "" : "s"}, {associations.length} association{associations.length === 1 ? "" : "s"}, deleted faces, and profile history will be removed. Associated people themselves are preserved. A verified safety backup is created first.
+          <Alert color="red" icon={<IconShield size={18} />} title="This tombstones the identity">
+            <strong>{payload.person.name}</strong> will leave active use. Historical identity, sightings, relationships, and operation provenance remain represented. A verified safety backup is created first.
           </Alert>
           <TextInput
             label="Type DELETE to confirm"
@@ -1667,33 +1569,6 @@ function PeopleGalleryView({
               onClick={() => runManagement(() => onMerge(payload.person.person_id, targetPersonId))}
             >
               Merge people
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-
-      <Modal
-        opened={managementDialog === "undo-merge"}
-        onClose={() => !actionBusy && setManagementDialog(null)}
-        title="Undo this merge?"
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            SentriFace will restore <strong>{payload.person.name}</strong> as a separate active person and return exactly the photos and sightings recorded by the merge.
-          </Text>
-          <Alert color="orange" title="Protected undo">
-            Undo stops without changing anything if either profile or any merged photo changed after the merge. A safety backup is created first.
-          </Alert>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
-            <Button
-              color="orange"
-              loading={actionBusy}
-              leftSection={<IconRestore size={16} />}
-              onClick={() => runManagement(() => onUndoMerge(mergeEvent.operation_id))}
-            >
-              Undo merge
             </Button>
           </Group>
         </Stack>
@@ -1915,60 +1790,30 @@ function RelationshipGraphModal({
   opened,
   onClose,
   rootPerson,
-  initialAssociations,
   onLoadPerson,
   onOpenProfile,
 }) {
-  const [graph, setGraph] = useState(() => mergeRelationshipGraph(
-    createRelationshipGraph(rootPerson), rootPerson, initialAssociations,
-  ));
-  const [expandedIds, setExpandedIds] = useState(() => new Set([rootPerson.person_id]));
-  const [loadingIds, setLoadingIds] = useState(() => new Set());
-  const [queryTruncated, setQueryTruncated] = useState(false);
+  const [graph, setGraph] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!opened) return;
-    setGraph(mergeRelationshipGraph(
-      createRelationshipGraph(rootPerson), rootPerson, initialAssociations,
-    ));
-    setExpandedIds(new Set([rootPerson.person_id]));
-    setLoadingIds(new Set());
-    setQueryTruncated(false);
-  }, [opened, rootPerson.person_id, initialAssociations]);
+    let active = true;
+    setLoading(true);
+    onLoadPerson(rootPerson.person_id, false, RELATIONSHIP_GRAPH_NODE_LIMIT)
+      .then((payload) => { if (active) setGraph(payload); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [opened, rootPerson.person_id]);
 
-  const { nodes, edges } = relationshipGraphCollections(graph);
+  const nodes = graph?.nodes || [];
+  const edges = graph?.edges || [];
   const positions = layoutRelationshipGraph(graph);
-  const expandNode = async (node) => {
-    if (personLifecycleStatus(node) !== "ACTIVE"
-      || expandedIds.has(node.person_id) || loadingIds.has(node.person_id) || graph.limitReached) return;
-    setLoadingIds((current) => new Set([...current, node.person_id]));
-    try {
-      const payload = await onLoadPerson(
-        node.person_id,
-        Boolean(node.archived),
-        RELATIONSHIP_GRAPH_NEIGHBOR_LIMIT,
-      );
-      if (!payload?.person) return;
-      setGraph((current) => mergeRelationshipGraph(
-        current,
-        payload.person,
-        payload.associations,
-      ));
-      setExpandedIds((current) => new Set([...current, node.person_id]));
-      if (payload.truncated) setQueryTruncated(true);
-    } finally {
-      setLoadingIds((current) => {
-        const next = new Set(current);
-        next.delete(node.person_id);
-        return next;
-      });
-    }
-  };
 
   return (
     <Modal opened={opened} onClose={onClose} title={`Relationship Graph · ${rootPerson.name}`} size="calc(100vw - 48px)" centered>
-      {!initialAssociations.length ? (
-        <EmptyCard text={`${rootPerson.name} has no stored associations.`} />
+      {loading ? <Loader /> : !edges.length ? (
+        <EmptyCard text={`${rootPerson.name} has no stored relationships.`} />
       ) : (
         <Stack gap="sm">
           <Group justify="space-between" gap="sm">
@@ -1978,9 +1823,9 @@ function RelationshipGraphModal({
               <Badge color="teal" variant="outline">Manually linked</Badge>
               <Badge color="orange" variant="outline">No photograph</Badge>
             </Group>
-            <Text size="xs" c="dimmed">{nodes.length} people · {edges.length} stored associations</Text>
+            <Text size="xs" c="dimmed">{graph.node_count} people · {graph.edge_count} stored relationships</Text>
           </Group>
-          {(graph.limitReached || queryTruncated) && (
+          {graph.truncated && (
             <Alert color="yellow" title="Graph display limit reached">
               Some associations are hidden to keep this view responsive. Open a person’s profile to continue from there.
             </Alert>
@@ -1988,19 +1833,19 @@ function RelationshipGraphModal({
           <Box className="relationship-graph-canvas">
             <svg className="relationship-graph-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               {edges.map((edge) => {
-                const source = positions[edge.sourceId];
-                const target = positions[edge.targetId];
+                const source = positions[edge.source_person_id];
+                const target = positions[edge.target_person_id];
                 if (!source || !target) return null;
                 return (
                   <line
-                    key={edge.edgeKey}
+                    key={edge.edge_id}
                     x1={source.x}
                     y1={source.y}
                     x2={target.x}
                     y2={target.y}
-                    className={edge.associationOrigin === "automatic_mention" ? "relationship-graph-edge relationship-graph-edge--mention" : "relationship-graph-edge"}
+                    className={edge.evidence_types?.includes("NOTE_REFERENCE") ? "relationship-graph-edge relationship-graph-edge--mention" : "relationship-graph-edge"}
                   >
-                    <title>{edge.relationshipType}</title>
+                    <title>{edge.presentation_label}</title>
                   </line>
                 );
               })}
@@ -2008,8 +1853,8 @@ function RelationshipGraphModal({
             {nodes.map((node) => {
               const position = positions[node.person_id];
               if (!position) return null;
-              const isRoot = node.person_id === graph.centerId;
-              const isHistorical = personLifecycleStatus(node) !== "ACTIVE";
+              const isRoot = node.person_id === graph.root_person_id;
+              const isHistorical = !personAllows(node, "OPEN");
               const noPhoto = node.is_placeholder || !node.representative_image;
               const className = [
                 "relationship-graph-node",
@@ -2029,7 +1874,7 @@ function RelationshipGraphModal({
                     onClick={() => {
                       if (!isHistorical) onOpenProfile(node.person_id, false);
                     }}
-                    aria-label={isHistorical ? `${node.name} is ${lifecycleStatusLabel(personLifecycleStatus(node))}` : `Open ${node.name} profile`}
+                    aria-label={isHistorical ? `${node.name} is ${lifecycleStatusLabel(node.lifecycle_status)}` : `Open ${node.name} profile`}
                   >
                     {node.representative_image
                       ? <Image src={mediaUrl(node.representative_image)} alt="" h={42} w={42} radius="xl" fit="cover" />
@@ -2040,26 +1885,11 @@ function RelationshipGraphModal({
                       {noPhoto && <Text size="10px" c="orange">No photograph</Text>}
                     </Box>
                   </button>
-                  {!isHistorical && !isRoot && !expandedIds.has(node.person_id) && (
-                    <Tooltip label="Show direct associations">
-                      <ActionIcon
-                        size="sm"
-                        variant="filled"
-                        color="teal"
-                        className="relationship-graph-expand"
-                        disabled={graph.limitReached}
-                        onClick={() => expandNode(node)}
-                        aria-label={`Expand ${node.name}`}
-                      >
-                        {loadingIds.has(node.person_id) ? <Loader size={12} color="white" /> : <IconPlus size={13} />}
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
                 </Box>
               );
             })}
           </Box>
-          <Text size="xs" c="dimmed">Click a person to open their profile. Use + to load only that person’s direct stored associations.</Text>
+          <Text size="xs" c="dimmed">Click an active person to open their profile. Graph membership, edges, depth, and counts come from the backend read model.</Text>
         </Stack>
       )}
     </Modal>
@@ -2068,124 +1898,13 @@ function RelationshipGraphModal({
 
 function PeopleProfileAssociations({
   person,
-  people,
   associations,
-  canEdit,
   onOpen,
-  onCreate,
-  onCreatePlaceholder,
-  onRemove,
   onLoadGraphPerson,
 }) {
-  const [query, setQuery] = useState("@");
-  const [selectedPersonId, setSelectedPersonId] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState(null);
   const [graphOpen, setGraphOpen] = useState(false);
-  const searchText = query.replace(/^@/, "").trim();
-  const normalizedSearch = searchText.toLowerCase();
-  const associatedIds = new Set(associations.map((item) => item.person?.person_id));
-  const allMatches = normalizedSearch.length >= 3 ? people.filter((candidate) => [
-    candidate.name,
-    candidate.person_id,
-    candidate.metadata?.rank,
-    candidate.metadata?.country,
-  ].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedSearch))) : [];
-  const availableMatches = allMatches
-    .filter((candidate) => candidate.person_id !== person.person_id && !associatedIds.has(candidate.person_id))
-    .slice(0, 8);
-  const selectedPerson = people.find((candidate) => candidate.person_id === selectedPersonId) || null;
-  const clearSearch = () => {
-    setQuery("@");
-    setSelectedPersonId("");
-  };
-  const run = async (action) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await action();
-      clearSearch();
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <Stack mt="md" gap="md" className="people-associations-panel">
-      <Card withBorder radius="md" className="people-profile-panel">
-        <Group gap="sm" mb="xs">
-          <ThemeIcon variant="light"><IconAt size={18} /></ThemeIcon>
-          <Box>
-            <Text fw={800}>Link another person</Text>
-            <Text size="xs" c="dimmed">Type @ followed by a name, role, country, or person ID. A link is created only after you confirm it.</Text>
-          </Box>
-        </Group>
-        <TextInput
-          disabled={!canEdit || busy}
-          value={query}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            setQuery(value.startsWith("@") ? value : `@${value}`);
-            setSelectedPersonId("");
-          }}
-          leftSection={<IconAt size={16} />}
-          placeholder="@Name"
-          aria-label="Search people to associate"
-        />
-        {selectedPerson ? (
-          <Group justify="space-between" mt="sm">
-            <AssociationIdentity person={selectedPerson} />
-            <Button
-              loading={busy}
-              leftSection={<IconLink size={16} />}
-              onClick={() => run(() => onCreate(person.person_id, selectedPerson.person_id))}
-            >
-              Link person
-            </Button>
-          </Group>
-        ) : normalizedSearch.length >= 3 ? (
-          <Stack gap="xs" mt="sm">
-            {availableMatches.map((candidate) => (
-              <Paper
-                key={candidate.person_id}
-                withBorder
-                radius="md"
-                p="sm"
-                component="button"
-                type="button"
-                className="mantine-click-card association-search-result"
-                onClick={() => {
-                  setSelectedPersonId(candidate.person_id);
-                  setQuery(`@${candidate.name}`);
-                }}
-              >
-                <AssociationIdentity person={candidate} />
-              </Paper>
-            ))}
-            {!availableMatches.length && allMatches.length > 0 && (
-              <Text size="sm" c="dimmed">Matching people are already linked or refer to this profile.</Text>
-            )}
-            {!allMatches.length && (
-              <Paper withBorder radius="md" p="sm">
-                <Group justify="space-between" gap="md">
-                  <Box>
-                    <Text fw={700}>No existing person matches “{searchText}”</Text>
-                    <Text size="xs" c="dimmed">Create an identity-only profile, then link it to {person.name}.</Text>
-                  </Box>
-                  <Button
-                    variant="light"
-                    loading={busy}
-                    leftSection={<IconUserPlus size={16} />}
-                    onClick={() => run(() => onCreatePlaceholder(person.person_id, searchText))}
-                  >
-                    Create placeholder “{searchText}”
-                  </Button>
-                </Group>
-              </Paper>
-            )}
-          </Stack>
-        ) : null}
-      </Card>
-
       <Card withBorder radius="md" className="people-profile-panel">
         <Group justify="space-between" mb="md">
           <Text fw={800}>Associated people ({associations.length})</Text>
@@ -2200,10 +1919,10 @@ function PeopleProfileAssociations({
         </Group>
         <Stack gap="xs">
           {associations.length ? associations.map((association) => {
-            const associationHistorical = personLifecycleStatus(association.person) !== "ACTIVE";
+            const associationHistorical = !personAllows(association.person, "OPEN");
             return (
             <Paper
-              key={association.association_id}
+              key={association.relationship_id}
               withBorder
               radius="md"
               p="sm"
@@ -2226,25 +1945,11 @@ function PeopleProfileAssociations({
                 <Group gap="xs" wrap="nowrap">
                   <Badge
                     variant="light"
-                    color={association.association_origin === "automatic_mention" ? "violet" : "teal"}
+                    color={association.evidence_type_counts?.NOTE_REFERENCE ? "violet" : "teal"}
                   >
-                    {association.association_origin === "automatic_mention" ? "Mention-linked" : "Manually linked"}
+                    {association.presentation_label}
                   </Badge>
-                  {canEdit && (
-                    <Tooltip label="Remove association">
-                      <ActionIcon
-                        color="red"
-                        variant="subtle"
-                        aria-label={`Remove association with ${association.person.name}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setRemoveTarget(association);
-                        }}
-                      >
-                        <IconUnlink size={17} />
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
+                  <Badge variant="outline" color="gray">{association.evidence_count} evidence</Badge>
                 </Group>
               </Group>
             </Paper>
@@ -2257,7 +1962,6 @@ function PeopleProfileAssociations({
         opened={graphOpen}
         onClose={() => setGraphOpen(false)}
         rootPerson={person}
-        initialAssociations={associations}
         onLoadPerson={onLoadGraphPerson}
         onOpenProfile={(personId, archived) => {
           setGraphOpen(false);
@@ -2265,36 +1969,6 @@ function PeopleProfileAssociations({
         }}
       />
 
-      <Modal
-        opened={Boolean(removeTarget)}
-        onClose={() => !busy && setRemoveTarget(null)}
-        title="Remove this association?"
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            Remove the association between <strong>{person.name}</strong> and <strong>{removeTarget?.person?.name}</strong>?
-          </Text>
-          <Alert color="blue" title="Profiles are preserved">
-            This removes only the association. Neither person nor their photos, biometric data, or history will be deleted.
-          </Alert>
-          <Group justify="flex-end">
-            <Button variant="default" disabled={busy} onClick={() => setRemoveTarget(null)}>Cancel</Button>
-            <Button
-              color="red"
-              loading={busy}
-              leftSection={<IconUnlink size={16} />}
-              onClick={async () => {
-                if (!removeTarget) return;
-                await run(() => onRemove(person.person_id, removeTarget.association_id));
-                setRemoveTarget(null);
-              }}
-            >
-              Remove association
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
     </Stack>
   );
 }
@@ -2313,7 +1987,9 @@ function AssociationIdentity({ person }) {
         <Group gap="xs" wrap="nowrap">
           <Text fw={800} truncate>{person.name}</Text>
           {person.is_placeholder && <Badge size="xs" color="gray" variant="light">No photo</Badge>}
-          {person.archived && <Badge size="xs" color="gray">Archived</Badge>}
+          {requirePersonContract(person).lifecycle_status !== "ACTIVE" && (
+            <Badge size="xs" color="gray">{lifecycleStatusLabel(person.lifecycle_status)}</Badge>
+          )}
         </Group>
         <Text size="xs" c="dimmed" truncate>{rank} · {country} · ID {String(person.person_id || "").slice(0, 8)} · {person.embedding_count || 0} photos</Text>
       </Box>
@@ -2321,35 +1997,28 @@ function AssociationIdentity({ person }) {
   );
 }
 
-function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
-  const changeCards = changes.map(normalizeChange).filter((change) => change.fields.length);
-  const historyCards = [
-    ...changeCards,
-    ...managementEvents.map(normalizeManagementChange),
-  ].sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
+function PeopleProfileChanges({ activity, currentProfile }) {
+  const historyCards = activity.map(normalizeManagementChange);
   const [historyFilter, setHistoryFilter] = useState("all");
   const [historyView, setHistoryView] = useState("cards");
   const [activeIndex, setActiveIndex] = useState(0);
   const filteredHistoryCards = historyCards.filter((change) => historyChangeMatchesFilter(change, historyFilter));
   const activeHistory = filteredHistoryCards[activeIndex] || null;
-  const activeChange = activeHistory?.kind === "profile" ? activeHistory : null;
-  const changedFields = new Set(activeChange?.fields.map((field) => field.key) || []);
   useEffect(() => setActiveIndex(0), [historyFilter]);
   return (
     <Box mt="md" className="people-change-history-shell">
       <Card withBorder radius="md" className="people-profile-panel people-current-diff-card">
         <Group justify="space-between" mb="md">
           <Box>
-            <Text fw={900} c="teal.3">Current Information (Latest)</Text>
-            <Text size="xs" c="dimmed">Compared with selected change on the right</Text>
+            <Text fw={900} c="teal.3">Current Information</Text>
+            <Text size="xs" c="dimmed">Authoritative profile values</Text>
           </Box>
-          {activeChange && <Badge variant="light" className="current-updated-badge">Up to date</Badge>}
         </Group>
         <Stack gap="xs">
-          <CurrentInfoRow icon={IconUser} label="Name" value={currentProfile.name || "-"} active={changedFields.has("name")} />
-          <CurrentInfoRow icon={IconShield} label="Rank" value={currentProfile.rank || "-"} active={changedFields.has("rank")} />
-          <CurrentInfoRow icon={IconGlobe} label="Country" value={currentProfile.country || "-"} active={changedFields.has("country")} />
-          <CurrentInfoRow icon={IconFlag} label="Importance" value={currentProfile.importance || "-"} active={changedFields.has("importance")} pill={importanceColor(currentProfile.importance)} />
+          <CurrentInfoRow icon={IconUser} label="Name" value={currentProfile.name || "-"} />
+          <CurrentInfoRow icon={IconShield} label="Rank" value={currentProfile.rank || "-"} />
+          <CurrentInfoRow icon={IconGlobe} label="Country" value={currentProfile.country || "-"} />
+          <CurrentInfoRow icon={IconFlag} label="Importance" value={currentProfile.importance || "-"} pill={importanceColor(currentProfile.importance)} />
           <Divider />
           <CurrentInfoRow icon={IconRefresh} label="Last Activity" value={activeHistory?.createdAt || "-"} subvalue={`By ${activeHistory?.editor || "System"}`} />
         </Stack>
@@ -2417,17 +2086,11 @@ function PeopleProfileChanges({ changes, managementEvents, currentProfile }) {
                 </Box>
                 {index === activeIndex && <Badge size="sm" variant="light">Active</Badge>}
               </Group>
-              {change.kind === "profile" ? (
-                <Stack gap={0} className="people-change-field-list">
-                  {change.fields.map((field) => <ChangeFieldRow key={field.key} field={field} />)}
-                </Stack>
-              ) : (
-                <Stack gap="sm" className="people-change-management-summary">
-                  <ThemeIcon size={42} radius="xl" variant="light"><IconRefresh size={21} /></ThemeIcon>
-                  <Text fw={800}>{change.title}</Text>
-                  <Text size="sm" c="dimmed">{change.detail}</Text>
-                </Stack>
-              )}
+              <Stack gap="sm" className="people-change-management-summary">
+                <ThemeIcon size={42} radius="xl" variant="light"><IconRefresh size={21} /></ThemeIcon>
+                <Text fw={800}>{change.title}</Text>
+                <Text size="sm" c="dimmed">{change.detail}</Text>
+              </Stack>
               {/* <Button mt="md" size="xs" variant="default" rightSection={<IconArrowLeft size={13} style={{ transform: "rotate(135deg)" }} />}>View Full Details</Button> */}
             </Card>
           )) : <EmptyCard text="No activity matches this filter." />}
@@ -2456,51 +2119,31 @@ function ProfilePhoto({ path, name }) {
   );
 }
 
-function ProfileNoteSummary({ notes, associations, onOpen }) {
-  if (!notes.trim()) return <Text size="sm" c="dimmed">No notes added.</Text>;
-  const associationByName = new Map();
-  for (const association of associations || []) {
-    const name = association.person?.name?.trim();
-    if (!name) continue;
-    const key = name.toLocaleLowerCase();
-    const current = associationByName.get(key);
-    if (!current || association.association_origin === "automatic_mention") {
-      associationByName.set(key, association);
-    }
-  }
-  const names = [...associationByName.keys()].sort((left, right) => right.length - left.length);
-  const parts = names.length
-    ? notes.split(new RegExp(`(@(?:${names.map(escapeRegExp).join("|")}))(?!\\w)`, "gi"))
-    : [notes];
+function ProfileNoteSummary({ note, onOpen }) {
+  if (!note.content.trim()) return <Text size="sm" c="dimmed">No notes added.</Text>;
   return (
-    <Box className="people-profile-note-summary">
-      {parts.map((part, index) => {
-        const association = part.startsWith("@")
-          ? associationByName.get(part.slice(1).toLocaleLowerCase())
-          : null;
-        return association ? (
+    <Stack gap="xs" className="people-profile-note-summary">
+      <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{note.content}</Text>
+      <Group gap="xs">
+        {(note.mentions || []).map((mention) => (
           <Badge
-            key={`${association.association_id}-${index}`}
+            key={mention.occurrence_id}
             component="button"
             type="button"
             variant="light"
-            color={association.association_origin === "automatic_mention" ? "violet" : "teal"}
+            color="violet"
             className="people-note-person-chip"
-            disabled={personLifecycleStatus(association.person) !== "ACTIVE"}
+            disabled={!personAllows(mention.person, "OPEN")}
             onClick={() => {
-              if (personLifecycleStatus(association.person) === "ACTIVE") {
-                onOpen(association.person.person_id, { archived: false });
+              if (personAllows(mention.person, "OPEN")) {
+                onOpen(mention.effective_person_id, { archived: false });
               }
             }}
-          >@{association.person.name}</Badge>
-        ) : <Text key={index} component="span" size="sm">{part}</Text>;
-      })}
-    </Box>
+          >@{mention.display_name}</Badge>
+        ))}
+      </Group>
+    </Stack>
   );
-}
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function noteMentionQuery(notes) {
@@ -2510,6 +2153,10 @@ function noteMentionQuery(notes) {
 
 function replaceNoteMentionQuery(notes, personName) {
   return String(notes || "").replace(/(^|\s)@([^@,\n]*)$/, (_, prefix) => `${prefix}@${personName}, `);
+}
+
+function sameIds(left, right) {
+  return [...left].sort().join("\u0000") === [...right].sort().join("\u0000");
 }
 
 function newPlaceholderValues(name = "") {
@@ -2537,7 +2184,7 @@ function PlaceholderPersonFields({ values, onChange, people }) {
     if (mentionQuery.length < 3) return [];
     const normalized = mentionQuery.toLocaleLowerCase();
     return people.filter((candidate) => (
-      !candidate.archived
+      personAllows(candidate, "OPEN")
       && [candidate.name, candidate.person_id, candidate.metadata?.rank, candidate.metadata?.country]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase().includes(normalized))
@@ -2623,28 +2270,6 @@ function CurrentInfoRow({ icon: Icon, label, value, subvalue, active, pill, tags
   );
 }
 
-function DiffRow({ label, value, tone }) {
-  return (
-    <Paper withBorder radius="md" p="sm" className={tone === "new" ? "diff-row diff-row--new" : "diff-row"}>
-      <Text size="xs" c="dimmed">{label}</Text>
-      <Text fw={800}>{value}</Text>
-    </Paper>
-  );
-}
-
-function ChangeFieldRow({ field }) {
-  const Icon = iconForChangeField(field.key);
-  return (
-    <Group gap="sm" wrap="nowrap" className="change-field-row">
-      <ThemeIcon variant="subtle" color="gray" size="sm"><Icon size={15} /></ThemeIcon>
-      <Text size="xs" className="change-field-label">{field.label}</Text>
-      <Text size="xs" className="diff-old">{field.from || "—"}</Text>
-      <Text size="xs" c="dimmed">→</Text>
-      <Text size="xs" className="diff-new">{field.to || "—"}</Text>
-    </Group>
-  );
-}
-
 function IconCalendarMini() {
   return <Text component="span" size="xs" c="dimmed">▣</Text>;
 }
@@ -2678,10 +2303,6 @@ function SightingSummary({ detail }) {
 
 function isSeenDetail(detail) {
   return Boolean(detail?.place_seen || detail?.date || detail?.time || detail?.event_occasion || detail?.added_by);
-}
-
-function compareSightingsNewestFirst(left, right) {
-  return sightingTimestamp(right) - sightingTimestamp(left);
 }
 
 function sightingTimestamp(detail) {
@@ -2781,34 +2402,15 @@ function managementEventDetail(event) {
   return "Completed successfully";
 }
 
-function normalizeChange(change) {
-  const fields = [
-    ["name", "Name", change.previous_name, change.new_name],
-    ["rank", "Rank", change.previous_rank, change.new_rank],
-    ["country", "Country", change.previous_country, change.new_country],
-    ["importance", "Importance", change.previous_importance, change.new_importance],
-    ["status", "Biometric status", change.previous_status, change.new_status],
-    ["tags", "Tags", change.previous_tags, change.new_tags],
-    ["notes", "Notes", change.previous_notes, change.new_notes],
-  ]
-    .filter(([, , from, to]) => (from || "") !== (to || ""))
-    .map(([key, label, from, to]) => ({ key, label, from, to }));
-  return {
-    id: change.change_id,
-    kind: "profile",
-    createdAt: change.created_at,
-    editor: change.editor_name,
-    fields,
-  };
-}
-
 function normalizeManagementChange(event) {
   return {
     id: event.operation_id,
     kind: "management",
     operationType: event.operation_type,
     createdAt: event.created_at,
-    editor: "System",
+    editor: typeof event.actor === "string"
+      ? event.actor
+      : event.actor?.display_name || event.actor?.username || "System",
     title: managementEventLabel(event),
     detail: managementEventDetail(event),
     fields: [],
@@ -2817,11 +2419,10 @@ function normalizeManagementChange(event) {
 
 function historyChangeMatchesFilter(change, filter) {
   if (filter === "all") return true;
-  if (filter === "identity") return change.kind === "profile" && change.fields.some((field) => ["name", "status"].includes(field.key));
-  if (filter === "metadata") return change.kind === "profile" && change.fields.some((field) => field.key !== "name");
-  if (filter === "photos") return ["person-preferences", "move-embedding", "delete-embedding"].includes(change.operationType);
-  if (filter === "management") return change.kind === "management"
-    && !["person-preferences", "move-embedding", "delete-embedding"].includes(change.operationType);
+  if (filter === "identity") return change.operationType?.startsWith("identity.");
+  if (filter === "metadata") return ["identity.profile.update", "identity.note.update"].includes(change.operationType);
+  if (filter === "photos") return ["identity.preferences.update", "identity.face.move", "biometric.face.delete"].includes(change.operationType);
+  if (filter === "management") return ["identity.archive", "identity.restore", "identity.merge", "identity.delete"].includes(change.operationType);
   return true;
 }
 
@@ -2833,18 +2434,6 @@ function historyFilterLabel(filter) {
     photos: "Photo & Favorite Changes",
     management: "Record Management",
   }[filter] || "All Changes";
-}
-
-function iconForChangeField(key) {
-  return {
-    name: IconUser,
-    rank: IconShield,
-    country: IconGlobe,
-    importance: IconFlag,
-    tags: IconTag,
-    notes: IconNotes,
-    status: IconPhoto,
-  }[key] || IconEdit;
 }
 
 function compactChangeDate(value) {
@@ -2880,95 +2469,6 @@ function PeopleEditableFields({ values, onChange }) {
       <TextInput required label="Edited by" placeholder="Your name" value={values.editorName || ""} onChange={(event) => onChange("editorName", event.target.value)} />
     </SimpleGrid>
   );
-}
-
-function PeopleInfoFields({ profile, details }) {
-  return (
-    <Stack>
-      <Badge size="lg" variant="light">{profile.scopeLabel}</Badge>
-      <SimpleGrid cols={{ base: 1, sm: 2 }}>
-        <InfoLine label="Rank" value={profile.rank} />
-        <InfoLine label="Name" value={profile.name} />
-        <InfoLine label="Country" value={profile.country} />
-        <InfoLine label="Importance" value={profile.importance} />
-      </SimpleGrid>
-      <Card withBorder radius="md">
-        <Text fw={700} mb="sm">Seen At</Text>
-        <SeenAtList details={details} />
-      </Card>
-    </Stack>
-  );
-}
-
-function PeopleChangesPanel({ payload, profile, onBack }) {
-  const changes = payload.changes || [];
-  return (
-    <Stack>
-      <Group justify="space-between" align="flex-start">
-        <Box>
-          <Text fw={700}>Changes</Text>
-          <Text size="xs" c="dimmed">Latest changes first</Text>
-        </Box>
-        <Button size="xs" variant="light" leftSection={<IconArrowLeft size={14} />} onClick={onBack}>Back</Button>
-      </Group>
-      <PeopleInfoFields profile={profile} details={payload.details || []} />
-      {changes.length ? changes.map((change) => (
-        <Card key={change.change_id} withBorder radius="md">
-          <Text size="xs" c="dimmed" mb="xs">{change.created_at}</Text>
-          <Stack gap={6}>
-            <ChangeLine label="Rank" from={change.previous_rank} to={change.new_rank} editor={change.editor_name} />
-            <ChangeLine label="Name" from={change.previous_name} to={change.new_name} editor={change.editor_name} />
-            <ChangeLine label="Country" from={change.previous_country} to={change.new_country} editor={change.editor_name} />
-            <ChangeLine label="Importance" from={change.previous_importance} to={change.new_importance} editor={change.editor_name} />
-          </Stack>
-        </Card>
-      )) : <EmptyCard text="No changes recorded yet." />}
-    </Stack>
-  );
-}
-
-function InfoLine({ label, value }) {
-  return (
-    <Paper withBorder radius="md" p="sm">
-      <Text size="xs" c="dimmed" fw={700}>{label}</Text>
-      <Text fw={700}>{value || "-"}</Text>
-    </Paper>
-  );
-}
-
-function ChangeLine({ label, from, to, editor }) {
-  if ((from || "") === (to || "")) return null;
-  return (
-    <Text size="sm">
-      <Text span fw={700}>{label}: </Text>{from || "-"} -&gt; {to || "-"} <Text span c="dimmed">(By {editor || "-"})</Text>
-    </Text>
-  );
-}
-
-function SeenAtList({ details }) {
-  const items = (details || []).filter((detail) => detail.place_seen || detail.date || detail.time || detail.event_occasion || detail.added_by);
-  if (!items.length) return <Text size="sm" c="dimmed">No seen-at details saved.</Text>;
-  return (
-    <Stack gap="xs">
-      {items.map((detail) => (
-        <Paper key={detail.detail_id} withBorder radius="md" p="sm" className="detail-history-card">
-          <Text fw={700}>{detail.place_seen || "-"}</Text>
-          <Text size="xs" c="dimmed">
-            [AT] {formatSeenDateTime(detail)} | [Event] {detail.event_occasion || "-"} | [Added by] - {detail.added_by || "-"}
-          </Text>
-        </Paper>
-      ))}
-    </Stack>
-  );
-}
-
-function personLifecycleStatus(person) {
-  const explicit = String(person?.lifecycle_status || "").toUpperCase();
-  if (["ACTIVE", "ARCHIVED", "DELETED", "MERGED"].includes(explicit)) return explicit;
-  if (person?.merged || person?.canonical_person_id || person?.metadata?.merged_into) return "MERGED";
-  if (person?.deleted) return "DELETED";
-  if (person?.archived || person?.deleted_at) return "ARCHIVED";
-  return "ACTIVE";
 }
 
 function lifecycleStatusLabel(status) {

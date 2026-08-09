@@ -1,14 +1,13 @@
 import { useCallback, useRef } from "react";
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
-import { clearFile, currentDateTimeParts, imageIdFromPath, isNewPersonSuggestion } from "../utils.js";
+import { clearFile, currentDateTimeParts, imageIdFromPath, isNewPersonSuggestion, requirePersonContract } from "../utils.js";
 import { usePersistentState } from "./usePersistentState.js";
 
 export function useRecognizeController({
   apiGet,
   apiPost,
-  updatePerson,
-  upsertPerson,
+  loadPeople,
   notifySkippedInputs,
   prepareImageFiles,
   showToast,
@@ -222,13 +221,16 @@ export function useRecognizeController({
 
   const completeRecognitionReview = async () => {
     if (!recognition?.reviewId || recognitionAcceptedFaces.length !== recognition.faces.length) return;
-    const result = await apiPost("/api/photo-review-complete", {
+    await apiPost("/api/photo-review-complete", {
       review_id: recognition.reviewId,
       operation_id: recognition.completionOperationId,
       source: recognitionTargetPerson ? "add-face-review" : "check-photo",
       target_person_id: recognitionTargetPerson?.person_id,
     });
-    for (const person of result.created_people || []) upsertPerson(person);
+    await loadPeople({ dedupe: false });
+    if (recognitionTargetPerson?.person_id) {
+      await onExistingPersonEnrolled?.(recognitionTargetPerson.person_id);
+    }
     showToast("Review completed");
     setRecognition(null);
     setRecognitionAcceptedFaces([]);
@@ -237,7 +239,9 @@ export function useRecognizeController({
 
   const openRecognitionGallery = async (personId) => {
     if (!personId) return;
-    setRecognitionGallery(await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`));
+    const payload = await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`, { dedupe: false });
+    requirePersonContract(payload.person);
+    setRecognitionGallery(payload);
   };
 
   const recognitionGalleryBack = () => {
@@ -276,7 +280,6 @@ export function useRecognizeController({
       decision,
       action,
       identityOperationId: crypto.randomUUID(),
-      followupOperationId: crypto.randomUUID(),
     });
     setRecognitionFollowupDone(false);
   }

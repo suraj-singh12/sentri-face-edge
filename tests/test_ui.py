@@ -19,7 +19,7 @@ from sentriface.cli import build_dev_engine
 from sentriface.backup_service import BackupError, BackupService
 from sentriface.engine import _canonical_source_path
 from sentriface.errors import InputValidationError
-from sentriface.models import EmbeddingRecord
+from sentriface.models import EmbeddingRecord, Note
 from sentriface.secure_files import is_protected_file, read_protected_bytes
 from sentriface.api_server import (
     OperationGate,
@@ -29,6 +29,9 @@ from sentriface.api_server import (
     _discard_upload_batch,
     _has_duplicate_embedding,
     _pending,
+    _people_collection_payload,
+    _person_relationship_graph,
+    _profile_note_record,
     _person_summary,
     _init_group,
     _recognition,
@@ -39,6 +42,67 @@ from sentriface.api_server import (
 
 
 class ApiSerializationTest(unittest.TestCase):
+    def test_people_collection_contract_owns_statistics_sorting_and_identity_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            engine = build_dev_engine(Path(temp) / "data")
+            engine.initialize()
+            alpha = engine.store.create_person("Alpha", metadata={"importance": "Important"})
+            beta = engine.store.create_person("Beta")
+
+            payload = _people_collection_payload(engine)
+
+            self.assertEqual(payload["contract_version"], 1)
+            self.assertEqual(payload["statistics"]["active"]["people_count"], 2)
+            self.assertEqual(payload["sort_orders"]["active"]["name"], [alpha.person_id, beta.person_id])
+            self.assertEqual(payload["sort_orders"]["active"]["priority"][0], alpha.person_id)
+            for person in payload["persons"]:
+                self.assertEqual(person["lifecycle_status"], "ACTIVE")
+                self.assertEqual(person["effective_person_id"], person["person_id"])
+                self.assertIn("OPEN", person["allowed_actions"])
+
+    def test_relationship_graph_contract_is_versioned_and_supplies_layout_depth(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            engine = build_dev_engine(Path(temp) / "data")
+            engine.initialize()
+            person = engine.store.create_person("Graph Root")
+
+            payload = _person_relationship_graph(engine, person.person_id, limit=60)
+
+            self.assertEqual(payload["contract"], "sentriface.relationship-subgraph")
+            self.assertEqual(payload["contract_version"], 1)
+            self.assertTrue(payload["graph_revision"])
+            self.assertEqual(payload["root_person_id"], person.person_id)
+            self.assertEqual(payload["node_count"], 1)
+            self.assertEqual(payload["edge_count"], 0)
+            self.assertEqual(payload["nodes"][0]["layout"], {"depth": 0})
+
+    def test_profile_note_contract_exposes_stable_mention_occurrences(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            engine = build_dev_engine(Path(temp) / "data")
+            engine.initialize()
+            owner = engine.store.create_person("Owner")
+            mentioned = engine.store.create_person("Mentioned")
+            summaries = {
+                item.person.person_id: item
+                for item in engine.list_persons()
+            }
+            note = Note(
+                note_id="note-1",
+                owner_person_id=owner.person_id,
+                status="ACTIVE",
+                content="Met @Mentioned",
+                revision_number=1,
+                mentioned_person_ids=(mentioned.person_id,),
+                effective_mentioned_person_ids=(mentioned.person_id,),
+            )
+
+            payload = _profile_note_record(note, summaries, engine)
+
+            self.assertEqual(payload["mentioned_person_ids"], [mentioned.person_id])
+            self.assertEqual(payload["mentions"][0]["occurrence_id"], f"note-1:{mentioned.person_id}")
+            self.assertEqual(payload["mentions"][0]["effective_person_id"], mentioned.person_id)
+            self.assertEqual(payload["mentions"][0]["display_name"], "Mentioned")
+
     def test_recognition_browse_ranks_people_only_for_the_selected_face(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
