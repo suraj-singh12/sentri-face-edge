@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from sentriface.contracts import IdentityStore
-from sentriface.models import GraphReadFilter, PersonGraphReadModel, WorldGraphReadModel
+from sentriface.models import (
+    GraphReadFilter,
+    PersonGraphReadModel,
+    WorldGraphReadModel,
+    WorldGraphRequest,
+    WorldGraphV2ReadModel,
+)
 
 
 class GraphReadService:
@@ -22,3 +28,8 @@ class GraphReadService:
         self, filters: GraphReadFilter | None = None,
     ) -> WorldGraphReadModel:
         return self.store.get_world_graph_read(filters)
+
+    def world_graph_v2(
+        self, request: WorldGraphRequest | None = None,
+    ) -> WorldGraphV2ReadModel:
+        return self.store.get_world_graph_v2_read(request)

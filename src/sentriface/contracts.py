@@ -11,6 +11,8 @@ from sentriface.models import (
     GraphReadFilter,
     PersonGraphReadModel,
     WorldGraphReadModel,
+    WorldGraphRequest,
+    WorldGraphV2ReadModel,
     GraphConnection,
     InitFace,
     InitGroup,
@@ -432,6 +434,11 @@ class IdentityStore(Protocol):
         self, filters: GraphReadFilter | None = None,
     ) -> WorldGraphReadModel:
         """Build the canonical global graph read model using backend filter semantics."""
+
+    def get_world_graph_v2_read(
+        self, request: WorldGraphRequest | None = None,
+    ) -> WorldGraphV2ReadModel:
+        """Build one bounded, revision-consistent World API v2 projection."""
 
     def rebuild_graph_projection(
         self,

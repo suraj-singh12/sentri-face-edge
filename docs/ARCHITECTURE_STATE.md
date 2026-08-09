@@ -4,7 +4,7 @@ This document is a concise checkpoint of the stable implemented architecture. De
 
 ## Current phase
 
-P10-D World Intelligence read-model architecture review is complete. P0 through P10-B remain frozen; P10-C and P10-D are documentation-only decisions. The bounded World backend contract and World UI remain separate future phases.
+P10-E World Intelligence read-model backend contract is complete. P0 through P10-D remain frozen. World UI remains a separate future phase and no frontend rendering or generated asset was changed.
 
 ## Core principles
 
@@ -64,7 +64,7 @@ Compatibility stores are not current truth: `persons.notes` mirrors the latest n
 ## P10-A graph read behavior
 
 - `/api/person-graph` returns one canonical root, its evidence-derived relationships, UI-ready node state, canonical endpoints, evidence-count strength, occurrence bounds, directionality, and summarized provenance.
-- `/api/world-graph` returns the complete canonical node/edge projection plus summary intelligence. Merged aliases collapse into their survivor; canonical self-edges are suppressed; archived and deleted terminal identities remain historical nodes.
+- `/api/world-graph` version 1 returns the complete canonical node/edge compatibility projection plus summary intelligence. Merged aliases collapse into their survivor; canonical self-edges are suppressed; archived and deleted terminal identities remain historical nodes.
 - `/api/graph-revision` exposes the current opaque revision and can compare a client-supplied `current_revision`. Person and World responses carry the same revision and a generated timestamp.
 - Filters are backend semantics: inclusive date occurrence bounds, exact case-insensitive observation location, canonical lifecycle/country/rank/priority facets, P9 descriptive frequency threshold, and post-scope evidence-count strength threshold.
 - `relationship_evidence` remains the edge source. P10-A does not read `person_associations`, expose raw evidence rows, add layout coordinates, or cache graph responses.
@@ -85,7 +85,7 @@ Compatibility stores are not current truth: `persons.notes` mirrors the latest n
 
 - World is a scope-first, spatial/temporal exploration of the global identity graph, not a zoomed-out Person Graph. Its purpose is to surface significant people, evidence-derived relationships, activity patterns, and their time/place context, then let the operator progressively ask for explanation.
 - The initial World experience is Level 0 overview data, followed by Level 1 important people/read-model clusters, Level 2 canonical person relationships, and Level 3 evidence/finalized-event detail. Every response and expansion is bounded and revision-consistent. The backend owns membership, clustering, ranking semantics, canonical collapse, evidence aggregation, filters, totals, and truncation; the frontend owns coordinates, camera, selection, and presentation.
-- Canonical people are the only current relationship nodes. Active, archived, and deleted identities remain representable; merged sources remain historical provenance but collapse into their survivor. `NO_FACE` is biometric state, not an unknown node type. `UNIDENTIFIED` is distinct identity state and is currently missing from `GraphReadNode`/the API payload.
+- Canonical people are the only current relationship nodes. Active, archived, and deleted identities remain representable; merged sources remain historical provenance but collapse into their survivor. `NO_FACE` is biometric state, not an unknown node type. `UNIDENTIFIED` is a distinct identity state exposed by World API v2.
 - Finalized observations/events are secondary evidence-detail objects and appear only on explicit drill-down. Locations remain filters/facets because the current source is free-text observation metadata and has no stable location identity. Read-model clusters are ephemeral summaries for one query/revision and never authoritative organizations or associations.
 - One finalized observation is already the grouped-encounter unit; sightings are derived detail records, not nodes, and no cross-observation encounter group may be inferred. Overview edges aggregate scoped person-pair relationships between summaries, Level 2 edges remain evidence-derived person relationships, and Level 3 may expose finalized-event participation. Each edge states its type and aggregation/strength basis.
 - Unresolved and finalized-unknown face decisions are not participants, sightings, nodes, or relationship endpoints. Repeated unknown appearances cannot be linked from recognition similarity. Tracked unknown nodes require a future explicit operator-finalized authoritative entity/lifecycle; until then only aggregate finalized unknown/non-participant decision metadata is permissible, never draft review state.
@@ -103,23 +103,33 @@ Compatibility stores are not current truth: `persons.notes` mirrors the latest n
 - The minimum contract is `/api/world-graph` version 2 with level, typed focus, filters, ranking intent, limits, and revision-bound cursor/expansion tokens. A common envelope carries typed people/clusters/events/patterns/edges, explanations, scope totals/facets, algorithm versions, counts, and truncation. Separate overview/cluster/person/event routes are not justified yet.
 - All responses are capped. Small scopes may return a complete bounded Level 2 graph; 10,000-person scopes start with server-aggregated Level 0/1 data and lazy expansion; 100,000-observation histories require indexed server-side aggregation and on-demand event/evidence pages. Derived caches remain optional, measured, revision-keyed, and rebuildable.
 
-## World contract gap and scaling assessment
+## P10-E World API v2 implementation
+
+- `/api/world-graph?version=2` accepts the five semantic detail levels, typed focus, normalized World filters, deterministic ranking intent, hard per-object limits, `as_of`, revision, and revision-bound cursor. Version 1 remains unchanged for compatibility.
+- The backend returns typed people, ephemeral evidence-connected clusters, finalized events, bounded provenance evidence, evidence-derived relationships, and qualified descriptive patterns in one revision-consistent envelope. It owns scope totals/facets, effective filters, ordering, clustering, explanations, truncation, pagination, and expansion identity.
+- `WORLD_SCOPE` pages ranked people and bounded cluster/pattern summaries; `CLUSTER` expands one revision-bound component; `PERSON` returns a bounded scoped relationship neighbourhood without Person Graph layout assumptions; `EVENT` returns finalized observation detail; `EVIDENCE` returns bounded source provenance. No level is a UI zoom threshold.
+- Clustering uses deterministic connected components over qualifying scoped evidence relationships and requires at least two members. Explanations expose algorithm/version, parameters, member/relationship/evidence counts, types, and occurrence bounds. The initial pattern surface is limited to measured missing-location data quality. There is no intent, affiliation, organization, risk, prediction, anomaly, or hidden-AI conclusion.
+- Existing normalized persons, finalized observations/participants/corrections, active relationship evidence, notes/mentions, merge history, and operation provenance remain authoritative. World has no table or cache. SQL performs evidence/event scoping and aggregation; event/evidence detail is always bounded and lazy.
+- The shared opaque revision now covers finalized events even when no relationship edge is created. Schema v28 only narrows the existing person metadata trigger so unrelated metadata does not invalidate World; it adds no World truth. Revision-bound cursors reject stale or mismatched snapshots.
+- Frontend responsibility remains limited to future rendering, layout, interaction state, and request intent. No World route, view, visualization, React logic, or generated frontend asset was added.
+
+## World scaling and compatibility assessment
 
 - `/api/world-graph` version 1 is sufficient only for a small Level 2 person-to-person projection. It already has canonical nodes, evidence summaries, filters, revision, generation time, and counts, but returns the complete matching graph.
-- Before World UI, the version 2 backend read contract must implement the P10-D object, explanation, pattern, scope, and pagination rules. Evidence/event detail must be lazy and bounded.
-- P10-E must prove that its revision token advances for every authoritative input used by World. An uncovered input must be excluded or placed under a broader backend-owned snapshot revision before revision-bound cursors are safe.
-- The current SQLite read walks all persons, observations, active evidence, sightings, and embeddings and constructs full node intelligence before returning. This is acceptable around 100 people but is not an appropriate initial-load path for 10,000 people or 100,000+ observations. Existing indexes help but do not make the current all-record materialization bounded.
-- The first performance step is query bounding and server-side scoping, not a new cache or dependency. For medium data, overview/cluster reads, stable pagination, and lazy expansion are required. For large observation histories, evidence/event detail must be queried on demand and aggregation should be pushed into indexed SQL where measurements show it is needed. Derived caches remain optional, rebuildable optimizations only.
+- Version 2 implements the P10-D object, explanation, scope, filter, hard-bound, and pagination rules. Evidence/event detail is lazy and bounded. Version 1 remains compatibility-only.
+- Revision-input tests cover finalized event visibility, relationship evidence, canonical/lifecycle/profile changes, stale cursor rejection, and irrelevant draft/tag metadata writes.
+- Version 1 still walks complete graph inputs and is unsuitable for medium/large World loading. Version 2 returns bounded objects, pushes event/evidence scoping and pair aggregation into indexed SQL, pages ranked people, and queries event/evidence detail on demand. Canonical people and the aggregated scoped relationship set remain the bounded working set needed for deterministic ranking and connected-component clustering.
+- No cache or dependency was added. Further optimization must be driven by query-plan and fixture measurements; any later cache remains revision-keyed, local, rebuildable, and non-authoritative.
 
 ## Person Graph reuse boundary
 
 - Reuse the opaque revision token, immutable replacement model, canonical/lifecycle semantics, backend `allowed_actions`, evidence-count strength, occurrence/provenance explanations, and the rule that React owns only presentation/interaction.
 - Do not reuse the person-centred radial membership model, complete-graph loading assumption, homogeneous person-node schema, client-only full-response refresh strategy, or the assumption that edge weight alone communicates importance. World requires scope-first levels, typed summary/detail objects, server-side ranking/clustering, bounded expansion, and density-aware presentation.
-- No World UI is safe to start against contract version 1 beyond disposable prototyping. Implement and test the bounded World read contract first; then the UI can safely render it without acquiring graph semantics.
+- World UI may now start against contract version 2. It must not use version 1 as its product contract or acquire backend semantics.
 
 ## Known deferred work
 
 - P11 guarded merge/operation revert; normalized merge undo is intentionally not exposed yet.
 - P12 backup/restore hardening for normalized authoritative, journal, and projection records.
 - P13 fully offline BYOM/model-management work.
-- The bounded World read/expansion contract and then World rendering/query controls remain deferred, along with later integrity/rebuild/revert, packaging, and release work.
+- P10-F World rendering/query controls remain deferred, along with later integrity/rebuild/revert, packaging, and release work.

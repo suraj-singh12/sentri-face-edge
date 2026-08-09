@@ -17,7 +17,7 @@ import time
 import uuid
 import zipfile
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -81,6 +81,11 @@ from sentriface.models import (
     RejectedFace,
     Sighting,
     WorldGraphReadModel,
+    WorldDetailLevel,
+    WorldGraphRequest,
+    WorldGraphV2ReadModel,
+    WorldReadFilter,
+    WorldReadLimits,
 )
 from sentriface.storage.sqlite_store import SCHEMA_VERSION
 STATIC_DIR = Path(__file__).with_name("ui_static")
@@ -1112,6 +1117,16 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 ))
                 return
             if parsed.path == "/api/world-graph":
+                version = parse_qs(parsed.query).get("version", ["1"])[0]
+                if version == "2":
+                    self._json(_world_graph_v2_payload(
+                        self.server.engine.get_world_graph_v2_read(
+                            _world_graph_v2_request_from_query(parsed.query),
+                        )
+                    ))
+                    return
+                if version != "1":
+                    raise ValueError("Unsupported World Graph API version")
                 self._json(_world_graph_read_payload(
                     self.server.engine.get_world_graph_read(
                         _graph_filters_from_query(parsed.query),
@@ -3711,6 +3726,71 @@ def _world_graph_read_payload(model: WorldGraphReadModel) -> dict[str, Any]:
         "node_count": len(model.nodes),
         "edge_count": len(model.edges),
     }
+
+
+def _world_graph_v2_request_from_query(query: str) -> WorldGraphRequest:
+    values = parse_qs(query)
+
+    def one(key: str) -> str | None:
+        value = values.get(key, [None])[0]
+        return str(value).strip() if value is not None and str(value).strip() else None
+
+    def many(key: str) -> tuple[str, ...]:
+        result: list[str] = []
+        for value in values.get(key, []):
+            result.extend(item.strip() for item in str(value).split(",") if item.strip())
+        return tuple(result)
+
+    def integer(key: str, default: int) -> int:
+        value = one(key)
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"Invalid World limit: {key}") from exc
+
+    level_text = (one("level") or "WORLD_SCOPE").upper()
+    try:
+        level = WorldDetailLevel(level_text)
+    except ValueError as exc:
+        raise ValueError(f"Unsupported World detail level: {level_text}") from exc
+    return WorldGraphRequest(
+        detail_level=level,
+        focus_type=one("focus_type"), focus_id=one("focus_id"),
+        filters=WorldReadFilter(
+            date_from=one("date_from"), date_to=one("date_to"),
+            recent_activity=one("recent_activity"), locations=many("location"),
+            missing_location=one("missing_location") or "INCLUDE",
+            lifecycle=many("lifecycle"), identity_state=many("identity_state"),
+            biometric_state=many("biometric_state"), country=many("country"),
+            rank=many("rank"), priority=many("priority"),
+            evidence_type=many("evidence_type"), relationship_type=many("relationship_type"),
+            min_relationship_strength=(integer("min_relationship_strength", 1) if one("min_relationship_strength") else None),
+            activity=many("activity"), pattern_type=many("pattern_type"),
+        ),
+        ranking=one("ranking") or "SALIENCE",
+        limits=WorldReadLimits(
+            people=integer("people_limit", 25), clusters=integer("cluster_limit", 10),
+            events=integer("event_limit", 25), evidence=integer("evidence_limit", 25),
+            relationships=integer("relationship_limit", 50), patterns=integer("pattern_limit", 10),
+        ),
+        cursor=one("cursor"), revision=one("revision"), as_of=one("as_of"),
+    )
+
+
+def _world_graph_v2_payload(model: WorldGraphV2ReadModel) -> dict[str, Any]:
+    # Normalize tuple-backed immutable models into their JSON array representation.
+    payload = json.loads(json.dumps(asdict(model)))
+    payload.update({
+        "contract": "sentriface.world-graph",
+        "contract_version": 2,
+        "filter_semantics_version": "world-filters-v1",
+        "ranking_version": "descriptive-salience-v1",
+        "clustering_version": "connected-evidence-components-v1",
+        "calculation_version": "world-descriptive-v1",
+    })
+    return payload
 
 
 def _person_relationship_graph(

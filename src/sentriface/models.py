@@ -421,6 +421,183 @@ class WorldGraphReadModel:
     edges: tuple[GraphReadEdge, ...]
 
 
+class WorldDetailLevel(str, Enum):
+    WORLD_SCOPE = "WORLD_SCOPE"
+    CLUSTER = "CLUSTER"
+    PERSON = "PERSON"
+    EVENT = "EVENT"
+    EVIDENCE = "EVIDENCE"
+
+
+@dataclass(frozen=True)
+class WorldReadFilter:
+    """World filter intent; the response carries the normalized effective value."""
+
+    date_from: str | None = None
+    date_to: str | None = None
+    recent_activity: str | None = None
+    locations: tuple[str, ...] = ()
+    missing_location: str = "INCLUDE"
+    lifecycle: tuple[str, ...] = ()
+    identity_state: tuple[str, ...] = ()
+    biometric_state: tuple[str, ...] = ()
+    country: tuple[str, ...] = ()
+    rank: tuple[str, ...] = ()
+    priority: tuple[str, ...] = ()
+    evidence_type: tuple[str, ...] = ()
+    relationship_type: tuple[str, ...] = ()
+    min_relationship_strength: int | None = None
+    activity: tuple[str, ...] = ()
+    pattern_type: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class WorldReadLimits:
+    people: int = 25
+    clusters: int = 10
+    events: int = 25
+    evidence: int = 25
+    relationships: int = 50
+    patterns: int = 10
+
+
+@dataclass(frozen=True)
+class WorldGraphRequest:
+    detail_level: WorldDetailLevel = WorldDetailLevel.WORLD_SCOPE
+    focus_type: str | None = None
+    focus_id: str | None = None
+    filters: WorldReadFilter = field(default_factory=WorldReadFilter)
+    ranking: str = "SALIENCE"
+    limits: WorldReadLimits = field(default_factory=WorldReadLimits)
+    cursor: str | None = None
+    revision: str | None = None
+    as_of: str | None = None
+
+
+@dataclass(frozen=True)
+class WorldExplanation:
+    summary: str
+    basis_type: str
+    factual_factors: tuple[dict[str, Any], ...]
+    derived_factors: tuple[dict[str, Any], ...] = ()
+    calculation_version: str = "world-explanation-v1"
+    evidence_types: tuple[str, ...] = ()
+    evidence_count: int = 0
+    first_occurrence_at: str | None = None
+    last_occurrence_at: str | None = None
+    evidence_expansion_token: str | None = None
+
+
+@dataclass(frozen=True)
+class WorldPerson:
+    canonical_person_id: str
+    historical_person_ids: tuple[str, ...]
+    display_name: str
+    lifecycle_state: str
+    identity_state: str
+    biometric_state: str
+    display: dict[str, Any]
+    intelligence_summary: dict[str, Any]
+    importance_indicators: tuple[dict[str, Any], ...]
+    activity_summary: dict[str, Any]
+    allowed_actions: tuple[str, ...]
+    explanation: WorldExplanation
+
+
+@dataclass(frozen=True)
+class WorldCluster:
+    cluster_id: str
+    graph_revision: str
+    member_ids: tuple[str, ...]
+    member_count: int
+    member_preview: tuple[dict[str, Any], ...]
+    grouping_algorithm: str
+    algorithm_version: str
+    parameters: dict[str, Any]
+    evidence_basis: dict[str, Any]
+    explanation: WorldExplanation
+    expansion_token: str | None = None
+
+
+@dataclass(frozen=True)
+class WorldEvent:
+    event_id: str
+    finalized_at: str
+    occurred_at: str
+    location: str | None
+    context: dict[str, Any]
+    source: str | None
+    participants: tuple[dict[str, Any], ...]
+    evidence_references: tuple[str, ...]
+    media_summary: dict[str, Any]
+    explanation: WorldExplanation
+
+
+@dataclass(frozen=True)
+class WorldEvidence:
+    evidence_id: str
+    provenance: dict[str, Any]
+    evidence_type: str
+    supporting_references: tuple[dict[str, Any], ...]
+    occurred_at: str
+    explanation_links: tuple[str, ...]
+    active: bool
+
+
+@dataclass(frozen=True)
+class WorldRelationship:
+    relationship_id: str
+    source_person_id: str
+    target_person_id: str
+    directionality: str
+    relationship_types: tuple[str, ...]
+    evidence_count: int
+    evidence_type_counts: dict[str, int]
+    first_occurrence_at: str
+    last_occurrence_at: str
+    strength_basis: str
+    explanation: WorldExplanation
+    evidence_expansion_token: str | None = None
+
+
+@dataclass(frozen=True)
+class WorldPattern:
+    pattern_id: str
+    pattern_type: str
+    status: str
+    subject_ids: tuple[str, ...]
+    metrics: dict[str, Any]
+    calculation_version: str
+    explanation: WorldExplanation
+
+
+@dataclass(frozen=True)
+class WorldGraphV2ReadModel:
+    graph_revision: str
+    as_of: str
+    generated_at: str
+    requested_detail_level: WorldDetailLevel
+    returned_detail_level: WorldDetailLevel
+    focus: dict[str, Any] | None
+    requested_filters: WorldReadFilter
+    effective_filters: WorldReadFilter
+    ranking: str
+    limits: WorldReadLimits
+    scope_totals: dict[str, int]
+    available_facets: dict[str, Any]
+    returned_counts: dict[str, int]
+    truncated: bool
+    has_more: bool
+    next_cursor: str | None
+    expansion_tokens: tuple[str, ...]
+    people: tuple[WorldPerson, ...] = ()
+    clusters: tuple[WorldCluster, ...] = ()
+    events: tuple[WorldEvent, ...] = ()
+    evidence: tuple[WorldEvidence, ...] = ()
+    relationships: tuple[WorldRelationship, ...] = ()
+    patterns: tuple[WorldPattern, ...] = ()
+
+
 @dataclass(frozen=True)
 class PersonChange:
     change_id: str

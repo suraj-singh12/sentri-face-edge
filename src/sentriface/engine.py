@@ -515,6 +515,10 @@ class FaceEngine:
         with self.metrics.timer("db_world_graph_read_ms"):
             return self.graph_reads.world_graph(filters)
 
+    def get_world_graph_v2_read(self, request=None):
+        with self.metrics.timer("db_world_graph_v2_read_ms"):
+            return self.graph_reads.world_graph_v2(request)
+
     def get_person_operation(self, operation_id: str, operation_type: str) -> dict | None:
         return self.store.get_person_operation(operation_id, operation_type)
 
