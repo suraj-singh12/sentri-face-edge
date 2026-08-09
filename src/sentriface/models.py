@@ -280,6 +280,79 @@ class GlobalGraphProjection:
 
 
 @dataclass(frozen=True)
+class Sighting:
+    """One effective canonical person's presence in one finalized observation."""
+
+    sighting_id: str
+    observation_id: str
+    canonical_person_id: str
+    observed_at: str
+    location: str | None
+    context: dict[str, Any]
+    source: str | None
+    finalized_at: str | None
+    media: tuple[ObservationMedia, ...] = ()
+    raw_participant_person_ids: tuple[str, ...] = ()
+    effective_participant_person_ids: tuple[str, ...] = ()
+    correction_operation_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TemporalCount:
+    period: str
+    count: int
+
+
+@dataclass(frozen=True)
+class LocationCount:
+    location: str
+    count: int
+    last_observed_at: str
+
+
+@dataclass(frozen=True)
+class PresenceAnalytics:
+    observation_count: int
+    first_seen_at: str | None
+    last_seen_at: str | None
+    frequency_per_30_days: float
+    frequency_label: str
+    timeline: tuple[TemporalCount, ...] = ()
+    locations: tuple[LocationCount, ...] = ()
+    provenance: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class RelationshipAnalytics:
+    person_id: str
+    source_person_id: str
+    target_person_id: str
+    relationship_type: str
+    directionality: str
+    evidence_count: int
+    evidence_type_counts: dict[str, int]
+    first_evidence_at: str
+    last_evidence_at: str
+    co_observation_count: int
+    evidence: tuple[RelationshipEvidence, ...] = ()
+
+
+@dataclass(frozen=True)
+class PersonIntelligence:
+    requested_person_id: str
+    canonical_person_id: str
+    lifecycle_status: str
+    canonical_lifecycle_status: str
+    biometric_status: str
+    embedding_count: int
+    confidence_summary: dict[str, Any]
+    presence: PresenceAnalytics
+    relationships: tuple[RelationshipAnalytics, ...]
+    activity: tuple[dict[str, Any], ...]
+    provenance: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class PersonChange:
     change_id: str
     person_id: str
@@ -320,6 +393,9 @@ class PersonSummary:
     embedding_count: int
     sighting_count: int = 0
     last_seen_at: str | None = None
+    first_seen_at: str | None = None
+    frequency_per_30_days: float = 0.0
+    frequency_label: str = "Never Seen"
 
 
 @dataclass(frozen=True)

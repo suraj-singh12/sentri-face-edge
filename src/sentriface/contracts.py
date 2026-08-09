@@ -18,6 +18,7 @@ from sentriface.models import (
     Observation,
     ObservationMedia,
     ObservationParticipant,
+    PersonIntelligence,
     MergeOperation,
     PendingAddition,
     PhotoReview,
@@ -27,6 +28,7 @@ from sentriface.models import (
     PersonSummary,
     RecognitionDetail,
     RelationshipEvidence,
+    Sighting,
 )
 
 
@@ -359,6 +361,12 @@ class IdentityStore(Protocol):
 
     def list_raw_observations_for_person(self, person_id: str) -> list[Observation]:
         """List observations retaining this exact historical participant identity."""
+
+    def list_person_sightings(self, person_id: str) -> list[Sighting]:
+        """List deduplicated finalized-observation sightings for an effective identity."""
+
+    def get_person_intelligence(self, person_id: str) -> PersonIntelligence:
+        """Build canonical presence, temporal, graph, and activity read models."""
 
     def list_observations_for_media(self, media_id: str) -> list[Observation]:
         """List observations containing a media identifier."""

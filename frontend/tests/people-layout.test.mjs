@@ -26,6 +26,17 @@ test("people library exposes all requested grouping and sorting modes", async ()
   assert.match(view, /<Collapse expanded=\{!closed\}>/);
 });
 
+test("people sightings and frequency render normalized backend read models", async () => {
+  const view = await readFile(new URL("../src/views/PeopleView.jsx", import.meta.url), "utf8");
+
+  assert.match(view, /payload\.sightings \|\| \[\]/);
+  assert.match(view, /person\?\.frequency_per_30_days/);
+  assert.match(view, /person\?\.frequency_label/);
+  assert.match(view, /detail\.image_path \|\|/);
+  assert.doesNotMatch(view, /sightingCount\(person\) \/ activeMonths/);
+  assert.doesNotMatch(view, /payload\.details \|\| \[\]\)\]\.filter\(isSeenDetail\)/);
+});
+
 test("profile and management history share the horizontal card flow", async () => {
   const view = await readFile(new URL("../src/views/PeopleView.jsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../src/sentriface-interface.css", import.meta.url), "utf8");

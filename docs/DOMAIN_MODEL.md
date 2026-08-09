@@ -48,6 +48,16 @@ P8-A provides the merge infrastructure. A normalized merge manifest links one so
 
 P8-B adds a read-only preview and one normalized execution command through the backend service boundary. Canonical survivor rules reject self-maps, missing targets, cycles, deleted identities, and inactive survivors. Execution applies explicit conflict strategies, writes the manifest and canonical mapping, rebuilds and validates the graph projection, publishes canonical index ownership, and commits the journal atomically. Raw ownership and provenance remain unchanged while effective reads resolve to the survivor. Merge undo remains gated for the guarded P11 revert phase.
 
+### P9 intelligence and sightings read models
+
+A current `Sighting` is a derived `(finalized observation, effective canonical person)` pair. It is not a stored identity record and does not own a face, embedding, or recognition-detail row. Repeated accepted faces for one effective person within the same observation collapse to one sighting. Draft observations and recognition proposals never appear. Raw accepted participant IDs, media membership, correction operation IDs, original timestamps, location/context, and source remain attached as provenance while the current person is resolved through corrections and terminal canonical identity.
+
+`PresenceAnalytics` derives observation count, first/last seen, monthly counts, observed locations, and a descriptive 30-day frequency from those sightings. Frequency is appearances divided by the observed span in 30-day units (with a one-unit minimum); its labels are descriptive buckets, not probabilities. A photo or embedding deletion does not remove an authoritative finalized observation, an identity correction moves the effective current sighting while preserving the raw participant, and a merge unions source history under the canonical survivor.
+
+`RelationshipAnalytics` reads active `relationship_evidence` directly and resolves endpoints canonically. It reports evidence counts by type, co-observation count, first/last evidence time, directionality, raw evidence provenance, and an evidence-count strength basis. It does not assign a probabilistic confidence or mutate `graph_connections`. Profile intelligence combines lifecycle/canonical state, current embedding count, the presence read model, evidence-derived relationships, and canonical operation-journal activity. A confidence summary explicitly reports that no probabilistic identity confidence is available from normalized authoritative records.
+
+These models are calculated by the backend read boundary and returned by the API. They introduce no new authoritative table or cache. No-face identities participate normally because sightings, notes, activity, and relationship evidence do not require an embedding.
+
 ## Current repository map (schema version 26)
 
 | Concern | Current implementation |
@@ -59,8 +69,9 @@ P8-B adds a read-only preview and one normalized execution command through the b
 | Application service | `src/sentriface/graph_service.py::GlobalIdentityGraphService` is the single normalized evidence/projection boundary; `src/sentriface/engine.py::FaceEngine` owns it as `graph` alongside existing recognition and identity services |
 | Correction service | `src/sentriface/correction_service.py::IdentityCorrectionService` centralizes P7 observation correction, Move Face, and Add Face commands and routes graph-affecting work through `GlobalIdentityGraphService` |
 | Merge service | `src/sentriface/merge_service.py::IdentityMergeService` is the P8-B preview/execution boundary and coordinates transactional storage execution with derived-index publication/reconciliation |
+| Intelligence service | `src/sentriface/intelligence_service.py::IntelligenceReadService` is the read-only P9 boundary for canonical sightings, presence/temporal metrics, evidence-derived relationship analytics, and profile intelligence |
 | Recognition/index | `FaceEngine.recognize()` returns proposals; `linear_index.py`/`hnsw_index.py` are rebuilt from active embeddings and are derived caches |
-| API | `src/sentriface/api_server.py`; relevant routes include `/api/recognize`, `/api/recognition-*`, `/api/queue-*`, `/api/person*`, `/api/person-association*`, photo lifecycle, `/api/person-merge-preview`, `/api/person-merge`, and backups; merge undo remains gated |
+| API | `src/sentriface/api_server.py`; P9 enriches `/api/persons` and `/api/person` and exposes `/api/person-sightings` and `/api/person-intelligence`; recognition, queue, graph, merge, lifecycle, and backup routes retain their prior boundaries |
 | React shell/controllers | `frontend/src/SentriFaceApp.jsx`; `useRecognizeController.js`, `useQueueController.js`, `usePeopleController.js`, `useAppData.js` |
 | React views | `frontend/src/views/RecognizeView.jsx`, `QueueView.jsx`, `PeopleView.jsx`; no World view exists |
 | Current graph UI | `frontend/src/views/PeopleView.jsx::RelationshipGraphModal` expands neighbor requests; `frontend/src/utils/relationshipGraph.js` stores/layouts client-side nodes and edges for display |
@@ -93,7 +104,8 @@ P8-B adds a read-only preview and one normalized execution command through the b
 - Add Face uses a completed staged review targeting one active existing identity. It creates no person, observation, participant, or graph evidence, records immutable enrollment history, and atomically transitions the existing identity to `ENROLLED`.
 - `operation_journal` is the current activity authority and profile activity resolves affected person entities canonically. `person_operations` remains unchanged only for historical compatibility and legacy idempotency; it is not merged into the current activity feed because its rows lack reliable actor and lifecycle data.
 - Storage methods are generally transaction-scoped through `_connect()`. Normalized review, correction, and merge commands provide their phase-owned atomic boundaries; remaining legacy workflows that span several engine/API calls are not implicitly atomic.
-- Sightings metrics count `recognition_details` joined through live embeddings; archive/delete/merge/move behavior can therefore change counts rather than report stable event participation.
+- Current sightings and People metrics use finalized observations plus corrected/canonical effective participants. `recognition_details` remains available only as legacy recognition/photo-detail history and cannot determine sightings, presence, relationship strength, or identity.
+- The People UI renders backend-provided sighting counts, first/last seen values, frequency values/labels, and normalized sighting rows. It no longer derives sightings or frequency from recognition details or client time calculations.
 
 ## Projection rules
 

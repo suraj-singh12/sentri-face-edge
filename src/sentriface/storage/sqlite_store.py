@@ -36,16 +36,22 @@ from sentriface.models import (
     ObservationParticipant,
     PendingAddition,
     Person,
+    PersonIntelligence,
     PersonAssociation,
     PersonChange,
     PersonMatch,
     PersonSummary,
+    PresenceAnalytics,
     QualityReport,
     QualityStatus,
     PhotoReview,
     ReviewFaceDecision,
     RecognitionDetail,
     RelationshipEvidence,
+    RelationshipAnalytics,
+    Sighting,
+    TemporalCount,
+    LocationCount,
     utc_now,
 )
 
@@ -338,68 +344,28 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             rows = conn.execute(
                 f"""
-                SELECT p.*,
-                       (
-                           SELECT COUNT(*)
-                           FROM embeddings e
-                           WHERE e.person_id = p.person_id AND e.deleted_at IS NULL
-                       ) AS embedding_count,
-                       (
-                           SELECT COUNT(*)
-                           FROM recognition_details d
-                           JOIN embeddings e ON e.embedding_id = d.embedding_id
-                           WHERE d.person_id = p.person_id AND e.deleted_at IS NULL
-                       ) AS sighting_count,
-                       (
-                           SELECT MAX(
-                               CASE
-                                   WHEN TRIM(COALESCE(d.seen_date, '')) <> ''
-                                   THEN d.seen_date || 'T' || COALESCE(NULLIF(d.seen_time, ''), '00:00:00')
-                                   ELSE d.created_at
-                               END
-                           )
-                           FROM recognition_details d
-                           JOIN embeddings e ON e.embedding_id = d.embedding_id
-                           WHERE d.person_id = p.person_id AND e.deleted_at IS NULL
-                       ) AS last_seen_at
+                SELECT p.*
                 FROM persons p
                 WHERE {"p.lifecycle_status <> 'ACTIVE' OR p.deleted_at IS NOT NULL" if archived else "p.lifecycle_status = 'ACTIVE' AND p.deleted_at IS NULL"}
                 ORDER BY p.name COLLATE NOCASE
                 """
             ).fetchall()
             effective_embedding_counts: dict[str, int] = {}
-            effective_sighting_counts: dict[str, int] = {}
-            effective_last_seen: dict[str, str] = {}
-            if not archived:
-                for embedding_row in conn.execute(
-                    "SELECT person_id FROM embeddings WHERE deleted_at IS NULL"
-                ).fetchall():
-                    canonical_id = _resolve_canonical_person_id(
-                        conn, str(embedding_row["person_id"]),
-                    )
-                    effective_embedding_counts[canonical_id] = (
-                        effective_embedding_counts.get(canonical_id, 0) + 1
-                    )
-                detail_rows = conn.execute(
-                    """
-                    SELECT d.person_id, d.seen_date, d.seen_time, d.created_at
-                    FROM recognition_details d
-                    JOIN embeddings e ON e.embedding_id = d.embedding_id
-                    WHERE e.deleted_at IS NULL
-                    """
-                ).fetchall()
-                for detail in detail_rows:
-                    canonical_id = _resolve_canonical_person_id(conn, str(detail["person_id"]))
-                    effective_sighting_counts[canonical_id] = (
-                        effective_sighting_counts.get(canonical_id, 0) + 1
-                    )
-                    seen_at = (
-                        f"{detail['seen_date']}T{detail['seen_time'] or '00:00:00'}"
-                        if str(detail["seen_date"] or "").strip()
-                        else str(detail["created_at"])
-                    )
-                    effective_last_seen[canonical_id] = max(
-                        effective_last_seen.get(canonical_id, seen_at), seen_at,
+            for embedding_row in conn.execute(
+                "SELECT embedding_id, person_id FROM embeddings WHERE deleted_at IS NULL"
+            ).fetchall():
+                canonical_id = _effective_embedding_owner_person_id(conn, embedding_row)
+                effective_embedding_counts[canonical_id] = (
+                    effective_embedding_counts.get(canonical_id, 0) + 1
+                )
+            analytics_by_canonical: dict[str, PresenceAnalytics] = {}
+            row_canonical_ids: dict[str, str] = {}
+            for row in rows:
+                canonical_id = _resolve_canonical_person_id(conn, str(row["person_id"]))
+                row_canonical_ids[str(row["person_id"])] = canonical_id
+                if canonical_id not in analytics_by_canonical:
+                    analytics_by_canonical[canonical_id] = _presence_analytics(
+                        _list_person_sightings(conn, canonical_id)
                     )
         return [
             PersonSummary(
@@ -416,18 +382,24 @@ class SQLiteIdentityStore:
                     identity_status=row["identity_status"],
                     biometric_status=row["biometric_status"],
                 ),
-                embedding_count=(
-                    row["embedding_count"] if archived
-                    else effective_embedding_counts.get(str(row["person_id"]), 0)
+                embedding_count=effective_embedding_counts.get(
+                    row_canonical_ids[str(row["person_id"])], 0,
                 ),
-                sighting_count=(
-                    row["sighting_count"] if archived
-                    else effective_sighting_counts.get(str(row["person_id"]), 0)
-                ),
-                last_seen_at=(
-                    row["last_seen_at"] if archived
-                    else effective_last_seen.get(str(row["person_id"]))
-                ),
+                sighting_count=analytics_by_canonical[
+                    row_canonical_ids[str(row["person_id"])]
+                ].observation_count,
+                last_seen_at=analytics_by_canonical[
+                    row_canonical_ids[str(row["person_id"])]
+                ].last_seen_at,
+                first_seen_at=analytics_by_canonical[
+                    row_canonical_ids[str(row["person_id"])]
+                ].first_seen_at,
+                frequency_per_30_days=analytics_by_canonical[
+                    row_canonical_ids[str(row["person_id"])]
+                ].frequency_per_30_days,
+                frequency_label=analytics_by_canonical[
+                    row_canonical_ids[str(row["person_id"])]
+                ].frequency_label,
             )
             for row in rows
         ]
@@ -2914,6 +2886,62 @@ class SQLiteIdentityStore:
                 (person_id,),
             ).fetchall()
         return [_observation_from_row(row) for row in rows]
+
+    def list_person_sightings(self, person_id: str) -> list[Sighting]:
+        with self._connect() as conn:
+            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
+            return _list_person_sightings(conn, canonical_person_id)
+
+    def get_person_intelligence(self, person_id: str) -> PersonIntelligence:
+        with self._connect() as conn:
+            requested = conn.execute(
+                "SELECT * FROM persons WHERE person_id = ?", (person_id,),
+            ).fetchone()
+            if requested is None:
+                raise KeyError(f"Unknown person: {person_id}")
+            canonical_person_id = _resolve_canonical_person_id(conn, person_id)
+            canonical = conn.execute(
+                "SELECT * FROM persons WHERE person_id = ?", (canonical_person_id,),
+            ).fetchone()
+            if canonical is None:
+                raise RuntimeError("Canonical person record is unavailable")
+            sightings = _list_person_sightings(conn, canonical_person_id)
+            presence = _presence_analytics(sightings)
+            relationships = _person_relationship_analytics(conn, canonical_person_id)
+            embedding_count = sum(
+                _effective_embedding_owner_person_id(conn, row) == canonical_person_id
+                for row in conn.execute(
+                    "SELECT embedding_id, person_id FROM embeddings WHERE deleted_at IS NULL"
+                ).fetchall()
+            )
+            activity = tuple(self._list_person_operations(
+                conn, canonical_person_id, canonical_person_id=canonical_person_id,
+            ))
+            return PersonIntelligence(
+                requested_person_id=person_id,
+                canonical_person_id=canonical_person_id,
+                lifecycle_status=str(requested["lifecycle_status"]),
+                canonical_lifecycle_status=str(canonical["lifecycle_status"]),
+                biometric_status=str(canonical["biometric_status"]),
+                embedding_count=embedding_count,
+                confidence_summary={
+                    "score": None,
+                    "basis": "operator-finalized observations and current biometric enrollment",
+                    "accepted_observation_count": presence.observation_count,
+                    "active_embedding_count": embedding_count,
+                    "probabilistic_confidence_available": False,
+                },
+                presence=presence,
+                relationships=relationships,
+                activity=activity,
+                provenance=(
+                    "persons.lifecycle_status",
+                    "persons.canonical_person_id",
+                    "finalized observations and effective participants",
+                    "active relationship_evidence",
+                    "operation_journal",
+                ),
+            )
 
     def list_observations_for_media(self, media_id: str) -> list[Observation]:
         normalized_media_id = str(media_id).strip()
@@ -8489,6 +8517,173 @@ def _effective_observation_person_ids(
         _resolve_canonical_person_id(conn, raw_person_id)
         for raw_person_id in corrected_ids
     })
+
+
+def _list_person_sightings(
+    conn: sqlite3.Connection, canonical_person_id: str,
+) -> list[Sighting]:
+    sightings: list[Sighting] = []
+    rows = conn.execute(
+        """
+        SELECT * FROM observations
+        WHERE status = 'FINALIZED'
+        ORDER BY COALESCE(observed_at, created_at) DESC, observation_id
+        """
+    ).fetchall()
+    for row in rows:
+        observation_id = str(row["observation_id"])
+        effective_ids = tuple(_effective_observation_person_ids(conn, observation_id))
+        if canonical_person_id not in effective_ids:
+            continue
+        raw_ids = tuple(sorted({
+            str(item["person_id"])
+            for item in conn.execute(
+                "SELECT person_id FROM observation_participants WHERE observation_id = ?",
+                (observation_id,),
+            ).fetchall()
+        }))
+        correction_ids = tuple(
+            str(item["operation_id"])
+            for item in conn.execute(
+                """
+                SELECT DISTINCT operation_id FROM identity_corrections
+                WHERE observation_id = ?
+                ORDER BY created_at, operation_id
+                """,
+                (observation_id,),
+            ).fetchall()
+        )
+        sightings.append(Sighting(
+            sighting_id=f"{observation_id}:{canonical_person_id}",
+            observation_id=observation_id,
+            canonical_person_id=canonical_person_id,
+            observed_at=str(row["observed_at"] or row["created_at"]),
+            location=_optional_text(row["location"]),
+            context=json.loads(row["context"] or "{}"),
+            source=_optional_text(row["source"]),
+            finalized_at=_optional_text(row["finalized_at"]),
+            media=tuple(_list_observation_media(conn, observation_id)),
+            raw_participant_person_ids=raw_ids,
+            effective_participant_person_ids=effective_ids,
+            correction_operation_ids=correction_ids,
+        ))
+    return sightings
+
+
+def _presence_analytics(sightings: list[Sighting]) -> PresenceAnalytics:
+    if not sightings:
+        return PresenceAnalytics(
+            observation_count=0,
+            first_seen_at=None,
+            last_seen_at=None,
+            frequency_per_30_days=0.0,
+            frequency_label="Never Seen",
+            provenance=(
+                "observations.status=FINALIZED",
+                "effective corrected/canonical observation participants",
+            ),
+        )
+    ordered = sorted(sightings, key=lambda item: (item.observed_at, item.observation_id))
+    first_seen_at = ordered[0].observed_at
+    last_seen_at = ordered[-1].observed_at
+    try:
+        first = datetime.fromisoformat(first_seen_at.replace("Z", "+00:00"))
+        last = datetime.fromisoformat(last_seen_at.replace("Z", "+00:00"))
+        active_days = max(1.0, (last - first).total_seconds() / 86_400 + 1)
+    except (TypeError, ValueError):
+        active_days = 30.0
+    frequency = round(len(ordered) / max(1.0, active_days / 30.0), 3)
+    if frequency >= 8:
+        frequency_label = "Very Frequent"
+    elif frequency >= 3:
+        frequency_label = "Frequent"
+    elif frequency >= 1:
+        frequency_label = "Occasional"
+    else:
+        frequency_label = "Rare"
+    periods: dict[str, int] = {}
+    locations: dict[str, dict[str, object]] = {}
+    for sighting in ordered:
+        period = sighting.observed_at[:7]
+        periods[period] = periods.get(period, 0) + 1
+        if sighting.location:
+            item = locations.setdefault(sighting.location, {
+                "count": 0, "last_observed_at": sighting.observed_at,
+            })
+            item["count"] = int(item["count"]) + 1
+            item["last_observed_at"] = max(
+                str(item["last_observed_at"]), sighting.observed_at,
+            )
+    return PresenceAnalytics(
+        observation_count=len(ordered),
+        first_seen_at=first_seen_at,
+        last_seen_at=last_seen_at,
+        frequency_per_30_days=frequency,
+        frequency_label=frequency_label,
+        timeline=tuple(TemporalCount(period=period, count=count)
+                       for period, count in sorted(periods.items())),
+        locations=tuple(sorted((
+            LocationCount(
+                location=location,
+                count=int(values["count"]),
+                last_observed_at=str(values["last_observed_at"]),
+            )
+            for location, values in locations.items()
+        ), key=lambda item: (-item.count, item.location.casefold()))),
+        provenance=(
+            "observations.status=FINALIZED",
+            "observations.observed_at (created_at fallback)",
+            "effective corrected/canonical observation participants",
+        ),
+    )
+
+
+def _person_relationship_analytics(
+    conn: sqlite3.Connection, canonical_person_id: str,
+) -> tuple[RelationshipAnalytics, ...]:
+    aggregates: dict[tuple[str, str, str, str], list[RelationshipEvidence]] = {}
+    rows = conn.execute(
+        "SELECT * FROM relationship_evidence WHERE active = 1 ORDER BY created_at, evidence_id"
+    ).fetchall()
+    for row in rows:
+        source_id = _resolve_canonical_person_id(conn, str(row["source_person_id"]))
+        target_id = _resolve_canonical_person_id(conn, str(row["target_person_id"]))
+        if source_id == target_id:
+            continue
+        if row["directionality"] == "UNDIRECTED":
+            source_id, target_id = sorted((source_id, target_id))
+        if canonical_person_id not in {source_id, target_id}:
+            continue
+        other_id = target_id if source_id == canonical_person_id else source_id
+        key = (
+            other_id,
+            source_id,
+            target_id,
+            f"{row['relationship_type']}|{row['directionality']}",
+        )
+        aggregates.setdefault(key, []).append(_relationship_evidence_from_row(row))
+    results: list[RelationshipAnalytics] = []
+    for (other_id, source_id, target_id, relationship_key), evidence in aggregates.items():
+        relationship_type, directionality = relationship_key.split("|", 1)
+        type_counts: dict[str, int] = {}
+        for item in evidence:
+            type_counts[item.evidence_type] = type_counts.get(item.evidence_type, 0) + 1
+        results.append(RelationshipAnalytics(
+            person_id=other_id,
+            source_person_id=source_id,
+            target_person_id=target_id,
+            relationship_type=relationship_type,
+            directionality=directionality,
+            evidence_count=len(evidence),
+            evidence_type_counts=dict(sorted(type_counts.items())),
+            first_evidence_at=min(item.created_at for item in evidence),
+            last_evidence_at=max(item.created_at for item in evidence),
+            co_observation_count=type_counts.get("CO_OBSERVED", 0),
+            evidence=tuple(evidence),
+        ))
+    results.sort(key=lambda item: (item.last_evidence_at, item.person_id), reverse=True)
+    results.sort(key=lambda item: item.evidence_count, reverse=True)
+    return tuple(results)
 
 
 def _recalculate_observation_evidence(

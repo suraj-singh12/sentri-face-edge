@@ -567,7 +567,7 @@ class MergeFoundationTest(unittest.TestCase):
                 item for item in store.list_persons()
                 if item.person.person_id == survivor.person_id
             )
-            self.assertEqual((summary.embedding_count, summary.sighting_count), (1, 1))
+            self.assertEqual((summary.embedding_count, summary.sighting_count), (1, 0))
 
             self.assertEqual(
                 store.list_raw_embeddings_for_person(source.person_id)[0].person_id,

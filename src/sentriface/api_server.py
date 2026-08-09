@@ -69,11 +69,13 @@ from sentriface.models import (
     PersonAssociation,
     PersonChange,
     PersonMatch,
+    PersonIntelligence,
     PersonSummary,
     QualityReport,
     RecognitionDetail,
     RecognitionResult,
     RejectedFace,
+    Sighting,
 )
 from sentriface.storage.sqlite_store import SCHEMA_VERSION
 STATIC_DIR = Path(__file__).with_name("ui_static")
@@ -1015,6 +1017,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     if raw_view
                     else self.server.engine.get_person_graph_neighbors(person.person_id)
                 )
+                intelligence = self.server.engine.get_person_intelligence(person_id)
+                sightings = self.server.engine.list_person_sightings(person_id)
                 person_summaries = {
                     item.person.person_id: item
                     for item in [
@@ -1048,6 +1052,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         ],
                         "notes_records": [_note_record(note) for note in notes],
                         "observations": [_observation_record(item) for item in observations],
+                        "sightings": [_sighting_record(item) for item in sightings],
+                        "intelligence": _person_intelligence(intelligence),
                         "changes": [_person_change(change) for change in changes],
                         "management_events": management_events,
                         "associations": [
@@ -1064,6 +1070,23 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         ],
                     }
                 )
+                return
+            if parsed.path == "/api/person-intelligence":
+                person_id = _query_value(parsed.query, "person_id")
+                self._json({
+                    "intelligence": _person_intelligence(
+                        self.server.engine.get_person_intelligence(person_id)
+                    )
+                })
+                return
+            if parsed.path == "/api/person-sightings":
+                person_id = _query_value(parsed.query, "person_id")
+                self._json({
+                    "sightings": [
+                        _sighting_record(item)
+                        for item in self.server.engine.list_person_sightings(person_id)
+                    ]
+                })
                 return
             if parsed.path == "/api/person-association-neighbors":
                 person_id = _query_value(parsed.query, "person_id")
@@ -3233,6 +3256,9 @@ def _person_summary_from_embeddings(
         "embedding_count": summary.embedding_count,
         "sighting_count": summary.sighting_count,
         "last_seen_at": summary.last_seen_at,
+        "first_seen_at": summary.first_seen_at,
+        "frequency_per_30_days": summary.frequency_per_30_days,
+        "frequency_label": summary.frequency_label,
         "favorite": bool(summary.person.metadata.get("favorite")),
         "tags": list(summary.person.metadata.get("tags", [])),
         "representative_image": _representative_image(
@@ -3324,6 +3350,113 @@ def _observation_record(observation: Observation) -> dict[str, Any]:
         "observed_at": observation.observed_at,
         "location": observation.location,
         "source": observation.source,
+    }
+
+
+def _sighting_record(sighting: Sighting) -> dict[str, Any]:
+    observed_at = sighting.observed_at
+    date, separator, time = observed_at.partition("T")
+    media = [
+        {
+            "media_id": item.media_id,
+            "media_path": item.media_path,
+            "source": item.source,
+        }
+        for item in sighting.media
+    ]
+    return {
+        "sighting_id": sighting.sighting_id,
+        "detail_id": sighting.sighting_id,
+        "observation_id": sighting.observation_id,
+        "canonical_person_id": sighting.canonical_person_id,
+        "observed_at": observed_at,
+        "date": date,
+        "time": time if separator else "",
+        "location": sighting.location,
+        "place_seen": sighting.location or "",
+        "context": sighting.context,
+        "event_occasion": str(sighting.context.get("occasion") or ""),
+        "source": sighting.source,
+        "added_by": str(sighting.context.get("added_by") or ""),
+        "finalized_at": sighting.finalized_at,
+        "media": media,
+        "image_path": next((item["media_path"] for item in media if item["media_path"]), None),
+        "raw_participant_person_ids": list(sighting.raw_participant_person_ids),
+        "effective_participant_person_ids": list(sighting.effective_participant_person_ids),
+        "correction_operation_ids": list(sighting.correction_operation_ids),
+        "provenance": {
+            "basis": "finalized observation accepted participation",
+            "raw_participants_preserved": True,
+            "canonical_resolution_applied": True,
+        },
+    }
+
+
+def _person_intelligence(intelligence: PersonIntelligence) -> dict[str, Any]:
+    presence = intelligence.presence
+    return {
+        "requested_person_id": intelligence.requested_person_id,
+        "canonical_person_id": intelligence.canonical_person_id,
+        "lifecycle_status": intelligence.lifecycle_status,
+        "canonical_lifecycle_status": intelligence.canonical_lifecycle_status,
+        "biometric_status": intelligence.biometric_status,
+        "embedding_count": intelligence.embedding_count,
+        "confidence_summary": intelligence.confidence_summary,
+        "presence": {
+            "observation_count": presence.observation_count,
+            "first_seen_at": presence.first_seen_at,
+            "last_seen_at": presence.last_seen_at,
+            "frequency_per_30_days": presence.frequency_per_30_days,
+            "frequency_label": presence.frequency_label,
+            "timeline": [
+                {"period": item.period, "count": item.count}
+                for item in presence.timeline
+            ],
+            "locations": [
+                {
+                    "location": item.location,
+                    "count": item.count,
+                    "last_observed_at": item.last_observed_at,
+                }
+                for item in presence.locations
+            ],
+            "provenance": list(presence.provenance),
+        },
+        "relationships": [
+            {
+                "person_id": item.person_id,
+                "source_person_id": item.source_person_id,
+                "target_person_id": item.target_person_id,
+                "relationship_type": item.relationship_type,
+                "directionality": item.directionality,
+                "evidence_count": item.evidence_count,
+                "evidence_type_counts": item.evidence_type_counts,
+                "first_evidence_at": item.first_evidence_at,
+                "last_evidence_at": item.last_evidence_at,
+                "co_observation_count": item.co_observation_count,
+                "strength": {
+                    "basis": "active normalized evidence count",
+                    "count": item.evidence_count,
+                    "probability": None,
+                },
+                "evidence": [
+                    {
+                        "evidence_id": evidence.evidence_id,
+                        "evidence_type": evidence.evidence_type,
+                        "source_entity_type": evidence.source_entity_type,
+                        "source_entity_id": evidence.source_entity_id,
+                        "raw_source_person_id": evidence.source_person_id,
+                        "raw_target_person_id": evidence.target_person_id,
+                        "created_at": evidence.created_at,
+                        "source": evidence.source,
+                    }
+                    for evidence in item.evidence
+                ],
+            }
+            for item in intelligence.relationships
+        ],
+        "activity": list(intelligence.activity),
+        "provenance": list(intelligence.provenance),
     }
 
 

@@ -17,6 +17,7 @@ from sentriface.contracts import FaceDetector, FaceEmbedder, FaceIndex, Identity
 from sentriface.errors import InputImageError, QueueCancellationError
 from sentriface.graph_service import GlobalIdentityGraphService
 from sentriface.identity_service import IdentityService
+from sentriface.intelligence_service import IntelligenceReadService
 from sentriface.metrics import MetricsCollector
 from sentriface.merge_service import IdentityMergeService
 from sentriface.models import (
@@ -98,6 +99,7 @@ class FaceEngine:
         self.store = store
         self.graph = GlobalIdentityGraphService(store)
         self.identity = IdentityService(store)
+        self.intelligence = IntelligenceReadService(store)
         self.merges = IdentityMergeService(
             store,
             publish_index=self._publish_merge_index,
@@ -313,6 +315,14 @@ class FaceEngine:
     def list_persons(self, archived: bool = False) -> list[PersonSummary]:
         with self.metrics.timer("db_list_persons_ms"):
             return self.store.list_persons(archived=archived)
+
+    def list_person_sightings(self, person_id: str):
+        with self.metrics.timer("db_list_person_sightings_ms"):
+            return self.intelligence.list_sightings(person_id)
+
+    def get_person_intelligence(self, person_id: str):
+        with self.metrics.timer("db_person_intelligence_ms"):
+            return self.intelligence.get_person_intelligence(person_id)
 
     def create_identified_person(
         self,

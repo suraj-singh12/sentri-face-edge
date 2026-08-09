@@ -2,7 +2,7 @@
 
 Implement in order. Each phase must preserve offline operation, use additive migrations where possible, keep important writes transactional and journaled, and add upgrade/failure tests before moving on.
 
-Status at this checkpoint: P0 through P8-C are complete. P9 is the next planned phase; P9 and later remain future work.
+Status at this checkpoint: P0 through P9 are complete. P10 is the next planned phase; P10 and later remain future work.
 
 ## P0 Database migration/version foundation — Complete
 
@@ -50,11 +50,11 @@ Orchestrate Merge on the P8-A foundation. Preserve source records and evidence, 
 
 ## P8-C Architecture hardening — Complete
 
-Remove compatibility stores from current-truth decisions without deleting their historical data. Embedding enrollment ownership remains raw provenance while correction history and terminal canonical resolution determine effective ownership. Merge note conflicts append normalized note revisions before refreshing the `persons.notes` mirror. Profile activity reads the global operation journal, current relationship reads use the evidence-derived graph projection, and review/identity request boundaries require an operation ID plus authenticated actor. Exit: `person_associations`, `persons.notes`, `person_operations`, and `recognition_details` are restricted to compatibility, migration, historical display, or explicitly deferred P9 metrics; none determines current graph, activity, notes, or identity.
+Remove compatibility stores from current-truth decisions without deleting their historical data. Embedding enrollment ownership remains raw provenance while correction history and terminal canonical resolution determine effective ownership. Merge note conflicts append normalized note revisions before refreshing the `persons.notes` mirror. Profile activity reads the global operation journal, current relationship reads use the evidence-derived graph projection, and review/identity request boundaries require an operation ID plus authenticated actor. Exit: `person_associations`, `persons.notes`, `person_operations`, and `recognition_details` are restricted to compatibility, migration, or historical display; none determines current graph, activity, notes, identity, or P9 analytics.
 
-## P9 Sightings metrics + People sort/group — Future
+## P9 Intelligence, Sightings, Analytics, and Derived Read Models — Complete
 
-Compute sightings, last seen, frequency, and grouping from accepted event participation rather than embedding-linked detail counts. Update People APIs/controllers with stable canonical/lifecycle semantics. Exit: metrics remain stable across photo deletion, face move, and merge according to documented rules.
+Added a read-only intelligence service and normalized backend models for effective sightings, presence, monthly/location trends, evidence-derived relationship analytics, and profile intelligence. Sightings now come only from finalized observations and corrected/canonical effective participants, collapse duplicate faces within an observation, retain raw provenance, and aggregate merge history under the survivor. People summaries and sort/group fields use backend-provided observation counts, first/last seen, frequency values, and labels; the profile renders normalized sighting rows. Relationship strength and history come only from active `relationship_evidence`, and activity comes only from `operation_journal`. `recognition_details`, `person_associations`, `persons.notes`, and `person_operations` remain compatibility data rather than analytics truth. No-face identities are supported without biometric enrollment. No authoritative table, graph mutation, dependency, or schema migration was added. Exit: photo/embedding deletion cannot erase event participation, corrections move the effective current sighting while preserving raw history, merges union canonical history, and focused plus full regression suites verify the behavior.
 
 ## P10 Person Graph + World — Future
 

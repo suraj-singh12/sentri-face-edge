@@ -967,7 +967,7 @@ function groupLabelForPerson(person, groupBy) {
   if (groupBy === "frequency") return sightingFrequencyLabel(person);
   if (groupBy === "frequent") {
     if (!sightingCount(person)) return "Not Seen Yet";
-    return sightingFrequencyScore(person) >= 3 && daysSince(person.last_seen_at) <= 30
+    return ["Very Frequent", "Frequent"].includes(sightingFrequencyLabel(person))
       ? "Frequently Seen"
       : "Seen Occasionally";
   }
@@ -998,22 +998,15 @@ function sightingCount(person) {
 }
 
 function sightingFrequencyScore(person) {
-  const activeMonths = Math.max(1, daysSince(person?.created_at) / 30);
-  return sightingCount(person) / activeMonths;
+  return Number(person?.frequency_per_30_days || 0);
 }
 
 function frequentlySeenScore(person) {
-  const recencyWeight = Math.max(0.1, 1 - (daysSince(person?.last_seen_at) / 365));
-  return sightingFrequencyScore(person) * recencyWeight;
+  return sightingFrequencyScore(person);
 }
 
 function sightingFrequencyLabel(person) {
-  const score = sightingFrequencyScore(person);
-  if (score >= 8) return "Very Frequent";
-  if (score >= 3) return "Frequent";
-  if (score >= 1) return "Occasional";
-  if (sightingCount(person)) return "Rare";
-  return "Never Seen";
+  return person?.frequency_label || "Never Seen";
 }
 
 function priorityScore(person) {
@@ -1101,7 +1094,7 @@ function PeopleGalleryView({
   const selectedDetails = selectedRecord ? detailsForEmbedding(payload.details || [], selectedRecord.embeddingId) : [];
   const profile = personProfile(payload, selectedDetails, Boolean(selectedRecord));
   const summaryProfile = personProfile(payload);
-  const latestSightings = [...(payload.details || [])].filter(isSeenDetail).sort(compareSightingsNewestFirst);
+  const latestSightings = [...(payload.sightings || [])].sort(compareSightingsNewestFirst);
   const recentSightings = latestSightings.slice(0, 3);
   const latestSightingLabel = lastSeenLabel(latestSightings[0]);
   const changes = payload.changes || [];
@@ -2603,7 +2596,7 @@ function PlaceholderPersonFields({ values, onChange, people }) {
 
 function SightingImage({ detail, imageRecords, fallbackPath, size = 56 }) {
   const record = imageRecords.find((item) => item.embeddingId === detail.embedding_id);
-  const path = record?.thumbPath || record?.path || fallbackPath;
+  const path = detail.image_path || record?.thumbPath || record?.path || fallbackPath;
   if (!path) return null;
   return <Image src={mediaUrl(path)} alt={detail.place_seen || "sighting"} h={size} w={size} fit="cover" radius="sm" className="sighting-thumb" />;
 }

@@ -4,7 +4,7 @@ This document is a concise checkpoint of the stable implemented architecture. De
 
 ## Current phase
 
-P8-A Merge infrastructure, P8-B Merge orchestration, and P8-C Architecture hardening are complete. P9 Sightings metrics and People sort/group is the next planned phase.
+P9 Intelligence, Sightings, Analytics, and Derived Read Models is complete. P0 through P8-C remain frozen; P10 Person Graph + World is the next planned phase.
 
 ## Core principles
 
@@ -24,6 +24,7 @@ P8-A Merge infrastructure, P8-B Merge orchestration, and P8-C Architecture harde
 - **Review finalisation:** commits completed multi-face decisions, accepted identity data, observation state, evidence, and journal history atomically.
 - **Correction:** records observation identity corrections, Move Face, and Add Face with preserved provenance and affected projection rebuilds.
 - **Merge:** `IdentityMergeService` provides read-only preview and normalized execution over the P8-A canonical and manifest primitives. It preserves raw provenance, applies explicit conflict strategies, updates canonical state, rebuilds the graph projection, and coordinates derived-index publication. Undo remains deferred to guarded P11 revert work.
+- **Intelligence:** `IntelligenceReadService` exposes deduplicated effective sightings, presence/temporal metrics, evidence-derived relationship analytics, and canonical operation-journal activity without adding an authoritative store or mutating the graph.
 
 ## Mutation rules
 
@@ -42,14 +43,22 @@ Important mutations require a stable operation/idempotency ID and an operation-j
 | `operation_journal` | Important operation and status history |
 | `merge_operations`, affected items, and conflict resolutions | Normalized merge history, affected-item provenance, selected strategies, and inverse data |
 
-`graph_connections`, vector indexes, canonical groupings, and UI graph layouts are derived read models or caches, not authoritative sources.
+`Sighting`, `PresenceAnalytics`, `RelationshipAnalytics`, profile intelligence, `graph_connections`, vector indexes, canonical groupings, and UI graph layouts are derived read models or caches, not authoritative sources.
 
-Compatibility stores are not current truth: `persons.notes` mirrors the latest normalized profile-note revision; `person_operations` is legacy history; `person_associations` is available only for explicit historical/raw reads; and `recognition_details` preserves legacy sighting history. Current profiles, activity, graph relationships, and identity resolution use normalized sources.
+Compatibility stores are not current truth: `persons.notes` mirrors the latest normalized profile-note revision; `person_operations` is legacy history; `person_associations` is available only for explicit historical/raw reads; and `recognition_details` preserves legacy recognition/photo-detail history. Current profiles, activity, graph relationships, identity resolution, sightings, and presence metrics use normalized sources.
+
+## P9 read behavior
+
+- One current sighting is one finalized observation plus one effective canonical person, regardless of duplicate face detections or media count.
+- Corrections determine current effective participation; immutable raw participants and correction operation IDs remain visible as provenance.
+- Merge resolution aggregates source observations and embeddings into the canonical survivor without rewriting original ownership or timestamps.
+- Presence metrics expose observation count, first/last seen, monthly trend buckets, observed-location counts, and a documented descriptive frequency value/label.
+- Relationship analytics read active `relationship_evidence`, including independent type counts and first/last occurrence. Evidence count is reported as strength; no unsupported probability is invented.
+- Profile activity comes only from `operation_journal`. No-face identities use the same read models without automatic identity or enrollment creation.
+- The backend computes these values. The React People view renders them and retains `recognition_details` only for legacy face/photo-detail presentation.
 
 ## Known deferred work
 
-- P9 sightings metrics and People sort/group improvements based on accepted event participation.
-- P9 replacement of legacy `recognition_details` sighting counts with accepted-participant metrics.
 - P11 guarded merge/operation revert; normalized merge undo is intentionally not exposed yet.
 - P12 backup/restore hardening for normalized authoritative, journal, and projection records.
 - P13 fully offline BYOM/model-management work.

@@ -469,8 +469,8 @@ class StorageMigrationTest(unittest.TestCase):
             self.assertEqual(details[0].added_by, "Analyst A")
             self.assertEqual(store.get_person(person.person_id).metadata["added_by"], "Analyst A")
             summary = store.list_persons()[0]
-            self.assertEqual(summary.sighting_count, 1)
-            self.assertEqual(summary.last_seen_at, "2026-06-07T13:45")
+            self.assertEqual(summary.sighting_count, 0)
+            self.assertIsNone(summary.last_seen_at)
 
     def test_person_profile_update_keeps_change_history(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
