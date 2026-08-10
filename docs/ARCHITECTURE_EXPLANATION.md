@@ -1,0 +1,1325 @@
+# SentriFace Edge architecture explanation
+
+## Purpose and scope
+
+This document is the long-term architectural memory for SentriFace Edge. It explains not merely what the system contains, but why its boundaries exist, what simpler designs would have broken, and how the design behaves when history becomes complicated.
+
+Use it with, rather than instead of, the other architecture documents:
+
+- `DOMAIN_MODEL.md` defines the formal entities, relationships, and current normative contracts.
+- `ARCHITECTURE_STATE.md` records the concise implementation checkpoint.
+- `IMPLEMENTATION_PLAN.md` records phase order, completion, and remaining gates.
+
+This explanation covers the architecture implemented from P0 through P10-D and the stabilized P10-E backend as of 2026-08-10. P10-E correctness and contract behavior are implemented, but the backend is not frozen for P10-F because the mandatory consolidated sparse/dense cold/warm performance artifact remains incomplete. That distinction matters: implemented behavior is described here, while the remaining measurement gate stays visible rather than being normalized into readiness.
+
+The central question throughout is:
+
+> What does the system know, why is it allowed to know it, and can it explain how that knowledge changed?
+
+SentriFace is not primarily a collection of face files. It is a historical identity system in which biometric recognition proposes an interpretation, an operator accepts or rejects that proposal, authoritative records preserve what was accepted at the time, and canonical read models express the current interpretation without destroying the past.
+
+---
+
+## 1. Core philosophy
+
+### Evidence over assumption
+
+The first architectural problem was that face recognition output looks deceptively authoritative. A high similarity score can be useful for ranking candidates, but it does not prove identity, participation in an event, or a relationship between people. Treating model output as fact would let model changes, threshold changes, or stale indexes silently rewrite the meaning of the database.
+
+The decision is that recognition owns proposals only. The authoritative transition occurs only after explicit operator finalisation. A recognition result may populate a review choice, but it may not directly create a person, accepted participant, sighting, relationship, cluster, or World node.
+
+This produces a deliberate pipeline:
+
+```mermaid
+flowchart LR
+    R["Recognition proposal"] --> S["Staged review decision"]
+    S --> O["Explicit operator completion"]
+    O --> T["One authoritative transaction"]
+    T --> A["Persons, finalized observation, participants, notes, evidence, journal"]
+    A --> P["Rebuildable projections and read models"]
+```
+
+If the model later improves, existing authoritative history does not change. New recognition can generate better proposals; correcting old history still requires an explainable operator mutation.
+
+### History preservation over destructive mutation
+
+Identity data accumulates provenance. A face may have been accepted as A, corrected to B, and later interpreted under canonical survivor C. Rewriting the original row to C would make the current screen look simple, but it would erase the fact that A and B ever existed and make earlier decisions impossible to audit.
+
+The decision is to preserve raw historical ownership and layer current interpretation on top. Corrections append records. Merges add canonical mappings and manifests. Notes add revisions. Evidence becomes inactive rather than being silently replaced. Archive and delete are lifecycle states, not routine erasure.
+
+This is the system's most important distinction:
+
+- **Historical truth:** what identifier, decision, owner, participant, note revision, or evidence source was recorded at the time.
+- **Current interpretation:** what those historical records mean after corrections and terminal canonical resolution.
+
+Both are needed. Historical truth without current interpretation produces fragmented identities. Current interpretation without historical truth produces an unauditable system.
+
+### Backend authority over frontend inference
+
+The React application sees enough display data that it could calculate counts, relationships, identity ownership, and graph membership. That would be convenient initially, but it would create a second domain engine with different timing, filtering, and correction behavior.
+
+The decision is that the frontend sends operator intent and renders versioned backend read contracts. It may decide coordinates, animation, selection, and camera state. It may not decide that two people are related, that two aliases are the same identity, that a node is actionable, that a sighting exists, or that two paged results form one edge.
+
+This boundary is not just code organization. It ensures that the same answer is used by the People list, profile, Person Graph, World, exports, and future integrity tooling.
+
+### Derived state must be replaceable
+
+Graph connections, vector indexes, sightings, analytics, clusters, layouts, rankings, and World explanations are useful, but none is allowed to become irreplaceable truth. Every durable projection must either be rebuilt from authoritative records or be treated as a disposable cache.
+
+The reason is operational as well as conceptual. Offline installations can survive partial upgrades, corrected history, index failure, and projection drift only if the system can distinguish the record of truth from an acceleration structure.
+
+### Offline-first deterministic behavior
+
+SentriFace Edge is completely offline. The loopback API, in-process socket guard, OS network policy checks, encrypted SQLite storage, local model onboarding, and filesystem media model are product invariants, not deployment details.
+
+Offline operation reinforces the architectural preference for deterministic local reads. There is no remote identity service to reconcile ambiguous state and no external event stream to repair local history. Important commands therefore require local operation IDs, actor snapshots, SQLite transaction boundaries, and reproducible projections.
+
+### Explainability is a write-time obligation
+
+“Explainability” is not added later by generating prose about a result. Every important mutation must preserve enough structure to answer who initiated it, what changed, which records were affected, what evidence supports the current result, and what previous state matters for a future guarded revert.
+
+This is why the operation journal, correction history, merge manifests, note revisions, evidence provenance, and structured World explanations all exist. They are different views of the same principle: every mutation is an event that must be explainable.
+
+---
+
+## 2. Persistence and migration foundation
+
+### What problem existed?
+
+All later architectural work depended on changing the schema of databases that may live for years on disconnected machines. An ad hoc series of `if version < n` changes would make upgrade paths hard to test and would risk a partially migrated database becoming the only copy of an installation's identity history.
+
+### Design decision
+
+The schema uses a contiguous, explicit migration registry through schema version 28. Each supported version advances one version at a time, old databases receive a verified pre-migration backup, and the migration chain runs inside an immediate SQLite transaction. A database newer than the application is rejected rather than guessed at.
+
+This was chosen instead of broad schema replacement or best-effort migration. Additive versioned migrations preserve compatibility records and make every supported upgrade path testable. A destructive “recreate current tables and copy what fits” approach was rejected because it could lose legacy history precisely when new authority rules are being introduced.
+
+### How it works internally
+
+The migration registry is validated for contiguity before use. Foreign keys are enabled on storage connections. Before an old database is changed, SentriFace creates or re-verifies a named safety backup. The migration transaction updates schema, data, and `user_version` together. Validation runs before commit; any failure rolls the schema version and data changes back together.
+
+Fresh databases and upgraded databases are expected to converge on the same schema. Compatibility data is preserved even when it is no longer allowed to determine current truth.
+
+### Example scenario
+
+An offline installation starts with schema v17. It must reach v28 through every registered intermediate migration. If migration v23 to v24 fails after creating one table, the entire chain rolls back to the original schema and data. The verified pre-migration backup remains available for recovery. Restarting does not assume that the half-created table is valid progress.
+
+### Edge cases
+
+- A current-schema database does not create an unnecessary migration backup or rerun migrations.
+- A failed backup prevents migration from starting.
+- A failed migration cannot leave `user_version` ahead of the actual schema.
+- Repeated startup is idempotent.
+- Foreign-key checks protect historical links from accidental physical deletion.
+- A newer database is not opened under older semantics.
+
+The broader lesson is that domain invariants are only credible if the migration system can establish them for every supported existing database.
+
+---
+
+## 3. Identity architecture
+
+### 3.1 Person, identity, and embedding are different concepts
+
+#### What problem existed?
+
+A simple face gallery tends to equate three things:
+
+1. the human being represented by the system;
+2. a database record and its historical ID;
+3. one or more biometric embeddings used to propose matches.
+
+That equivalence fails as soon as a person has no face enrollment, a face is moved, two records are merged, or an identity is archived while historical events remain visible.
+
+#### Design decision
+
+A `Person` is a stable historical identity node. An embedding is biometric enrollment provenance owned by a raw person record. “Current identity” is the result of corrections and canonical resolution, not a property inferred from the embedding alone.
+
+There is no second durable `Identity` object that supersedes `Person`. In architectural discussion, “identity” means the person record together with its identity/lifecycle/biometric state and its current canonical interpretation. Keeping that term conceptual avoids introducing a competing owner for observations or embeddings.
+
+The person model separates three independent dimensions:
+
+- `lifecycle_status`: `ACTIVE`, `ARCHIVED`, `DELETED`, or `MERGED`;
+- `identity_status`: for example, an explicitly created `IDENTIFIED` or `UNIDENTIFIED` person;
+- `biometric_status`: `ENROLLED` or `NO_FACE`.
+
+This was chosen instead of encoding all states in `deleted_at`, enrollment count, or display-name conventions. A no-face person can still own notes, participate in finalized observations, and appear in graph history. An unidentified person is still an intentionally tracked identity; an unknown detection is not.
+
+#### How it works internally
+
+Raw records keep their original `person_id`. Embeddings keep raw enrollment ownership. Read methods expose both raw ownership and effective canonical ownership. Vector indexes are derived caches rebuilt from active embeddings and their current canonical owners.
+
+Recognition search is defensive even when an index is stale: candidate embeddings are regrouped through the storage layer's current effective owner before person matches are returned. This prevents a moved face from continuing to propose its former owner merely because an older index generation is still in memory.
+
+#### Example scenario
+
+Priya is created as a known person with background context but no usable image. She is `ACTIVE`, `IDENTIFIED`, and `NO_FACE`. She may be mentioned in notes and accepted as a participant through an operator workflow. Later, Add Face enrolls a biometric embedding and changes only her biometric state to `ENROLLED`. It does not create a second identity or invent an observation.
+
+#### Edge cases
+
+- Zero embeddings does not mean the person does not exist.
+- Deleting an embedding does not delete observations in which the person participated.
+- A stale vector index is corrected at result grouping by current storage ownership.
+- A merged source may still own raw embeddings while searches return the survivor.
+- An archived or deleted terminal identity remains historical, but is excluded from active recognition enrollment and action paths.
+
+### 3.2 Why canonical identity exists
+
+#### What problem existed?
+
+Duplicate person records are unavoidable. Physically moving every embedding, participant, note, evidence row, and operation to one ID would appear to solve the duplicate, but it would erase the identity under which each fact was originally recorded. It would also make merges expensive, fragile, and difficult to reverse safely.
+
+#### Design decision
+
+Physical consolidation of historical records was rejected. Instead, raw ownership remains unchanged and canonical resolution provides the current interpretation.
+
+A merged source points to a canonical target. Resolution is transitive and always ends at a terminal canonical identity. Current reads collapse aliases to that terminal person; historical reads can still show each raw ID and each merge step.
+
+```mermaid
+flowchart LR
+    O["Finalized observation"] --> R["Raw participant A"]
+    R --> C["Correction: A interpreted as B"]
+    C --> M["Canonical resolution: B merged into C"]
+    M --> V["Current view: observation belongs to C"]
+    R -. preserved .-> H["Historical view still records A"]
+```
+
+The resolution order is significant:
+
+1. start from raw observation participant or face assignment;
+2. apply the applicable correction chain;
+3. resolve the resulting person through the canonical merge chain;
+4. deduplicate the terminal person within the observation or projection.
+
+#### How it works internally
+
+Only `MERGED` people may carry a canonical target. The resolver walks the mapping transitively and detects cycles, dangling targets, and malformed non-merged mappings. A merge target must resolve to a terminal active person. Current embedding ownership follows the latest face-ownership correction and then the same terminal canonical resolution.
+
+Raw state therefore looks like:
+
+```text
+Observation O1 -> participant A
+Embedding E1   -> original owner A
+Evidence V1    -> raw endpoints A and B
+```
+
+The current interpretation may be:
+
+```text
+O1 -> Canonical(Corrected(A))
+E1 -> Canonical(CurrentOwner(E1))
+V1 -> Canonical(A) and Canonical(B), unless they collapse to one person
+```
+
+#### Example scenario
+
+Day 1: an observation is finalized with raw participant A.
+
+Day 30: an operator corrects that participation from A to B.
+
+Day 60: B is merged into C.
+
+The current sighting and World event show C. The raw participant row still says A. The correction still says A to B. The merge history still says B to C. An explanation can therefore show the complete interpretation chain rather than pretending the observation always belonged to C.
+
+#### Edge cases
+
+- **Merge chains:** A merged to B and B later merged to C resolves A and B to C. Each manifest retains its original source and target.
+- **Self-map or cycle:** rejected before commit and also guarded by schema/state validation.
+- **Deleted survivor:** rejected. A survivor must be terminal and active.
+- **Archived source:** may be merged into an active survivor; its archived history is preserved.
+- **Deleted source:** cannot be merged.
+- **Correction followed by merge:** correction remains raw history; its target resolves through the later merge.
+- **Merge followed by correction:** a merged ID supplied to a current command resolves to its terminal survivor; the correction must still name different effective people.
+
+### 3.3 Lifecycle is visibility and action policy, not erasure
+
+#### What problem existed?
+
+Using deletion as the only lifecycle operation conflates “not currently active,” “historically removed,” and “merged into another identity.” Physical deletion also destroys graph provenance, audit history, and the ability to explain past events.
+
+#### Design decision
+
+Lifecycle states are explicit:
+
+- `ACTIVE`: participates in current action paths and active recognition ownership.
+- `ARCHIVED`: inactive but restorable and historically visible.
+- `DELETED`: tombstoned and historically represented, not ordinarily restorable through the archive path.
+- `MERGED`: a historical alias whose current interpretation is another active person.
+
+The compatibility operation named `permanently_delete_person` now tombstones rather than physically erasing. A separate storage-only physical purge capability remains exceptional and is not normal identity lifecycle behavior.
+
+#### How it works internally
+
+Archive, restore, and delete are journaled state transitions. The person row and linked historical records remain. Active lists exclude inactive people; historical and graph projections can retain them with backend-provided restrictions. Recognition indexes are rebuilt after lifecycle transitions so inactive identities do not remain normal proposal targets.
+
+#### Example scenario
+
+An operator archives Arun because he should not appear in current matching workflows. Old finalized events and relationship evidence still refer to Arun, and historical graph views may show him as inactive. Restoring Arun returns him to `ACTIVE` without recreating his history. If Arun is instead tombstoned as `DELETED`, his events remain, but active operations remain restricted.
+
+#### Edge cases
+
+- Re-archiving an archived identity is idempotent and records whether state actually changed.
+- Only archived identities can be restored.
+- A merged source cannot be independently deleted; its lifecycle meaning is already the canonical mapping.
+- Archived and deleted graph nodes remain explainable even when navigation is disabled.
+- Lifecycle change and journal commit share the same transaction.
+
+---
+
+## 4. Evidence and observation architecture
+
+### 4.1 Why sightings are not stored as counters
+
+#### What problem existed?
+
+A counter such as `person.sighting_count += 1` cannot answer which event produced the count, whether duplicate faces in one photo were counted twice, what happens after a correction, or how two merged identities should combine. A counter also becomes stale when an observation changes interpretation.
+
+#### Design decision
+
+The finalized `Observation` is the authoritative presence unit. A current sighting is a derived pair:
+
+```text
+(finalized observation, effective terminal canonical person)
+```
+
+Sightings, first/last seen values, monthly trends, location counts, and frequency labels are rebuilt from observations. They are not independent authority.
+
+#### How it works internally
+
+An observation carries event time, location, context, source, status, and one or more references to existing media. Raw participants preserve accepted person IDs. Immutable face assignments preserve which accepted face and embedding contributed to the event. Effective participants apply corrections, then canonical resolution, then set-based deduplication.
+
+Only `FINALIZED` observations contribute to sightings and co-observation evidence. Draft observations and staged reviews do not. Media is referenced rather than copied into the event model, so deleting one biometric enrollment does not erase the historical event.
+
+#### Example scenario
+
+One event contains two photos and three detected faces. Two faces are accepted as the same person and one as another person. The finalized event has two effective participants, not three sightings. It contributes one sighting to each person and one co-observation relationship evidence record for the pair.
+
+#### Edge cases
+
+- Duplicate faces or duplicate photos do not multiply a person's sighting within one observation.
+- If two participants later merge, the effective participant set collapses to one; the event remains, but no self-relationship is projected.
+- Missing location is retained as missing, not replaced with an invented place.
+- Invalid timestamps use documented fallbacks in current analytics rather than changing stored history.
+- Photo or embedding deletion cannot remove finalized participation.
+
+### 4.2 Why finalisation is one atomic command
+
+#### What problem existed?
+
+The earlier UI shape naturally encouraged one request per detected face: accept A, create B, skip C, then create relationships. In a multi-face event, any failure between requests could leave half an observation authoritative. That violates the meaning of co-observation and makes graph evidence depend on request ordering.
+
+#### Design decision
+
+Review decisions are non-authoritative staging. Every detected face must have a final decision, and the operator must explicitly complete the review. One backend command then commits every authoritative consequence or none.
+
+This was chosen instead of compensating transactions across frontend request loops. SQLite can provide a stronger and simpler guarantee when the entire final write crosses one backend transaction boundary.
+
+#### How it works internally
+
+`photo_reviews` and `photo_review_faces` store staged decisions such as accept existing, accept new, exclude, or skip. Completion performs one transaction that may:
+
+- create accepted people;
+- create embeddings and immutable face assignments;
+- finalize the observation and attach media;
+- insert deduplicated raw participants;
+- save normalized note revisions and explicit mentions;
+- create co-observation and mention evidence;
+- replace and validate the graph projection;
+- commit the `review.complete` journal operation;
+- mark the review completed and remove staging.
+
+The Queue uses the same completion boundary for the selected group subset. Check Photo also sends one completion intent after all faces have decisions. React does not assemble durable participant or evidence state.
+
+#### Example scenario
+
+A photo contains Meera, Nikhil, and one poor-quality face. The operator accepts Meera, creates Nikhil as a new person, and explicitly excludes the poor-quality face. Completion succeeds as one unit. If creating Nikhil's embedding fails, Meera is not partially recorded as a participant and no co-observation edge appears.
+
+#### Edge cases
+
+- A review with any undecided face cannot complete.
+- `EXCLUDE` and `SKIP` remain review history but create no participant.
+- Retrying the same committed operation ID returns the committed result without duplicating evidence or advancing graph revision again.
+- A failure inside the transaction removes its started journal row along with all partial authoritative changes. Some service-level commands then record a separate durable failed attempt; failure semantics are command-specific and must not be generalized blindly.
+- A cancelled review cannot later be treated as finalized identity history.
+
+### 4.3 Corrections preserve the accepted-at-the-time record
+
+#### What problem existed?
+
+Operators will discover mistakes after finalisation. Updating `observation_participants.person_id` in place would make current results look correct, but would destroy the original accepted decision and make it impossible to distinguish human correction from initial recognition.
+
+#### Design decision
+
+Corrections are append-only authoritative history. Raw participants, original face assignments, and original review decisions remain unchanged. Effective participant reads apply the correction chain before canonical resolution.
+
+Only the affected observation's current co-observation evidence is revised: existing evidence becomes inactive, a new evidence revision is created from the new effective participant set, and the graph projection is rebuilt in the same transaction.
+
+#### How it works internally
+
+An identity correction records its type, from/to people, operation ID, time, and the applicable observation, face assignment, or embedding. Observation correction identifies all raw/effective records that currently resolve to the source in that observation. It appends face-assignment corrections where assignments exist and observation-identity corrections for remaining participant provenance.
+
+The recalculation step deduplicates effective participants, retires only active `CO_OBSERVED` evidence sourced from that observation, creates a new revision for current pairs, rebuilds the graph, validates it, and commits the journal entry.
+
+#### Example scenario
+
+Event O1 and O2 both contain A and B. O1 was misidentified: its B is actually C. Correcting O1 leaves the O2 A-B evidence active, retires only O1's A-B evidence, and creates O1 A-C evidence. Historical inspection can still show that O1 originally named B.
+
+#### Edge cases
+
+- The source must be an effective participant in a finalized observation.
+- Source and target must resolve to different terminal identities.
+- The target must be active.
+- Correcting B to A in an event that already contains A collapses the effective participants; no self-edge is created.
+- A later merge of the correction target is handled by canonical resolution without editing the correction row.
+- Projection failure rolls back the correction, evidence revision, and committed mutation; the correction service records a durable failed operation attempt when possible.
+
+### 4.4 Move Face changes interpretation, not raw enrollment history
+
+#### What problem existed?
+
+Moving an embedding by updating `embeddings.person_id` would erase who originally enrolled it. It would also leave any completed event's face assignment and relationship evidence inconsistent unless every dependent row were destructively rewritten.
+
+#### Design decision
+
+Move Face appends a `FACE_OWNERSHIP` correction and corresponding `FACE_ASSIGNMENT` corrections for observations that used the embedding. Raw embedding ownership, review decisions, recognition details, and immutable assignments remain unchanged.
+
+Current ownership is:
+
+```text
+terminal canonical(latest face-ownership correction, otherwise raw embedding owner)
+```
+
+#### How it works internally
+
+The command resolves the destination to an active canonical person, rejects no-op moves, finds observations containing the embedding, appends ownership and assignment corrections, updates derived biometric state, recalculates evidence only for affected observations, validates the graph, and journals the entire operation atomically.
+
+If the moved embedding was the source person's representative face, that derived preference is cleared. If no effective active embeddings remain for the source, the source becomes `NO_FACE`; the target becomes `ENROLLED`.
+
+#### Example scenario
+
+An event has A and two faces accepted as B. One B face is later found to be C. Moving that embedding adds C to the effective event but keeps B because another B face still supports B's participation. If the moved face had been B's only face in the event, B would disappear from the effective participant set for that event.
+
+#### Edge cases
+
+- Moving a face to its current effective owner is rejected.
+- A deleted embedding cannot be moved.
+- An archived or deleted target cannot receive the face.
+- A face may affect multiple finalized observations; all affected evidence recalculations share the transaction.
+- A stale vector index cannot override current ownership because result grouping asks storage for effective owners.
+- If graph recalculation fails, ownership corrections and biometric-state changes roll back together.
+
+### 4.5 Add Face is enrollment, not an event
+
+#### What problem existed?
+
+The same staged face machinery is useful both for reviewing an encounter and for adding a reference photo to an existing person. Treating every Add Face as an observation would invent a sighting, location, participant, and relationship from what may be only a profile-enrollment action.
+
+#### Design decision
+
+Add Face is a distinct atomic enrollment command. It may create one or more embeddings and immutable enrollment-history rows for one active existing person. It does not create a person, observation, participant, sighting, or graph evidence.
+
+#### How it works internally
+
+Every staged face must have a final decision, every accepted face must target the same active canonical person, and no accepted-new-person decision is allowed. Duplicate vectors for the same raw target reuse the embedding rather than creating another. The review completes, enrollment history is journaled, biometric state becomes `ENROLLED`, and staging is removed in one transaction.
+
+#### Example scenario
+
+Raj already exists as a `NO_FACE` identity with notes and relationships. An operator opens Add Face and accepts two crops as Raj. The operation enrolls those references and changes Raj to `ENROLLED`. His observation count and graph remain exactly as before.
+
+#### Edge cases
+
+- Add Face to an archived identity is rejected.
+- A review containing a “create new person” decision is rejected for this command.
+- An enrollment failure leaves the review in progress and creates no embedding.
+- Existing notes, mentions, and graph evidence are untouched.
+
+### 4.6 Notes and mentions are structured evidence
+
+#### What problem existed?
+
+Plain text such as “Met @Alex” is ambiguous. Names are not stable IDs, two people can share a name, spelling can change, and parsing historical free text would fabricate intent that was never explicitly saved.
+
+#### Design decision
+
+Notes are normalized, revisioned records. Mentions are explicit saved occurrences referencing person IDs. Display text helps the operator, but it is not the source of relationship truth.
+
+An active mention occurrence creates directed `NOTE_REFERENCE` evidence from the note owner to the referenced person. Editing a note diffs exact mention IDs: removed occurrences retire only their evidence; unchanged occurrences remain; new occurrences create new evidence.
+
+#### How it works internally
+
+Each note has immutable revisions containing content, actor/author, operation ID, and the mention snapshot. Active mention rows point to the revisions that created and retired them. Profile note saves use optimistic concurrency through `expected_previous_notes`. The latest normalized revision is current truth; `persons.notes` is refreshed afterward only as a compatibility mirror.
+
+Merge note conflict resolution also appends a normalized revision before updating the compatibility mirror. Existing raw mentions may remain editable after the referenced identity is merged, while new mentions must resolve through permitted active identity rules.
+
+Legacy profile and recognition-detail text migrates into note history without parsing `@` strings. Legacy `automatic_mention` associations are not promoted when the exact note occurrence cannot be proven.
+
+#### Example scenario
+
+Anita's note explicitly mentions person ID B. That creates directed Anita-to-B evidence. The note is later edited to mention C instead. B's mention evidence becomes inactive, C's becomes active, and an independent Anita-B co-observation remains untouched.
+
+#### Edge cases
+
+- Duplicate display names are safe because the saved reference is an ID.
+- Mentioning oneself does not create self-evidence.
+- If another editor changed the note, the expected-text mismatch rejects the save and requires a refresh rather than silently overwriting the newer revision.
+- During merge, `KEEP_SOURCE`, `KEEP_TARGET`, `COMBINE`, or `USER_SELECTED` determines the survivor's note content; the resulting revision and selected strategy remain explainable.
+- `USER_SELECTED` free text cannot safely invent parsed mention provenance; existing target mention provenance is retained rather than guessed.
+
+---
+
+## 5. Mutation architecture
+
+### What problem existed?
+
+Without a common mutation discipline, archive, note save, review completion, correction, and merge could each leave a different audit trail and a different partial-failure shape. Request retries could duplicate evidence, and an activity feed built from UI events would not prove that a database change committed.
+
+### Design decision
+
+Every important normalized mutation is identified by a stable operation/idempotency ID and an authenticated actor snapshot. Graph-affecting authoritative changes, their evidence changes, graph projection replacement, graph revision advancement, and successful journal transition share one SQLite transaction.
+
+`operation_journal` is the current operation/activity authority. `person_operations` remains only for historical compatibility and old idempotency paths; it is not merged into the current activity feed because legacy rows lack reliable actor and lifecycle semantics.
+
+### How it works internally
+
+A journal entry records:
+
+- operation ID and type;
+- status and immutable status-transition history;
+- actor and actor user ID;
+- source boundary and optional context;
+- affected entities;
+- initial details and committed/failed result details;
+- creation and completion times.
+
+The normal success path is `STARTED` to `COMMITTED`. The schema also supports `FAILED`, `ROLLED_BACK`, and `REVERTED`, but general operation revert is deliberately deferred to P11.
+
+The API requires operation IDs for important writes and derives the actor from the authenticated local session. The engine rejects mutation calls that lack both a usable operation ID and actor identity. SQL writes remain behind storage/service boundaries.
+
+### Transaction boundaries and rollback philosophy
+
+The architectural unit is the domain command, not an individual table update. For example, merge includes its manifest, conflict choices, canonical mapping, graph rebuild, index publication coordination, validation, and journal commit. Review completion includes every accepted face and its event consequences.
+
+If any in-transaction step fails, authoritative state rolls back. Failure-attempt recording is intentionally separate where durability is useful:
+
+- correction service commands can record a new `FAILED` journal state after the failed transaction rolls back;
+- merge records a durable failed attempt and prohibits reuse of that operation ID;
+- lower-level transaction tests may correctly leave no journal row because the started row was part of the rolled-back transaction.
+
+This is not inconsistency; it distinguishes “no authoritative operation committed” from “an explainable attempt failed.” Callers must not assume every exception produces a durable failure row unless the command boundary promises it.
+
+### Example scenario
+
+The frontend submits merge operation ID M1 as operator U. The database begins M1, writes the manifest and profile selection, updates canonical state, rebuilds the graph, and prepares the canonical index generation. If graph validation fails, none of the manifest, profile, canonical, or graph changes remains. M1 is recorded as failed and cannot be reused. A corrected retry uses M2.
+
+### Edge cases
+
+- Retrying a committed operation ID with the same request returns the prior result.
+- Reusing an operation ID for a different entity or operation type is rejected.
+- Failed merge IDs are non-reusable so a later success cannot rewrite the meaning of the failed attempt.
+- Journal identity fields and status history are protected against mutation or deletion.
+- File cleanup may occur outside SQLite, but database intent must remain recoverable; file failure cannot justify corrupting identity history.
+- Some older workflows remain compatibility paths and are not automatically granted the atomicity of newer phase-owned commands.
+
+---
+
+## 6. Merge architecture
+
+### What problem existed?
+
+Two person records can represent one real identity while each owns valuable history: different embeddings, observations, notes, corrections, evidence, profile edits, and operation records. A naive merge must choose between duplication and destruction.
+
+### What merge is not
+
+Merge is not deleting one person and copying its data into another.
+
+It is not bulk-updating every foreign key to the survivor.
+
+It is not treating a legacy `metadata.merged_into` snapshot as sufficient normalized truth.
+
+It is not an undoable UI convenience. It is a graph-affecting historical interpretation command with explicit conflicts and a guarded future-revert requirement.
+
+### Design decision
+
+The source remains a historical person and becomes `MERGED`. The target resolves to a terminal active survivor. Raw records remain with their original IDs; current reads union or reinterpret them through canonical resolution.
+
+Before execution, a read-only preview inventories affected items and proposes typed conflict strategies. Execution writes an immutable manifest, affected-item records, conflict resolutions with inverse data, the canonical mapping, selected survivor profile values, the rebuilt graph projection, and the operation journal in one transaction.
+
+### Merge preview
+
+Preview exists because the consequences of a merge are wider than the visible profile fields. It resolves a requested target through any existing merge chain and returns:
+
+- source and terminal target identities;
+- the source canonical component;
+- source and target lifecycle state;
+- conflicting profile fields and proposed strategies;
+- a manifest-like inventory of embeddings, photos, observations, participants, assignments, notes, revisions, mentions, corrections, evidence, profile history, operation history, merge history, and compatibility history;
+- `will_mutate: false`.
+
+Preview is deliberately read-only. It lets the caller make conflict choices without reserving a stale long-lived transaction or partially applying a merge.
+
+### Survivor selection and conflict strategies
+
+The caller chooses the source and requested target. The backend resolves the target to its terminal survivor and validates that it is active, undeleted, and not itself mapped onward. Self-merge, cycles, deleted targets, inactive survivors, and deleted sources are rejected.
+
+Profile conflicts use one of:
+
+- `KEEP_SOURCE`;
+- `KEEP_TARGET`;
+- `COMBINE`;
+- `USER_SELECTED`.
+
+Tags combine as a normalized union. Favorite combines truthfully if either side is favorite. Notes can combine as a new survivor revision. Other fields default conservatively, commonly retaining an existing target value unless it is empty. The selected value and inverse data are stored; no strategy is inferred after the fact.
+
+### Manifest and affected items
+
+The merge manifest is the durable explanation of scope. Each affected item states whether it is:
+
+- `PRESERVE` — remain unchanged as historical provenance;
+- `REINTERPRET_CANONICAL_OWNER` — retain raw owner but resolve currently to the survivor;
+- `UNION_IN_CURRENT_VIEW` — appear in the survivor's current combined collection;
+- `SELECT_VALUE` — participate in an explicit conflict choice.
+
+This taxonomy avoids the misleading idea that every affected row was “moved.” Most were not.
+
+### How merge works internally
+
+Within the execution transaction:
+
+1. validate or create the `identity.merge` journal attempt;
+2. recompute preview against current database state;
+3. validate supplied conflict resolutions;
+4. write immutable merge manifest, affected items, conflicts, and inverse data;
+5. append normalized survivor note revision when notes change;
+6. apply selected survivor profile fields;
+7. set the source lifecycle to `MERGED` and canonical target to the terminal survivor;
+8. synchronize survivor biometric state from preserved effective embeddings;
+9. rebuild and validate the canonical graph projection and foreign keys;
+10. build/publish the index generation using canonical effective owners;
+11. commit the journal operation and transaction.
+
+Index publication is coordinated before SQLite commit so readers are not shown committed canonical state paired with an older index generation. If publication or commit fails, the database rolls back and the merge service attempts to reconcile the index from authoritative storage. The database, not the in-memory index, remains the authority.
+
+### Example scenario
+
+A and B are duplicates. A has three embeddings, two events, and a note mentioning D. B has one embedding, five events, and a profile name the operator wants to keep.
+
+The operator previews A into B and selects `KEEP_TARGET` for name and `COMBINE` for notes. Execution leaves A's embeddings and events raw-owned by A, marks A as merged into B, appends the combined note as a normalized B revision, and rebuilds the graph. Current profile and recognition reads for either A or B resolve to B and show the unioned history. Historical inspection still explains which records belonged to A.
+
+### Merge chains
+
+Suppose A is merged into B, then B into C. A resolves transitively to C. The A-to-B manifest remains truthful: its target at that operation was B. The later B-to-C manifest explains the subsequent change. Flattening old manifests to point at C was rejected because it would rewrite operation history.
+
+### Merge and graph behavior
+
+Evidence rows are never rewritten during merge. Projection rebuild resolves their raw endpoints canonically:
+
+- A-C evidence and B-C evidence can aggregate into one B-C current edge after A merges into B.
+- A-B evidence collapses to B-B and is suppressed from the projection.
+- Suppression does not deactivate or delete the raw evidence.
+
+This is essential for future undo and historical explanation.
+
+### Merge and recognition behavior
+
+Source-owned embeddings stay source-owned in raw storage. Effective embedding reads, vector-index records, browse ranking, representative-photo decisions, and recognition results resolve them to the survivor. This avoids bulk ownership rewrites while keeping current matching behavior coherent.
+
+### Future undo considerations
+
+Normalized merge undo is not exposed. The manifest and inverse data were designed to support a future guarded P11 revert, but having inverse data is not enough to make undo safe. A later correction, merge, note edit, lifecycle change, or new observation may depend on the merged interpretation.
+
+A future revert must therefore validate preconditions, determine whether later operations conflict, rebuild projections transactionally, and journal the revert. The current result explicitly reports `undo_supported: false`.
+
+### Edge cases
+
+- **Source archived:** allowed; historical state is captured in the manifest.
+- **Source deleted:** rejected.
+- **Target merged:** request resolves to its terminal active survivor.
+- **Target archived/deleted:** rejected.
+- **Correction before merge:** effective current observations collapse correctly while raw correction endpoints remain unchanged.
+- **Two participants collapse after merge:** one effective participant remains and self-edges are suppressed.
+- **Conflicting notes:** selected strategy creates a normalized survivor revision; `persons.notes` follows only as a mirror.
+- **Failure after canonical update or graph rebuild:** manifest, profile, canonical state, and graph roll back; the failed attempt remains journaled.
+- **Successful retry:** same operation ID returns the original result.
+- **Failed retry:** same failed operation ID is rejected; a new ID is required.
+
+---
+
+## 7. Graph architecture
+
+### What problem existed?
+
+A single relationship row such as `A associated_with B` cannot express why the relationship exists. If a note mention, a manual assertion, and ten co-observations all support it, deleting any one reason should not erase the others. Directly editing an edge also makes graph rebuild and integrity checking impossible.
+
+### Design decision
+
+Relationships use a two-layer architecture:
+
+```text
+authoritative source record
+        -> relationship_evidence
+        -> canonical graph projection
+        -> Person Graph / World / profile read models
+```
+
+Evidence is authoritative. `graph_connections` is a replaceable projection grouped from active evidence after canonical resolution. UI graph objects are read models only.
+
+### Evidence types
+
+#### `CO_OBSERVED`
+
+Created from each unordered pair of effective accepted participants in one finalized observation. The source is the observation and the evidence revision identifies the finalisation or correction operation. It is undirected.
+
+#### `NOTE_REFERENCE`
+
+Created from one exact active saved mention occurrence. The source is that mention, not merely the note text. It is directed from note owner to referenced person.
+
+#### `MANUAL_ASSOCIATION`
+
+Represents an operator-created authoritative assertion with `MANUAL_ASSERTION` provenance. Its evidence type, schema constraints, directionality handling, projection behavior, and tests are present.
+
+**Needs verification:** the current code clearly proves storage/projection support but does not expose an obvious normalized production-facing service/API command for creating a new manual assertion. Future work must verify or add that command before a UI claims that manual associations are fully operator-editable through the normalized boundary.
+
+### How projection works internally
+
+For every evidence row, rebuild:
+
+1. validates source provenance, including finalized observation and saved mention rules;
+2. skips inactive evidence for current projection;
+3. resolves both raw endpoints through terminal canonical identity;
+4. suppresses the row if both endpoints become the same person;
+5. normalizes endpoint order for undirected evidence while preserving direction for directed evidence;
+6. groups by canonical endpoints, relationship type, and directionality;
+7. records evidence count, evidence types, and last occurrence;
+8. replaces `graph_connections` and advances graph revision in the same transaction.
+
+Incremental mutation paths call the same replacement/validation semantics, and rebuild equivalence is tested. The projection can therefore be discarded and recreated from evidence without recognition inference or frontend state.
+
+### Example scenario
+
+A and B have:
+
+- two finalized co-observations;
+- one note from A mentioning B;
+- one manual assertion.
+
+The projection may show one or more typed directional relationship aggregates, depending on the contract, but the four evidence records remain independent. Removing the note mention retires only its `NOTE_REFERENCE`. The co-observations and manual assertion continue to support the relationship.
+
+### Canonical collapse and self-edge suppression
+
+If A later merges into B, evidence between A and B resolves to B-B. The projection suppresses that self-edge. Evidence from A to C and B to C aggregates under B-C. Raw evidence stays intact so history can explain both the suppressed relationship and the combined edge.
+
+### Edge cases
+
+- Duplicate co-observation command retries are idempotent because evidence IDs are deterministic for source, revision, endpoints, type, and direction.
+- Reversed undirected endpoints normalize to the same evidence identity and are constrained to ordered storage.
+- Directed note evidence preserves direction; reading B-to-A does not silently turn A-to-B into the reverse assertion.
+- Retiring one evidence record cannot remove another evidence type.
+- Archived and deleted people remain graph nodes with inactive presentation policy.
+- Compatibility `person_associations` rows are not promoted into current evidence without provable provenance.
+- The legacy current-association removal path can delete an entire compatibility row and therefore must not be mistaken for evidence-aware normalized removal.
+
+---
+
+## 8. Intelligence and read-model architecture
+
+### What problem existed?
+
+Once authoritative observations and evidence existed, older UI logic still derived sightings, frequency, associations, and activity from compatibility tables and client-side calculations. That risked showing different answers for the same person depending on screen and could let a deleted photo erase apparent presence.
+
+### Design decision
+
+P9 introduced read-only backend intelligence models with no new authoritative tables. They calculate current answers from finalized observations, corrections, canonical identity, active evidence, embeddings, and the operation journal.
+
+This was chosen instead of materializing counters or letting every UI consumer recompute them. Read models remain replaceable and inherit one set of correction, merge, lifecycle, and evidence semantics.
+
+### Sightings and presence
+
+A sighting is one finalized observation plus one effective canonical person. It retains raw participant IDs, effective participant IDs, correction operation IDs, original event time, location, context, source, finalisation time, and media references.
+
+Presence analytics derives:
+
+- observation count;
+- first and last seen;
+- month buckets;
+- observed location counts;
+- appearances per 30 days over the observed span, with a one-period minimum;
+- descriptive labels such as Never Seen, Rare, Occasional, Frequent, and Very Frequent.
+
+These labels describe count rate. They are not recognition probability, identity confidence, risk, or importance.
+
+### Relationship analytics
+
+Relationship analytics reads active `relationship_evidence` directly rather than trusting the projection as its only source. It reports canonical endpoints, directionality, counts by evidence type, co-observation count, first/last evidence time, raw provenance, and evidence-count strength.
+
+The graph projection is useful for navigation, but analytics can explain the evidence underneath it. Neither layer invents probabilistic confidence.
+
+### Profile intelligence and activity
+
+Profile intelligence combines lifecycle/canonical state, effective embeddings, presence, evidence-derived relationships, and canonically resolved operation-journal activity. The journal is the only current activity authority. Legacy `person_operations` is not blended in because missing actors and ambiguous lifecycle semantics would make the feed look more complete than it really is.
+
+### Example scenario
+
+A has two finalized events. B has three. A is merged into B after one of A's events is corrected to C. B's current presence contains B's three events plus only the remaining event that still resolves from A to B. The corrected event appears under C. No stored counter needs manual decrementing or unioning.
+
+### Edge cases
+
+- A person with no sightings returns explicit zero/never-seen analytics.
+- A no-face person can still have complete presence and relationship intelligence.
+- Duplicate faces collapse before metrics.
+- Merge unions history by current canonical identity without rewriting timestamps.
+- Missing location contributes no invented location label; World may expose it as explicit data-quality state.
+- Recognition details remain available for historical photo presentation but cannot determine current sightings, presence, strength, or identity.
+
+---
+
+## 9. Frontend architecture philosophy
+
+### What problem existed?
+
+Client state is fast to manipulate and naturally close to user interaction. That makes it tempting to patch a graph after a merge, calculate counts from loaded photos, or infer that nodes placed near each other are related. The result would be a second, incomplete truth that breaks on refresh, pagination, correction, or another mutation path.
+
+### Design decision
+
+React is a rendering and interaction layer over explicit backend contracts.
+
+The frontend is allowed to own:
+
+- rendering and formatting;
+- deterministic layout coordinates;
+- animation and visual styling;
+- pan, zoom, camera, hover, selection, and focus;
+- form state and pending operator intent;
+- deciding when to request or refresh a backend projection.
+
+The frontend is not allowed to own:
+
+- identity or canonical resolution;
+- lifecycle or allowed actions;
+- participant membership or sightings;
+- relationships, evidence counts, or strength;
+- clusters, ranking, salience, patterns, or explanations;
+- durable note mentions or associations;
+- independent graph truth assembled from pages or local mutations.
+
+### How it works internally
+
+Identity mutations invalidate and refetch People collections and profiles. The client does not patch canonical ownership, embedding counts, or activity after a write.
+
+Person Graph consumes `/api/person-graph`. Its layout function accepts only backend nodes and the backend root ID; it deliberately does not accept edges for membership or placement. Edges are rendered from backend endpoints and strength. Node navigation follows backend `allowed_actions`.
+
+The existing relationship modal similarly consumes a versioned bounded backend subgraph. Compatibility layout code may choose coordinates but not graph membership or evidence.
+
+### Example scenario
+
+After A is merged into B, the merge response may contain a new graph revision. React marks its retained Person Graph snapshot invalid. It does not rename A locally, move A's edges to B, or guess which nodes collapsed. The next graph open performs a complete backend reload.
+
+### Edge cases
+
+- A stale response from an older request is ignored through request generation tracking.
+- A restricted archived/deleted node can remain selectable for explanation without being navigable.
+- A large node set changes ring layout size but not topology.
+- A frontend rendering bug cannot write durable graph state.
+- When a backend contract is incomplete, especially P10-E, the frontend must not compensate by inventing missing semantics.
+
+---
+
+## 10. Revision and snapshot architecture
+
+### What problem existed?
+
+A client can retain a graph while local mutations change persons or evidence. Refetching continuously is wasteful in an offline single-user app; blindly reusing the graph is stale. Paged World responses add a harder problem: pages from different logical graph states must never be combined.
+
+### Design decision
+
+`graph_state` contains a local monotonic revision exposed as an opaque token such as `g27`. Clients compare equality only; they do not parse the number or treat it as an evidence sequence.
+
+Graph-affecting writes and relevant World-visible person changes advance the revision transactionally. Idempotent retries do not. P10-E cursors bind the revision together with level, focus, collection, normalized filters, ranking intent, effective limits, `as_of`, and contract scope.
+
+### How it works internally
+
+Projection replacement advances the revision in its write transaction. SQLite triggers advance it for relevant person display/profile/lifecycle/identity/biometric fields. Schema v28 narrows metadata invalidation so unrelated metadata does not make World stale, while finalized single-participant observations still advance revision even when no relationship edge is created.
+
+Person Graph uses lifecycle-bound validation rather than polling:
+
+1. initial open loads and stores a complete immutable response and revision;
+2. closing retains it;
+3. returning validates the revision once;
+4. unchanged revision reuses the snapshot;
+5. changed, invalidated, or manually refreshed state triggers complete replacement.
+
+### Revision mismatch behavior
+
+For Person Graph, mismatch means discard the old read model and refetch. For World pagination, mismatch means reject the cursor; pages from two revisions cannot be combined.
+
+The revision remains an invalidation token rather than a database record ID. World v2 now turns it into a coherent response boundary by beginning a deferred SQLite read transaction before reading the revision. SQLite WAL lets an unrelated writer commit concurrently while every later query in the response continues to see the revision's original snapshot. The next new read sees the writer's new revision and data.
+
+### Example scenario
+
+The client loads graph revision G1, closes the graph, then finalizes an observation. The finalisation transaction advances to G2. Reopening validates G1, learns it is stale, and replaces the full graph. It does not apply the finalisation response as an edge patch.
+
+### Edge cases
+
+- A mutation that changes irrelevant person metadata should not advance revision.
+- A finalized one-person event must advance revision because it changes activity even though it creates no relationship.
+- A retry of an already committed evidence command retains the previous revision.
+- A stale or scope-mismatched World cursor fails deterministically.
+- A concurrent writer after the revision read cannot leak newer rows into that response; the next read observes the commit.
+
+---
+
+## 11. World architecture
+
+### What problem existed?
+
+Person Graph answers “how is this person connected?” It cannot simply be expanded to thousands of nodes to answer “what is happening across this identity environment?” A zoomed-out person graph would be visually dense, expensive, unbounded, and semantically unable to distinguish people, events, clusters, evidence, and media.
+
+### Design decision
+
+World is a scope-first spatial/temporal intelligence projection of the same global identity graph. It is not a second graph or database.
+
+World is not:
+
+- a bigger Person Graph;
+- a social network;
+- a geographic map;
+- an organization detector;
+- an AI prediction, threat, risk, intent, or affiliation engine.
+
+Person Graph begins with one canonical person and expands an evidence-derived neighbourhood. World begins with a declared scope—time, location, lifecycle, identity state, biometric state, profile facets, and evidence thresholds—and asks which bounded summaries and facts are relevant inside that scope.
+
+### Why the semantic levels exist
+
+World separates context from proof using five backend request levels. They are not zoom thresholds; a client may request a focused level directly.
+
+#### Level 0 — `WORLD_SCOPE`
+
+Answers what exists in the selected scope: totals, truthful facets, bounded ranked people, cluster summaries, supported patterns, and truncation. It avoids loading complete topology.
+
+#### Level 1 — `CLUSTER`
+
+Explains one ephemeral evidence-connected component: algorithm, revision-bound ID, member count, bounded member or relationship pages, qualifying relationships, evidence types/counts, occurrence bounds, ranking/activity context, and limitations.
+
+#### Level 2 — `PERSON`
+
+Shows one canonical person's scoped activity, bounded relationships or finalized events, allowed actions, explanations, and applicable World context. It reuses identity and evidence truth from Person Graph, not Person Graph's radial layout or complete-neighbourhood assumptions.
+
+#### Level 3 — `EVENT`
+
+Shows one finalized observation: time, location, context, source, effective participants, raw-to-effective provenance, correction/merge interpretation, and independently bounded participant, evidence, or media detail.
+
+#### Level 4 — `EVIDENCE`
+
+Shows bounded proof for a selected claim: evidence identity/type, source references, raw and effective endpoints, directionality, occurrence, operation provenance, explanation, and relevant media references when authoritative.
+
+The intended progression is:
+
+```text
+WORLD_SCOPE -> CLUSTER -> PERSON -> EVENT -> EVIDENCE -> MEDIA reference
+```
+
+The five semantic detail levels now support the complete transition. `EVIDENCE` may focus one evidence ID and independently page `MEDIA`. Co-observation evidence resolves only media attached to its supporting finalized observation; note-reference and manual-association evidence report an explicitly unavailable empty media collection instead of borrowing endpoint media.
+
+### Authoritative entities versus derived objects
+
+World topology may include terminal canonical people and focused finalized events. Everything else has a narrower role:
+
+- **Person:** current canonical projection of an authoritative person, with historical IDs retained.
+- **Event:** authoritative finalized observation, never a draft or proposal.
+- **Relationship:** projection of active authoritative relationship evidence.
+- **Cluster:** deterministic, ephemeral, revision/filter-bound read object; never an organization.
+- **Pattern:** deterministic explanatory measurement; never a graph node or evidence.
+- **Evidence:** bounded proof, not topology.
+- **Media:** reference/provenance, never embedded bytes in World JSON.
+- **Location:** filter/facet metadata because current locations are free text, not normalized place entities.
+
+The intended edge taxonomy is `PERSON_RELATIONSHIP`, `PARTICIPATED_IN`, and explicitly typed `AGGREGATED_RELATIONSHIP`. Event-to-event edges are excluded because shared time, place, or participant is not an authoritative event-link assertion. Cluster-to-cluster edges, when implemented, are aggregate summaries and do not claim every member is related.
+
+### Clusters and explanations
+
+The initial implemented algorithm is `connected-evidence-components-v1`: deterministic connected components over the relationships that remain after evidence/event scoping, correction and canonical resolution, person filters, self-link suppression, and minimum-strength filtering. A cluster must contain at least two people. Its identity is valid only for its revision, effective scope, algorithm parameters, and member set.
+
+A cluster explanation should expose facts such as:
+
+```text
+45 co-observation evidence items
+12 finalized shared events
+3 observed location facets
+recent activity increase under calculation version X
+```
+
+Those facts are not an AI confidence score. The explanation must distinguish factual inputs from derived calculations, name method/version and scope, expose strongest qualifying relationships, and state limitations. “Likely organization” or “suspicious group” would be unsupported inference and is prohibited.
+
+### Ranking and patterns
+
+Ranking is deterministic ordering, not importance confidence. Supported intents include salience, recent activity, evidence count, and display name. Responses expose factor values, reason, scope, position when globally ranked, and deterministic tie-breaks. Explicit operator priority remains separate from computed activity or connectivity.
+
+P10-D permits only evidence-backed, versioned descriptive patterns with explicit windows, thresholds, sample sufficiency, subjects, metrics, and limitations. The P10-E implementation currently emits only a measured missing-location `DATA_QUALITY` pattern. It does not implement the broader reviewed pattern set as hidden behavior.
+
+### Filter ownership and order
+
+Filter order is architectural because changing it changes meaning:
+
+1. resolve `as_of`, absolute or recent time scope, locations, missing-location policy, evidence type, and relationship type;
+2. scope finalized events and active evidence;
+3. apply corrections, resolve canonical identities, deduplicate participants, and suppress self-links;
+4. apply eligible-person lifecycle, identity, biometric, country, rank, priority, and activity filters;
+5. aggregate relationship strength;
+6. calculate clusters, ranking, facets, and supported patterns;
+7. paginate bounded collections.
+
+The backend normalizes and echoes effective filters. The frontend cannot reorder these operations or apply client filters to fabricate a different graph.
+
+### Bounded expansion
+
+Version 1 `/api/world-graph` is a small-data compatibility person projection. Version 2 is the bounded World contract. One request selects one semantic level, typed focus, and independently bounded collection intent.
+
+Hard caps, counts, `has_more`, next cursor, and truncation reason are part of truth. An unrequested child must be lazy or explicitly unavailable; it must not look like a complete empty collection. The frontend must not join pages across revisions or infer omitted objects.
+
+### Example scenario
+
+An operator requests the last 30 days at “Warehouse 3,” excluding deleted people. The backend scopes finalized events and co-observation evidence to the resolved dates and exact case-insensitive location, applies corrections, collapses merges, removes self-links, filters eligible people, computes evidence strength, clusters the remaining graph, and returns a bounded overview.
+
+Selecting a cluster requests its revision-bound ID. Selecting a person requests that person's bounded relationships or events. Selecting an event requests one child collection. At every step the backend explains why the object is present and how much data is omitted.
+
+### Edge cases
+
+- Empty database: zero totals/facets and no fabricated cluster or pattern.
+- No relationships: people may remain, but clusters and topology are empty.
+- Missing location: represented explicitly as missing/data quality, never geocoded or guessed.
+- All aliases merged: current topology contains terminal survivors, with historical IDs in provenance.
+- Duplicate effective participation: one canonical person contributes once per event to activity, totals, ranking, and patterns.
+- Archived/deleted people: historically representable with restricted backend actions.
+- Unknown detections: never World people or cluster members.
+- Stale cursor: rejected rather than combined with a new revision.
+- Focused person/event/evidence reads should avoid global ranking/clustering unless the selected contract requires it.
+
+### P10-E stabilization boundary
+
+The final stabilization pass closed the reviewed correctness and contract defects without changing authority. One response uses one SQLite snapshot. Projection and evidence expansion apply correction before terminal canonical resolution and use exact effective endpoints, so self-edge evidence cannot leak into another relationship. Overview relationships, cluster ranking/activity, person cluster membership, independent event provenance, exact evidence media, paged location facets, and explicit not-requested children are backend-owned. Partial neighbours say `NOT_LOADED` instead of using zero. Evidence pages batch canonical, correction, occurrence, and media data; recorded statement counts fell from 78 to 17 for 25 EVENT evidence items and from 1,004 to at most 6 for an empty 1,000-person evidence read.
+
+P10-E remains unfrozen solely because the required consolidated performance artifact did not complete. Dataset A profiles and a Dataset B sparse smoke completed, but dense-B `tracemalloc` callback instrumentation dominated runtime for more than an hour. Future runs mark that peak-allocation field not practical while still measuring API latency, SQL count, payload, and returned items. The frontend must remain blocked until that matrix gate closes; it may not infer around it.
+
+### Final stabilization decisions
+
+#### Revision-bound reads
+
+The problem was a time-of-check/time-of-use split: revision could be read at R, a writer could commit R+1, and later autocommit queries could return R+1 rows under an R response. A process-wide lock was rejected because it would serialize unrelated local activity and would still duplicate a guarantee SQLite already provides. The chosen deferred read transaction establishes its snapshot with the revision query and releases it when the complete immutable response is built.
+
+Normally, a World overview reads revision G20 and all totals, facets, people, clusters, and relationships from G20. In the edge case where an operator commits a merge while that response is being built, the in-flight response remains wholly G20 and the next request returns the merge under G21. WAL allows both operations to progress without a World-specific application lock.
+
+#### Exact relationship evidence
+
+The problem was selecting raw endpoints from the union of two canonical alias groups. That predicate admitted A-B evidence collapsing to B-B while expanding a surviving B-C relationship. Filtering only after pagination was rejected because totals and cursors would remain wrong; rewriting raw evidence was rejected because it would destroy provenance. The chosen request-scoped endpoint resolver applies observation correction then terminal canonical mapping inside the same SQL predicate used for count and rows.
+
+Normally, three raw A-C/B-C evidence rows may collapse into one B-C relationship and all three expand under it with their raw endpoints intact. In the edge case where A merges into B, historical A-B evidence remains queryable by authoritative source/history but is suppressed from projected B-C support because its effective endpoints are B-B. Directional A-to-C evidence remains effective B-to-C rather than becoming an undirected overlap.
+
+#### Bounds and query shape
+
+The problem was bounded JSON hiding unbounded work: per-item canonical/observation reads, per-person alias resolution, raw provenance escaping participant limits, and a silent 100-location cap. Persistent caches, World tables, background workers, and new indexes were rejected because set-based request-local reads solve the known defects without new authority or migration risk. The chosen design preloads canonical/correction maps, joins occurrence data, batches media counts, and gives provenance and facets their own hard limits/page states.
+
+Normally, a 25-item evidence page uses a constant statement shape and truthfully reports its next cursor. In the edge case of 1,000 people with no supporting evidence, the read performs at most six statements rather than one lookup per person. Merge collapse cannot expose hundreds of raw participant rows under a one-person effective page because raw provenance has an independent cursor.
+
+---
+
+## 12. Unknown handling
+
+### What problem existed?
+
+Recognition often returns “unknown,” and repeated images may look similar. Automatically creating an identity for every unknown detection would fill the graph with low-quality, duplicate, and model-dependent pseudo-people. Linking repeated unknowns by embedding similarity would promote a proposal into durable identity truth without operator review.
+
+### Design decision
+
+An unknown detection is review state, not an identity.
+
+A tracked unidentified entity is different: it is an explicitly created authoritative `Person` with `identity_status = UNIDENTIFIED`, its own lifecycle, journaled creation, and operator-approved provenance.
+
+```text
+Unknown detection
+    = a face for which no identity decision was accepted
+    = not a participant, sighting, node, endpoint, or cluster member
+
+Tracked unidentified entity
+    = an intentionally created Person
+    = may participate in authoritative history like any other person
+```
+
+### How it works internally
+
+Rejected, skipped, unresolved, and finalized-unknown face decisions remain review/non-participant history. They do not create accepted observation participants. Repeated-unknown similarity remains proposal data. `NO_FACE` is a biometric state and must not be confused with unknown identity.
+
+World may eventually report bounded aggregate finalized unknown/non-participant decision counts as data quality, but it may not promote draft review state or create unknown topology.
+
+### Example scenario
+
+Three photos contain a visually similar unknown face. SentriFace may rank the same proposal candidate in each review, but it does not create “Unknown 17” or link the detections. If an operator decides the person should be tracked, the operator explicitly creates an unidentified person and finalizes the relevant decisions with preserved provenance.
+
+### Edge cases
+
+- Similar embeddings do not prove the same unknown person.
+- A no-face known person is not an unknown.
+- A skipped face does not become an event participant.
+- A future repeated-unknown feature requires its own reviewable lifecycle and journaled resolution model; it cannot be smuggled into vector-index cache state.
+
+---
+
+## 13. Performance philosophy
+
+### Optimize measured bottlenecks, not architectural anxiety
+
+The system deliberately began with direct normalized reads and bounded server-side aggregation. Premature caches and materialized World tables were rejected because they would add invalidation and authority problems before measurements proved they were needed.
+
+The rule is:
+
+> Preserve correct authority and bounds first; optimize the measured traversal that dominates the real workload.
+
+### World overview investigation
+
+The initial large-scale issue was not response size—the v2 response was already capped—but repeated observation/participant traversal and Python-side work. Diagnostics measured latency, SQL statement count, peak Python allocation, payload bytes, and returned counts on representative datasets.
+
+The investigation identified distinct paths:
+
+- overview aggregation repeatedly scanned or joined observation participation;
+- focused person-event reads performed too many statements and, before restructuring, could take tens of seconds on the million-observation fixture;
+- sparse single-participant data and dense multi-participant data preferred different traversal orders.
+
+### Implemented fix
+
+The overview path now uses shared one-pass activity/location aggregation instead of duplicate scans. It applies sparse correction/merge adjustments to direct scoped aggregates. Person projection and canonical mapping work is combined. Focused person/event/evidence dispatch avoids global clustering and ranking.
+
+An adaptive plan chooses:
+
+- participant-first sequential traversal only for an unrestricted scope with no multi-participant observations;
+- observation-first indexed traversal for dense or filtered scopes.
+
+This is a narrow, measured optimization. It does not change authority or create a cache.
+
+The recorded diagnostic results show why the approach was chosen: focused Dataset B person-event reads improved from about 23.7 seconds and 134 statements to about 37 milliseconds and 11 statements. The adaptive sparse overview comparison improved the million single-participant observation p50 from about 3.26 seconds to 2.27 seconds, while the dense case remained effectively unchanged. These are diagnostic results, not the complete acceptance matrix.
+
+### Example scenario
+
+A one-million-observation database contains only one participant per observation and the operator requests an unfiltered World overview. Walking the participant primary-key order is sequential and lets one aggregation count both activity and each observation's location once. On a dense database with many participants per observation, or when date/location filters apply, observation-first traversal preserves the useful index and grouping behavior. The system chooses between those known shapes rather than guessing that one plan is universally faster.
+
+### Rejected performance shortcuts
+
+- **Premature persistent cache:** rejected because revision/filter/calculation invalidation was not yet justified by measurement.
+- **Materialized World authority:** rejected because World must remain a read model over normalized truth.
+- **Unbounded in-memory graph:** rejected for medium/large scopes; overview and expansions are capped and paged.
+- **One universal SQL plan:** rejected after sparse and dense fixtures showed different traversal behavior.
+- **Frontend aggregation:** rejected because bounded responses cannot safely recreate omitted global semantics.
+
+If a cache is later proven necessary, it must be local, keyed by revision plus normalized filters and calculation versions, invalidated deterministically, bounded, and rebuildable. It must never become the only source for a World result.
+
+### Remaining performance edge cases
+
+The former N+1 evidence paths and silent facet cap are fixed with request-scoped maps, set-based queries, and revision-bound facet pages. Person membership also avoids computing global activity that its membership summary does not use, while cluster activity reuses the optimized exact overview aggregation.
+
+The remaining gate is measurement coverage: cold/warm p50/p95 across both target datasets and sparse/dense filtered/focused/cursor scenarios must complete in one consolidated artifact. Python peak-allocation tracing is retained where practical but explicitly unavailable for dense Dataset B because it distorts wall time. This blocks P10-E freeze because intended-scale performance must be measured, not extrapolated; it does not justify a cache, schema change, or frontend inference.
+
+---
+
+## 14. Cross-feature behavior scenarios
+
+### Scenario A: correction, merge chain, and duplicate event participation
+
+Day 1: event O contains raw participants A and D.
+
+Day 10: O's A is corrected to B.
+
+Day 20: B is merged into C.
+
+Day 30: C is merged into D.
+
+Current result:
+
+- O has one effective participant, D.
+- O contributes one sighting to D.
+- Any O co-observation edge collapses to a self-edge and is suppressed.
+- Raw participants still show A and D.
+- Correction history still shows A to B.
+- Merge manifests show B to C and C to D.
+- Raw evidence is preserved even if no current relationship edge remains.
+
+### Scenario B: archive versus delete versus merge
+
+An archived person remains historically visible and can be restored. A deleted person remains tombstoned and historically visible but cannot be a merge survivor or normal action target. A merged source remains historically visible but current reads resolve it to the survivor; it cannot be independently archived, restored, or deleted as if it were still a terminal identity.
+
+These states answer different questions and must not be compressed into one `is_deleted` flag.
+
+### Scenario C: conflicting note edits
+
+Editor 1 opens a note at revision 4. Editor 2 saves revision 5. Editor 1 attempts to save using revision-4 text as `expected_previous_notes`. The backend rejects the write. It does not create revision 6 by overwriting Editor 2, and it does not locally merge prose or mentions. Editor 1 must reopen and make an explicit new choice.
+
+### Scenario D: failed graph-affecting command
+
+A Move Face command appends ownership corrections and begins recalculating affected event evidence. Projection validation fails. SQLite rolls back the corrections, evidence changes, biometric changes, and started journal row. The correction service then records a separate failed attempt. The current owner and graph remain as before; the failed attempt is explainable but does not masquerade as applied history.
+
+### Scenario E: stale frontend graph
+
+The Person Graph displays revision G12. A Queue completion creates a new finalized multi-person observation and revision G13. React invalidates G12 but does not patch it. On next entry it fetches the complete G13 graph. If a pending older request returns afterward, request-generation tracking prevents that result from replacing the newer state.
+
+### Scenario F: missing location in World
+
+A finalized event has accepted participants and no location. It contributes to activity and presence. A World request with `missing_location=INCLUDE` may include it and report missing-location data quality. `EXCLUDE` removes it from scoped event/evidence calculations. `ONLY` selects missing-location events. The system never invents a geographic node or guesses a place from media.
+
+---
+
+## 15. Decisions we intentionally rejected
+
+### Destructive merge
+
+**Problem:** Duplicate identities need one current interpretation.
+
+**Why rejected:** Copying rows to a survivor and deleting the source destroys provenance, makes merge chains unexplainable, risks foreign-key loss, and makes guarded undo nearly impossible.
+
+**Chosen alternative:** Preserve raw ownership, write immutable merge manifests and conflicts, and resolve current reads through terminal canonical identity.
+
+### Frontend graph computation
+
+**Problem:** React already has nodes, events, and user interactions, so computing edges locally appears convenient.
+
+**Why rejected:** The client sees bounded/incomplete data, cannot apply all correction and canonical rules reliably, and would create a second truth that disappears on refresh.
+
+**Chosen alternative:** Backend-owned graph membership, filtering, strength, explanations, lifecycle, and actions; frontend-owned layout and interaction only.
+
+### Automatic unknown identity creation
+
+**Problem:** Unknown faces recur and operators may eventually care about them.
+
+**Why rejected:** Recognition similarity is proposal data; automatic creation would produce duplicate, model-dependent identities without an accountable decision.
+
+**Chosen alternative:** Unknown remains review state. A tracked unidentified person requires explicit operator-finalized creation and normal lifecycle/journal semantics.
+
+### Hidden AI inference
+
+**Problem:** World could appear more useful by labeling groups, importance, risk, affiliation, or unusual behavior.
+
+**Why rejected:** Existing authoritative records do not prove those claims. An unexplained score would confuse deterministic evidence counts with probability and could not be rebuilt transparently.
+
+**Chosen alternative:** Deterministic descriptive metrics, named algorithms, structured factors, explicit windows/thresholds, evidence expansion, and stated limitations.
+
+### Uncontrolled caching
+
+**Problem:** Large World queries create pressure to cache early.
+
+**Why rejected:** A cache without exact revision, filter, calculation-version, and bounds semantics easily becomes stale shadow authority. It also hides the real query pathology.
+
+**Chosen alternative:** Measure first, use bounded indexed SQL and adaptive traversal, and permit only future local revision-keyed rebuildable caches proven necessary.
+
+### Duplicated backend/frontend logic
+
+**Problem:** Client-side sorting and counters can improve perceived responsiveness.
+
+**Why rejected:** Duplicate frequency, lifecycle, canonical, and filter logic inevitably diverges, especially after corrections and merges.
+
+**Chosen alternative:** Backend supplies complete read semantics and sort/group fields; client formats and renders them.
+
+### Treating compatibility tables as truth
+
+**Problem:** `recognition_details`, `person_associations`, `persons.notes`, and `person_operations` already contain useful historical data.
+
+**Why rejected:** Their semantics predate normalized provenance, canonical identity, exact mentions, and reliable actors. Promoting ambiguous legacy rows would invent authority.
+
+**Chosen alternative:** Preserve them for migration, compatibility, or historical display while current identity, notes, activity, sightings, analytics, and graph reads use normalized sources.
+
+### Stored sighting counters
+
+**Problem:** Counts and first/last seen are frequently displayed.
+
+**Why rejected:** Counters cannot correctly survive correction, participant deduplication, merge chains, or event preservation after media deletion without complex repair logic.
+
+**Chosen alternative:** Derive sightings and presence from finalized observations and effective participants.
+
+### In-place correction
+
+**Problem:** Changing a mistaken participant or face owner in place is mechanically simple.
+
+**Why rejected:** It erases the original accepted decision and disconnects evidence from the operation that changed its interpretation.
+
+**Chosen alternative:** Append corrections, retire only affected current evidence revisions, and rebuild projections atomically.
+
+### Parsing names from historical note text
+
+**Problem:** Old notes may contain `@Name` strings that look like mentions.
+
+**Why rejected:** Names are ambiguous and the original author's intended entity cannot be proven.
+
+**Chosen alternative:** Preserve migrated text without fabricated mentions; only explicit saved person-ID occurrences create current evidence.
+
+### Continuous graph polling
+
+**Problem:** Polling would detect stale Person Graph state quickly.
+
+**Why rejected:** In the current local single-user model it creates unnecessary work and still does not justify patching partial graph state.
+
+**Chosen alternative:** Opaque revision validation at lifecycle boundaries, known mutation invalidation, manual refresh, and full-response replacement.
+
+### Location as an entity
+
+**Problem:** World is spatial/temporal, so a location node seems natural.
+
+**Why rejected:** Current locations are free text without stable identity, hierarchy, or normalization. Treating them as nodes would equate spelling with place identity.
+
+**Chosen alternative:** Exact normalized filter/facet metadata plus explicit missing-location semantics until a reviewed place model exists.
+
+### Event-to-event edges
+
+**Problem:** Events may share people, time, location, or context.
+
+**Why rejected:** Similarity or shared metadata does not prove an authoritative relationship between events.
+
+**Chosen alternative:** Events remain evidence drill-down objects. Cross-event observations may support descriptive patterns only under a named calculation, not topology.
+
+### One unbounded World graph
+
+**Problem:** Loading all nodes and edges simplifies a visualization prototype.
+
+**Why rejected:** It fails at intended scale, encourages frontend inference, hides truncation, and mixes overview with proof.
+
+**Chosen alternative:** Scope-first semantic levels, hard caps, server-side ranking/clustering, focused reads, and revision-bound pagination.
+
+---
+
+## 16. Compatibility, readiness, and future boundaries
+
+The architecture deliberately keeps three categories separate:
+
+1. **Authoritative current model:** normalized persons, observations, participants, assignments, corrections, notes/revisions/mentions, relationship evidence, merge history, and journaled operations.
+2. **Derived current model:** graph projection, vector indexes, sightings, analytics, graph/World read objects, clusters, rankings, explanations, and layouts.
+3. **Compatibility history:** legacy recognition details, associations, person note mirror, and person operation records.
+
+Compatibility data remains valuable, but value does not confer authority. Deleting it casually would lose history; consulting it for current truth would reintroduce ambiguity.
+
+Several capabilities are intentionally future work:
+
+- P10-F World UI waits for P10-E snapshot, evidence-expansion, navigation, bounds, and performance gates.
+- P11 will add broader integrity checking, transactional rebuild tooling, and guarded operation/merge revert.
+- P12 will extend portable backup/restore rules for every normalized record and derived state.
+- Future repeated-unknown tracking needs its own authoritative lifecycle.
+- A normalized place model is required before location becomes an entity.
+
+Future work must extend the authority model rather than bypass it. In particular, a missing UI or read-contract field is never permission to compute new domain truth in React.
+
+---
+
+## 17. Architectural laws
+
+1. **Frontend never creates identity truth.** It renders backend state and submits operator intent.
+2. **Recognition never finalizes identity truth.** It proposes; an operator-finalized command decides.
+3. **Historical evidence is never rewritten merely to simplify the current view.**
+4. **Current interpretation comes through corrections followed by terminal canonical resolution.**
+5. **A finalized observation, not a face file or counter, is the authoritative presence unit.**
+6. **One effective canonical person appears at most once in one observation.**
+7. **Unknown detection is not identity.** A tracked unidentified person requires explicit creation.
+8. **Relationship evidence is authoritative; graph edges are projections.**
+9. **Evidence types remain independent.** Removing one reason cannot erase another.
+10. **Canonical collapse never creates a self-link.** Raw provenance is preserved even when the current edge is suppressed.
+11. **Archive and delete change lifecycle, not history.** Merge changes interpretation, not raw ownership.
+12. **Every important mutation has an operation ID, actor, and explainable journal history.**
+13. **Every graph-affecting write, evidence change, projection update, revision change, and successful journal transition commits atomically.**
+14. **Derived projections and caches must be rebuildable from normalized authority.**
+15. **Compatibility tables are historical inputs only where explicitly allowed; they are not current truth.**
+16. **Graph revision is an opaque invalidation token, not a record ID or a substitute for a coherent read snapshot.**
+17. **World explanations expose evidence and deterministic calculations, never hidden confidence or speculative inference.**
+18. **Every response is bounded at the backend; omitted data must be truthfully reported.**
+19. **Optimize measured bottlenecks without promoting an optimization into authority.**
+20. **When the system cannot prove a claim from authoritative records, it must say less, not infer more.**

@@ -192,6 +192,14 @@ Ranking values are descriptive ordering inputs, never confidence or risk scores.
 
 Overview reads own global ranking/clustering/summary aggregation. Person reads execute focused relationship and event queries; event reads load only the selected finalized event and requested child page; evidence reads load only bounded evidence. Event summaries do not contain media bytes, embeddings, raw evidence bodies, or complete history. Media remains a separate reference collection. This hardening adds no authoritative World storage, schema migration, cache, materialized view, background work, dependency, or frontend behavior.
 
+#### 2026-08-10 P10-E stabilization status
+
+The correctness and contract gaps found by the freeze review are closed. A World v2 response now begins a deferred SQLite read transaction before reading graph revision, so every contributing query—including focused person, event, and evidence reads—belongs to the same snapshot while WAL writers remain concurrent. Relationship projection and evidence expansion both apply observation correction before terminal canonical resolution; exact effective endpoint predicates suppress self-edges and prevent cross-edge leakage while raw evidence endpoints and source provenance remain visible.
+
+The active contract now supports bounded overview relationships, cluster ranking/activity context, person cluster memberships, exact `EVIDENCE → MEDIA`, independent participant provenance, truthful location-facet pagination, and explicit not-requested children. Partial neighbour analytics are `NOT_LOADED`/`null`, never zero placeholders. Evidence rows carry type, direction, raw/effective endpoints, occurrence bounds, authoritative source references, structured explanation, and media availability. Co-observation evidence may navigate only to its supporting finalized observation's media; note and manual evidence return an explicit unavailable empty media collection. Dormant expansion-token fields are excluded from the v2 JSON payload.
+
+P10-E is still not frozen for P10-F because the mandatory consolidated sparse/dense cold/warm performance artifact did not complete: dense-B Python allocation tracing dominated runtime for more than one hour. Future acceptance runs mark dense-B peak allocation not practical while retaining latency, SQL-count, payload, and returned-item measurements. This remaining measurement gate does not transfer any authority to the frontend.
+
 ## Current repository map (schema version 28)
 
 | Concern | Current implementation |
