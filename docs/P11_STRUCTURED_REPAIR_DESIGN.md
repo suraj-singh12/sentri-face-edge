@@ -1,4 +1,6 @@
-# P11-C1 structured repair authority audit and execution design
+# P11 structured repair authority audit and execution design
+
+Status: **P11-C1 design is frozen; P11C-R01 is implemented; P11C-R02 is not implemented; P11-C is not complete.**
 
 Status: **P11-C1 design complete; P11-C is not implemented.** P11-A and P11-B remain complete and frozen. This document authorizes only a future implementation of the two fixed repair commands below. It does not implement or authorize generic repair, operation revert, a recovery API/UI, automatic invocation, or P12 work.
 
@@ -132,7 +134,7 @@ explicit P11-A report
     -> return result or prominently report post-check failure
 ```
 
-The service/store boundary should be one explicit structured-repair service delegating to one SQLite transaction-scoped dispatcher keyed by the two fixed repair IDs. It must not accept table names, SQL fragments, arbitrary field/value patches, or an open-ended invariant ID.
+The implemented service/store boundary is one explicit structured-repair service delegating to a typed SQLite R01 command. It does not accept table names, SQL fragments, arbitrary field/value patches, an open-ended invariant ID, or R02 input. R02 may extend this same bounded service later without creating a generic engine.
 
 The current journal can represent both safe catalog operations. The private connection-scoped `_begin_journal_operation()` and `_transition_journal_operation()` pattern is suitable; public `begin_operation()`/normal domain methods cannot be composed because they open and commit their own connections. Future implementation therefore needs connection-scoped typed helpers, not a second transaction around public calls.
 
@@ -167,7 +169,19 @@ P11-C must stop and report when:
 
 `UNRECOVERABLE_FROM_LOCAL_STATE` remains reserved for loss or contradiction that local authority cannot resolve, including physical/constraint database damage reported by schema invariants and missing historical truth not recoverable from immutable records. The operator must use verified backup/restore or external evidence; P11-C does not reconstruct it.
 
-## Future test plan
+## P11C-R01 implementation record
+
+`StructuredRepairService.prepare_restore_archived_canonical_survivor()` explicitly obtains a fresh, untruncated P11-A report and returns an `ArchivedCanonicalSurvivorRepairPrecondition`. The token binds repair/spec and fingerprint versions, `P11-IDENTITY-003`, sorted finding entity IDs, terminal ID, schema v28, graph revision, exact lifecycle/deletion/canonical/timestamp state, every resolving merge source/path, supporting merge operation IDs and manifest fingerprint, and a relevant-operation fingerprint. It refuses clean state, any other `ERROR`/`CRITICAL`, deleted/mapped/non-terminal targets, malformed/cyclic/dangling paths, incomplete merge/journal support, or diagnosis/state disagreement without writing a journal row.
+
+`StructuredRepairService.restore_archived_canonical_survivor()` requires that typed token, a fresh operation ID, authenticated actor, and bounded reason. The store reruns P11-A, enters `BEGIN IMMEDIATE`, compares the complete precondition again, starts `integrity.repair.canonical-survivor.restore`, invokes the shared connection-scoped archived-to-active lifecycle primitive, and immediately validates lifecycle, canonical paths, immutable merge state, byte-identical `graph_connections`, projection equivalence, foreign keys, and an exactly-one graph revision advance before committing the journal result and mutation together.
+
+The only domain mutation is `persons.lifecycle_status: ARCHIVED -> ACTIVE`, `deleted_at -> NULL`, and a new `lifecycle_changed_at`. Canonical mappings, merge manifests/items/conflicts, corrections, observations/participants/media, note history/mentions, relationship evidence, graph connections, legacy person-operation history, and prior journal/history rows are unchanged. The archived transition remains visible in its original lifecycle journal/person-operation record; the repair adds its own immutable journal history. The lifecycle trigger advances the graph revision once as the existing invalidation rule requires, but R01 neither rewrites the projection nor invokes P11-B rebuild.
+
+After commit the service refreshes the derived recognition index and runs full P11-A. It returns `postcheck_status: PASS` only when the selected finding is absent, the report is untruncated, and no `CRITICAL`/`ERROR` remains. An unexpected failure is surfaced without an automatic repair or journal rewrite. An exact committed operation-ID/fingerprint retry returns the committed result; a new ID against clean/stale state refuses; failed IDs cannot be reused and retry requires a fresh diagnosis and operation ID. Transaction failures roll authority and revision back before a bounded separate `STARTED -> FAILED` attempt is recorded. R01 remains `NOT_SAFELY_REVERSIBLE` and exposes no inverse.
+
+R02 remains design-only. No recovery API/UI, startup hook, scheduler, worker, polling, repair-all path, or revert has been added.
+
+## Test plan
 
 Implementation is not authorized complete until every catalog entry has focused tests plus the relevant full suites.
 
@@ -209,7 +223,7 @@ Implementation is not authorized complete until every catalog entry has focused 
 - projection aggregation/direction/count/latest-time and canonical self-edge suppression remain correct;
 - wrong endpoint/type/direction, incomplete retirement provenance, `P11-EVIDENCE-001/002`, wholly missing occurrence, later note revision, later evidence retirement, correction, and merge all refuse.
 
-Run focused repair tests first, then `python -m pytest -q`, `npm --prefix frontend test`, and `npm --prefix frontend run build` when implementation eventually adds a callable backend surface. P11-C1 itself adds no tests or runtime code.
+R01 has focused success, refusal, idempotency, rollback, postcondition, history, transitive-path, correction/evidence, graph-revision, and mutation-boundary coverage. R02 tests remain future. Run focused repair tests first, then `python -m pytest -q`, `npm --prefix frontend test`, and `npm --prefix frontend run build`.
 
 ## P11-D boundary
 

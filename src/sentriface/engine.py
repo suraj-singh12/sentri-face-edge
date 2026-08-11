@@ -21,7 +21,9 @@ from sentriface.identity_service import IdentityService
 from sentriface.intelligence_service import IntelligenceReadService
 from sentriface.metrics import MetricsCollector
 from sentriface.merge_service import IdentityMergeService
+from sentriface.structured_repair_service import StructuredRepairService
 from sentriface.models import (
+    ArchivedCanonicalSurvivorRepairPrecondition,
     FaceBox,
     Match,
     MatchDecision,
@@ -106,6 +108,9 @@ class FaceEngine:
             store,
             publish_index=self._publish_merge_index,
             reconcile_index=self._rebuild_index,
+        )
+        self.structured_repairs = StructuredRepairService(
+            store, refresh_index=self._rebuild_index,
         )
         self.corrections = IdentityCorrectionService(self.graph)
         self.index_degraded_reason: str | None = (
@@ -704,6 +709,31 @@ class FaceEngine:
             result = self.store.restore_person(person_id, operation_id, actor, source)
         self._rebuild_index()
         return result
+
+    def prepare_restore_archived_canonical_survivor(
+        self, survivor_person_id: str,
+    ) -> ArchivedCanonicalSurvivorRepairPrecondition:
+        return self.structured_repairs.prepare_restore_archived_canonical_survivor(
+            survivor_person_id,
+        )
+
+    def repair_archived_canonical_survivor(
+        self,
+        precondition: ArchivedCanonicalSurvivorRepairPrecondition,
+        operation_id: str,
+        *,
+        actor: dict,
+        reason: str,
+        source: str | None = None,
+    ) -> dict:
+        _require_mutation_context(operation_id, actor)
+        return self.structured_repairs.restore_archived_canonical_survivor(
+            precondition,
+            operation_id,
+            actor=actor,
+            reason=reason,
+            source=source,
+        )
 
     def soft_delete_person(
         self, person_id: str, operation_id: str,

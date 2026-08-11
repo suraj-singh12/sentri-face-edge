@@ -16,8 +16,10 @@ from sentriface.backup_service import BackupError, BackupService
 from sentriface.errors import (
     GraphProjectionPostcheckError,
     GraphProjectionRebuildRefused,
+    StructuredRepairRefused,
 )
 from sentriface.models import (
+    ArchivedCanonicalSurvivorRepairPrecondition,
     DetectedFace,
     Embedding,
     EmbeddingRecord,
@@ -3922,17 +3924,7 @@ class SQLiteIdentityStore:
                 affected_entities=[{"entity_type": "person", "entity_id": person_id}],
                 details={"previous_status": "ARCHIVED"},
             )
-            try:
-                cursor = conn.execute(
-                    """
-                    UPDATE persons
-                    SET lifecycle_status = 'ACTIVE', deleted_at = NULL, lifecycle_changed_at = ?
-                    WHERE person_id = ? AND lifecycle_status = 'ARCHIVED'
-                    """,
-                    (utc_now(), person_id),
-                )
-            except sqlite3.IntegrityError as exc:
-                raise _placeholder_name_conflict(exc) from exc
+            cursor = _restore_archived_person_in_transaction(conn, person_id)
             result = {
                 "person_id": person_id,
                 "restored": True,
@@ -3942,6 +3934,183 @@ class SQLiteIdentityStore:
             _record_person_operation(conn, operation_id, "restore-person", result)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
+
+    def prepare_restore_archived_canonical_survivor(
+        self, survivor_person_id: str,
+    ) -> ArchivedCanonicalSurvivorRepairPrecondition:
+        """Diagnose and bind the one authorized P11-C R01 mutation."""
+        normalized_id = str(survivor_person_id).strip()
+        if not normalized_id:
+            raise ValueError("Survivor person ID is required")
+        from sentriface.integrity import ReadOnlyIntegrityChecker
+
+        report = ReadOnlyIntegrityChecker(
+            self.db_path, database_key=self.database_key,
+        ).run()
+        with self._connect() as conn:
+            conn.execute("BEGIN")
+            return _r01_precondition_from_report(conn, report, normalized_id)
+
+    def execute_restore_archived_canonical_survivor(
+        self,
+        precondition: ArchivedCanonicalSurvivorRepairPrecondition,
+        operation_id: str,
+        *,
+        actor: dict,
+        reason: str,
+        source: str | None = None,
+    ) -> dict:
+        """Execute P11C-R01 only; the caller performs the full P11-A post-check."""
+        normalized_operation_id = str(operation_id).strip()
+        if not normalized_operation_id:
+            raise ValueError("Operation ID is required")
+        if not isinstance(actor, dict) or not actor:
+            raise ValueError("Authenticated actor is required")
+        normalized_reason = str(reason).strip()
+        if not normalized_reason:
+            raise ValueError("Repair reason is required")
+        if len(normalized_reason) > 500:
+            raise ValueError("Repair reason must not exceed 500 characters")
+        _validate_r01_request_shape(precondition)
+
+        with self._connect() as conn:
+            existing = _r01_existing_result(
+                conn, normalized_operation_id, precondition,
+            )
+            if existing is not None:
+                return existing
+
+        from sentriface.integrity import ReadOnlyIntegrityChecker
+
+        report = ReadOnlyIntegrityChecker(
+            self.db_path, database_key=self.database_key,
+        ).run()
+        failure_details = {
+            "repair_id": precondition.repair_id,
+            "repair_spec_version": precondition.repair_spec_version,
+            "invariant_ids": list(precondition.invariant_ids),
+            "finding_fingerprint_version": precondition.finding_fingerprint_version,
+            "finding_fingerprint": precondition.finding_fingerprint,
+            "survivor_person_id": precondition.survivor_person_id,
+        }
+        try:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                existing = _r01_existing_result(
+                    conn, normalized_operation_id, precondition,
+                )
+                if existing is not None:
+                    return existing
+                current = _r01_precondition_from_report(
+                    conn, report, precondition.survivor_person_id,
+                )
+                if current != precondition:
+                    raise StructuredRepairRefused(
+                        "R01 refused because the diagnosed authoritative state is stale",
+                        report=report,
+                    )
+                connections_before = _r01_table_fingerprint(conn, "graph_connections")
+                canonical_before = _r01_canonical_fingerprint(conn)
+                merge_before = precondition.merge_state_fingerprint
+                revision_before = _graph_revision_token(conn)
+                _begin_journal_operation(
+                    conn,
+                    "integrity.repair.canonical-survivor.restore",
+                    operation_id=normalized_operation_id,
+                    actor=actor,
+                    source=source or "structured-repair-service",
+                    affected_entities=[
+                        {"entity_type": "person", "entity_id": item}
+                        for item in precondition.affected_entity_ids[:50]
+                    ],
+                    details={
+                        **failure_details,
+                        "reason": normalized_reason,
+                        "affected_entity_count": len(precondition.affected_entity_ids),
+                        "affected_entity_fingerprint": _r01_hash(
+                            precondition.affected_entity_ids
+                        ),
+                        "before_state_fingerprint": _r01_hash({
+                            "lifecycle": precondition.expected_lifecycle_status,
+                            "deleted_at": precondition.expected_deleted_at,
+                            "lifecycle_changed_at": precondition.expected_lifecycle_changed_at,
+                            "canonical_person_id": precondition.expected_canonical_person_id,
+                            "merge_state_fingerprint": merge_before,
+                        }),
+                    },
+                )
+                _restore_archived_person_in_transaction(
+                    conn, precondition.survivor_person_id,
+                )
+                post = _validate_r01_postconditions(
+                    conn,
+                    precondition,
+                    canonical_before=canonical_before,
+                    connections_before=connections_before,
+                    merge_before=merge_before,
+                    revision_before=revision_before,
+                )
+                result = {
+                    "repair_id": precondition.repair_id,
+                    "repair_spec_version": precondition.repair_spec_version,
+                    "invariant_ids": list(precondition.invariant_ids),
+                    "finding_fingerprint_version": precondition.finding_fingerprint_version,
+                    "finding_fingerprint": precondition.finding_fingerprint,
+                    "survivor_person_id": precondition.survivor_person_id,
+                    "merge_path_count": len(precondition.merge_paths),
+                    "merge_path_fingerprint": _r01_hash(precondition.merge_paths),
+                    "lifecycle_before": "ARCHIVED",
+                    "lifecycle_after": "ACTIVE",
+                    "graph_revision_before": revision_before,
+                    "graph_revision_after": post["graph_revision_after"],
+                    "changed": True,
+                    "immediate_postcondition_status": "PASS",
+                    "postcheck_status": "PENDING",
+                }
+                _transition_journal_operation(
+                    conn, normalized_operation_id, "COMMITTED", result,
+                )
+                return result
+        except StructuredRepairRefused:
+            raise
+        except Exception as exc:
+            self._record_r01_attempt_failed(
+                normalized_operation_id,
+                actor=actor,
+                source=source,
+                details={
+                    **failure_details,
+                    "transaction_rolled_back": True,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:240],
+                },
+            )
+            raise
+
+    def _record_r01_attempt_failed(
+        self,
+        operation_id: str,
+        *,
+        actor: dict,
+        source: str | None,
+        details: dict,
+    ) -> None:
+        with self._connect() as conn:
+            if _get_journal_operation(conn, operation_id) is not None:
+                return
+            _begin_journal_operation(
+                conn,
+                "integrity.repair.canonical-survivor.restore",
+                operation_id=operation_id,
+                actor=actor,
+                source=source or "structured-repair-service",
+                affected_entities=[{
+                    "entity_type": "person",
+                    "entity_id": details["survivor_person_id"],
+                }],
+                details=details,
+            )
+            _transition_journal_operation(conn, operation_id, "FAILED", details)
 
     def soft_delete_person(
         self,
@@ -13687,6 +13856,376 @@ def _existing_committed_operation_result(
         )
     history = operation["status_history"]
     return dict(history[-1]["details"]) if history else {}
+
+
+_R01_REPAIR_ID = "P11C-R01-RESTORE-ARCHIVED-CANONICAL-SURVIVOR"
+_R01_SPEC_VERSION = 1
+_R01_INVARIANT_ID = "P11-IDENTITY-003"
+_R01_FINGERPRINT_VERSION = "p11-a-schema28-repair-fingerprint-v1"
+_R01_OPERATION_TYPE = "integrity.repair.canonical-survivor.restore"
+
+
+def _r01_hash(value: object) -> str:
+    payload = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+        default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _r01_table_fingerprint(conn: sqlite3.Connection, table: str) -> str:
+    allowed = {
+        "graph_connections", "merge_operations", "merge_affected_items",
+        "merge_conflict_resolutions",
+    }
+    if table not in allowed:
+        raise ValueError("Unsupported R01 fingerprint table")
+    rows = conn.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
+    return _r01_hash([dict(row) for row in rows])
+
+
+def _r01_canonical_fingerprint(conn: sqlite3.Connection) -> str:
+    rows = conn.execute(
+        "SELECT person_id, canonical_person_id FROM persons ORDER BY person_id"
+    ).fetchall()
+    return _r01_hash([tuple(row) for row in rows])
+
+
+def _r01_resolve_paths(
+    conn: sqlite3.Connection, survivor_person_id: str,
+) -> tuple[tuple[str, ...], tuple[tuple[str, ...], ...]]:
+    people = {
+        str(row["person_id"]): (str(row["lifecycle_status"]), row["canonical_person_id"])
+        for row in conn.execute(
+            "SELECT person_id, lifecycle_status, canonical_person_id FROM persons"
+        )
+    }
+    paths: list[tuple[str, ...]] = []
+    sources: list[str] = []
+    for source_id, (lifecycle, target) in sorted(people.items()):
+        if lifecycle != "MERGED":
+            continue
+        if not target:
+            raise StructuredRepairRefused("R01 refused because a merged identity has no target")
+        current = source_id
+        path: list[str] = []
+        seen: set[str] = set()
+        while True:
+            if current in seen:
+                raise StructuredRepairRefused("R01 refused because a canonical cycle exists")
+            seen.add(current)
+            path.append(current)
+            state = people.get(current)
+            if state is None:
+                raise StructuredRepairRefused("R01 refused because a canonical target is dangling")
+            current_lifecycle, current_target = state
+            if current_lifecycle != "MERGED":
+                if current_target is not None:
+                    raise StructuredRepairRefused(
+                        "R01 refused because a non-merged identity has a canonical target"
+                    )
+                break
+            if not current_target:
+                raise StructuredRepairRefused("R01 refused because a canonical path is malformed")
+            current = str(current_target)
+        if current == survivor_person_id:
+            sources.append(source_id)
+            paths.append(tuple(path))
+    return tuple(sources), tuple(paths)
+
+
+def _r01_merge_snapshot(
+    conn: sqlite3.Connection,
+    sources: tuple[str, ...],
+) -> tuple[tuple[str, ...], str]:
+    operation_ids: list[str] = []
+    for source_id in sources:
+        direct_target = conn.execute(
+            "SELECT canonical_person_id FROM persons WHERE person_id = ?",
+            (source_id,),
+        ).fetchone()[0]
+        rows = conn.execute(
+            """
+            SELECT m.*, j.operation_type, j.status, j.actor AS journal_actor
+            FROM merge_operations m
+            JOIN operation_journal j ON j.operation_id = m.operation_journal_id
+            WHERE m.source_person_id = ? AND m.target_person_id = ?
+            ORDER BY m.created_at, m.merge_operation_id
+            """,
+            (source_id, direct_target),
+        ).fetchall()
+        if len(rows) != 1:
+            raise StructuredRepairRefused(
+                "R01 refused because merge history does not uniquely support the path"
+            )
+        row = rows[0]
+        if (
+            row["operation_type"] != "identity.merge"
+            or row["status"] != "COMMITTED"
+            or row["actor"] != row["journal_actor"]
+            or row["operation_journal_id"] != row["merge_operation_id"]
+        ):
+            raise StructuredRepairRefused(
+                "R01 refused because merge manifest and journal history disagree"
+            )
+        operation_ids.append(str(row["merge_operation_id"]))
+    ids = tuple(sorted(operation_ids))
+    if not ids:
+        raise StructuredRepairRefused("R01 requires at least one preserved merge manifest")
+    placeholders = ",".join("?" for _ in ids)
+    snapshot = {
+        "operations": [dict(row) for row in conn.execute(
+            f"SELECT * FROM merge_operations WHERE merge_operation_id IN ({placeholders}) ORDER BY merge_operation_id",
+            ids,
+        )],
+        "items": [dict(row) for row in conn.execute(
+            f"SELECT * FROM merge_affected_items WHERE merge_operation_id IN ({placeholders}) ORDER BY merge_operation_id, item_type, item_id",
+            ids,
+        )],
+        "conflicts": [dict(row) for row in conn.execute(
+            f"SELECT * FROM merge_conflict_resolutions WHERE merge_operation_id IN ({placeholders}) ORDER BY merge_operation_id, conflict_id",
+            ids,
+        )],
+    }
+    return ids, _r01_hash(snapshot)
+
+
+def _r01_relevant_operation_fingerprint(
+    conn: sqlite3.Connection, entity_ids: tuple[str, ...],
+) -> str:
+    selected: list[dict] = []
+    wanted = set(entity_ids)
+    for row in conn.execute(
+        "SELECT operation_id, operation_type, status, affected_entities, created_at, completed_at FROM operation_journal ORDER BY rowid"
+    ):
+        try:
+            affected = json.loads(row["affected_entities"])
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise StructuredRepairRefused("R01 refused because journal metadata is malformed") from exc
+        if any(
+            isinstance(item, dict) and str(item.get("entity_id")) in wanted
+            for item in affected
+        ):
+            selected.append(dict(row))
+    return _r01_hash(selected)
+
+
+def _r01_precondition_from_report(
+    conn: sqlite3.Connection,
+    report: object,
+    survivor_person_id: str,
+) -> ArchivedCanonicalSurvivorRepairPrecondition:
+    if report.schema_version != SCHEMA_VERSION or SCHEMA_VERSION != 28:
+        raise StructuredRepairRefused("R01 requires schema version 28", report=report)
+    if report.findings_truncated:
+        raise StructuredRepairRefused("R01 requires an untruncated P11-A report", report=report)
+    blocking = [
+        item for item in report.findings
+        if item.severity.value in {"CRITICAL", "ERROR"}
+    ]
+    selected = []
+    for item in blocking:
+        entities = dict(item.entity_ids)
+        if (
+            item.invariant_id != _R01_INVARIANT_ID
+            or entities.get("terminal_person_id") != survivor_person_id
+        ):
+            raise StructuredRepairRefused(
+                "R01 refused because another critical/error finding makes identity interpretation ambiguous",
+                report=report,
+            )
+        selected.append(item)
+    if not selected:
+        raise StructuredRepairRefused(
+            "R01 refused because the selected P11-IDENTITY-003 finding is absent",
+            report=report,
+        )
+    graph_revision = _graph_revision_token(conn)
+    if graph_revision != report.graph_revision:
+        raise StructuredRepairRefused(
+            "R01 refused because the graph revision changed after diagnosis", report=report,
+        )
+    row = conn.execute(
+        """
+        SELECT lifecycle_status, deleted_at, lifecycle_changed_at, canonical_person_id
+        FROM persons WHERE person_id = ?
+        """,
+        (survivor_person_id,),
+    ).fetchone()
+    if row is None:
+        raise StructuredRepairRefused("R01 survivor no longer exists", report=report)
+    if (
+        row["lifecycle_status"] != "ARCHIVED"
+        or row["deleted_at"] is None
+        or row["lifecycle_changed_at"] is None
+        or row["canonical_person_id"] is not None
+    ):
+        raise StructuredRepairRefused(
+            "R01 survivor is not the exact supported archived terminal state", report=report,
+        )
+    sources, paths = _r01_resolve_paths(conn, survivor_person_id)
+    selected_sources = tuple(sorted(dict(item.entity_ids)["person_id"] for item in selected))
+    if sources != selected_sources:
+        raise StructuredRepairRefused(
+            "R01 finding set does not cover every canonical path to the survivor", report=report,
+        )
+    merge_ids, merge_fingerprint = _r01_merge_snapshot(conn, sources)
+    affected = tuple(sorted({survivor_person_id, *sources}))
+    relevant_fingerprint = _r01_relevant_operation_fingerprint(conn, affected)
+    finding_payload = [
+        {
+            "invariant_id": item.invariant_id,
+            "message": item.message,
+            "entity_ids": list(item.entity_ids),
+            "evidence": list(item.evidence),
+        }
+        for item in sorted(selected, key=lambda value: value.entity_ids)
+    ]
+    state = {
+        "survivor_person_id": survivor_person_id,
+        "lifecycle_status": row["lifecycle_status"],
+        "deleted_at": row["deleted_at"],
+        "lifecycle_changed_at": row["lifecycle_changed_at"],
+        "canonical_person_id": row["canonical_person_id"],
+        "merge_sources": sources,
+        "merge_paths": paths,
+        "merge_operation_ids": merge_ids,
+        "merge_state_fingerprint": merge_fingerprint,
+        "relevant_operation_fingerprint": relevant_fingerprint,
+    }
+    fingerprint = _r01_hash({
+        "checker_contract": _R01_FINGERPRINT_VERSION,
+        "repair_id": _R01_REPAIR_ID,
+        "repair_spec_version": _R01_SPEC_VERSION,
+        "findings": finding_payload,
+        "schema_version": report.schema_version,
+        "graph_revision": graph_revision,
+        "state": state,
+    })
+    return ArchivedCanonicalSurvivorRepairPrecondition(
+        repair_id=_R01_REPAIR_ID,
+        repair_spec_version=_R01_SPEC_VERSION,
+        invariant_ids=(_R01_INVARIANT_ID,),
+        affected_entity_ids=affected,
+        survivor_person_id=survivor_person_id,
+        finding_fingerprint_version=_R01_FINGERPRINT_VERSION,
+        finding_fingerprint=fingerprint,
+        schema_version=SCHEMA_VERSION,
+        graph_revision=graph_revision,
+        expected_lifecycle_status=str(row["lifecycle_status"]),
+        expected_deleted_at=str(row["deleted_at"]),
+        expected_lifecycle_changed_at=str(row["lifecycle_changed_at"]),
+        expected_canonical_person_id=row["canonical_person_id"],
+        merge_source_person_ids=sources,
+        merge_paths=paths,
+        merge_operation_ids=merge_ids,
+        merge_state_fingerprint=merge_fingerprint,
+        relevant_operation_fingerprint=relevant_fingerprint,
+    )
+
+
+def _validate_r01_request_shape(
+    precondition: ArchivedCanonicalSurvivorRepairPrecondition,
+) -> None:
+    if not isinstance(precondition, ArchivedCanonicalSurvivorRepairPrecondition):
+        raise ValueError("R01 requires its typed finding precondition")
+    if (
+        precondition.repair_id != _R01_REPAIR_ID
+        or precondition.repair_spec_version != _R01_SPEC_VERSION
+        or precondition.invariant_ids != (_R01_INVARIANT_ID,)
+        or precondition.finding_fingerprint_version != _R01_FINGERPRINT_VERSION
+        or precondition.schema_version != SCHEMA_VERSION
+    ):
+        raise StructuredRepairRefused("R01 request does not match the frozen repair specification")
+
+
+def _r01_existing_result(
+    conn: sqlite3.Connection,
+    operation_id: str,
+    precondition: ArchivedCanonicalSurvivorRepairPrecondition,
+) -> dict | None:
+    operation = _get_journal_operation(conn, operation_id)
+    if operation is None:
+        return None
+    if operation["operation_type"] != _R01_OPERATION_TYPE:
+        raise KeyError(f"Operation ID already exists: {operation_id}")
+    details = operation["details"]
+    if (
+        details.get("finding_fingerprint") != precondition.finding_fingerprint
+        or details.get("repair_id") != precondition.repair_id
+        or details.get("survivor_person_id") != precondition.survivor_person_id
+    ):
+        raise KeyError("Operation ID was already used for a different R01 diagnosis")
+    if operation["status"] != "COMMITTED":
+        raise RuntimeError(
+            f"Operation {operation_id} is {operation['status']} and cannot be retried"
+        )
+    return dict(operation["status_history"][-1]["details"])
+
+
+def _restore_archived_person_in_transaction(
+    conn: sqlite3.Connection, person_id: str,
+) -> sqlite3.Cursor:
+    row = conn.execute(
+        "SELECT lifecycle_status FROM persons WHERE person_id = ?", (person_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"Unknown person: {person_id}")
+    if row["lifecycle_status"] != "ARCHIVED":
+        raise KeyError(f"Only archived people can be restored: {person_id}")
+    try:
+        cursor = conn.execute(
+            """
+            UPDATE persons
+            SET lifecycle_status = 'ACTIVE', deleted_at = NULL, lifecycle_changed_at = ?
+            WHERE person_id = ? AND lifecycle_status = 'ARCHIVED'
+            """,
+            (utc_now(), person_id),
+        )
+    except sqlite3.IntegrityError as exc:
+        raise _placeholder_name_conflict(exc) from exc
+    if cursor.rowcount != 1:
+        raise RuntimeError("Archived person lifecycle changed concurrently")
+    return cursor
+
+
+def _validate_r01_postconditions(
+    conn: sqlite3.Connection,
+    precondition: ArchivedCanonicalSurvivorRepairPrecondition,
+    *,
+    canonical_before: str,
+    connections_before: str,
+    merge_before: str,
+    revision_before: str,
+) -> dict:
+    row = conn.execute(
+        "SELECT lifecycle_status, deleted_at, canonical_person_id FROM persons WHERE person_id = ?",
+        (precondition.survivor_person_id,),
+    ).fetchone()
+    if row is None or tuple(row) != ("ACTIVE", None, None):
+        raise RuntimeError("R01 immediate lifecycle postcondition failed")
+    sources, paths = _r01_resolve_paths(conn, precondition.survivor_person_id)
+    merge_ids, merge_after = _r01_merge_snapshot(conn, sources)
+    if (
+        sources != precondition.merge_source_person_ids
+        or paths != precondition.merge_paths
+        or merge_ids != precondition.merge_operation_ids
+        or merge_after != merge_before
+        or _r01_canonical_fingerprint(conn) != canonical_before
+    ):
+        raise RuntimeError("R01 changed canonical or merge history")
+    if _r01_table_fingerprint(conn, "graph_connections") != connections_before:
+        raise RuntimeError("R01 unexpectedly changed the graph projection")
+    projection = _validate_graph_projection(conn)
+    if not projection["valid"]:
+        raise RuntimeError("R01 graph validation failed: " + "; ".join(projection["errors"][:10]))
+    if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise RuntimeError("R01 foreign-key postcondition failed")
+    before_number = int(revision_before[1:])
+    revision_after = _graph_revision_token(conn)
+    if revision_after != f"g{before_number + 1}":
+        raise RuntimeError("R01 must advance graph revision exactly once")
+    return {"graph_revision_after": revision_after, "projection": projection}
 
 
 def _existing_person_operation(

@@ -1,6 +1,6 @@
 # P11 integrity authority model, checker, and graph rebuild
 
-Status: **P11-A and P11-B complete and frozen; P11-C1 design complete; P11-C as a whole remains unimplemented.** This document fixes the P11 invariant IDs and authority boundary, records the read-only checker, and defines the explicit deterministic `graph_connections` rebuild. `P11_STRUCTURED_REPAIR_DESIGN.md` records the P11-C1 authority audit, two-entry fixed future repair catalog, and execution design. It does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
+Status: **P11-A and P11-B complete and frozen; P11-C1 design complete; P11C-R01 implemented; P11C-R02 unimplemented; P11-C incomplete.** This document fixes the P11 invariant IDs and authority boundary, records the read-only checker, and defines the explicit deterministic `graph_connections` rebuild. `P11_STRUCTURED_REPAIR_DESIGN.md` records the frozen two-entry catalog and the finding-bound R01 implementation. It does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
 
 ## State-authority map
 
@@ -113,7 +113,7 @@ These are architectural boundaries, not P11-A blockers. They constrain later rep
 
 1. **P11-A — Read-only integrity checker:** complete.
 2. **P11-B — Deterministic graph projection rebuild:** complete; explicit preflight-gated, atomic, journaled, revision-aware replacement with no authority rewrite.
-3. **P11-C1 — Structured repair authority audit/catalog/design:** complete as architecture only. The only future commands admitted are restoring an otherwise-valid archived terminal merge survivor and reconciling diagnosed note occurrence/reference state from immutable revision authority. No repair code or callable surface exists.
-4. **P11-C implementation:** future; implement only the fixed versioned catalog in `P11_STRUCTURED_REPAIR_DESIGN.md`, with finding-bound preconditions and explicit invocation.
+3. **P11-C1 — Structured repair authority audit/catalog/design:** complete and frozen. The only commands admitted are restoring an otherwise-valid archived terminal merge survivor and reconciling diagnosed note occurrence/reference state from immutable revision authority.
+4. **P11-C2 / R01:** implemented as explicit Python/service invocation with typed finding preconditions, in-transaction revalidation, immutable repair journaling, shared lifecycle mutation, exact projection/revision validation, and full P11-A post-check. **R02 remains unimplemented.**
 5. **P11-D — Revert execution:** future; operation-specific preconditions/inverse data and atomic journaled execution.
 6. **P11-E — Integrity/recovery UI and acceptance:** future; explicit invocation and factual reports, no polling/background scan.

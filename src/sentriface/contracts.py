@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from sentriface.models import (
+    ArchivedCanonicalSurvivorRepairPrecondition,
     DetectedFace,
     Embedding,
     EmbeddingRecord,
@@ -501,6 +502,22 @@ class IdentityStore(Protocol):
         actor: dict | None = None, source: str | None = None,
     ) -> dict:
         """Atomically restore one archived person."""
+
+    def prepare_restore_archived_canonical_survivor(
+        self, survivor_person_id: str,
+    ) -> ArchivedCanonicalSurvivorRepairPrecondition:
+        """Create a fresh finding-bound R01 precondition without mutation."""
+
+    def execute_restore_archived_canonical_survivor(
+        self,
+        precondition: ArchivedCanonicalSurvivorRepairPrecondition,
+        operation_id: str,
+        *,
+        actor: dict,
+        reason: str,
+        source: str | None = None,
+    ) -> dict:
+        """Execute only P11C-R01 under an immediate journaled transaction."""
 
     def soft_delete_person(
         self, person_id: str, operation_id: str,

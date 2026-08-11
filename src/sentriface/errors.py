@@ -48,3 +48,22 @@ class GraphProjectionPostcheckError(SentriFaceError):
         )
         self.result = result
         self.report = report
+
+
+class StructuredRepairRefused(SentriFaceError):
+    """Raised when a finding-bound structured repair is stale or unsafe."""
+
+    def __init__(self, message: str, *, report: object | None = None) -> None:
+        super().__init__(message)
+        self.report = report
+
+
+class StructuredRepairPostcheckError(SentriFaceError):
+    """Raised when committed R01 state fails its read-only post-check."""
+
+    def __init__(self, result: dict, report: object) -> None:
+        super().__init__(
+            "Structured repair committed, but the post-commit integrity check failed"
+        )
+        self.result = result
+        self.report = report

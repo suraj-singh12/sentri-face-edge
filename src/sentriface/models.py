@@ -47,6 +47,30 @@ class Person:
 
 
 @dataclass(frozen=True)
+class ArchivedCanonicalSurvivorRepairPrecondition:
+    """Finding-bound, immutable R01 diagnosis token."""
+
+    repair_id: str
+    repair_spec_version: int
+    invariant_ids: tuple[str, ...]
+    affected_entity_ids: tuple[str, ...]
+    survivor_person_id: str
+    finding_fingerprint_version: str
+    finding_fingerprint: str
+    schema_version: int
+    graph_revision: str
+    expected_lifecycle_status: str
+    expected_deleted_at: str
+    expected_lifecycle_changed_at: str
+    expected_canonical_person_id: str | None
+    merge_source_person_ids: tuple[str, ...]
+    merge_paths: tuple[tuple[str, ...], ...]
+    merge_operation_ids: tuple[str, ...]
+    merge_state_fingerprint: str
+    relevant_operation_fingerprint: str
+
+
+@dataclass(frozen=True)
 class EmbeddingRecord:
     embedding_id: str
     person_id: str
