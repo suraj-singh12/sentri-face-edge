@@ -13,6 +13,7 @@ import { DebugView } from "./views/DebugView.jsx";
 import { PeopleView } from "./views/PeopleView.jsx";
 import { QueueView } from "./views/QueueView.jsx";
 import { RecognizeView } from "./views/RecognizeView.jsx";
+import { WorldView } from "./views/WorldView.jsx";
 
 function ShellNotice({ color, title, children, action }) {
   return (
@@ -295,6 +296,16 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onDeletePhoto={actions.deletePersonPhoto}
               onRestoreDeletedFace={actions.restoreDeletedFace}
               onPermanentlyDeleteFace={actions.permanentlyDeleteFace}
+            />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="world">
+            <WorldView
+              state={state.world}
+              onRefresh={guarded(actions.refreshWorld)}
+              onApplyScope={guarded(actions.applyWorldScope)}
+              onCollection={guarded(actions.selectWorldCollection)}
+              onNextPage={guarded(actions.nextWorldPage)}
             />
           </Tabs.Panel>
 

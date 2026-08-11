@@ -60,6 +60,7 @@ export function tabLabel(view) {
     recognize: "Check a photo",
     queue: "Review photos",
     people: "People",
+    world: "World",
     debug: "Settings",
   }[view];
 }

@@ -24,6 +24,7 @@ export function usePeopleController({
   loadPeople,
   loadDeletedFaces,
   showToast,
+  onWorldMutation,
 }) {
   const [peopleGallery, setPeopleGallery] = useState(null);
   const [peopleGalleryImage, setPeopleGalleryImage] = useState(null);
@@ -109,7 +110,8 @@ export function usePeopleController({
   const invalidatePersonGraph = useCallback((mutation = null) => {
     graphRequestRef.current += 1;
     setPersonGraph((current) => invalidatePersonGraphSnapshot(current, mutation));
-  }, []);
+    onWorldMutation?.(mutation);
+  }, [onWorldMutation]);
 
   const openPersonGraph = useCallback(async (personId) => {
     if (!personId) return null;

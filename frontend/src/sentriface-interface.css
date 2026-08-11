@@ -2,6 +2,238 @@
   color-scheme: light;
 }
 
+/* P10-F1 World: scope-first rendering of backend-owned intelligence. */
+.world-shell,
+.world-initial-loading {
+  min-height: 0;
+  height: 100%;
+}
+
+.world-initial-loading {
+  min-height: 460px;
+}
+
+.world-header {
+  min-height: 42px;
+}
+
+.world-scope-controls {
+  background: color-mix(in srgb, var(--sentriface-card-bg) 92%, transparent);
+  border-color: var(--sentriface-card-border);
+}
+
+.world-scope-controls > .mantine-Group-root {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.world-filter-time,
+.world-filter-missing,
+.world-filter-ranking {
+  width: 142px;
+}
+
+.world-filter-date {
+  width: 126px;
+}
+
+.world-filter-location {
+  width: min(238px, 28vw);
+}
+
+.world-summary-grid {
+  flex: 0 0 auto;
+}
+
+.world-summary-item {
+  min-width: 0;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.world-collection-bar {
+  min-height: 30px;
+}
+
+.world-workarea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px;
+  flex: 1 1 auto;
+  min-height: 470px;
+  gap: 10px;
+}
+
+.world-exploration {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.world-loading-stripe {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--sentriface-card-bg) 96%, transparent);
+  box-shadow: var(--mantine-shadow-sm);
+}
+
+.world-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(390px, 1.25fr) minmax(320px, 0.9fr);
+  gap: 10px;
+  height: 100%;
+}
+
+.world-overview-secondary {
+  min-width: 0;
+}
+
+.world-section {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.world-section-header {
+  min-height: 48px;
+}
+
+.world-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  color: var(--mantine-color-text);
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--sentriface-card-border) 70%, transparent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.world-row:last-child {
+  border-bottom: 0;
+}
+
+.world-row:hover,
+.world-row:focus-visible,
+.world-row[data-selected="true"] {
+  background: color-mix(in srgb, var(--mantine-color-teal-8) 13%, transparent);
+  outline: none;
+}
+
+.world-row[data-selected="true"] {
+  box-shadow: inset 2px 0 var(--mantine-color-teal-5);
+}
+
+.world-row-main {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.world-row-main > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.world-person-metrics {
+  display: flex;
+  min-width: 160px;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.world-metric {
+  display: inline-flex;
+  min-width: 38px;
+  flex-direction: column;
+  align-items: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-cluster-row,
+.world-pattern-row {
+  min-height: 70px;
+}
+
+.world-relationship-row {
+  min-height: 54px;
+}
+
+.world-inspector {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.world-inspector-row + .world-inspector-row {
+  margin-top: 4px;
+}
+
+.world-inspector-row > :last-child {
+  max-width: 62%;
+  overflow-wrap: anywhere;
+}
+
+.world-limitations {
+  padding: 8px;
+  border-left: 2px solid var(--mantine-color-yellow-7);
+  background: color-mix(in srgb, var(--mantine-color-yellow-9) 8%, transparent);
+}
+
+@media (max-width: 76em) {
+  .world-workarea {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+
+  .world-overview-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
+
+@media (max-width: 62em) {
+  .world-shell {
+    height: auto;
+  }
+
+  .world-workarea {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .world-inspector {
+    max-height: none;
+  }
+
+  .world-filter-location {
+    width: min(100%, 280px);
+  }
+
+  .world-scope-controls > .mantine-Group-root {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .world-person-metrics {
+    min-width: 0;
+  }
+}
+
 .header-user-chip {
   min-width: 124px;
   max-width: 190px;

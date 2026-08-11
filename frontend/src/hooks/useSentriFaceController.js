@@ -5,6 +5,7 @@ import { usePersistentState } from "./usePersistentState.js";
 import { usePeopleController } from "./usePeopleController.js";
 import { useQueueController } from "./useQueueController.js";
 import { useRecognizeController } from "./useRecognizeController.js";
+import { useWorldController } from "./useWorldController.js";
 
 export function useSentriFaceController({ capabilities = [] } = {}) {
   const [activeView, setActiveView] = usePersistentState("sentriface.activeView", "recognize");
@@ -12,11 +13,13 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
   const canAdd = capabilities.includes("add");
   const uploads = useFileUploads(api);
   const appData = useAppData({ activeView, capabilities, ...api });
+  const world = useWorldController({ activeView, ...api });
   const people = usePeopleController({
     activeView,
     ...api,
     loadPeople: appData.loadPeople,
     loadDeletedFaces: appData.loadDeletedFaces,
+    onWorldMutation: world.actions.invalidateWorld,
   });
   const recognize = useRecognizeController({
     ...api,
@@ -56,6 +59,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       ...recognize.state,
       ...queue.state,
       ...people.state,
+      ...world.state,
     },
     refs: { ...recognize.refs },
     actions: {
@@ -80,6 +84,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       ...recognize.actions,
       ...queue.actions,
       ...people.actions,
+      ...world.actions,
       guarded: api.guarded,
     },
   };

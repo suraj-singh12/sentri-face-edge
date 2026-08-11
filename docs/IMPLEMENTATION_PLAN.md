@@ -2,7 +2,7 @@
 
 Implement in order. Each phase must preserve offline operation, use additive migrations where possible, keep important writes transactional and journaled, and add upgrade/failure tests before moving on.
 
-Status after the 2026-08-11 final acceptance pass: P0 through P10-E are frozen. The consolidated post-optimization Dataset A/B sparse/dense matrix passes the existing correctness, boundedness, query-scaling, pathology, and architecture gates. P10-F World UI is safe to begin against the frozen v2 backend contract. P11 and later remain future work.
+Status after the 2026-08-11 P10-F1 frontend pass: P0 through P10-E remain frozen, and P10-F1 World UI foundation plus WORLD_SCOPE experience is complete against the frozen v2 backend contract. Later World drilldown subphases and P11 remain future work.
 
 ## P0 Database migration/version foundation — Complete
 
@@ -84,9 +84,9 @@ Final stabilization completed: every response is held to one revision-bound SQLi
 
 The final consolidated artifact, `docs/P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json`, records Dataset A/B sparse/dense cold/warm p50/p95, SQL counts, payloads, returned counts, and cursor walks. Dense-B allocation tracing remains explicitly unavailable because instrumentation distorts runtime; product latency is measured without it. The former dense observation×alias adjustments, focused-person event scans, repeated complete-World facet pages, and recursive cluster scoped counts were replaced with bounded participant-first or collection-specific reads without changing semantics. P10-PERF-01 through P10-PERF-05 pass. No cache, materialized view, background work, dependency, index, schema, or frontend feature was added.
 
-## P10-F World UI — Future, safe to begin
+## P10-F World UI — In progress; P10-F1 complete
 
-Render only the P10-E World contract as the progressive Level 0–4 experience. Layout, animation, zoom, selection, interaction state, and visual presentation remain client concerns; membership, filters, clustering, ranking, intelligence, evidence explanations, pagination, and revision ownership remain backend concerns. Archived/tombstoned nodes remain historically represented and restricted according to backend actions. Exit: World and Person Graph remain projections of the same backend truth, explain evidence consistently, and the frontend never loads or derives an unbounded global graph.
+P10-F1 adds World as a persistent first-class top-level view and renders only frozen `WORLD_SCOPE` authority: normalized effective scope controls, backend totals/facets, ranked canonical people, revision-bound cluster summaries, measured patterns, typed relationship pages, truthful analytics availability, page/truncation state, and structured factual explanations. The controller replaces immutable bounded responses, validates retained state at navigation boundaries, invalidates after known graph mutations, and performs no polling or page concatenation. Cluster selection establishes inspection/navigation intent only; full `CLUSTER`, `PERSON`, `EVENT`, and `EVIDENCE` drilldowns remain later P10-F subphases. Layout, selection, interaction state, and visual presentation remain client concerns; membership, filters, clustering, ranking, intelligence, evidence explanations, pagination, and revision ownership remain backend concerns. Exit for the complete P10-F phase remains: World and Person Graph are projections of the same backend truth, explain evidence consistently, and the frontend never loads or derives an unbounded global graph.
 
 ## P11 Integrity checker + graph rebuild + operation revert — Future
 

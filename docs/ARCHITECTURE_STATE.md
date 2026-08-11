@@ -4,7 +4,7 @@ This document is a concise checkpoint of the stable implemented architecture. De
 
 ## Current phase
 
-P10-E World Intelligence read-model backend stabilization is complete and frozen as of 2026-08-11. The consolidated post-optimization Dataset A/B sparse/dense matrix passes the existing performance gates, so P10-F World UI is safe to begin against the frozen v2 contract. P0 through P10-E are frozen; no frontend rendering or generated asset was changed during backend stabilization.
+P10-F World UI is in progress. P10-F1 World foundation and the `WORLD_SCOPE` experience are complete as of 2026-08-11 against the frozen World v2 backend. World is now a persistent top-level view with backend-normalized scope controls, authoritative totals/facets, ranked canonical people, revision-bound cluster summaries, measured patterns, typed relationship pages, structured explanation inspection, bounded response replacement, lifecycle revision validation, mutation invalidation, and no continuous polling. Full `CLUSTER`, `PERSON`, `EVENT`, and `EVIDENCE` drilldowns have not begun. P0 through P10-E remain frozen; P11 remains future work.
 
 ## Core principles
 
