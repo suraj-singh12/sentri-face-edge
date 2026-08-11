@@ -10,7 +10,7 @@ Use it with, rather than instead of, the other architecture documents:
 - `ARCHITECTURE_STATE.md` records the concise implementation checkpoint.
 - `IMPLEMENTATION_PLAN.md` records phase order, completion, and remaining gates.
 
-This explanation covers the architecture implemented and frozen from P0 through P10 as of 2026-08-11. Correctness, contract, authority, boundedness, invariant, consolidated performance, complete World navigation, revision lifecycle, runtime, visual, and automated gates pass. The P10-F World UI consumes the frozen v2 backend without adding frontend semantic authority. P11 is safe to start separately; new backend concepts remain deferred to their planned phases.
+This explanation covers the architecture implemented and frozen from P0 through P10 as of 2026-08-11, plus the completed P11-A read-only integrity checker and P11-B explicit graph projection rebuild. P11-C repair, P11-D revert, and P11-E recovery UI remain deferred to their planned phases.
 
 The central question throughout is:
 
@@ -692,7 +692,11 @@ For every evidence row, rebuild:
 7. records evidence count, evidence types, and last occurrence;
 8. replaces `graph_connections` and advances graph revision in the same transaction.
 
-Incremental mutation paths call the same replacement/validation semantics, and rebuild equivalence is tested. The projection can therefore be discarded and recreated from evidence without recognition inference or frontend state.
+Incremental mutation paths, P11-A comparison, validation, and P11-B all call the same expected-projection semantics. The projection can therefore be discarded and recreated from evidence without recognition inference or frontend state.
+
+P11-B makes exceptional replacement explicit. The service runs the P11-A checker first and permits only projection-only `P11-GRAPH-001` drift. Authoritative error/critical findings or truncated diagnostics produce a bounded failed journal attempt and no graph/revision write. Inside `BEGIN IMMEDIATE`, it recomputes authority, compares normalized signatures, replaces the full derived table only when different, validates exact equality, advances revision once only on change, and commits the bounded journal result. Insert, validation, or revision failures roll the old projection back. A second read-only integrity report follows commit; no automatic second repair is attempted.
+
+A healthy explicit invocation is a journaled committed no-op with a stable graph revision and idempotent operation result. Current-schema startup is validation-only and refuses drift with instructions to invoke P11-B; it never silently repairs. The one-time v26→v27 migration backfill remains because that upgrade introduced graph revision state and must normalize the older derived representation inside the migration transaction. No authoritative evidence, identity, correction, observation, note, merge, or pre-existing journal row is rewritten by P11-B.
 
 ### Example scenario
 
@@ -1294,7 +1298,7 @@ Compatibility data remains valuable, but value does not confer authority. Deleti
 Several capabilities are intentionally future work:
 
 - P10-F World UI is complete and frozen after the final post-fix integration/runtime gate; P10-FR-01 through P10-FR-04 are fixed.
-- P11-A now provides the fixed authority/invariant model and an explicit query-only integrity checker. P11-B deterministic projection rebuild, P11-C structured repair, P11-D operation revert, and P11-E recovery UI/acceptance remain future work. P11-A reports facts only and never mutates or infers missing authority.
+- P11-A provides the fixed authority/invariant model and explicit query-only integrity checker. P11-B provides only deterministic graph projection rebuild with preflight refusal, atomic replacement, journal/revision/no-op semantics, postcheck, and zero authoritative rewriting. P11-C structured repair, P11-D operation revert, and P11-E recovery UI/acceptance remain future work.
 - P12 will extend portable backup/restore rules for every normalized record and derived state.
 - Future repeated-unknown tracking needs its own authoritative lifecycle.
 - A normalized place model is required before location becomes an entity.

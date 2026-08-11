@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from sentriface.models import utc_now
 from sentriface.secure_storage import connect_database
-from sentriface.storage.sqlite_store import SCHEMA_VERSION
+from sentriface.storage.sqlite_store import SCHEMA_VERSION, _expected_graph_connections
 
 
 class IntegritySeverity(str, Enum):
@@ -617,24 +617,22 @@ class ReadOnlyIntegrityChecker:
                     self._add("P11-EVIDENCE-002", "Active co-observation evidence endpoints are not current effective participants", entities={"evidence_id": row[0], "observation_id": row[2]}, evidence={"effective_source_person_id": source, "effective_target_person_id": target})
 
     def _expected_graph(self, conn: sqlite3.Connection) -> dict[tuple[str, str, str, str], tuple[int, tuple[str, ...], str]]:
-        self._load_people(conn)
-        aggregates: dict[tuple[str, str, str, str], list[object]] = {}
-        for row in conn.execute("SELECT evidence_type, source_person_id, target_person_id, relationship_type, directionality, created_at FROM relationship_evidence WHERE active = 1 ORDER BY evidence_id"):
-            source, _p, serr = self._resolve(row[1])
-            target, _p2, terr = self._resolve(row[2])
-            if serr or terr or source is None or target is None or source == target:
-                continue
-            direction = str(row[4])
-            if direction == "UNDIRECTED":
-                source, target = sorted((source, target))
-            key = (source, target, str(row[3]), direction)
-            item = aggregates.setdefault(key, [0, set(), str(row[5])])
-            item[0] = int(item[0]) + 1
-            cast_set = item[1]
-            assert isinstance(cast_set, set)
-            cast_set.add(str(row[0]))
-            item[2] = max(str(item[2]), str(row[5]))
-        return {key: (int(value[0]), tuple(sorted(value[1])), str(value[2])) for key, value in aggregates.items()}
+        connections, _authority_errors, _active_evidence_count = (
+            _expected_graph_connections(conn)
+        )
+        return {
+            (
+                item.source_person_id,
+                item.target_person_id,
+                item.relationship_type,
+                item.directionality,
+            ): (
+                item.evidence_count,
+                item.evidence_types,
+                item.last_evidence_at,
+            )
+            for item in connections
+        }
 
     def _check_graph_projection(self, conn: sqlite3.Connection) -> None:
         expected = self._expected_graph(conn)

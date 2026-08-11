@@ -15,7 +15,7 @@ class StartupDomainValidationTest(unittest.TestCase):
         store.initialize()
         return store
 
-    def test_startup_repairs_only_corrupted_derived_graph_projection(self) -> None:
+    def test_startup_reports_projection_drift_without_repairing_it(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             store = self._store(Path(temp))
             first = store.create_person("First")
@@ -30,11 +30,25 @@ class StartupDomainValidationTest(unittest.TestCase):
             graph.record_observation_evidence(observation.observation_id, "startup-evidence")
             with store._connect() as conn:
                 conn.execute("DELETE FROM graph_connections")
+                revision_before = conn.execute(
+                    "SELECT revision FROM graph_state WHERE singleton_id = 1"
+                ).fetchone()[0]
 
-            store.initialize()
+            with self.assertRaisesRegex(
+                SchemaMigrationError,
+                "explicit P11-B graph projection rebuild",
+            ):
+                store.initialize()
 
-            self.assertTrue(store.validate_graph_projection()["valid"])
-            self.assertEqual(len(graph.get_global_projection().connections), 1)
+            self.assertFalse(store.validate_graph_projection()["valid"])
+            self.assertEqual(graph.get_global_projection().connections, ())
+            with store._connect() as conn:
+                self.assertEqual(
+                    conn.execute(
+                        "SELECT revision FROM graph_state WHERE singleton_id = 1"
+                    ).fetchone()[0],
+                    revision_before,
+                )
 
     def test_startup_rejects_invalid_current_schema_canonical_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

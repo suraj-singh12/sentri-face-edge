@@ -446,8 +446,10 @@ class IdentityStore(Protocol):
         *,
         source: str | None = None,
         actor: dict | None = None,
+        reason: str | None = None,
+        context: dict | None = None,
     ) -> dict:
-        """Deterministically replace the projection from active normalized evidence."""
+        """Explicitly replace the derived projection after a read-only preflight."""
 
     def validate_graph_projection(self) -> dict:
         """Compare the current projection with normalized evidence."""

@@ -182,9 +182,15 @@ class GlobalIdentityGraphService:
         *,
         source: str | None = None,
         actor: dict | None = None,
+        reason: str | None = None,
+        context: dict | None = None,
     ) -> dict:
         return self.store.rebuild_graph_projection(
-            operation_id, source=source, actor=actor,
+            operation_id,
+            source=source,
+            actor=actor,
+            reason=reason,
+            context=context,
         )
 
     def validate_projection(self) -> dict:

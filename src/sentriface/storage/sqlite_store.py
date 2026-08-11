@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Callable
 
 from sentriface.backup_service import BackupError, BackupService
+from sentriface.errors import (
+    GraphProjectionPostcheckError,
+    GraphProjectionRebuildRefused,
+)
 from sentriface.models import (
     DetectedFace,
     Embedding,
@@ -151,7 +155,7 @@ class SQLiteIdentityStore:
             if current_version == SCHEMA_VERSION:
                 conn.execute("BEGIN IMMEDIATE")
                 try:
-                    _validate_and_repair_current_domain_state(conn)
+                    _validate_current_domain_state(conn)
                     conn.commit()
                 except Exception:
                     conn.rollback()
@@ -3397,34 +3401,227 @@ class SQLiteIdentityStore:
         *,
         source: str | None = None,
         actor: dict | None = None,
+        reason: str | None = None,
+        context: dict | None = None,
     ) -> dict:
+        """Explicit P11-B recovery command for the derived graph projection only."""
+        normalized_operation_id = str(operation_id).strip()
+        if not normalized_operation_id:
+            raise ValueError("Operation ID is required")
         with self._connect() as conn:
             existing_result = _existing_committed_operation_result(
-                conn, operation_id, "graph.projection.rebuild",
+                conn, normalized_operation_id, "graph.projection.rebuild",
             )
             if existing_result is not None:
                 return existing_result
-            _begin_journal_operation(
-                conn,
-                "graph.projection.rebuild",
-                operation_id=operation_id,
+
+        # Import locally to keep the read-only P11-A module independent from store startup.
+        from sentriface.integrity import ReadOnlyIntegrityChecker
+
+        preflight = ReadOnlyIntegrityChecker(
+            self.db_path, database_key=self.database_key,
+        ).run()
+        projection_findings = tuple(
+            item for item in preflight.findings
+            if item.invariant_id == "P11-GRAPH-001"
+        )
+        blocking_findings = tuple(
+            item for item in preflight.findings
+            if item.invariant_id != "P11-GRAPH-001"
+            and item.severity.value in {"CRITICAL", "ERROR"}
+        )
+        preflight_status = (
+            "BLOCKED"
+            if blocking_findings or preflight.findings_truncated
+            else "PROJECTION_DRIFT"
+            if projection_findings
+            else "PASS"
+        )
+        preflight_summary = {
+            "status": preflight_status,
+            "finding_count": len(preflight.findings),
+            "projection_finding_count": len(projection_findings),
+            "blocking_finding_count": len(blocking_findings),
+            "blocking_invariant_ids": sorted({
+                item.invariant_id for item in blocking_findings
+            }),
+            "findings_truncated": preflight.findings_truncated,
+        }
+        if preflight_status == "BLOCKED":
+            self._record_graph_rebuild_attempt_failed(
+                normalized_operation_id,
                 actor=actor,
-                source=_optional_text(source) or "global-graph-service",
-                affected_entities=[{"entity_type": "global_graph", "entity_id": "global"}],
+                source=source,
+                context=context,
+                details={
+                    "reason": _optional_text(reason),
+                    "preflight": preflight_summary,
+                    "refused": True,
+                    "transaction_rolled_back": True,
+                },
             )
-            _replace_graph_projection(conn)
-            validation = _validate_graph_projection(conn)
-            if not validation["valid"]:
-                raise RuntimeError(
-                    "Graph projection validation failed: " + "; ".join(validation["errors"])
+            raise GraphProjectionRebuildRefused(
+                normalized_operation_id,
+                preflight,
+                "Graph projection rebuild refused because authoritative integrity "
+                "findings prevent deterministic interpretation",
+            )
+
+        failure_details: dict = {
+            "reason": _optional_text(reason),
+            "preflight": preflight_summary,
+            "transaction_rolled_back": True,
+        }
+        try:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                existing_result = _existing_committed_operation_result(
+                    conn, normalized_operation_id, "graph.projection.rebuild",
                 )
-            result = {
-                "rebuilt": True,
-                "connection_count": validation["actual_connection_count"],
-                "evidence_count": validation["active_evidence_count"],
-            }
-            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
-            return result
+                if existing_result is not None:
+                    return existing_result
+                revision_before = _graph_revision_token(conn)
+                failure_details["revision_before"] = revision_before
+                expected, authority_errors, active_evidence_count = (
+                    _expected_graph_connections(conn)
+                )
+                if authority_errors:
+                    failure_details.update({
+                        "revision_before": revision_before,
+                        "authority_error_count": len(authority_errors),
+                        "authority_errors": authority_errors[:20],
+                    })
+                    raise RuntimeError(
+                        "Authoritative relationship evidence became invalid after "
+                        "preflight: " + "; ".join(authority_errors[:20])
+                    )
+                actual_rows = conn.execute(
+                    """
+                    SELECT * FROM graph_connections
+                    ORDER BY source_person_id, target_person_id,
+                             relationship_type, directionality
+                    """
+                ).fetchall()
+                expected_signatures = {
+                    _graph_connection_signature(item) for item in expected
+                }
+                actual_signatures = {
+                    _graph_connection_row_signature(item) for item in actual_rows
+                }
+                changed = expected_signatures != actual_signatures
+                added_count = len(expected_signatures - actual_signatures)
+                removed_count = len(actual_signatures - expected_signatures)
+                failure_details.update({
+                    "active_evidence_count": active_evidence_count,
+                    "expected_edge_count": len(expected),
+                    "stored_edge_count_before": len(actual_rows),
+                    "added_count": added_count,
+                    "removed_count": removed_count,
+                })
+                operation = _begin_journal_operation(
+                    conn,
+                    "graph.projection.rebuild",
+                    operation_id=normalized_operation_id,
+                    actor=actor,
+                    source=_optional_text(source) or "global-graph-service",
+                    context=context,
+                    affected_entities=[{
+                        "entity_type": "graph_projection",
+                        "entity_id": "graph_connections",
+                    }],
+                    details={
+                        "reason": _optional_text(reason),
+                        "preflight": preflight_summary,
+                        "revision_before": revision_before,
+                    },
+                )
+                if changed:
+                    _write_graph_projection(conn, expected)
+                validation = _validate_graph_projection(conn)
+                if not validation["valid"]:
+                    raise RuntimeError(
+                        "Graph projection validation failed: "
+                        + "; ".join(validation["errors"][:20])
+                    )
+                if changed:
+                    _advance_graph_revision(conn)
+                revision_after = _graph_revision_token(conn)
+                result = {
+                    "operation_id": normalized_operation_id,
+                    "started_at": operation["created_at"],
+                    "changed": changed,
+                    "revision_before": revision_before,
+                    "revision_after": revision_after,
+                    "active_evidence_count": active_evidence_count,
+                    "expected_edge_count": len(expected),
+                    "stored_edge_count_before": len(actual_rows),
+                    "stored_edge_count_after": validation["actual_connection_count"],
+                    "added_count": added_count,
+                    "removed_count": removed_count,
+                    "preflight_status": preflight_status,
+                    "postcheck_status": "PASS",
+                }
+                _transition_journal_operation(
+                    conn, normalized_operation_id, "COMMITTED", result,
+                )
+        except Exception as exc:
+            failure_details.update({
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:500],
+            })
+            self._record_graph_rebuild_attempt_failed(
+                normalized_operation_id,
+                actor=actor,
+                source=source,
+                context=context,
+                details=failure_details,
+            )
+            raise
+
+        postcheck = ReadOnlyIntegrityChecker(
+            self.db_path, database_key=self.database_key,
+        ).run()
+        if postcheck.status != "PASS":
+            failed_result = {**result, "postcheck_status": postcheck.status}
+            raise GraphProjectionPostcheckError(failed_result, postcheck)
+        return result
+
+    def _record_graph_rebuild_attempt_failed(
+        self,
+        operation_id: str,
+        *,
+        actor: dict | None,
+        source: str | None,
+        context: dict | None,
+        details: dict,
+    ) -> dict:
+        """Record failure only after a rebuild transaction has rolled back."""
+        with self._connect() as conn:
+            existing = _get_journal_operation(conn, operation_id)
+            if existing is not None:
+                if existing["operation_type"] != "graph.projection.rebuild":
+                    raise KeyError(f"Operation ID already exists: {operation_id}")
+                if existing["status"] == "FAILED":
+                    return existing
+                if existing["status"] != "STARTED":
+                    raise ValueError("Only a started graph rebuild can fail")
+            else:
+                _begin_journal_operation(
+                    conn,
+                    "graph.projection.rebuild",
+                    operation_id=operation_id,
+                    actor=actor,
+                    source=_optional_text(source) or "global-graph-service",
+                    context=context,
+                    affected_entities=[{
+                        "entity_type": "graph_projection",
+                        "entity_id": "graph_connections",
+                    }],
+                    details={"transaction_rolled_back": True},
+                )
+            return _transition_journal_operation(
+                conn, operation_id, "FAILED", details,
+            )
 
     def validate_graph_projection(self) -> dict:
         with self._connect() as conn:
@@ -7335,6 +7532,20 @@ def _migrate_26_to_27(conn: sqlite3.Connection) -> None:
         PRAGMA user_version = 27;
         """,
     )
+    # v27 introduced graph_state. Normalize a drifting pre-P11 projection once
+    # inside the schema-upgrade transaction; do not churn an already-equal graph.
+    expected, errors, _ = _expected_graph_connections(conn)
+    if errors:
+        raise RuntimeError(
+            "Relationship evidence validation failed: " + "; ".join(errors)
+        )
+    actual_rows = conn.execute("SELECT * FROM graph_connections").fetchall()
+    if (
+        {_graph_connection_signature(item) for item in expected}
+        != {_graph_connection_row_signature(item) for item in actual_rows}
+    ):
+        _write_graph_projection(conn, expected)
+        _advance_graph_revision(conn)
 
 
 def _migrate_27_to_28(conn: sqlite3.Connection) -> None:
@@ -7469,14 +7680,14 @@ def _apply_schema_migrations(conn: sqlite3.Connection, current_version: int) -> 
                     f"v{migration.to_version} reported schema v{migrated_version}."
                 )
             version = migrated_version
-        _validate_and_repair_current_domain_state(conn)
+        _validate_current_domain_state(conn)
         conn.commit()
     except Exception:
         conn.rollback()
         raise
 
 
-def _validate_and_repair_current_domain_state(conn: sqlite3.Connection) -> None:
+def _validate_current_domain_state(conn: sqlite3.Connection) -> None:
     foreign_key_errors = conn.execute("PRAGMA foreign_key_check").fetchall()
     authoritative_foreign_key_errors = [
         row for row in foreign_key_errors if str(row[0]) != "graph_connections"
@@ -7540,13 +7751,11 @@ def _validate_and_repair_current_domain_state(conn: sqlite3.Connection) -> None:
         )
     validation = _validate_graph_projection(conn)
     if not validation["valid"]:
-        _replace_graph_projection(conn)
-        repaired = _validate_graph_projection(conn)
-        if not repaired["valid"]:
-            raise SchemaMigrationError(
-                "Database graph projection repair failed: "
-                + "; ".join(repaired["errors"])
-            )
+        raise SchemaMigrationError(
+            "Database graph projection validation failed; run the explicit P11-B "
+            "graph projection rebuild after reviewing integrity findings: "
+            + "; ".join(validation["errors"])
+        )
 
 
 def _insert_identified_person_record(
@@ -8204,55 +8413,85 @@ def _expected_graph_connections(
 ) -> tuple[list[GraphConnection], list[str], int]:
     errors: list[str] = []
     aggregates: dict[tuple[str, str, str, str], dict] = {}
-    rows = conn.execute(
-        "SELECT * FROM relationship_evidence ORDER BY created_at, evidence_id"
-    ).fetchall()
+    resolve_canonical = _batch_canonical_resolver(conn)
+    co_observation_ids = {
+        str(row[0]) for row in conn.execute(
+            """
+            SELECT DISTINCT source_entity_id
+            FROM relationship_evidence
+            WHERE evidence_type = 'CO_OBSERVED'
+            """
+        )
+    }
+    observation_statuses = {
+        str(row["observation_id"]): str(row["status"])
+        for row in conn.execute(
+            "SELECT observation_id, status FROM observations ORDER BY observation_id"
+        )
+        if str(row["observation_id"]) in co_observation_ids
+    }
+    raw_participants: dict[str, set[str]] = {
+        observation_id: set() for observation_id in co_observation_ids
+    }
+    for row in conn.execute(
+        """
+        SELECT observation_id, person_id
+        FROM observation_participants
+        ORDER BY observation_id, person_id
+        """
+    ):
+        observation_id = str(row["observation_id"])
+        if observation_id in raw_participants:
+            raw_participants[observation_id].add(str(row["person_id"]))
+    effective_participants, participant_errors = (
+        _batch_effective_observation_person_ids(
+            conn, co_observation_ids, raw_participants, resolve_canonical,
+        )
+    )
+    errors.extend(participant_errors)
+    note_mentions = {
+        str(row["mention_id"]): row
+        for row in conn.execute(
+            """
+            SELECT m.mention_id, m.referenced_person_id, m.active,
+                   n.owner_person_id, n.status
+            FROM note_mentions m
+            JOIN notes n ON n.note_id = m.note_id
+            ORDER BY m.mention_id
+            """
+        )
+    }
     active_evidence_count = 0
-    for row in rows:
+    for row in conn.execute(
+        "SELECT * FROM relationship_evidence ORDER BY created_at, evidence_id"
+    ):
         evidence_id = str(row["evidence_id"])
         if row["evidence_type"] == "CO_OBSERVED":
-            observation = conn.execute(
-                "SELECT status FROM observations WHERE observation_id = ?",
-                (row["source_entity_id"],),
-            ).fetchone()
-            if observation is None:
+            observation_id = str(row["source_entity_id"])
+            observation_status = observation_statuses.get(observation_id)
+            if observation_status is None:
                 errors.append(f"Evidence {evidence_id} has a missing observation source")
-            elif observation["status"] != "FINALIZED":
+            elif observation_status != "FINALIZED":
                 errors.append(f"Evidence {evidence_id} references a non-finalized observation")
-            raw_participant_ids = {
-                str(item["person_id"])
-                for item in conn.execute(
-                    "SELECT person_id FROM observation_participants WHERE observation_id = ?",
-                    (row["source_entity_id"],),
-                ).fetchall()
-            }
-            effective_participant_ids = set(_effective_observation_person_ids(
-                conn, str(row["source_entity_id"]),
-            ))
+            raw_participant_ids = raw_participants.get(observation_id, set())
+            effective_participant_ids = effective_participants.get(observation_id, set())
             endpoints_valid = True
             for endpoint in (row["source_person_id"], row["target_person_id"]):
-                if endpoint in raw_participant_ids:
+                endpoint_id = str(endpoint)
+                if endpoint_id in raw_participant_ids:
                     continue
                 try:
-                    endpoint = _resolve_canonical_person_id(conn, str(endpoint))
+                    effective_endpoint = resolve_canonical(endpoint_id)
                 except (KeyError, RuntimeError, ValueError):
                     endpoints_valid = False
                     break
-                if endpoint not in effective_participant_ids:
+                if effective_endpoint not in effective_participant_ids:
                     endpoints_valid = False
                     break
             if not endpoints_valid:
                 errors.append(f"Evidence {evidence_id} endpoints are not observation participants")
         elif row["evidence_type"] == "NOTE_REFERENCE":
-            mention = conn.execute(
-                """
-                SELECT m.referenced_person_id, m.active, n.owner_person_id, n.status
-                FROM note_mentions m
-                JOIN notes n ON n.note_id = m.note_id
-                WHERE m.mention_id = ?
-                """,
-                (row["source_entity_id"],),
-            ).fetchone()
+            mention = note_mentions.get(str(row["source_entity_id"]))
             if mention is None:
                 errors.append(f"Evidence {evidence_id} has a missing note mention source")
             else:
@@ -8268,8 +8507,8 @@ def _expected_graph_connections(
             continue
         active_evidence_count += 1
         try:
-            source_person_id = _resolve_canonical_person_id(conn, row["source_person_id"])
-            target_person_id = _resolve_canonical_person_id(conn, row["target_person_id"])
+            source_person_id = resolve_canonical(str(row["source_person_id"]))
+            target_person_id = resolve_canonical(str(row["target_person_id"]))
         except (KeyError, RuntimeError, ValueError) as exc:
             errors.append(f"Evidence {evidence_id} has invalid canonical endpoints: {exc}")
             continue
@@ -8306,11 +8545,193 @@ def _expected_graph_connections(
     return connections, errors, active_evidence_count
 
 
+def _batch_canonical_resolver(conn: sqlite3.Connection) -> Callable[[str], str]:
+    people = {
+        str(row["person_id"]): (
+            str(row["lifecycle_status"]),
+            str(row["canonical_person_id"]) if row["canonical_person_id"] else None,
+        )
+        for row in conn.execute(
+            """
+            SELECT person_id, lifecycle_status, canonical_person_id
+            FROM persons ORDER BY person_id
+            """
+        )
+    }
+    cache: dict[str, str] = {}
+
+    def resolve(person_id: str) -> str:
+        normalized_id = str(person_id).strip()
+        if not normalized_id:
+            raise ValueError("Person ID is required")
+        cached = cache.get(normalized_id)
+        if cached is not None:
+            return cached
+        current_id = normalized_id
+        path: list[str] = []
+        visited: set[str] = set()
+        while True:
+            if current_id in visited:
+                raise RuntimeError("Canonical identity cycle detected")
+            visited.add(current_id)
+            path.append(current_id)
+            person = people.get(current_id)
+            if person is None:
+                if len(path) == 1:
+                    raise KeyError(f"Unknown person: {current_id}")
+                raise RuntimeError(
+                    f"Canonical identity target does not exist: {current_id}"
+                )
+            lifecycle_status, target_id = person
+            if lifecycle_status != "MERGED":
+                if target_id is not None:
+                    raise RuntimeError(
+                        "Non-merged identity has an invalid canonical mapping"
+                    )
+                for path_id in path:
+                    cache[path_id] = current_id
+                return current_id
+            if target_id is None:
+                raise RuntimeError("Merged identity has no canonical target")
+            current_id = target_id
+
+    return resolve
+
+
+def _batch_effective_observation_person_ids(
+    conn: sqlite3.Connection,
+    observation_ids: set[str],
+    raw_participants: dict[str, set[str]],
+    resolve_canonical: Callable[[str], str],
+) -> tuple[dict[str, set[str]], list[str]]:
+    if not observation_ids:
+        return {}, []
+    assignment_current: dict[str, str] = {}
+    assignment_originals: dict[str, set[str]] = {
+        observation_id: set() for observation_id in observation_ids
+    }
+    assignment_observation: dict[str, str] = {}
+    for row in conn.execute(
+        """
+        SELECT assignment_id, observation_id, original_person_id
+        FROM observation_face_assignments
+        ORDER BY observation_id, assignment_id
+        """
+    ):
+        observation_id = str(row["observation_id"])
+        if observation_id not in observation_ids:
+            continue
+        assignment_id = str(row["assignment_id"])
+        original_person_id = str(row["original_person_id"])
+        assignment_observation[assignment_id] = observation_id
+        assignment_current[assignment_id] = original_person_id
+        assignment_originals[observation_id].add(original_person_id)
+    observation_corrections: dict[str, list[tuple[str, str]]] = {
+        observation_id: [] for observation_id in observation_ids
+    }
+    for row in conn.execute(
+        """
+        SELECT correction_type, observation_id, face_assignment_id,
+               from_person_id, to_person_id
+        FROM identity_corrections
+        ORDER BY created_at, rowid, correction_id
+        """
+    ):
+        correction_type = str(row["correction_type"])
+        if correction_type == "FACE_ASSIGNMENT" and row["face_assignment_id"]:
+            assignment_id = str(row["face_assignment_id"])
+            if assignment_id in assignment_current:
+                assignment_current[assignment_id] = str(row["to_person_id"])
+        elif correction_type == "OBSERVATION_IDENTITY" and row["observation_id"]:
+            observation_id = str(row["observation_id"])
+            if observation_id in observation_corrections:
+                observation_corrections[observation_id].append((
+                    str(row["from_person_id"]), str(row["to_person_id"]),
+                ))
+    assignment_effective: dict[str, set[str]] = {
+        observation_id: set() for observation_id in observation_ids
+    }
+    for assignment_id, person_id in assignment_current.items():
+        assignment_effective[assignment_observation[assignment_id]].add(person_id)
+    result: dict[str, set[str]] = {}
+    errors: list[str] = []
+    for observation_id in sorted(observation_ids):
+        current = (
+            set(raw_participants.get(observation_id, set()))
+            - assignment_originals[observation_id]
+        )
+        current.update(assignment_effective[observation_id])
+        for from_person_id, to_person_id in observation_corrections[observation_id]:
+            if from_person_id not in current:
+                errors.append(
+                    f"Observation {observation_id} correction source "
+                    f"{from_person_id} is not a current participant"
+                )
+                continue
+            current.remove(from_person_id)
+            current.add(to_person_id)
+        effective: set[str] = set()
+        for person_id in sorted(current):
+            try:
+                effective.add(resolve_canonical(person_id))
+            except (KeyError, RuntimeError, ValueError) as exc:
+                errors.append(
+                    f"Observation {observation_id} participant {person_id} "
+                    f"cannot resolve: {exc}"
+                )
+        result[observation_id] = effective
+    return result, errors
+
+
 def _replace_graph_projection(conn: sqlite3.Connection) -> None:
     connections, errors, _ = _expected_graph_connections(conn)
     if errors:
         raise RuntimeError("Relationship evidence validation failed: " + "; ".join(errors))
+    _write_graph_projection(conn, connections)
+    _advance_graph_revision(conn)
+
+
+def _graph_connection_signature(item: GraphConnection) -> tuple:
+    return (
+        item.source_person_id,
+        item.target_person_id,
+        item.relationship_type,
+        item.directionality,
+        item.evidence_count,
+        tuple(sorted(item.evidence_types)),
+        item.last_evidence_at,
+    )
+
+
+def _graph_connection_row_signature(row: sqlite3.Row) -> tuple:
+    try:
+        evidence_types_value = json.loads(row["evidence_types"])
+        if not isinstance(evidence_types_value, list):
+            raise ValueError("evidence_types must be a JSON list")
+        evidence_types = tuple(sorted(str(item) for item in evidence_types_value))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        evidence_types = ("<invalid-json>", str(row["evidence_types"]))
+    return (
+        str(row["source_person_id"]),
+        str(row["target_person_id"]),
+        str(row["relationship_type"]),
+        str(row["directionality"]),
+        row["evidence_count"],
+        evidence_types,
+        str(row["last_evidence_at"]),
+    )
+
+
+def _write_graph_projection(
+    conn: sqlite3.Connection, connections: list[GraphConnection],
+) -> None:
     conn.execute("DELETE FROM graph_connections")
+    _insert_graph_projection_rows(conn, connections)
+
+
+def _insert_graph_projection_rows(
+    conn: sqlite3.Connection, connections: list[GraphConnection],
+) -> None:
     conn.executemany(
         """
         INSERT INTO graph_connections(
@@ -8331,7 +8752,6 @@ def _replace_graph_projection(conn: sqlite3.Connection) -> None:
             for item in connections
         ],
     )
-    _advance_graph_revision(conn)
 
 
 def _graph_revision_token(conn: sqlite3.Connection) -> str:

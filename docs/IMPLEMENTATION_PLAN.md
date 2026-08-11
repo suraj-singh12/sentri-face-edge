@@ -2,7 +2,7 @@
 
 Implement in order. Each phase must preserve offline operation, use additive migrations where possible, keep important writes transactional and journaled, and add upgrade/failure tests before moving on.
 
-Status after the 2026-08-11 P11-A gate: P0 through P10 are complete and frozen. P11-A establishes the fixed integrity authority/invariant model and explicit read-only checker. P11-B through P11-E remain future work; P11 as a whole is not complete.
+Status after the 2026-08-11 P11-B gate: P0 through P10 are complete and frozen. P11-A establishes the fixed integrity authority/invariant model and explicit read-only checker. P11-B adds the explicit deterministic, preflight-gated, atomic and journaled `relationship_evidence → graph_connections` rebuild without authoritative writes or revision churn on a no-op. P11-C through P11-E remain future work; P11 as a whole is not complete.
 
 ## P0 Database migration/version foundation — Complete
 
@@ -90,9 +90,11 @@ P10-F1 adds World as a persistent first-class top-level view and renders only fr
 
 ## P11 Integrity / rebuild / repair / revert — In progress
 
-P11-A is complete. `docs/P11_INTEGRITY_MODEL.md` records the verified authority map, fixed invariant registry, restrained severity/future-handling model, and explicit `ReadOnlyIntegrityChecker`. It checks schema/SQLite/FKs, identity and canonical chains, corrections, observations/media/reviews, evidence and graph projection equivalence, notes/mentions, merge manifests/inverse structure, and journal transitions/results from one query-only snapshot. It creates no journal row, performs no repair/rebuild/revert, and adds no UI, background work, schema, or dependency.
+P11-A is complete. `docs/P11_INTEGRITY_MODEL.md` records the verified authority map, fixed invariant registry, restrained severity/future-handling model, and explicit `ReadOnlyIntegrityChecker`. It checks schema/SQLite/FKs, identity and canonical chains, corrections, observations/media/reviews, evidence and graph projection equivalence, notes/mentions, merge manifests/inverse structure, and journal transitions/results from one query-only snapshot. It creates no journal row and performs no mutation.
 
-Remaining order: P11-B deterministic derived-state rebuild; P11-C journal-aware structured repair; P11-D guarded operation revert; P11-E integrity/recovery UI and final acceptance. Exit for all of P11 remains: corruption/drift is reported without inference, rebuild is idempotent, supported repair/revert is guarded and audited, and authority is never reconstructed by guessing.
+P11-B is complete. The existing graph service command now performs explicit recovery only: full P11-A preflight; refusal on authoritative ambiguity; one `BEGIN IMMEDIATE` snapshot; shared deterministic projection calculation; no-op comparison; complete derived replacement and in-transaction validation; one revision advance only on change; bounded immutable journal result; and post-commit P11-A verification. Current-schema startup no longer silently repairs projection drift. There is no schema, dependency, HTTP/API, frontend, worker, polling, vector-index, structured-repair, or revert change.
+
+Remaining order: P11-C journal-aware structured repair; P11-D guarded operation revert; P11-E integrity/recovery UI and final acceptance. Exit for all of P11 remains: corruption/drift is reported without inference, rebuild is idempotent, supported repair/revert is guarded and audited, and authority is never reconstructed by guessing.
 
 ## P12 Backup/Restore — Future
 

@@ -1,6 +1,6 @@
-# P11 integrity authority model and read-only checker
+# P11 integrity authority model, checker, and graph rebuild
 
-Status: **P11-A complete; P11 as a whole remains incomplete.** This document fixes the P11 invariant IDs and authority boundary used by the first read-only checker. It does not authorize repair, rebuild, rollback, revert, merge reversal, observation rewriting, or P12 backup/restore work.
+Status: **P11-A and P11-B complete; P11 as a whole remains incomplete.** This document fixes the P11 invariant IDs and authority boundary, records the read-only checker, and defines the explicit deterministic `graph_connections` rebuild. It does not authorize general repair, correction/merge/note/observation/journal repair, operation revert, vector-index rebuild, recovery UI, or P12 backup/restore work.
 
 ## State-authority map
 
@@ -82,6 +82,22 @@ Set-based joins cover foreign keys, finalization, review state, evidence sources
 
 Expected graph state is calculated without mutation. Active evidence is canonically resolved, undirected endpoints are ordered, collapsed self-links are suppressed, and remaining rows group by endpoints/type/direction with exact count, evidence-type set, and latest time. Missing, extra, and unequal stored rows are separately reported.
 
+## P11-B explicit graph projection rebuild
+
+`GlobalIdentityGraphService.rebuild_projection()` is the explicit local service boundary for exceptional graph recovery. It accepts an idempotency/operation ID plus bounded actor, source, reason, and context metadata. It has no HTTP/UI route, startup hook, scheduler, worker, polling loop, or automatic invocation from the checker. Normal domain commands continue to maintain the projection transactionally.
+
+The authoritative input is active and retired `relationship_evidence` interpreted with existing persons/corrections/canonical state. The only domain projection target is `graph_connections`; `graph_state` and the new immutable `graph.projection.rebuild` journal operation are operational bookkeeping. The shared `_expected_graph_connections` function is used by normal projection maintenance, P11-A comparison, validation, and P11-B. It streams evidence after set-based loads of people, observations/participants, corrections/assignments, and note mentions. Its semantics are active-evidence filtering, correction-before-canonical interpretation, canonical collapse, self-edge suppression, directed preservation, undirected normalization, and exact count/type/latest-time aggregation for `CO_OBSERVED`, `NOTE_REFERENCE`, and `MANUAL_ASSOCIATION`.
+
+Every rebuild first runs the full P11-A checker. A report containing only `P11-GRAPH-001` errors is classified `PROJECTION_DRIFT` and may proceed. Any other `ERROR`/`CRITICAL` finding, or a truncated report, is `BLOCKED`: the graph and revision are untouched, a bounded `FAILED` journal attempt records the refusal, and the caller receives `GraphProjectionRebuildRefused`. Authority is recomputed after `BEGIN IMMEDIATE`, so a change between preflight and the write snapshot also aborts rather than being guessed.
+
+Inside one SQLite write transaction, P11-B computes expected and stored signatures. A true equality is a committed journaled no-op: no graph rows are replaced and the opaque revision is unchanged. Drift uses deterministic delete-plus-insert of the complete expected projection, validates exact equality before advancing revision, advances once only when semantic projection changed, and commits the journal result atomically. The bounded result records revision before/after, active evidence, expected/stored edge counts, added/removed signature counts, preflight status, and postcheck status; it never stores edge payloads. Retrying the same committed operation ID returns the same result. Failed insertion, validation, or revision advancement rolls back the old projection and revision, then records the existing `STARTED → FAILED` lifecycle in a separate transaction.
+
+After commit, P11-A runs again. Its successful result proves `P11-GRAPH-001` and all other invariants pass at that new read snapshot. An unexpected post-commit finding raises `GraphProjectionPostcheckError` prominently and never starts another repair.
+
+Current-schema startup is validation-only for graph drift. It reports/refuses an inconsistent projection and directs the operator to explicit P11-B; it does not replace rows or advance revision. The supported schema-v26-to-v27 upgrade retains a one-time transactional derived-projection normalization because v27 introduced `graph_state`; this is migration backfill, not current-schema automatic repair.
+
+Tests directly corrupt disposable databases to cover missing/extra/wrong-direction/wrong-support/stale-retired/self rows, all evidence directionality families, correction then merge, merge then correction, no-op retries, authoritative refusal, and failures after deletion/before insertion, validation, and revision advancement. Snapshots prove persons, embeddings/enrollment history, observations/media/participants/assignments, corrections, evidence, notes/revisions/mentions, and merge manifests/items/conflicts are unchanged; pre-existing journal rows/history are unchanged and only the rebuild operation is appended. A 400-evidence fixture produces 400 expected edges using eight or fewer projection read statements, demonstrating fixed query shape without N+1 behavior or a new cache/index.
+
 ## Explicit limits and non-ambiguities
 
 - Raw historical IDs, archived/deleted persons, merged sources, transitive merge chains, retired evidence, and canonically collapsed self-evidence are valid.
@@ -96,8 +112,7 @@ These are architectural boundaries, not P11-A blockers. They constrain later rep
 ## Remaining P11 sequence
 
 1. **P11-A — Read-only integrity checker:** complete.
-2. **P11-B — Deterministic derived-state rebuild:** future; graph projection/revision transaction only, guarded by pre/post integrity reports and journal intent. No evidence rewrite.
+2. **P11-B — Deterministic graph projection rebuild:** complete; explicit preflight-gated, atomic, journaled, revision-aware replacement with no authority rewrite.
 3. **P11-C — Journal-aware structured repair:** future; only explicit non-guessing domain repairs.
 4. **P11-D — Revert execution:** future; operation-specific preconditions/inverse data and atomic journaled execution.
 5. **P11-E — Integrity/recovery UI and acceptance:** future; explicit invocation and factual reports, no polling/background scan.
-

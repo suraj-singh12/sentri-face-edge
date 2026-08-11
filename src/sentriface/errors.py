@@ -28,3 +28,23 @@ class QueueCancellationError(SentriFaceError):
         super().__init__("Queue processing was cancelled")
         self.session_id = session_id
         self.phase = phase
+
+
+class GraphProjectionRebuildRefused(SentriFaceError):
+    """Raised when authoritative integrity findings make rebuild unsafe."""
+
+    def __init__(self, operation_id: str, report: object, message: str) -> None:
+        super().__init__(message)
+        self.operation_id = operation_id
+        self.report = report
+
+
+class GraphProjectionPostcheckError(SentriFaceError):
+    """Raised when a committed rebuild fails its post-commit read-only check."""
+
+    def __init__(self, result: dict, report: object) -> None:
+        super().__init__(
+            "Graph projection rebuild committed, but the post-commit integrity check failed"
+        )
+        self.result = result
+        self.report = report
