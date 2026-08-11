@@ -326,6 +326,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onRefreshEvidence={guarded(actions.refreshWorldEvidence)}
               onEvidenceCollection={guarded(actions.selectWorldEvidenceCollection)}
               onNextEvidencePage={guarded(actions.nextWorldEvidencePage)}
+              onValidateMediaOrigin={actions.validateWorldMediaOrigin}
             />
           </Tabs.Panel>
 

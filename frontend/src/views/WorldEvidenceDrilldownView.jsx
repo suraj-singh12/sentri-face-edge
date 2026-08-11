@@ -30,18 +30,22 @@ import {
 import { SafeImage } from "../components/Shared.jsx";
 import { WorldMediaPreview } from "../components/WorldMediaPreview.jsx";
 import { mediaUrl } from "../utils.js";
+import { worldEvidenceMediaRequestState } from "../utils/world.js";
 
 const EVIDENCE_COLLECTIONS = [
   { label: "Evidence detail", value: "EVIDENCE" },
   { label: "Supporting media", value: "MEDIA" },
 ];
 
-export function WorldEvidenceDrilldownView({ evidence, onBack, onRefresh, onCollection, onNextPage }) {
+export function WorldEvidenceDrilldownView({ evidence, onBack, onRefresh, onCollection, onNextPage, onValidateMediaOrigin }) {
   const collectionState = evidence.collections[evidence.collection];
   const data = collectionState?.data;
   const detail = evidence.detail || data?.evidence?.[0] || null;
   const page = data?.pagination?.[evidence.collection] || null;
   const [previewMedia, setPreviewMedia] = useState(null);
+  const closeMediaPreview = async () => {
+    if (await onValidateMediaOrigin()) setPreviewMedia(null);
+  };
 
   if (!detail && collectionState?.loading) {
     return <Stack gap="sm" className="world-evidence-shell"><Button variant="subtle" size="xs" leftSection={<IconArrowLeft size={15} />} onClick={onBack} className="world-evidence-back">Back to finalized event</Button><Stack align="center" justify="center" className="world-evidence-loading"><Loader color="teal" /><Text size="sm" c="dimmed">Loading authoritative evidence and provenance…</Text></Stack></Stack>;
@@ -61,10 +65,10 @@ export function WorldEvidenceDrilldownView({ evidence, onBack, onRefresh, onColl
       {evidence.collection === "EVIDENCE" ? (
         <EvidenceDetail evidence={detail} binding={evidence.binding} onMedia={() => onCollection("MEDIA")} />
       ) : (
-        <SupportingMedia evidence={detail} state={collectionState} data={data} page={page} onPreview={setPreviewMedia} />
+        <SupportingMedia evidence={detail} state={collectionState} data={data} page={page} onPreview={setPreviewMedia} onRetry={onRefresh} />
       )}
       {page?.has_more ? <Group justify="center"><Button variant="default" size="xs" rightSection={<IconArrowRight size={14} />} onClick={onNextPage} disabled={collectionState?.loading || !page.next_cursor}>Next authoritative page</Button></Group> : null}
-      <WorldMediaPreview item={previewMedia} opened={Boolean(previewMedia)} onClose={() => setPreviewMedia(null)} origin={{ type: "EVIDENCE", evidenceId: detail.evidence_id, eventId: previewMedia?.supporting_event_id }} />
+      <WorldMediaPreview item={previewMedia} opened={Boolean(previewMedia)} onClose={closeMediaPreview} origin={{ type: "EVIDENCE", evidenceId: detail.evidence_id, eventId: previewMedia?.supporting_event_id }} />
     </Stack>
   );
 }
@@ -132,11 +136,19 @@ function MediaStatus({ summary, onMedia }) {
   return <Stack gap="xs"><Text fw={800}>Supporting media available</Text><Text size="xs" c="dimmed">{summary.total_count} authoritative media reference{summary.total_count === 1 ? "" : "s"}. The collection is not requested until opened.</Text><Button size="xs" variant="light" leftSection={<IconPhoto size={14} />} onClick={onMedia}>Request supporting media</Button></Stack>;
 }
 
-function SupportingMedia({ evidence, state, data, page, onPreview }) {
-  if (state?.loading && !data) return <Paper withBorder radius="md" className="world-evidence-media-collection"><Stack align="center" justify="center" className="world-evidence-media-loading"><Loader size={20} /><Text size="xs" c="dimmed">Loading authoritative supporting media…</Text></Stack></Paper>;
-  if (evidence.media_summary.availability === "UNAVAILABLE") return <Paper withBorder radius="md" p="sm"><Stack gap="xs"><Text fw={800}>No supporting media for this evidence type</Text><Text size="xs" c="dimmed">The backend explicitly marks media unavailable: {humanize(evidence.media_summary.reason)}.</Text><Badge size="xs" variant="outline" color="gray" w="fit-content">REQUESTED · UNAVAILABLE</Badge></Stack></Paper>;
-  const media = data?.media || [];
-  if (!media.length) return <Paper withBorder radius="md" p="sm"><Stack gap={2} align="center" ta="center"><Text size="sm" fw={700}>No supporting media returned</Text><Text size="xs" c="dimmed">The media collection was requested and is empty: {page?.returned_count ?? 0} of {page?.total_count ?? evidence.media_summary.total_count}.</Text></Stack></Paper>;
+function SupportingMedia({ evidence, state, data, page, onPreview, onRetry }) {
+  const requestState = worldEvidenceMediaRequestState({
+    availability: evidence.media_summary.availability,
+    data,
+    loading: state?.loading,
+    error: state?.error,
+  });
+  if (requestState === "EVIDENCE_MEDIA_NOT_REQUESTED") return <Paper withBorder radius="md" p="sm"><Stack gap="xs" align="center" ta="center"><Text size="sm" fw={700}>Supporting media not requested</Text><Text size="xs" c="dimmed">Open this collection to request authoritative media references.</Text></Stack></Paper>;
+  if (requestState === "EVIDENCE_MEDIA_LOADING") return <Paper withBorder radius="md" className="world-evidence-media-collection"><Stack align="center" justify="center" className="world-evidence-media-loading"><Loader size={20} /><Text size="xs" c="dimmed">Loading authoritative supporting media…</Text></Stack></Paper>;
+  if (requestState === "EVIDENCE_MEDIA_REQUEST_FAILED") return <Paper withBorder radius="md" p="sm"><Stack gap="xs" align="center" ta="center"><Text size="sm" fw={700}>Supporting media request failed</Text><Text size="xs" c="dimmed">No successful media page was returned. This is not an empty result.</Text><Button size="xs" variant="light" leftSection={<IconRefresh size={14} />} onClick={onRetry}>Retry supporting media</Button></Stack></Paper>;
+  if (requestState === "EVIDENCE_MEDIA_UNAVAILABLE") return <Paper withBorder radius="md" p="sm"><Stack gap="xs"><Text fw={800}>No supporting media for this evidence type</Text><Text size="xs" c="dimmed">The backend explicitly marks media unavailable: {humanize(evidence.media_summary.reason)}.</Text><Badge size="xs" variant="outline" color="gray" w="fit-content">REQUESTED · UNAVAILABLE</Badge></Stack></Paper>;
+  if (requestState === "EVIDENCE_MEDIA_EMPTY") return <Paper withBorder radius="md" p="sm"><Stack gap={2} align="center" ta="center"><Text size="sm" fw={700}>No supporting media returned</Text><Text size="xs" c="dimmed">The media collection was requested and is empty: {page.returned_count} of {page.total_count}.</Text></Stack></Paper>;
+  const media = data.media;
   return <Paper withBorder radius="md" className="world-evidence-media-collection">{state?.loading ? <Box className="world-loading-stripe"><Loader size={16} /><Text size="xs">Replacing media page…</Text></Box> : null}<ScrollArea.Autosize mah={570}><SimpleGrid cols={{ base: 2, sm: 3, lg: 4 }} spacing="xs" p="xs">{media.map((item) => <button key={item.media_id} type="button" className="world-evidence-media-card" onClick={() => onPreview(item)}><SafeImage src={item.media_reference ? mediaUrl(item.media_reference) : ""} alt="" className="world-evidence-media-thumb" fallback={<Stack align="center" gap={2}><ThemeIcon size={42} variant="light" color="gray"><IconPhoto size={21} /></ThemeIcon><Text size="10px" c="dimmed">Preview unavailable</Text></Stack>} /><span className="world-row-main"><Text component="span" size="xs" fw={800}>{shortId(item.media_id)}</Text><Text component="span" size="10px" c="dimmed">{formatDateTime(item.occurred_at)}</Text><Text component="span" size="10px">{item.source || "Source not supplied"}</Text><Text component="span" size="10px" c="dimmed">Event {shortId(item.supporting_event_id)}</Text></span></button>)}</SimpleGrid></ScrollArea.Autosize></Paper>;
 }
 

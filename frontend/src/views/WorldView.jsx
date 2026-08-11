@@ -36,7 +36,7 @@ import {
   IconWorld,
 } from "@tabler/icons-react";
 
-import { EMPTY_WORLD_FILTERS, worldPageFor } from "../utils/world.js";
+import { EMPTY_WORLD_FILTERS, worldPageFor, worldRetainedHierarchyIsCurrent } from "../utils/world.js";
 import { ClusterDrilldownView } from "./ClusterDrilldownView.jsx";
 import { WorldPersonDrilldownView } from "./WorldPersonDrilldownView.jsx";
 import { WorldEventDrilldownView } from "./WorldEventDrilldownView.jsx";
@@ -75,20 +75,22 @@ export function WorldView({
   onRefreshEvidence,
   onEvidenceCollection,
   onNextEvidencePage,
+  onValidateMediaOrigin,
 }) {
   const data = state.data;
   const [draft, setDraft] = useState(() => ({ ...EMPTY_WORLD_FILTERS }));
   const [ranking, setRanking] = useState("SALIENCE");
   const [selected, setSelected] = useState(null);
+  const retainedHierarchyCurrent = worldRetainedHierarchyIsCurrent(state, data);
 
   useEffect(() => {
     setDraft({ ...EMPTY_WORLD_FILTERS, ...(state.filters || {}) });
-    setRanking(state.ranking || "SALIENCE");
+    setRanking(state.ranking);
   }, [state.filters, state.ranking]);
 
   useEffect(() => setSelected(null), [data?.graph_revision, state.collection, state.pageNumber]);
 
-  if (state.evidence?.active) {
+  if (retainedHierarchyCurrent && state.evidence?.active) {
     return (
       <WorldEvidenceDrilldownView
         evidence={state.evidence}
@@ -96,11 +98,12 @@ export function WorldView({
         onRefresh={onRefreshEvidence}
         onCollection={onEvidenceCollection}
         onNextPage={onNextEvidencePage}
+        onValidateMediaOrigin={onValidateMediaOrigin}
       />
     );
   }
 
-  if (state.event?.active) {
+  if (retainedHierarchyCurrent && state.event?.active) {
     return (
       <WorldEventDrilldownView
         event={state.event}
@@ -109,11 +112,12 @@ export function WorldView({
         onCollection={onEventCollection}
         onNextPage={onNextEventPage}
         onOpenEvidence={onOpenEvidence}
+        onValidateMediaOrigin={onValidateMediaOrigin}
       />
     );
   }
 
-  if (state.person?.active) {
+  if (retainedHierarchyCurrent && state.person?.active) {
     return (
       <WorldPersonDrilldownView
         person={state.person}
@@ -126,7 +130,7 @@ export function WorldView({
     );
   }
 
-  if (state.cluster?.active) {
+  if (retainedHierarchyCurrent && state.cluster?.active) {
     return (
       <ClusterDrilldownView
         cluster={state.cluster}
@@ -372,16 +376,16 @@ function FacetSelect({ label, value, data, onChange }) {
 }
 
 function WorldTotals({ data }) {
-  const totals = data.scope_totals || {};
-  const facets = data.available_facets || {};
+  const totals = data.scope_totals;
+  const facets = data.available_facets;
   const locations = Array.isArray(facets.locations) ? facets.locations : [];
   const missing = locations.find((item) => item.value === "MISSING")?.count;
   const items = [
-    { label: "Effective people", value: totals.people ?? 0, icon: IconUsers },
-    { label: "Finalized events", value: totals.finalized_events ?? 0, icon: IconCalendarStats },
-    { label: "Relationships", value: totals.relationships ?? 0, icon: IconRoute },
-    { label: "Evidence clusters", value: totals.clusters ?? 0, icon: IconBinaryTree },
-    { label: "Location facets", value: data.pagination?.LOCATION_FACETS?.total_count ?? "—", note: missing ? `${missing} events missing location` : "No missing-location count", icon: IconWorld },
+    { label: "Effective people", value: totals.people, icon: IconUsers },
+    { label: "Finalized events", value: totals.finalized_events, icon: IconCalendarStats },
+    { label: "Relationships", value: totals.relationships, icon: IconRoute },
+    { label: "Evidence clusters", value: totals.clusters, icon: IconBinaryTree },
+    { label: "Location facets", value: data.pagination.LOCATION_FACETS.total_count, note: missing ? `${missing} events missing location` : "No missing-location count", icon: IconWorld },
   ];
   return (
     <SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} spacing="xs" className="world-summary-grid">

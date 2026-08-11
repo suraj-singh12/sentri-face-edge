@@ -41,13 +41,16 @@ const EVENT_COLLECTIONS = [
   { label: "Media", value: "MEDIA" },
 ];
 
-export function WorldEventDrilldownView({ event, onBack, onRefresh, onCollection, onNextPage, onOpenEvidence }) {
+export function WorldEventDrilldownView({ event, onBack, onRefresh, onCollection, onNextPage, onOpenEvidence, onValidateMediaOrigin }) {
   const collectionState = event.collections[event.collection];
   const data = collectionState?.data;
   const summary = event.summary || data?.events?.[0] || null;
   const page = data?.pagination?.[event.collection] || null;
   const [selected, setSelected] = useState(null);
   const [previewMedia, setPreviewMedia] = useState(null);
+  const closeMediaPreview = async () => {
+    if (await onValidateMediaOrigin()) setPreviewMedia(null);
+  };
 
   useEffect(() => setSelected(null), [event.collection, collectionState?.pageNumber, data?.graph_revision]);
 
@@ -98,7 +101,7 @@ export function WorldEventDrilldownView({ event, onBack, onRefresh, onCollection
           <Paper withBorder radius="md" className="world-event-inspector"><EventSelectionInspector item={selected} eventId={summary.event_id} binding={event.binding} onOpenEvidence={onOpenEvidence} onPreviewMedia={setPreviewMedia} /></Paper>
         </Stack>
       </Box>
-      <WorldMediaPreview item={previewMedia} opened={Boolean(previewMedia)} onClose={() => setPreviewMedia(null)} origin={{ type: "EVENT", eventId: summary.event_id }} />
+      <WorldMediaPreview item={previewMedia} opened={Boolean(previewMedia)} onClose={closeMediaPreview} origin={{ type: "EVENT", eventId: summary.event_id }} />
     </Stack>
   );
 }

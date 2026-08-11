@@ -20,7 +20,9 @@ import {
   requireWorldEvidenceContract,
   requireWorldPersonContract,
   requireWorldScopeContract,
+  worldEvidenceMediaRequestState,
   worldEntryMode,
+  worldRetainedHierarchyIsCurrent,
 } from "../src/utils/world.js";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
@@ -34,6 +36,54 @@ function page(collection, count) {
     next_cursor: null,
     truncated: false,
     truncation_reason: null,
+  };
+}
+
+function unrequestedPage(collection, count = 0) {
+  return {
+    collection,
+    total_count: count,
+    returned_count: 0,
+    has_more: count > 0,
+    next_cursor: null,
+    truncated: count > 0,
+    truncation_reason: "collection_not_requested",
+  };
+}
+
+function worldFilters(values = {}) {
+  return {
+    date_from: null,
+    date_to: null,
+    recent_activity: null,
+    locations: [],
+    missing_location: "INCLUDE",
+    lifecycle: [],
+    identity_state: [],
+    biometric_state: [],
+    country: [],
+    rank: [],
+    priority: [],
+    evidence_type: [],
+    relationship_type: [],
+    min_relationship_strength: null,
+    activity: [],
+    pattern_type: [],
+    ...values,
+  };
+}
+
+function worldLimits() {
+  return {
+    people: 25,
+    clusters: 10,
+    events: 25,
+    evidence: 25,
+    media: 25,
+    relationships: 50,
+    patterns: 10,
+    provenance: 100,
+    facets: 100,
   };
 }
 
@@ -74,20 +124,70 @@ function payload(values = {}) {
   return {
     contract: "sentriface.world-graph",
     contract_version: 2,
+    filter_semantics_version: "world-filters-v1",
+    ranking_version: "descriptive-salience-v1",
+    clustering_version: "connected-evidence-components-v1",
+    calculation_version: "world-descriptive-v1",
     requested_detail_level: "WORLD_SCOPE",
     returned_detail_level: "WORLD_SCOPE",
     graph_revision: "opaque-g7",
     as_of: "2026-08-11T12:00:00+00:00",
+    generated_at: "2026-08-11T12:00:01+00:00",
+    focus: null,
+    requested_filters: worldFilters(),
+    effective_filters: worldFilters(),
+    ranking: "SALIENCE",
+    limits: worldLimits(),
     scope_totals: { people: 1, clusters: 0, relationships: 0, finalized_events: 0 },
-    available_facets: {},
-    effective_filters: { missing_location: "INCLUDE" },
-    pagination: { PEOPLE: page("PEOPLE", 1) },
+    available_facets: {
+      filter_semantics_version: "world-filters-v1",
+      ranking_version: "descriptive-salience-v1",
+      clustering_version: "connected-evidence-components-v1",
+      calculation_version: "world-descriptive-v1",
+    },
+    returned_counts: { people: 1, clusters: 0, events: 0, evidence: 0, relationships: 0, patterns: 0, media: 0 },
+    pagination: {
+      PEOPLE: page("PEOPLE", 1),
+      CLUSTERS: unrequestedPage("CLUSTERS"),
+      RELATIONSHIPS: unrequestedPage("RELATIONSHIPS"),
+      PATTERNS: unrequestedPage("PATTERNS"),
+      LOCATION_FACETS: unrequestedPage("LOCATION_FACETS"),
+    },
+    truncated: false,
+    has_more: false,
+    next_cursor: null,
     people: [person()],
     clusters: [],
+    events: [],
+    evidence: [],
     relationships: [],
     patterns: [],
+    media: [],
     ...values,
   };
+}
+
+function emptyDatabaseWorldScopePayload(values = {}) {
+  return payload({
+    graph_revision: "0",
+    scope_totals: { people: 0, clusters: 0, relationships: 0, finalized_events: 0 },
+    returned_counts: { people: 0, clusters: 0, events: 0, evidence: 0, relationships: 0, patterns: 0, media: 0 },
+    pagination: {
+      PEOPLE: page("PEOPLE", 0),
+      CLUSTERS: unrequestedPage("CLUSTERS"),
+      RELATIONSHIPS: unrequestedPage("RELATIONSHIPS"),
+      PATTERNS: unrequestedPage("PATTERNS"),
+      LOCATION_FACETS: unrequestedPage("LOCATION_FACETS"),
+    },
+    people: [],
+    clusters: [],
+    events: [],
+    evidence: [],
+    relationships: [],
+    patterns: [],
+    media: [],
+    ...values,
+  });
 }
 
 function clusterSummary(values = {}) {
@@ -336,7 +436,7 @@ function evidencePayload(collection = "EVIDENCE", values = {}) {
   const evidencePage = page("EVIDENCE", 1);
   const mediaPage = collection === "MEDIA"
     ? { ...page("MEDIA", mediaTotal), returned_count: media.length, has_more: media.length < mediaTotal, next_cursor: media.length < mediaTotal ? "media-next" : null, truncated: media.length < mediaTotal, truncation_reason: media.length < mediaTotal ? `backend_limit:${media.length}` : null }
-    : page("MEDIA", 0);
+    : unrequestedPage("MEDIA", detail.media_summary.total_count);
   return {
     contract: "sentriface.world-graph",
     contract_version: 2,
@@ -423,6 +523,236 @@ test("World lifecycle invalidates snapshots and treats revisions as opaque", () 
   assert.equal(invalidated.data, snapshot.data);
   assert.equal(worldEntryMode(invalidated), "LOAD");
   assert.equal(isStaleWorldError({ status: 400, message: "World revision is stale; request a new snapshot" }), true);
+});
+
+test("FR-01 stale re-entry and Back paths discard retained semantic hierarchy before rendering a parent", async () => {
+  const [controller, evidenceController] = await Promise.all([
+    read("../src/hooks/useWorldController.js"),
+    read("../src/hooks/useWorldEvidenceController.js"),
+  ]);
+  assert.match(controller, /discardRetainedWorldHierarchy/);
+  assert.match(controller, /revision\.stale[\s\S]*discardRetainedWorldHierarchy\([\s\S]*loadWorld/);
+  assert.match(controller, /closeWorldCluster[\s\S]*validateRetainedWorldRevision/);
+  assert.match(controller, /closeWorldPerson[\s\S]*validateRetainedWorldRevision/);
+  assert.match(controller, /closeWorldEvent[\s\S]*validateRetainedWorldRevision/);
+  assert.match(controller, /closeWorldEvidence[\s\S]*validateRetainedWorldRevision/);
+  assert.match(controller, /validateWorldMediaOrigin/);
+  assert.match(controller, /const next = \{ \.\.\.current, active: false, notice: null \}/);
+  assert.match(evidenceController, /resetWorldEvidence[\s\S]*generation \+ 1/);
+});
+
+test("FR-01 retained hierarchy is renderable only for the current authoritative scope revision", () => {
+  const hierarchy = {
+    cluster: { active: true, binding: { revision: "opaque-g6" } },
+    person: { active: true, binding: { revision: "opaque-g6" } },
+    event: { active: true, binding: { revision: "opaque-g6" } },
+    evidence: { active: true, binding: { revision: "opaque-g6" } },
+  };
+  assert.equal(worldRetainedHierarchyIsCurrent(hierarchy, { graph_revision: "opaque-g6" }), true);
+  assert.equal(worldRetainedHierarchyIsCurrent(hierarchy, { graph_revision: "opaque-g7" }), false);
+  assert.equal(worldRetainedHierarchyIsCurrent(hierarchy, null), false);
+  assert.equal(worldRetainedHierarchyIsCurrent({ evidence: { active: false } }, { graph_revision: "opaque-g7" }), true);
+});
+
+test("FR-01 World rendering suppresses stale g6 Evidence under g7 and preserves same-revision Evidence", async (t) => {
+  const { createServer } = await import("vite");
+  const React = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { MantineProvider } = await import("@mantine/core");
+  const server = await createServer({
+    root: new URL("../", import.meta.url).pathname,
+    appType: "custom",
+    logLevel: "silent",
+    server: { middlewareMode: true },
+  });
+  t.after(() => server.close());
+  const { WorldView } = await server.ssrLoadModule("/src/views/WorldView.jsx");
+  const detail = worldEvidence();
+  const evidenceData = evidencePayload("EVIDENCE", { graph_revision: "opaque-g7", detail });
+  const evidenceState = (revision) => ({
+    active: true,
+    evidenceId: detail.evidence_id,
+    collection: "EVIDENCE",
+    detail,
+    binding: { revision, asOf: evidenceData.as_of, filters: worldFilters() },
+    collections: {
+      EVIDENCE: { data: evidenceData, loading: false, error: null, pageNumber: 1 },
+      MEDIA: { data: null, loading: false, error: null, pageNumber: 1 },
+    },
+  });
+  const render = (revision) => renderToStaticMarkup(React.createElement(
+    MantineProvider,
+    null,
+    React.createElement(WorldView, {
+      state: {
+        data: payload(), collection: "PEOPLE", filters: worldFilters(), ranking: "SALIENCE",
+        loading: false, error: null, pageNumber: 1,
+        cluster: { active: true, binding: { revision } },
+        person: { active: true, binding: { revision } },
+        event: { active: true, binding: { revision } },
+        evidence: evidenceState(revision),
+      },
+      onValidateMediaOrigin: async () => true,
+    }),
+  ));
+  const staleMarkup = render("opaque-g6");
+  assert.doesNotMatch(staleMarkup, /data-world-level="EVIDENCE"/);
+  assert.match(staleMarkup, /data-contract="sentriface\.world-graph-v2"/);
+  const currentMarkup = render("opaque-g7");
+  assert.match(currentMarkup, /data-world-level="EVIDENCE"/);
+});
+
+test("FR-02 WORLD_SCOPE rejects every required frozen envelope and nullable page property when absent", () => {
+  for (const field of [
+    "filter_semantics_version", "ranking_version", "clustering_version", "calculation_version",
+    "generated_at", "focus", "requested_filters", "effective_filters", "ranking", "limits",
+    "scope_totals", "available_facets", "returned_counts", "pagination", "truncated", "has_more",
+    "next_cursor", "events", "evidence", "media",
+  ]) {
+    const malformed = payload();
+    delete malformed[field];
+    assert.throws(() => requireWorldScopeContract(malformed), undefined, `missing ${field}`);
+  }
+  for (const collection of ["PEOPLE", "CLUSTERS", "RELATIONSHIPS", "PATTERNS", "LOCATION_FACETS"]) {
+    const malformed = payload();
+    delete malformed.pagination[collection];
+    assert.throws(() => requireWorldScopeContract(malformed), undefined, `missing ${collection} page`);
+  }
+  for (const field of ["next_cursor", "truncation_reason"]) {
+    const malformed = payload();
+    delete malformed.pagination.PEOPLE[field];
+    assert.throws(() => requireWorldScopeContract(malformed), undefined, `missing nullable page property ${field}`);
+  }
+  for (const field of ["people", "clusters", "relationships", "finalized_events"]) {
+    const malformed = payload();
+    delete malformed.scope_totals[field];
+    assert.throws(() => requireWorldScopeContract(malformed), undefined, `missing scope total ${field}`);
+  }
+  for (const field of ["people", "clusters", "events", "evidence", "relationships", "patterns", "media"]) {
+    const malformed = payload();
+    delete malformed.returned_counts[field];
+    assert.throws(() => requireWorldScopeContract(malformed), undefined, `missing returned count ${field}`);
+  }
+  assert.throws(() => requireWorldScopeContract(payload({ ranking: "UNSPECIFIED" })), /scope or revision contract/);
+});
+
+test("FR-02 accepts the frozen requested and collection-not-requested page-state matrix", () => {
+  assert.doesNotThrow(() => requireWorldScopeContract(emptyDatabaseWorldScopePayload(), { collection: "PEOPLE" }));
+
+  const populatedComplete = payload();
+  assert.doesNotThrow(() => requireWorldScopeContract(populatedComplete, { collection: "PEOPLE" }));
+
+  const requestedPaginated = payload({
+    scope_totals: { people: 2, clusters: 0, relationships: 0, finalized_events: 0 },
+    pagination: {
+      ...payload().pagination,
+      PEOPLE: {
+        collection: "PEOPLE", total_count: 2, returned_count: 1,
+        has_more: true, next_cursor: "opaque-next", truncated: true,
+        truncation_reason: "backend_limit:25",
+      },
+    },
+    truncated: true,
+    has_more: true,
+    next_cursor: "opaque-next",
+  });
+  assert.doesNotThrow(() => requireWorldScopeContract(requestedPaginated, { collection: "PEOPLE" }));
+
+  const unrequestedPopulatedCollection = payload({
+    scope_totals: { people: 1, clusters: 0, relationships: 2, finalized_events: 0 },
+    pagination: {
+      ...payload().pagination,
+      RELATIONSHIPS: unrequestedPage("RELATIONSHIPS", 2),
+    },
+    truncated: true,
+  });
+  assert.doesNotThrow(() => requireWorldScopeContract(unrequestedPopulatedCollection, { collection: "PEOPLE" }));
+
+  const malformedPages = [
+    { ...page("CLUSTERS", 0), truncation_reason: "arbitrary_reason" },
+    { ...unrequestedPage("CLUSTERS"), returned_count: 1 },
+    { ...unrequestedPage("CLUSTERS", 1), next_cursor: "forbidden-cursor" },
+    { ...page("CLUSTERS", 1), has_more: true, truncated: true, truncation_reason: "backend_limit:10" },
+    { ...page("CLUSTERS", 1), has_more: true, next_cursor: "opaque-next", truncation_reason: "backend_limit:10" },
+  ];
+  for (const malformedPage of malformedPages) {
+    const malformed = payload({
+      pagination: { ...payload().pagination, CLUSTERS: malformedPage },
+      truncated: Boolean(malformedPage.truncated),
+    });
+    assert.throws(() => requireWorldScopeContract(malformed, { collection: "PEOPLE" }), /Invalid World CLUSTERS page state/);
+  }
+
+  for (const field of ["next_cursor", "truncation_reason"]) {
+    const malformed = emptyDatabaseWorldScopePayload();
+    delete malformed.pagination.CLUSTERS[field];
+    assert.throws(() => requireWorldScopeContract(malformed, { collection: "PEOPLE" }), /Invalid World CLUSTERS page state/);
+  }
+});
+
+test("FR-02 World rendering does not fabricate required totals or ranking", async () => {
+  const view = await read("../src/views/WorldView.jsx");
+  assert.doesNotMatch(view, /totals\.(people|finalized_events|relationships|clusters) \?\? 0/);
+  assert.doesNotMatch(view, /setRanking\(state\.ranking \|\| "SALIENCE"\)/);
+  assert.match(view, /value: totals\.people/);
+  assert.match(view, /setRanking\(state\.ranking\)/);
+});
+
+test("FR-03 PERSON relationship pages require backend neighbor projections and preserve analytics distinctions", () => {
+  const valid = requireWorldPersonContract(personPayload("RELATIONSHIPS"), {
+    personId: "person-a", collection: "RELATIONSHIPS", revision: "opaque-g7",
+  });
+  assert.equal(valid.people[1].analytics_state, "NOT_LOADED");
+  assert.throws(() => requireWorldPersonContract(personPayload("RELATIONSHIPS", {
+    people: [personPayload("RELATIONSHIPS").people[0]],
+  }), { personId: "person-a", collection: "RELATIONSHIPS", revision: "opaque-g7" }), /neighbor projection/);
+
+  const loadedZeroNeighbor = person({
+    canonical_person_id: "person-b",
+    display_name: "B",
+    analytics_state: "LOADED",
+    intelligence_summary: { relationship_count: 0, relationship_evidence_count: 0, activity_bucket: "NONE" },
+    activity_summary: { finalized_event_count: 0, activity_bucket: "NONE", state: "LOADED" },
+  });
+  const loadedZero = requireWorldPersonContract(personPayload("RELATIONSHIPS", {
+    people: [personPayload("RELATIONSHIPS").people[0], loadedZeroNeighbor],
+  }), { personId: "person-a", collection: "RELATIONSHIPS", revision: "opaque-g7" });
+  assert.equal(loadedZero.people[1].analytics_state, "LOADED");
+  assert.equal(loadedZero.people[1].activity_summary.finalized_event_count, 0);
+  assert.equal(loadedZero.people[1].intelligence_summary.relationship_count, 0);
+});
+
+test("FR-03 Person relationship rendering consumes explicit neighbor state without synthesizing authority", async () => {
+  const view = await read("../src/views/WorldPersonDrilldownView.jsx");
+  assert.match(view, /neighbor\.display_name/);
+  assert.match(view, /neighbor\.analytics_state/);
+  assert.doesNotMatch(view, /neighbor\?\.analytics_state \|\| "NOT_LOADED"|neighbor\?\.display_name \|\|/);
+});
+
+test("FR-04 Evidence media request failure is not rendered as requested-empty", async () => {
+  const view = await read("../src/views/WorldEvidenceDrilldownView.jsx");
+  assert.match(view, /EVIDENCE_MEDIA_REQUEST_FAILED/);
+  assert.match(view, /Supporting media request failed/);
+  assert.doesNotMatch(view, /const media = data\?\.media \|\| \[\]/);
+  assert.match(view, /EVIDENCE_MEDIA_EMPTY[\s\S]*No supporting media returned/);
+});
+
+test("FR-04 Evidence media state machine keeps all request outcomes mutually exclusive", () => {
+  const state = (values = {}) => worldEvidenceMediaRequestState({
+    availability: "AVAILABLE", data: null, loading: false, error: null, ...values,
+  });
+  assert.equal(state(), "EVIDENCE_MEDIA_NOT_REQUESTED");
+  assert.equal(state({ loading: true }), "EVIDENCE_MEDIA_LOADING");
+  assert.equal(state({ error: new Error("offline") }), "EVIDENCE_MEDIA_REQUEST_FAILED");
+  assert.equal(state({ data: { media: [] } }), "EVIDENCE_MEDIA_EMPTY");
+  assert.equal(state({ data: { media: [worldMedia({ supporting_evidence_id: "evidence-a" })] } }), "EVIDENCE_MEDIA_POPULATED");
+  for (const evidenceType of ["NOTE_REFERENCE", "MANUAL_ASSOCIATION"]) {
+    const detail = worldEvidence({ evidence_type: evidenceType, media_summary: { total_count: 0, availability: "UNAVAILABLE", retrieval: "EVIDENCE_MEDIA_COLLECTION", reason: "evidence_source_has_no_authoritative_media" } });
+    assert.equal(state({ availability: detail.media_summary.availability }), "EVIDENCE_MEDIA_UNAVAILABLE");
+  }
+  assert.equal(state({ data: { media: [worldMedia({ supporting_evidence_id: "evidence-a" })] } }), "EVIDENCE_MEDIA_POPULATED");
+  assert.equal(state({ error: new Error("first request failed") }), "EVIDENCE_MEDIA_REQUEST_FAILED");
+  assert.equal(state({ data: { media: [] }, error: null }), "EVIDENCE_MEDIA_EMPTY");
 });
 
 test("World controller uses bounded replacement, lifecycle validation, and no polling", async () => {

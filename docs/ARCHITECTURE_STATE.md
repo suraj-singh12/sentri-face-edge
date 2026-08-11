@@ -4,7 +4,9 @@ This document is a concise checkpoint of the stable implemented architecture. De
 
 ## Current phase
 
-P10-F World UI implementation is complete through P10-F5 as of 2026-08-11 against the frozen World v2 backend; the final P10 integration/adversarial freeze review remains pending. World is a persistent top-level view with backend-normalized scope controls, authoritative totals/facets, ranked canonical people, revision-bound clusters and memberships, measured patterns, typed relationship pages, bounded finalized-event summaries, effective participants, independent raw provenance, exact evidence detail, and bounded supporting media references. Every semantic level performs a fresh revision/filter-bound read rather than expanding preview data. `EVIDENCE` preserves backend type/direction, raw and current-effective endpoints, source provenance, factual explanation, and explicit media availability; EVENT and EVIDENCE media share an inspection-only preview while retaining distinct origins. Collection pages are replaced rather than concatenated, retained detail is invalidated by lifecycle revision changes, and no continuous polling is used. P0 through P10-E remain frozen; P11 remains future work.
+P10-F World UI and the complete P10 phase are frozen as of 2026-08-11 against the World v2 backend. World is a persistent top-level view with backend-normalized scope controls, authoritative totals/facets, ranked canonical people, revision-bound clusters and memberships, measured patterns, typed relationship pages, bounded finalized-event summaries, effective participants, independent raw provenance, exact evidence detail, and bounded supporting media references. Every semantic level performs a fresh revision/filter-bound read rather than expanding preview data. `EVIDENCE` preserves backend type/direction, raw and current-effective endpoints, source provenance, factual explanation, and explicit media availability; EVENT and EVIDENCE media share an inspection-only preview while retaining distinct origins. Collection pages are replaced rather than concatenated, retained detail is invalidated by lifecycle revision changes, and no continuous polling is used. P0 through P10 are frozen; P11 is safe to start but remains future work.
+
+The final integration review found P10-FR-01 through P10-FR-04, and the bounded freeze-fix pass corrected all four. The first post-fix runtime gate then exposed one remaining P10-FR-02 validator mismatch for the frozen backend's empty `collection_not_requested` page state; the focused follow-up fixed that mismatch without changing the backend. The complete gate rerun passes focused and full automated verification, fresh empty-database World startup, same-revision deep navigation/Back restoration, direct WORLD_SCOPE → PERSON, and runtime g6 → g7 retained-hierarchy invalidation in light and dark themes. P10-FR-01, P10-FR-02, P10-FR-03, and P10-FR-04 are FIXED.
 
 ## Core principles
 
@@ -148,11 +150,11 @@ The final mandatory matrix completed on 2026-08-11 in `docs/P10_WORLD_BENCHMARK_
 
 - Reuse the opaque revision token, immutable replacement model, canonical/lifecycle semantics, backend `allowed_actions`, evidence-count strength, occurrence/provenance explanations, and the rule that React owns only presentation/interaction.
 - Do not reuse the person-centred radial membership model, complete-graph loading assumption, homogeneous person-node schema, client-only full-response refresh strategy, or the assumption that edge weight alone communicates importance. World requires scope-first levels, typed summary/detail objects, server-side ranking/clustering, bounded expansion, and density-aware presentation.
-- P10-F1 `WORLD_SCOPE`, P10-F2 `CLUSTER`, P10-F3 `PERSON`, P10-F4 `EVENT`, and P10-F5 `EVIDENCE`/supporting media are implemented against the frozen additive v2 contract. The pending final integration/adversarial review must verify the full chain without granting the frontend canonical, topology, ranking, cluster, evidence, media, filter, or truncation authority.
+- P10-F1 `WORLD_SCOPE`, P10-F2 `CLUSTER`, P10-F3 `PERSON`, P10-F4 `EVENT`, and P10-F5 `EVIDENCE`/supporting media are frozen against the additive v2 contract. The final integration/adversarial gate verified the full chain without granting the frontend canonical, topology, ranking, cluster, evidence, media, filter, or truncation authority.
 
 ## Known deferred work
 
 - P11 guarded merge/operation revert; normalized merge undo is intentionally not exposed yet.
 - P12 backup/restore hardening for normalized authoritative, journal, and projection records.
 - P13 fully offline BYOM/model-management work.
-- The final P10 integration/adversarial freeze review remains deferred, along with later integrity/rebuild/revert, packaging, and release work.
+- P11 integrity/rebuild/revert, packaging, and release work remain deferred; the passing P10 freeze gate makes P11 safe to start separately.

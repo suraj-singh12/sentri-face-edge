@@ -9,6 +9,17 @@ const WORLD_LIFECYCLE_STATES = new Set(["ACTIVE", "ARCHIVED", "DELETED", "MERGED
 const WORLD_IDENTITY_STATES = new Set(["IDENTIFIED", "UNIDENTIFIED"]);
 const WORLD_BIOMETRIC_STATES = new Set(["NO_FACE", "ENROLLED"]);
 const WORLD_ANALYTICS_STATES = new Set(["LOADED", "NOT_LOADED"]);
+const WORLD_RANKINGS = new Set(["SALIENCE", "RECENT_ACTIVITY", "EVIDENCE_COUNT", "DISPLAY_NAME"]);
+const WORLD_SCOPE_COLLECTIONS = ["PEOPLE", "CLUSTERS", "RELATIONSHIPS", "PATTERNS", "LOCATION_FACETS"];
+const WORLD_RESPONSE_COLLECTIONS = ["people", "clusters", "events", "evidence", "relationships", "patterns", "media"];
+const WORLD_LIMIT_FIELDS = ["people", "clusters", "events", "evidence", "media", "relationships", "patterns", "provenance", "facets"];
+const WORLD_FILTER_LIST_FIELDS = ["locations", "lifecycle", "identity_state", "biometric_state", "country", "rank", "priority", "evidence_type", "relationship_type", "activity", "pattern_type"];
+const WORLD_SEMANTIC_VERSIONS = Object.freeze({
+  filter_semantics_version: "world-filters-v1",
+  ranking_version: "descriptive-salience-v1",
+  clustering_version: "connected-evidence-components-v1",
+  calculation_version: "world-descriptive-v1",
+});
 
 export const EMPTY_WORLD_FILTERS = Object.freeze({
   date_from: "",
@@ -29,25 +40,60 @@ export const EMPTY_WORLD_FILTERS = Object.freeze({
   pattern_type: [],
 });
 
-export function requireWorldScopeContract(payload) {
+export function requireWorldScopeContract(payload, expected = {}) {
   requireWorldContractIdentity(payload);
   if (
     payload.requested_detail_level !== "WORLD_SCOPE"
     || payload.returned_detail_level !== "WORLD_SCOPE"
     || !payload.graph_revision
     || !payload.as_of
+    || !payload.generated_at
+    || !hasOwn(payload, "focus")
+    || payload.focus !== null
+    || !WORLD_RANKINGS.has(payload.ranking)
+    || typeof payload.truncated !== "boolean"
+    || typeof payload.has_more !== "boolean"
+    || !hasOwn(payload, "next_cursor")
+    || (payload.next_cursor !== null && typeof payload.next_cursor !== "string")
   ) {
     throw new Error("Incomplete World scope or revision contract");
   }
-  for (const field of ["scope_totals", "available_facets", "effective_filters", "pagination"]) {
+  for (const [field, value] of Object.entries(WORLD_SEMANTIC_VERSIONS)) {
+    if (payload[field] !== value) throw new Error(`Invalid World ${field} contract`);
+  }
+  for (const field of ["scope_totals", "available_facets", "requested_filters", "effective_filters", "limits", "returned_counts", "pagination"]) {
     if (!payload[field] || typeof payload[field] !== "object" || Array.isArray(payload[field])) {
       throw new Error(`Incomplete World ${field} contract`);
     }
   }
-  for (const field of ["people", "clusters", "relationships", "patterns"]) {
-    if (!Array.isArray(payload[field])) throw new Error(`Incomplete World ${field} collection`);
+  requireWorldFilters(payload.requested_filters, "requested_filters");
+  requireWorldFilters(payload.effective_filters, "effective_filters");
+  for (const field of WORLD_LIMIT_FIELDS) {
+    if (!isNonNegativeInteger(payload.limits[field])) throw new Error(`Invalid World ${field} limit`);
   }
-  requireWorldPagination(payload.pagination);
+  for (const field of ["people", "clusters", "relationships", "finalized_events"]) {
+    if (!isNonNegativeInteger(payload.scope_totals[field])) throw new Error(`Invalid World ${field} scope total`);
+  }
+  for (const [field, value] of Object.entries(WORLD_SEMANTIC_VERSIONS)) {
+    if (payload.available_facets[field] !== value) throw new Error(`Invalid World facet ${field} contract`);
+  }
+  for (const field of WORLD_RESPONSE_COLLECTIONS) {
+    if (!Array.isArray(payload[field])) throw new Error(`Incomplete World ${field} collection`);
+    if (!isNonNegativeInteger(payload.returned_counts[field]) || payload.returned_counts[field] !== payload[field].length) {
+      throw new Error(`Invalid World ${field} returned count`);
+    }
+  }
+  for (const collection of WORLD_SCOPE_COLLECTIONS) {
+    if (!hasOwn(payload.pagination, collection)) throw new Error(`Missing World ${collection} page state`);
+  }
+  requireWorldPagination(payload.pagination, expected.collection || "PEOPLE");
+  const primary = payload.pagination[expected.collection || "PEOPLE"];
+  if (!primary || payload.has_more !== primary.has_more || payload.next_cursor !== primary.next_cursor) {
+    throw new Error("World aggregate page state does not match the requested collection");
+  }
+  if (payload.truncated !== Object.values(payload.pagination).some((page) => page.truncated)) {
+    throw new Error("World aggregate truncation state is inconsistent");
+  }
   payload.people.forEach(requireWorldPerson);
   for (const cluster of payload.clusters) {
     if (
@@ -100,7 +146,7 @@ export function requireWorldClusterContract(payload, expected = {}) {
   for (const collection of WORLD_CLUSTER_COLLECTIONS) {
     if (!payload.pagination[collection]) throw new Error(`Missing World Cluster ${collection} page state`);
   }
-  requireWorldPagination(payload.pagination);
+  requireWorldPagination(payload.pagination, expected.collection || "MEMBERS");
   const cluster = payload.clusters[0];
   if (
     cluster.cluster_id !== payload.focus.id
@@ -174,7 +220,7 @@ export function requireWorldPersonContract(payload, expected = {}) {
   for (const collection of WORLD_PERSON_COLLECTIONS) {
     if (!payload.pagination[collection]) throw new Error(`Missing World Person ${collection} page state`);
   }
-  requireWorldPagination(payload.pagination);
+  requireWorldPagination(payload.pagination, expected.collection || "RELATIONSHIPS");
   if (!payload.people.length) throw new Error("World Person response must contain the focused person");
   payload.people.forEach(requireWorldPerson);
   payload.relationships.forEach(requireWorldRelationship);
@@ -198,6 +244,16 @@ export function requireWorldPersonContract(payload, expected = {}) {
   const requestedCollection = expected.collection || null;
   if (requestedCollection === "RELATIONSHIPS" && payload.relationships.length !== payload.pagination.RELATIONSHIPS.returned_count) {
     throw new Error("World Person relationship count does not match its page state");
+  }
+  if (requestedCollection === "RELATIONSHIPS") {
+    const peopleById = new Map(payload.people.map((person) => [person.canonical_person_id, person]));
+    for (const relationship of payload.relationships) {
+      const sourceIsRoot = relationship.source_person_id === root.canonical_person_id;
+      const targetIsRoot = relationship.target_person_id === root.canonical_person_id;
+      if (sourceIsRoot === targetIsRoot) throw new Error("World Person relationship is not incident to the focused person");
+      const neighborId = sourceIsRoot ? relationship.target_person_id : relationship.source_person_id;
+      if (!peopleById.has(neighborId)) throw new Error("World Person relationship is missing its required neighbor projection");
+    }
   }
   if (requestedCollection === "EVENTS" && payload.events.length !== payload.pagination.EVENTS.returned_count) {
     throw new Error("World Person event count does not match its page state");
@@ -232,7 +288,7 @@ export function requireWorldEventContract(payload, expected = {}) {
   for (const collection of WORLD_EVENT_COLLECTIONS) {
     if (!payload.pagination[collection]) throw new Error(`Missing World Event ${collection} page state`);
   }
-  requireWorldPagination(payload.pagination);
+  requireWorldPagination(payload.pagination, expected.collection || "PARTICIPANTS");
   if (payload.events.length !== 1) throw new Error("World Event response must contain exactly one finalized observation");
   const event = payload.events[0];
   requireWorldEvent(event);
@@ -289,7 +345,7 @@ export function requireWorldEvidenceContract(payload, expected = {}) {
   for (const collection of WORLD_EVIDENCE_COLLECTIONS) {
     if (!payload.pagination[collection]) throw new Error(`Missing World Evidence ${collection} page state`);
   }
-  requireWorldPagination(payload.pagination);
+  requireWorldPagination(payload.pagination, expected.collection || "EVIDENCE");
   if (payload.evidence.length !== 1) throw new Error("World Evidence response must contain exactly one evidence record");
   const evidence = payload.evidence[0];
   requireWorldEvidence(evidence, "Evidence");
@@ -571,23 +627,81 @@ export function worldPageFor(data, collection) {
   return data?.pagination?.[collection] || null;
 }
 
+export function worldEvidenceMediaRequestState({ availability, data, loading, error }) {
+  if (availability === "UNAVAILABLE") return "EVIDENCE_MEDIA_UNAVAILABLE";
+  if (loading) return "EVIDENCE_MEDIA_LOADING";
+  if (error) return "EVIDENCE_MEDIA_REQUEST_FAILED";
+  if (data === null || data === undefined) return "EVIDENCE_MEDIA_NOT_REQUESTED";
+  return data.media.length ? "EVIDENCE_MEDIA_POPULATED" : "EVIDENCE_MEDIA_EMPTY";
+}
+
+export function worldRetainedHierarchyIsCurrent(hierarchy, scope) {
+  const retained = [hierarchy?.evidence, hierarchy?.event, hierarchy?.person, hierarchy?.cluster]
+    .find((level) => level?.active);
+  if (!retained) return true;
+  return Boolean(scope?.graph_revision && retained.binding?.revision === scope.graph_revision);
+}
+
 function requireWorldContractIdentity(payload) {
   if (payload?.contract !== "sentriface.world-graph" || payload.contract_version !== 2) {
     throw new Error("Unsupported World contract");
   }
 }
 
-function requireWorldPagination(pagination) {
+function requireWorldPagination(pagination, requestedCollection) {
   for (const [name, page] of Object.entries(pagination || {})) {
+    const collectionNotRequested = page?.truncation_reason === "collection_not_requested";
     if (
       page?.collection !== name
-      || !Number.isFinite(Number(page.total_count))
-      || !Number.isFinite(Number(page.returned_count))
+      || !hasOwn(page, "next_cursor")
+      || !hasOwn(page, "truncation_reason")
+      || !isNonNegativeInteger(page.total_count)
+      || !isNonNegativeInteger(page.returned_count)
+      || page.returned_count > page.total_count
       || typeof page.has_more !== "boolean"
       || typeof page.truncated !== "boolean"
-      || (page.has_more && !page.next_cursor && page.truncation_reason !== "collection_not_requested")
+      || page.has_more !== page.truncated
+      || (page.next_cursor !== null && typeof page.next_cursor !== "string")
+      || (page.truncation_reason !== null && typeof page.truncation_reason !== "string")
+      || (collectionNotRequested && (
+        name === requestedCollection
+        || page.returned_count !== 0
+        || page.next_cursor !== null
+        || page.has_more !== (page.total_count > 0)
+      ))
+      || (!collectionNotRequested && name !== requestedCollection && page.returned_count === 0)
+      || (!collectionNotRequested && !page.has_more && (page.next_cursor !== null || page.truncation_reason !== null))
+      || (!collectionNotRequested && page.has_more && (
+        !page.next_cursor
+        || !/^backend_limit:[1-9]\d*$/.test(page.truncation_reason || "")
+      ))
     ) throw new Error(`Invalid World ${name} page state`);
   }
+}
+
+function requireWorldFilters(filters, label) {
+  for (const field of ["date_from", "date_to", "recent_activity"]) {
+    if (!hasOwn(filters, field) || (filters[field] !== null && typeof filters[field] !== "string")) {
+      throw new Error(`Invalid World ${label}.${field}`);
+    }
+  }
+  if (!hasOwn(filters, "missing_location") || !["INCLUDE", "EXCLUDE", "ONLY"].includes(filters.missing_location)) {
+    throw new Error(`Invalid World ${label}.missing_location`);
+  }
+  for (const field of WORLD_FILTER_LIST_FIELDS) {
+    if (!Array.isArray(filters[field])) throw new Error(`Invalid World ${label}.${field}`);
+  }
+  if (!hasOwn(filters, "min_relationship_strength") || (
+    filters.min_relationship_strength !== null && !isNonNegativeInteger(filters.min_relationship_strength)
+  )) throw new Error(`Invalid World ${label}.min_relationship_strength`);
+}
+
+function hasOwn(value, field) {
+  return Object.prototype.hasOwnProperty.call(value, field);
+}
+
+function isNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
 function requireWorldPerson(person) {

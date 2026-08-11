@@ -138,9 +138,21 @@ export function useWorldEvidenceController({ apiGet, getEvent, onStale }) {
     return loadWorldEvidenceCollection({ collection: "EVIDENCE" });
   }, [getEvent, loadWorldEvidenceCollection]);
 
-  const closeWorldEvidence = useCallback(() => {
+  const closeWorldEvidence = useCallback((expected = {}) => {
+    const current = evidenceRef.current;
+    if (
+      (expected.evidenceId && current.evidenceId !== expected.evidenceId)
+      || (expected.revision && current.binding?.revision !== expected.revision)
+    ) return false;
     for (const request of Object.values(requestsRef.current)) request.abort?.abort();
-    setEvidence((value) => ({ ...value, active: false, notice: null }));
+    requestsRef.current = {
+      EVIDENCE: { generation: requestsRef.current.EVIDENCE.generation + 1, abort: null },
+      MEDIA: { generation: requestsRef.current.MEDIA.generation + 1, abort: null },
+    };
+    const next = { ...current, active: false, notice: null };
+    evidenceRef.current = next;
+    setEvidence(next);
+    return true;
   }, []);
 
   const selectWorldEvidenceCollection = useCallback((collection) => {

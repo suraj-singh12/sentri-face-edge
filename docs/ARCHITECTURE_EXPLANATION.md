@@ -10,7 +10,7 @@ Use it with, rather than instead of, the other architecture documents:
 - `ARCHITECTURE_STATE.md` records the concise implementation checkpoint.
 - `IMPLEMENTATION_PLAN.md` records phase order, completion, and remaining gates.
 
-This explanation covers the architecture implemented from P0 through P10-E and the frozen P10-E backend as of 2026-08-11. Correctness, contract, authority, boundedness, invariant, and consolidated performance gates pass. P10-F World UI is safe to begin against this frozen v2 contract; new backend concepts remain deferred unless UI implementation exposes an actual contract defect.
+This explanation covers the architecture implemented and frozen from P0 through P10 as of 2026-08-11. Correctness, contract, authority, boundedness, invariant, consolidated performance, complete World navigation, revision lifecycle, runtime, visual, and automated gates pass. The P10-F World UI consumes the frozen v2 backend without adding frontend semantic authority. P11 is safe to start separately; new backend concepts remain deferred to their planned phases.
 
 The central question throughout is:
 
@@ -1293,7 +1293,7 @@ Compatibility data remains valuable, but value does not confer authority. Deleti
 
 Several capabilities are intentionally future work:
 
-- P10-F World UI may begin because the P10-E snapshot, evidence-expansion, navigation, bounds, and performance gates pass.
+- P10-F World UI is complete and frozen after the final post-fix integration/runtime gate; P10-FR-01 through P10-FR-04 are fixed.
 - P11 will add broader integrity checking, transactional rebuild tooling, and guarded operation/merge revert.
 - P12 will extend portable backup/restore rules for every normalized record and derived state.
 - Future repeated-unknown tracking needs its own authoritative lifecycle.

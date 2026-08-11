@@ -96,6 +96,15 @@ function emptyWorldEvent(values = {}) {
   };
 }
 
+function invalidateCollectionRequests(requestsRef) {
+  const next = {};
+  for (const [collection, request] of Object.entries(requestsRef.current)) {
+    request.abort?.abort();
+    next[collection] = { generation: request.generation + 1, abort: null };
+  }
+  requestsRef.current = next;
+}
+
 export function useWorldController({ activeView, apiGet }) {
   const [world, setWorld] = useState(INITIAL_WORLD_STATE);
   const [worldCluster, setWorldCluster] = useState(() => emptyWorldCluster());
@@ -116,6 +125,7 @@ export function useWorldController({ activeView, apiGet }) {
     EVIDENCE: { generation: 0, abort: null },
     MEDIA: { generation: 0, abort: null },
   });
+  const retainedRevisionRequestRef = useRef({ generation: 0, abort: null });
   const worldRef = useRef(world);
   const worldClusterRef = useRef(worldCluster);
   const worldPersonRef = useRef(worldPerson);
@@ -140,6 +150,11 @@ export function useWorldController({ activeView, apiGet }) {
     const nextCollection = collection || current.collection || "PEOPLE";
     const nextFilters = filters || current.filters;
     const nextRanking = ranking || current.ranking;
+    retainedRevisionRequestRef.current.abort?.abort();
+    retainedRevisionRequestRef.current = {
+      generation: retainedRevisionRequestRef.current.generation + 1,
+      abort: null,
+    };
     requestRef.current.abort?.abort();
     const abort = new AbortController();
     const generation = requestRef.current.generation + 1;
@@ -164,7 +179,9 @@ export function useWorldController({ activeView, apiGet }) {
         cursor,
         revision,
         asOf,
-      }), { dedupe: false, signal: abort.signal, silent: true, timeoutMs: 120_000 }));
+      }), { dedupe: false, signal: abort.signal, silent: true, timeoutMs: 120_000 }), {
+        collection: nextCollection,
+      });
       if (requestRef.current.generation === generation) {
         setWorld({
           data: payload,
@@ -218,13 +235,99 @@ export function useWorldController({ activeView, apiGet }) {
   const evidenceController = useWorldEvidenceController({ apiGet, getEvent: getWorldEvent, onStale: recoverStaleEvidence });
   const worldEvidence = evidenceController.state;
   const {
-    openWorldEvidence,
-    closeWorldEvidence,
+    openWorldEvidence: requestWorldEvidence,
+    closeWorldEvidence: dismissWorldEvidence,
     selectWorldEvidenceCollection,
     nextWorldEvidencePage,
     refreshWorldEvidence,
     resetWorldEvidence,
   } = evidenceController.actions;
+
+  const discardRetainedWorldHierarchy = useCallback(({ notice = null } = {}) => {
+    retainedRevisionRequestRef.current.abort?.abort();
+    retainedRevisionRequestRef.current = {
+      generation: retainedRevisionRequestRef.current.generation + 1,
+      abort: null,
+    };
+    invalidateCollectionRequests(clusterRequestsRef);
+    invalidateCollectionRequests(personRequestsRef);
+    invalidateCollectionRequests(eventRequestsRef);
+    const nextCluster = emptyWorldCluster({ notice });
+    const nextPerson = emptyWorldPerson();
+    const nextEvent = emptyWorldEvent();
+    worldClusterRef.current = nextCluster;
+    worldPersonRef.current = nextPerson;
+    worldEventRef.current = nextEvent;
+    setWorldCluster(nextCluster);
+    setWorldPerson(nextPerson);
+    setWorldEvent(nextEvent);
+    resetWorldEvidence();
+  }, [resetWorldEvidence]);
+
+  const reloadAuthoritativeWorld = useCallback((notice = null) => {
+    const current = worldRef.current;
+    discardRetainedWorldHierarchy({ notice });
+    return loadWorld({
+      collection: current.collection,
+      filters: current.filters,
+      ranking: current.ranking,
+      pageNumber: 1,
+      preserve: false,
+    });
+  }, [discardRetainedWorldHierarchy, loadWorld]);
+
+  const validateRetainedWorldRevision = useCallback(async (retainedRevision, onCurrent) => {
+    const scopeRevision = worldRef.current.data?.graph_revision;
+    if (!retainedRevision || !scopeRevision || retainedRevision !== scopeRevision) {
+      await reloadAuthoritativeWorld("World changed, so the retained navigation hierarchy was discarded.");
+      return false;
+    }
+    retainedRevisionRequestRef.current.abort?.abort();
+    const abort = new AbortController();
+    const generation = retainedRevisionRequestRef.current.generation + 1;
+    retainedRevisionRequestRef.current = { generation, abort };
+    try {
+      const revision = await apiGet(
+        `/api/graph-revision?current_revision=${encodeURIComponent(retainedRevision)}`,
+        { dedupe: false, signal: abort.signal, silent: true },
+      );
+      if (retainedRevisionRequestRef.current.generation !== generation) return false;
+      if (revision.stale || revision.graph_revision !== retainedRevision) {
+        await reloadAuthoritativeWorld("World changed, so the retained navigation hierarchy was discarded.");
+        return false;
+      }
+      return onCurrent ? onCurrent() !== false : true;
+    } catch (error) {
+      if (error?.name === "AbortError" || retainedRevisionRequestRef.current.generation !== generation) return false;
+      setWorld((current) => ({ ...current, error }));
+      return false;
+    }
+  }, [apiGet, reloadAuthoritativeWorld]);
+
+  const openWorldEvidence = useCallback((evidenceSummary) => {
+    retainedRevisionRequestRef.current.abort?.abort();
+    retainedRevisionRequestRef.current = {
+      generation: retainedRevisionRequestRef.current.generation + 1,
+      abort: null,
+    };
+    return requestWorldEvidence(evidenceSummary);
+  }, [requestWorldEvidence]);
+
+  const closeWorldEvidence = useCallback(() => {
+    const evidenceId = worldEvidence.evidenceId;
+    const retainedRevision = worldEvidence.binding?.revision;
+    return validateRetainedWorldRevision(retainedRevision, () => dismissWorldEvidence({
+      evidenceId,
+      revision: retainedRevision,
+    }));
+  }, [dismissWorldEvidence, validateRetainedWorldRevision, worldEvidence.binding?.revision, worldEvidence.evidenceId]);
+
+  const validateWorldMediaOrigin = useCallback(() => {
+    const retainedRevision = worldEvidence.active
+      ? worldEvidence.binding?.revision
+      : worldEventRef.current.binding?.revision;
+    return validateRetainedWorldRevision(retainedRevision);
+  }, [validateRetainedWorldRevision, worldEvidence.active, worldEvidence.binding?.revision]);
 
   const applyWorldScope = useCallback((filters, ranking) => {
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
@@ -357,6 +460,11 @@ export function useWorldController({ activeView, apiGet }) {
     if (clusterSummary.graph_revision !== scope.graph_revision) {
       return recoverStaleCluster();
     }
+    retainedRevisionRequestRef.current.abort?.abort();
+    retainedRevisionRequestRef.current = {
+      generation: retainedRevisionRequestRef.current.generation + 1,
+      abort: null,
+    };
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
     for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
     for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
@@ -379,9 +487,18 @@ export function useWorldController({ activeView, apiGet }) {
   }, [loadWorldClusterCollection, recoverStaleCluster, resetWorldEvidence]);
 
   const closeWorldCluster = useCallback(() => {
-    for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
-    setWorldCluster((current) => ({ ...current, active: false, notice: null }));
-  }, []);
+    const clusterId = worldClusterRef.current.clusterId;
+    const retainedRevision = worldClusterRef.current.binding?.revision;
+    return validateRetainedWorldRevision(retainedRevision, () => {
+      const current = worldClusterRef.current;
+      if (!current.active || current.clusterId !== clusterId || current.binding?.revision !== retainedRevision) return false;
+      invalidateCollectionRequests(clusterRequestsRef);
+      const next = { ...current, active: false, notice: null };
+      worldClusterRef.current = next;
+      setWorldCluster(next);
+      return true;
+    });
+  }, [validateRetainedWorldRevision]);
 
   const selectWorldClusterCollection = useCallback((collection) => {
     const cluster = worldClusterRef.current;
@@ -511,6 +628,11 @@ export function useWorldController({ activeView, apiGet }) {
       } : null
     );
     if (!personSummary?.canonical_person_id || !binding) return null;
+    retainedRevisionRequestRef.current.abort?.abort();
+    retainedRevisionRequestRef.current = {
+      generation: retainedRevisionRequestRef.current.generation + 1,
+      abort: null,
+    };
     for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
     for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
     setWorldEvent(emptyWorldEvent());
@@ -529,12 +651,23 @@ export function useWorldController({ activeView, apiGet }) {
   }, [loadWorldPersonCollection, resetWorldEvidence]);
 
   const closeWorldPerson = useCallback(() => {
-    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
-    for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
-    setWorldEvent(emptyWorldEvent());
-    resetWorldEvidence();
-    setWorldPerson((current) => ({ ...current, active: false, notice: null }));
-  }, [resetWorldEvidence]);
+    const personId = worldPersonRef.current.personId;
+    const retainedRevision = worldPersonRef.current.binding?.revision;
+    return validateRetainedWorldRevision(retainedRevision, () => {
+      const current = worldPersonRef.current;
+      if (!current.active || current.personId !== personId || current.binding?.revision !== retainedRevision) return false;
+      invalidateCollectionRequests(personRequestsRef);
+      invalidateCollectionRequests(eventRequestsRef);
+      const nextEvent = emptyWorldEvent();
+      const nextPerson = { ...current, active: false, notice: null };
+      worldEventRef.current = nextEvent;
+      worldPersonRef.current = nextPerson;
+      setWorldEvent(nextEvent);
+      resetWorldEvidence();
+      setWorldPerson(nextPerson);
+      return true;
+    });
+  }, [resetWorldEvidence, validateRetainedWorldRevision]);
 
   const selectWorldPersonCollection = useCallback((collection) => {
     const person = worldPersonRef.current;
@@ -657,6 +790,11 @@ export function useWorldController({ activeView, apiGet }) {
   const openWorldEvent = useCallback((eventSummary) => {
     const person = worldPersonRef.current;
     if (!person.active || !eventSummary?.event_id || !person.binding) return null;
+    retainedRevisionRequestRef.current.abort?.abort();
+    retainedRevisionRequestRef.current = {
+      generation: retainedRevisionRequestRef.current.generation + 1,
+      abort: null,
+    };
     for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
     resetWorldEvidence();
     const nextEvent = emptyWorldEvent({
@@ -676,10 +814,19 @@ export function useWorldController({ activeView, apiGet }) {
   }, [loadWorldEventCollection, resetWorldEvidence]);
 
   const closeWorldEvent = useCallback(() => {
-    for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
-    resetWorldEvidence();
-    setWorldEvent((current) => ({ ...current, active: false, notice: null }));
-  }, [resetWorldEvidence]);
+    const eventId = worldEventRef.current.eventId;
+    const retainedRevision = worldEventRef.current.binding?.revision;
+    return validateRetainedWorldRevision(retainedRevision, () => {
+      const current = worldEventRef.current;
+      if (!current.active || current.eventId !== eventId || current.binding?.revision !== retainedRevision) return false;
+      invalidateCollectionRequests(eventRequestsRef);
+      const next = { ...current, active: false, notice: null };
+      worldEventRef.current = next;
+      setWorldEvent(next);
+      resetWorldEvidence();
+      return true;
+    });
+  }, [resetWorldEvidence, validateRetainedWorldRevision]);
 
   const selectWorldEventCollection = useCallback((collection) => {
     const event = worldEventRef.current;
@@ -712,23 +859,12 @@ export function useWorldController({ activeView, apiGet }) {
     requestRef.current.abort?.abort();
     requestRef.current = { generation: requestRef.current.generation + 1, abort: null };
     setWorld((current) => invalidateWorldSnapshot(current, mutation));
-    for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
-    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
-    for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
-    setWorldCluster((current) => emptyWorldCluster({
-      notice: current.active ? "World changed, so the previous revision-bound cluster was closed." : current.notice,
-    }));
-    setWorldPerson((current) => emptyWorldPerson({
-      notice: current.active ? "World changed, so the previous scoped person view was closed." : current.notice,
-    }));
-    setWorldEvent((current) => emptyWorldEvent({
-      notice: current.active ? "World changed, so the previous finalized event view was closed." : current.notice,
-    }));
-    resetWorldEvidence({ notice: worldEvidence.active ? "World changed, so the previous evidence view was closed." : worldEvidence.notice });
-  }, [resetWorldEvidence, worldEvidence.active, worldEvidence.notice]);
+    discardRetainedWorldHierarchy({ notice: "World changed, so the previous revision-bound hierarchy was closed." });
+  }, [discardRetainedWorldHierarchy]);
 
   useEffect(() => () => {
     requestRef.current.abort?.abort();
+    retainedRevisionRequestRef.current.abort?.abort();
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
     for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
     for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
@@ -753,6 +889,7 @@ export function useWorldController({ activeView, apiGet }) {
     ).then((revision) => {
       if (requestRef.current.generation !== generation) return;
       if (revision.stale || revision.graph_revision !== cached.data.graph_revision) {
+        discardRetainedWorldHierarchy();
         loadWorld({ preserve: false }).catch((error) => console.error(error));
       } else {
         setWorld((current) => ({ ...current, loading: false, error: null }));
@@ -762,7 +899,7 @@ export function useWorldController({ activeView, apiGet }) {
         setWorld((current) => ({ ...current, loading: false, error }));
       }
     });
-  }, [activeView, apiGet, loadWorld]);
+  }, [activeView, apiGet, discardRetainedWorldHierarchy, loadWorld]);
 
   return {
     state: { world: { ...world, cluster: worldCluster, person: worldPerson, event: worldEvent, evidence: worldEvidence } },
@@ -792,6 +929,7 @@ export function useWorldController({ activeView, apiGet }) {
       selectWorldEvidenceCollection,
       nextWorldEvidencePage,
       refreshWorldEvidence,
+      validateWorldMediaOrigin,
       invalidateWorld,
     },
   };

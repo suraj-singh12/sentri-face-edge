@@ -189,12 +189,12 @@ function PersonRelationships({ root, people, relationships, page, selected, onSe
         <button key={relationship.relationship_id} type="button" className="world-row world-person-relationship-row" data-selected={selected?.type === "relationship" && selected.value.relationship_id === relationship.relationship_id} onClick={() => onSelect(relationship)}>
           <ThemeIcon size={32} variant="light" color="blue"><IconRoute size={16} /></ThemeIcon>
           <span className="world-row-main">
-            <Text component="span" size="xs" fw={800}>{neighbor?.display_name || shortId(neighborId)}</Text>
+            <Text component="span" size="xs" fw={800}>{neighbor.display_name}</Text>
             <Text component="span" size="10px" c="dimmed">{relationship.relationship_types.map(humanize).join(", ")} · {humanize(relationship.directionality)}</Text>
             <Text component="span" size="10px">{Object.entries(relationship.evidence_type_counts).map(([type, count]) => `${humanize(type)} ${count}`).join(" · ")}</Text>
           </span>
           <Metric value={relationship.evidence_count} label="evidence" />
-          <Box ta="right" className="world-person-neighbor-state"><Text size="10px" c="dimmed">Last {formatDate(relationship.last_occurrence_at)}</Text><Text size="10px" c="dimmed">{humanize(relationship.strength_basis)}</Text><Text size="10px" c="dimmed">Neighbor analytics {humanize(neighbor?.analytics_state || "NOT_LOADED")}</Text></Box>
+          <Box ta="right" className="world-person-neighbor-state"><Text size="10px" c="dimmed">Last {formatDate(relationship.last_occurrence_at)}</Text><Text size="10px" c="dimmed">{humanize(relationship.strength_basis)}</Text><Text size="10px" c="dimmed">Neighbor analytics {humanize(neighbor.analytics_state)}</Text></Box>
         </button>
       );
     })}</Stack></ScrollArea.Autosize>
