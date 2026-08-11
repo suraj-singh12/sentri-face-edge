@@ -10,7 +10,7 @@ Use it with, rather than instead of, the other architecture documents:
 - `ARCHITECTURE_STATE.md` records the concise implementation checkpoint.
 - `IMPLEMENTATION_PLAN.md` records phase order, completion, and remaining gates.
 
-This explanation covers the architecture implemented and frozen from P0 through P10 as of 2026-08-11, plus the completed P11-A read-only integrity checker, P11-B explicit graph projection rebuild, and P11C-R01 archived canonical-survivor repair. P11-C1 fixes the two-entry catalog and execution design in `P11_STRUCTURED_REPAIR_DESIGN.md`; R02, P11-D revert, and P11-E recovery UI remain deferred.
+This explanation covers the architecture implemented and frozen from P0 through P10 as of 2026-08-11, plus the completed P11-A/P11-A1 read-only integrity checker, P11-B explicit graph projection rebuild, and P11C-R01 archived canonical-survivor repair. P11-A1 corrected and refroze note occurrence integrity after the R02 safety stop; R02 itself remains unimplemented. P11-C1 fixes the two-entry catalog and execution design in `P11_STRUCTURED_REPAIR_DESIGN.md`; P11-D revert and P11-E recovery UI remain deferred.
 
 The central question throughout is:
 
@@ -1298,7 +1298,7 @@ Compatibility data remains valuable, but value does not confer authority. Deleti
 Several capabilities are intentionally future work:
 
 - P10-F World UI is complete and frozen after the final post-fix integration/runtime gate; P10-FR-01 through P10-FR-04 are fixed.
-- P11-A provides the fixed authority/invariant model and explicit query-only integrity checker. P11-B provides deterministic graph projection rebuild with preflight refusal, atomic replacement, journal/revision/no-op semantics, postcheck, and zero authoritative rewriting. P11-C1 fixes two repairs. R01 is implemented as an explicit finding-bound, journaled archived-to-active transition for the uniquely proven terminal survivor; it preserves canonical/merge/history/evidence state, leaves graph edges unchanged, advances the lifecycle revision once, and requires a clean full P11-A post-check. R02 note reference reconciliation, P11-D operation revert, and P11-E recovery UI/acceptance remain future work.
+- P11-A provides the fixed authority/invariant model and explicit query-only checker. P11-A1 corrected the former row-by-row NOTE-002 assumption: active rows form the current occurrence layer, while completely retired same-note occurrences remain historical even when their person is mentioned again later. Current active cardinality is evaluated per existing note/person group; zero-row missing groups remain outside coverage, and NOTE-003 is unchanged. P11-B provides deterministic graph projection rebuild. P11-C1 fixes two repairs. R01 is implemented; R02 note reference reconciliation may restart against the refrozen checker contract. P11-D operation revert and P11-E recovery UI/acceptance remain future work.
 - P12 will extend portable backup/restore rules for every normalized record and derived state.
 - Future repeated-unknown tracking needs its own authoritative lifecycle.
 - A normalized place model is required before location becomes an entity.

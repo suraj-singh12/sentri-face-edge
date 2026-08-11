@@ -2,11 +2,13 @@
 
 This document is a concise checkpoint of the stable implemented architecture. Detailed rules remain in `AGENTS.md`, `DOMAIN_MODEL.md`, and `P11_INTEGRITY_MODEL.md`; phase scope remains in `IMPLEMENTATION_PLAN.md`.
 
-## P11-A/B integrity and graph recovery status; P11-C R01
+## P11-A1/B integrity and graph recovery status; P11-C R01
 
 P11-A and P11-B are complete and frozen while P11 remains in progress. `ReadOnlyIntegrityChecker` explicitly opens schema-v28 storage read-only/query-only, holds one deferred SQLite snapshot, runs the fixed P11 invariant registry, and returns deterministic bounded factual findings. `GlobalIdentityGraphService.rebuild_projection()` is the only implemented exceptional recovery command for `relationship_evidence → graph_connections`: it reuses normal projection semantics, refuses authoritative `ERROR`/`CRITICAL` ambiguity, replaces drift under `BEGIN IMMEDIATE`, validates before commit, advances the opaque revision only when the projection changes, journals `graph.projection.rebuild`, and runs the checker again after commit.
 
-P11-C1 is complete and frozen. Of its exactly two catalog entries, `P11C-R01-RESTORE-ARCHIVED-CANONICAL-SURVIVOR` is implemented through an explicit Python/service call. It accepts only a fresh typed P11-A diagnosis token, revalidates all identity/merge/journal/revision state under `BEGIN IMMEDIATE`, restores the proven terminal from archived to active using shared lifecycle machinery, preserves all canonical/merge and other history, advances the lifecycle visibility revision once without rebuilding graph edges, journals atomically, refreshes the derived recognition index, and runs full P11-A afterward. `P11C-R02-RECONCILE-NOTE-REFERENCE-STATE` remains unimplemented. There is no API/UI, startup hook, worker, polling, repair-all behavior, generic repair engine, or revert.
+P11-A1 corrected and refroze `P11-NOTE-002` after R02 safely stopped on a checker contradiction. The checker now distinguishes current active occurrence cardinality from valid retired historical occurrences using existing active state and same-note retirement provenance. Normal remove/re-add cycles are clean, genuine cardinality/provenance corruption remains detectable, NOTE-003 is unchanged, and wholly missing occurrence groups remain outside coverage. No note mutation, history, schema, graph, journal, API, or UI behavior changed.
+
+P11-C1 is complete and frozen. Of its exactly two catalog entries, `P11C-R01-RESTORE-ARCHIVED-CANONICAL-SURVIVOR` is implemented through an explicit Python/service call. It accepts only a fresh typed P11-A diagnosis token, revalidates all identity/merge/journal/revision state under `BEGIN IMMEDIATE`, restores the proven terminal from archived to active using shared lifecycle machinery, preserves all canonical/merge and other history, advances the lifecycle visibility revision once without rebuilding graph edges, journals atomically, refreshes the derived recognition index, and runs full P11-A afterward. `P11C-R02-RECONCILE-NOTE-REFERENCE-STATE` remains unimplemented but is safe to restart against the P11-A1 contract. There is no API/UI, startup hook, worker, polling, repair-all behavior, generic repair engine, or revert.
 
 ## Current phase
 
@@ -160,7 +162,7 @@ The final mandatory matrix completed on 2026-08-11 in `docs/P10_WORLD_BENCHMARK_
 
 ## Known deferred work
 
-- Implement only R02 from the fixed P11-C catalog in `docs/P11_STRUCTURED_REPAIR_DESIGN.md`; R01 is implemented and frozen, and no generic repair or recovery surface is authorized.
+- Restart only R02 from the fixed P11-C catalog against the refrozen P11-A1 note-occurrence contract; R01 remains implemented and frozen, and no generic repair or recovery surface is authorized.
 - P11 guarded merge/operation revert; normalized merge undo is intentionally not exposed yet.
 - P12 backup/restore hardening for normalized authoritative, journal, and projection records.
 - P13 fully offline BYOM/model-management work.

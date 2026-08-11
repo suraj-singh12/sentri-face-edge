@@ -2,7 +2,7 @@
 
 Implement in order. Each phase must preserve offline operation, use additive migrations where possible, keep important writes transactional and journaled, and add upgrade/failure tests before moving on.
 
-Status after P11-C2: P0 through P10 are complete and frozen. P11-A establishes the fixed integrity authority/invariant model and explicit read-only checker. P11-B adds the explicit deterministic, preflight-gated, atomic and journaled `relationship_evidence → graph_connections` rebuild. P11-C1 fixes a two-entry structured-repair catalog and execution design. P11C-R01 is implemented; R02 and P11-D/E remain future work. P11 as a whole is not complete.
+Status after P11-A1: P0 through P10 are complete and frozen. P11-A establishes the integrity authority/invariant model and explicit read-only checker; P11-A1 corrected and refroze only `P11-NOTE-002` after the R02 safety stop exposed a historical/current occurrence false positive. P11-B provides deterministic graph rebuild. P11-C1 fixes a two-entry repair catalog, and P11C-R01 is implemented. R02 and P11-D/E remain future work; P11 is not complete.
 
 ## P0 Database migration/version foundation — Complete
 
@@ -95,6 +95,8 @@ P11-A is complete. `docs/P11_INTEGRITY_MODEL.md` records the verified authority 
 P11-B is complete. The existing graph service command now performs explicit recovery only: full P11-A preflight; refusal on authoritative ambiguity; one `BEGIN IMMEDIATE` snapshot; shared deterministic projection calculation; no-op comparison; complete derived replacement and in-transaction validation; one revision advance only on change; bounded immutable journal result; and post-commit P11-A verification. Current-schema startup no longer silently repairs projection drift. There is no schema, dependency, HTTP/API, frontend, worker, polling, vector-index, structured-repair, or revert change.
 
 P11-C1 authority audit/catalog/execution design is complete and frozen. The executable registry contributes exactly four candidates, but implementation inspection admits only two fixed repair commands. P11C-R01 now implements restoration of an otherwise-valid archived terminal merge survivor with a finding-bound typed token, exact `BEGIN IMMEDIATE` revalidation, a shared archived-to-active primitive, immutable journal, unchanged merge/canonical/graph-edge state, one lifecycle revision advance, and full P11-A post-check. The note occurrence/`NOTE_REFERENCE` reconciliation R02 remains design-only. Generic repair, canonical retargeting, lifecycle/identity guessing, missing-history reconstruction, automatic invocation, and revert remain rejected.
+
+P11-A1 records the required safety-stop correction before R02 resumes. The former row-by-row `P11-NOTE-002` rule incorrectly expected a retired occurrence to reactivate when its person appeared in a later revision. The refrozen rule validates occurrence provenance individually, then requires current active cardinality per existing note/person group. It preserves append/retire history and the wholly-missing-group coverage boundary, leaves NOTE-003 unchanged, and changes no note-domain mutation code.
 
 Remaining order: implement only P11C-R02 from the fixed catalog; P11-D guarded operation revert; P11-E integrity/recovery UI and final acceptance. Exit for all of P11 remains: corruption/drift is reported without inference, rebuild is idempotent, supported repair/revert is guarded and audited, and authority is never reconstructed by guessing.
 

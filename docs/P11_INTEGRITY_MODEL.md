@@ -1,6 +1,6 @@
 # P11 integrity authority model, checker, and graph rebuild
 
-Status: **P11-A and P11-B complete and frozen; P11-C1 design complete; P11C-R01 implemented; P11C-R02 unimplemented; P11-C incomplete.** This document fixes the P11 invariant IDs and authority boundary, records the read-only checker, and defines the explicit deterministic `graph_connections` rebuild. `P11_STRUCTURED_REPAIR_DESIGN.md` records the frozen two-entry catalog and the finding-bound R01 implementation. It does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
+Status: **P11-A1 corrected and refroze `P11-NOTE-002`; P11-A/B remain complete and frozen; P11C-R01 is implemented; P11C-R02 is unimplemented.** The R02 safety stop exposed a false-positive occurrence model, now corrected without changing note mutation/history semantics or expanding missing-occurrence coverage. `P11_STRUCTURED_REPAIR_DESIGN.md` records the fixed two-entry catalog and the finding-bound R01 implementation. It does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
 
 ## State-authority map
 
@@ -21,7 +21,7 @@ The classification is verified against schema v28, storage writes, services, tri
 | `graph_state` revision | B — Derived / rebuildable | Opaque invalidation metadata, not evidence or an operation count. P11-A does not infer a “correct” numeric revision. |
 | `notes` identity/lifecycle | A — Authoritative | Stable note identity, owner/subject, and active/retired state. |
 | `note_revisions`, `note_revision_mentions` | C — Historical / immutable | Saved content and exact person-ID mention snapshots. Text parsing is never authority. |
-| active/retired `note_mentions` | A — Authoritative | Current mention occurrence plus retirement provenance. Active occurrences support current `NOTE_REFERENCE` evidence. |
+| active/retired `note_mentions` | A — Authoritative | Active rows are the current occurrence layer. Inactive rows are preserved historical occurrences and remain valid across later remove/re-add cycles when their same-note retirement revision, operation, and timestamp provenance is complete. |
 | `merge_operations`, `merge_affected_items`, `merge_conflict_resolutions` | C — Historical / immutable | Normalized manifest, ownership/action inventory, conflict selection, and inverse data. Later merges may extend the terminal chain beyond the originally selected survivor. |
 | `operation_journal`, `operation_journal_status_history` | C — Historical / immutable | Immutable operation identity/details and append-only transitions. History cannot be reconstructed by guessing. |
 | local media and durable paths referenced by normalized records | A — Authoritative | Media content is local authority. P11-A checks durable database provenance, not ordinary path readability: protected files and test/reference paths are not plain-file existence claims. |
@@ -62,7 +62,7 @@ The executable registry is `sentriface.integrity.INTEGRITY_INVARIANTS`. Every fi
 | `P11-EVIDENCE-002` | Evidence / Error | Active evidence resolves legally and co-observation endpoints remain effective participants. Canonically collapsed self-evidence is legal history. | Manual review |
 | `P11-GRAPH-001` | Projection / Error | Stored graph exactly equals the active-evidence aggregate; missing, extra, malformed, wrong-support, and self-edge rows fail. | Safe rebuild |
 | `P11-NOTE-001` | Note / Error | Every note has contiguous revisions and valid revision mentions. | Manual review |
-| `P11-NOTE-002` | Note / Error | Mention active/retired state agrees with note lifecycle and latest revision. | Structured repair |
+| `P11-NOTE-002` | Note / Error | For each existing note/person occurrence group, active cardinality is exactly one when the active latest revision requires that non-self person and zero otherwise. Retired historical occurrences remain valid with complete same-note retirement provenance. A latest-revision person with no occurrence rows remains outside current coverage. | Structured repair for the already-frozen R02 shapes only |
 | `P11-NOTE-003` | Note / Error | Active non-self mentions have exactly one matching active directed `NOTE_REFERENCE`; inactive mentions are not active support. | Structured repair |
 | `P11-MERGE-001` | Merge / Critical | Manifest/journal identity, actor, status, and current transitive source/target terminal resolution agree. | Manual review |
 | `P11-MERGE-002` | Merge / Critical | Affected item/action/ownership and conflict selected/inverse JSON are structurally complete. | Manual review |
@@ -81,6 +81,14 @@ Individual SQL failures become findings and later checks continue when safe. Fin
 Set-based joins cover foreign keys, finalization, review state, evidence sources, notes, journal linkage, and known results. Evidence is streamed. Canonical people, corrections, effective-participant working sets, and unique expected graph aggregates are request-local memory bounded by normalized person/correction/edge cardinality; no persistent cache or integrity table is created. A 500-person fixture confirms the SQL statement count does not grow with person count (76–86 traced read statements depending on empty-database `integrity_check` internals).
 
 Expected graph state is calculated without mutation. Active evidence is canonically resolved, undirected endpoints are ordered, collapsed self-links are suppressed, and remaining rows group by endpoints/type/direction with exact count, evidence-type set, and latest time. Missing, extra, and unequal stored rows are separately reported.
+
+### P11-A1 note-occurrence correction and refreeze
+
+The original `P11-NOTE-002` implementation compared every occurrence row independently with membership in the latest revision. That was incorrect for append/retire history: after mention, removal, and later re-mention, it demanded that both the retired historical occurrence and the new current occurrence be active. The normal note domain correctly never reactivates or deletes historical rows.
+
+The refrozen checker first validates each occurrence's own state. Active rows have no retirement fields. Inactive historical rows require a retirement revision belonging to the same note at or after their creation revision, plus retirement operation and timestamp. It then groups only existing occurrence rows by raw note/person identity and compares current active cardinality with the immutable latest revision: one active occurrence for a required active non-self mention, otherwise none. Inactive historical rows do not contribute to current cardinality. No row ID or timestamp ordering is used to select a current occurrence.
+
+Coverage remains deliberately unchanged when the latest revision mentions a person for whom no `note_mentions` occurrence row exists: `P11-NOTE-002` still emits no finding. `P11-NOTE-003` is unchanged and continues to require exactly one matching active directed `NOTE_REFERENCE` only for a current active non-self occurrence. Regression tests prove valid remove/re-add cycles are clean, malformed provenance and wrong active cardinality still fail, historical evidence stays inactive, and the frozen R02 append/retire result can theoretically clear its finding without rewriting history.
 
 ## P11-B explicit graph projection rebuild
 
@@ -111,9 +119,9 @@ These are architectural boundaries, not P11-A blockers. They constrain later rep
 
 ## Remaining P11 sequence
 
-1. **P11-A — Read-only integrity checker:** complete.
+1. **P11-A / P11-A1 — Read-only integrity checker:** complete and refrozen after correcting `P11-NOTE-002` historical/current occurrence semantics.
 2. **P11-B — Deterministic graph projection rebuild:** complete; explicit preflight-gated, atomic, journaled, revision-aware replacement with no authority rewrite.
 3. **P11-C1 — Structured repair authority audit/catalog/design:** complete and frozen. The only commands admitted are restoring an otherwise-valid archived terminal merge survivor and reconciling diagnosed note occurrence/reference state from immutable revision authority.
-4. **P11-C2 / R01:** implemented as explicit Python/service invocation with typed finding preconditions, in-transaction revalidation, immutable repair journaling, shared lifecycle mutation, exact projection/revision validation, and full P11-A post-check. **R02 remains unimplemented.**
+4. **P11-C2 / R01:** implemented as explicit Python/service invocation with typed finding preconditions, in-transaction revalidation, immutable repair journaling, shared lifecycle mutation, exact projection/revision validation, and full P11-A post-check. **R02 remains unimplemented and may restart against the refrozen checker contract.**
 5. **P11-D — Revert execution:** future; operation-specific preconditions/inverse data and atomic journaled execution.
 6. **P11-E — Integrity/recovery UI and acceptance:** future; explicit invocation and factual reports, no polling/background scan.

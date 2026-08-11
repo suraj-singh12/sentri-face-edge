@@ -109,7 +109,7 @@ INTEGRITY_INVARIANTS: tuple[IntegrityInvariant, ...] = (
     _invariant("P11-EVIDENCE-002", "GRAPH_EVIDENCE", IntegritySeverity.ERROR, "active relationship_evidence plus correction/canonical interpretation", "Active evidence resolves to legal effective endpoints; canonical self-links remain historical evidence but are not projected.", "evidence ID and effective endpoints", FutureIntegrityHandling.MANUAL_REVIEW),
     _invariant("P11-GRAPH-001", "GRAPH_PROJECTION", IntegritySeverity.ERROR, "active relationship_evidence", "graph_connections exactly equals the deterministic aggregate of active evidence after canonical resolution and self-edge suppression.", "edge key and expected/stored aggregate", FutureIntegrityHandling.SAFE_REBUILD),
     _invariant("P11-NOTE-001", "NOTE", IntegritySeverity.ERROR, "notes, note_revisions and note_revision_mentions", "Every note has contiguous immutable revisions and revision mention references belong to existing revisions and persons.", "note/revision/person IDs", FutureIntegrityHandling.MANUAL_REVIEW),
-    _invariant("P11-NOTE-002", "NOTE", IntegritySeverity.ERROR, "note_mentions, latest revision and notes lifecycle", "Active mentions equal the latest active revision snapshot; retired mentions have complete retirement provenance.", "note, mention, revision and person IDs", FutureIntegrityHandling.STRUCTURED_REPAIR),
+    _invariant("P11-NOTE-002", "NOTE", IntegritySeverity.ERROR, "notes, latest note revision mentions, and existing note_mentions occurrence history", "For each existing note/person occurrence group, exactly one occurrence is active when the active latest revision requires that non-self person and none is active otherwise; inactive historical occurrences remain valid with complete same-note retirement provenance.", "note/person IDs, active occurrence IDs/count, latest revision ID, and malformed occurrence provenance", FutureIntegrityHandling.STRUCTURED_REPAIR),
     _invariant("P11-NOTE-003", "NOTE", IntegritySeverity.ERROR, "note_mentions and NOTE_REFERENCE evidence", "Each active non-self mention has exactly one matching active directed NOTE_REFERENCE evidence row, and inactive/retired state is not projected.", "mention and evidence IDs", FutureIntegrityHandling.STRUCTURED_REPAIR),
     _invariant("P11-MERGE-001", "MERGE", IntegritySeverity.CRITICAL, "merge_operations, persons and operation_journal", "Every committed merge manifest agrees with its journal identity/actor and the source resolves to its recorded survivor.", "merge, journal, source and survivor IDs", FutureIntegrityHandling.MANUAL_REVIEW),
     _invariant("P11-MERGE-002", "MERGE", IntegritySeverity.CRITICAL, "merge affected items/conflicts and inverse payloads", "Merge manifests retain structurally complete affected ownership/action state and conflict inverse data.", "merge/item/conflict IDs and missing fields", FutureIntegrityHandling.MANUAL_REVIEW),
@@ -667,28 +667,96 @@ class ReadOnlyIntegrityChecker:
             if not (active_shape or retired_shape):
                 self._add("P11-NOTE-002", "Note lifecycle and retirement provenance disagree", entities={"note_id": row[0]}, evidence={"status": row[1], "retired_operation_id": row[2], "retired_at": row[3]})
         query = """
-        WITH latest AS (SELECT note_id, MAX(revision_number) number FROM note_revisions GROUP BY note_id),
-        latest_mentions AS (
-          SELECT r.note_id, rm.referenced_person_id FROM note_revisions r
-          JOIN latest l ON l.note_id=r.note_id AND l.number=r.revision_number
-          JOIN note_revision_mentions rm USING(revision_id)
+        WITH latest AS (
+          SELECT r.* FROM note_revisions r
+          WHERE r.revision_number = (
+            SELECT MAX(candidate.revision_number)
+            FROM note_revisions candidate WHERE candidate.note_id=r.note_id
+          )
         )
         SELECT n.note_id, n.status, n.owner_person_id,
+               latest.revision_id AS latest_revision_id,
                m.mention_id, m.referenced_person_id, m.active,
-               m.retired_revision_id, m.retired_operation_id, m.retired_at,
-               CASE WHEN lm.referenced_person_id IS NULL THEN 0 ELSE 1 END in_latest
-        FROM notes n LEFT JOIN note_mentions m USING(note_id)
-        LEFT JOIN latest_mentions lm ON lm.note_id=n.note_id AND lm.referenced_person_id=m.referenced_person_id
-        ORDER BY n.note_id, m.mention_id
+               m.created_revision_id, created.note_id AS created_note_id,
+               created.revision_number AS created_revision_number,
+               m.retired_revision_id, retired.note_id AS retired_note_id,
+               retired.revision_number AS retired_revision_number,
+               m.retired_operation_id, m.retired_at,
+               CASE WHEN latest_mention.referenced_person_id IS NULL THEN 0 ELSE 1 END in_latest
+        FROM notes n
+        JOIN latest ON latest.note_id=n.note_id
+        JOIN note_mentions m ON m.note_id=n.note_id
+        JOIN note_revisions created ON created.revision_id=m.created_revision_id
+        LEFT JOIN note_revisions retired ON retired.revision_id=m.retired_revision_id
+        LEFT JOIN note_revision_mentions latest_mention
+          ON latest_mention.revision_id=latest.revision_id
+         AND latest_mention.referenced_person_id=m.referenced_person_id
+        ORDER BY n.note_id, m.referenced_person_id, m.mention_id
         """
+        grouped: dict[tuple[str, str], list[sqlite3.Row]] = defaultdict(list)
         for row in conn.execute(query):
-            if row[3] is None:
-                continue
-            active_expected = row[1] == "ACTIVE" and bool(row[9]) and row[4] != row[2]
-            shape = bool(row[5]) and row[6] is None and row[7] is None and row[8] is None
-            retired_shape = not bool(row[5]) and row[6] is not None and row[7] is not None and row[8] is not None
-            if bool(row[5]) != active_expected or not (shape or retired_shape):
-                self._add("P11-NOTE-002", "Note mention active/retired state disagrees with the latest authoritative revision", entities={"note_id": row[0], "mention_id": row[3], "person_id": row[4]}, evidence={"note_status": row[1], "mention_active": row[5], "present_in_latest_revision": row[9], "retired_revision_id": row[6], "retired_operation_id": row[7]})
+            grouped[(str(row["note_id"]), str(row["referenced_person_id"]))].append(row)
+            active_shape = (
+                bool(row["active"])
+                and row["retired_revision_id"] is None
+                and row["retired_operation_id"] is None
+                and row["retired_at"] is None
+            )
+            retired_shape = (
+                not bool(row["active"])
+                and row["retired_revision_id"] is not None
+                and row["retired_operation_id"] is not None
+                and row["retired_at"] is not None
+                and row["created_note_id"] == row["note_id"]
+                and row["retired_note_id"] == row["note_id"]
+                and int(row["retired_revision_number"] or 0)
+                    >= int(row["created_revision_number"] or 0)
+            )
+            if not (active_shape or retired_shape):
+                self._add(
+                    "P11-NOTE-002",
+                    "Note mention occurrence has invalid active/retirement provenance",
+                    entities={
+                        "note_id": row["note_id"],
+                        "mention_id": row["mention_id"],
+                        "person_id": row["referenced_person_id"],
+                    },
+                    evidence={
+                        "mention_active": row["active"],
+                        "created_revision_id": row["created_revision_id"],
+                        "retired_revision_id": row["retired_revision_id"],
+                        "retired_operation_id": row["retired_operation_id"],
+                        "retired_at": row["retired_at"],
+                    },
+                )
+        for (_note_id, _person_id), rows in sorted(grouped.items()):
+            sample = rows[0]
+            active_ids = tuple(sorted(
+                str(row["mention_id"]) for row in rows if bool(row["active"])
+            ))
+            expected_count = 1 if (
+                sample["status"] == "ACTIVE"
+                and bool(sample["in_latest"])
+                and sample["referenced_person_id"] != sample["owner_person_id"]
+            ) else 0
+            if len(active_ids) != expected_count:
+                self._add(
+                    "P11-NOTE-002",
+                    "Current note mention occurrence cardinality disagrees with the latest authoritative revision",
+                    entities={
+                        "note_id": sample["note_id"],
+                        "person_id": sample["referenced_person_id"],
+                    },
+                    evidence={
+                        "latest_revision_id": sample["latest_revision_id"],
+                        "note_status": sample["status"],
+                        "present_in_latest_revision": sample["in_latest"],
+                        "expected_active_occurrences": expected_count,
+                        "actual_active_occurrences": len(active_ids),
+                        "active_mention_ids": ",".join(active_ids),
+                        "historical_occurrence_count": len(rows) - len(active_ids),
+                    },
+                )
 
     def _check_note_evidence(self, conn: sqlite3.Connection) -> None:
         query = """
