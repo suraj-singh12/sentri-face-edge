@@ -1294,7 +1294,7 @@ Compatibility data remains valuable, but value does not confer authority. Deleti
 Several capabilities are intentionally future work:
 
 - P10-F World UI is complete and frozen after the final post-fix integration/runtime gate; P10-FR-01 through P10-FR-04 are fixed.
-- P11 will add broader integrity checking, transactional rebuild tooling, and guarded operation/merge revert.
+- P11-A now provides the fixed authority/invariant model and an explicit query-only integrity checker. P11-B deterministic projection rebuild, P11-C structured repair, P11-D operation revert, and P11-E recovery UI/acceptance remain future work. P11-A reports facts only and never mutates or infers missing authority.
 - P12 will extend portable backup/restore rules for every normalized record and derived state.
 - Future repeated-unknown tracking needs its own authoritative lifecycle.
 - A normalized place model is required before location becomes an entity.
