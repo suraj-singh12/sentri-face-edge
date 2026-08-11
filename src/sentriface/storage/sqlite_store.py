@@ -8684,11 +8684,31 @@ _WORLD_CALCULATION_VERSION = "world-descriptive-v1"
 _WORLD_RECENT_WINDOWS = {"LAST_7_DAYS": 7, "LAST_30_DAYS": 30, "LAST_90_DAYS": 90}
 _WORLD_MAX_LIMITS = WorldReadLimits(
     people=100, clusters=50, events=100, evidence=100, media=100,
-    relationships=200, patterns=25,
+    relationships=200, patterns=25, provenance=200, facets=200,
 )
 
 
 def _world_graph_v2_read(
+    conn: sqlite3.Connection, request: WorldGraphRequest,
+) -> WorldGraphV2ReadModel:
+    owns_snapshot = not conn.in_transaction
+    if owns_snapshot:
+        # The revision read is the first read in this deferred transaction. WAL
+        # then keeps every later SELECT on the same snapshot while writers remain
+        # free to commit on their own connections.
+        conn.execute("BEGIN")
+    try:
+        result = _world_graph_v2_read_snapshot(conn, request)
+    except Exception:
+        if owns_snapshot:
+            conn.rollback()
+        raise
+    if owns_snapshot:
+        conn.commit()
+    return result
+
+
+def _world_graph_v2_read_snapshot(
     conn: sqlite3.Connection, request: WorldGraphRequest,
 ) -> WorldGraphV2ReadModel:
     revision = _graph_revision_token(conn)
@@ -8756,13 +8776,18 @@ def _normalize_world_collection(
         WorldDetailLevel.EVIDENCE: WorldCollection.EVIDENCE,
     }
     allowed = {
-        WorldDetailLevel.WORLD_SCOPE: {WorldCollection.PEOPLE, WorldCollection.CLUSTERS},
+        WorldDetailLevel.WORLD_SCOPE: {
+            WorldCollection.PEOPLE, WorldCollection.CLUSTERS,
+            WorldCollection.RELATIONSHIPS, WorldCollection.PATTERNS,
+            WorldCollection.LOCATION_FACETS,
+        },
         WorldDetailLevel.CLUSTER: {WorldCollection.MEMBERS, WorldCollection.RELATIONSHIPS},
         WorldDetailLevel.PERSON: {WorldCollection.RELATIONSHIPS, WorldCollection.EVENTS},
         WorldDetailLevel.EVENT: {
-            WorldCollection.PARTICIPANTS, WorldCollection.EVIDENCE, WorldCollection.MEDIA,
+            WorldCollection.PARTICIPANTS, WorldCollection.PROVENANCE,
+            WorldCollection.EVIDENCE, WorldCollection.MEDIA,
         },
-        WorldDetailLevel.EVIDENCE: {WorldCollection.EVIDENCE},
+        WorldDetailLevel.EVIDENCE: {WorldCollection.EVIDENCE, WorldCollection.MEDIA},
     }
     value = collection or defaults[level]
     if value not in allowed[level]:
@@ -8780,14 +8805,20 @@ def _world_page_state(
     offset: int | None = None,
 ) -> WorldPageState:
     page_offset = context.offset if offset is None else offset
+    if collection != context.collection and returned_count == 0:
+        return WorldPageState(
+            collection=collection.value,
+            total_count=total_count,
+            returned_count=0,
+            has_more=total_count > 0,
+            next_cursor=None,
+            truncated=total_count > 0,
+            truncation_reason="collection_not_requested",
+        )
     has_more = page_offset + returned_count < total_count
     truncation_reason = None
     if has_more:
-        truncation_reason = (
-            "collection_not_requested"
-            if collection != context.collection and returned_count == 0
-            else f"backend_limit:{limit}"
-        )
+        truncation_reason = f"backend_limit:{limit}"
     cursor = _world_token(
         "CURSOR", context.revision, context.level.value,
         context.focus_type, context.focus_id, page_offset + returned_count,
@@ -8862,12 +8893,16 @@ def _world_result(
 def _world_scope_read(
     conn: sqlite3.Connection, context: _WorldReadContext,
 ) -> WorldGraphV2ReadModel:
+    if context.collection == WorldCollection.LOCATION_FACETS:
+        return _world_location_facets_read(conn, context)
+    facet_offset = context.offset if context.collection == WorldCollection.LOCATION_FACETS else 0
     people_rows, aliases, canonical_map = _world_people_scope(conn, context.filters)
     relationships = _world_relationship_scope(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
     )
     statistics = _world_event_statistics(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
+        location_offset=facet_offset, location_limit=context.limits.facets,
     )
     activity = statistics["activity"]
     if _world_has_event_scope(context.filters):
@@ -8895,6 +8930,7 @@ def _world_scope_read(
         ]
         statistics = _world_event_statistics(
             conn, context.filters, set(people_rows), canonical_map=canonical_map,
+            location_offset=facet_offset, location_limit=context.limits.facets,
         )
         activity = statistics["activity"]
     degree = _world_degree(people_rows, relationships)
@@ -8905,6 +8941,7 @@ def _world_scope_read(
     )
     people: tuple[WorldPerson, ...] = ()
     clusters: tuple[WorldCluster, ...] = ()
+    relationship_models: tuple[WorldRelationship, ...] = ()
     people_offset = context.offset if context.collection == WorldCollection.PEOPLE else 0
     cluster_offset = context.offset if context.collection == WorldCollection.CLUSTERS else 0
     if context.collection == WorldCollection.PEOPLE:
@@ -8923,6 +8960,13 @@ def _world_scope_read(
         clusters = tuple(replace(item, member_ids=()) for item in clusters_all[
             cluster_offset:cluster_offset + context.limits.clusters
         ])
+    relationship_offset = context.offset if context.collection == WorldCollection.RELATIONSHIPS else 0
+    if context.collection == WorldCollection.RELATIONSHIPS:
+        relationship_models = tuple(
+            _world_relationship(item, context) for item in relationships[
+                relationship_offset:relationship_offset + context.limits.relationships
+            ]
+        )
     pagination = {
         WorldCollection.PEOPLE.value: _world_page_state(
             context, WorldCollection.PEOPLE, len(ordered_ids), len(people),
@@ -8932,19 +8976,37 @@ def _world_scope_read(
             context, WorldCollection.CLUSTERS, len(clusters_all), len(clusters),
             context.limits.clusters, offset=cluster_offset,
         ),
+        WorldCollection.RELATIONSHIPS.value: _world_page_state(
+            context, WorldCollection.RELATIONSHIPS, len(relationships),
+            len(relationship_models), context.limits.relationships,
+            offset=relationship_offset,
+        ),
+        WorldCollection.LOCATION_FACETS.value: _world_page_state(
+            context, WorldCollection.LOCATION_FACETS,
+            int(statistics["location_total_count"]),
+            len(statistics["locations"]), context.limits.facets,
+            offset=facet_offset,
+        ),
     }
     eligible_ids = set(people_rows)
     event_count = int(statistics["total"])
-    facets = _world_facets(
-        conn, context.filters, people_rows, relationships, activity, eligible_ids,
-        location_facets=statistics["locations"],
-    )
-    patterns = tuple(_world_patterns(
+    all_patterns = tuple(_world_patterns(
         conn, context.filters, len(people_rows), context.limits.patterns,
         eligible_person_ids=eligible_ids, context=context,
         measured_total=int(statistics["total"]),
         measured_missing=int(statistics["missing"]),
-    )) if context.offset == 0 else ()
+    ))
+    patterns = all_patterns if context.offset == 0 else ()
+    pattern_total = len(all_patterns)
+    facets = _world_facets(
+        conn, context.filters, people_rows, relationships, activity, eligible_ids,
+        location_facets=statistics["locations"], pattern_count=pattern_total,
+    )
+    pagination[WorldCollection.PATTERNS.value] = _world_page_state(
+        context, WorldCollection.PATTERNS, pattern_total, len(patterns),
+        context.limits.patterns,
+        offset=(context.offset if context.collection == WorldCollection.PATTERNS else 0),
+    )
     return _world_result(
         context,
         scope_totals={
@@ -8954,7 +9016,105 @@ def _world_scope_read(
         pagination=pagination,
         available_facets=facets,
         people=people, clusters=clusters, patterns=patterns,
+        relationships=relationship_models,
     )
+
+
+def _world_location_facets_read(
+    conn: sqlite3.Connection, context: _WorldReadContext,
+) -> WorldGraphV2ReadModel:
+    """Read the authoritative location collection without unrelated World models."""
+    people_rows, _, canonical_map = _world_people_scope(conn, context.filters)
+    eligible_ids = set(people_rows)
+    if context.filters.activity:
+        statistics = _world_event_statistics(
+            conn, context.filters, eligible_ids, canonical_map=canonical_map,
+            location_offset=context.offset, location_limit=context.limits.facets,
+        )
+        allowed = set(context.filters.activity)
+        activity = statistics["activity"]
+        eligible_ids = {
+            person_id for person_id in eligible_ids
+            if _world_activity_bucket(activity.get(person_id, 0)) in allowed
+        }
+        statistics = _world_event_statistics(
+            conn, context.filters, eligible_ids, canonical_map=canonical_map,
+            location_offset=context.offset, location_limit=context.limits.facets,
+        )
+    else:
+        statistics = _world_location_facet_statistics(
+            conn, context.filters, eligible_ids, canonical_map,
+            context.offset, context.limits.facets,
+        )
+    pagination = {
+        WorldCollection.LOCATION_FACETS.value: _world_page_state(
+            context, WorldCollection.LOCATION_FACETS,
+            int(statistics["location_total_count"]), len(statistics["locations"]),
+            context.limits.facets, offset=context.offset,
+        ),
+    }
+    return _world_result(
+        context,
+        scope_totals={"finalized_events": int(statistics["total"])},
+        pagination=pagination,
+        available_facets={"locations": statistics["locations"]},
+    )
+
+
+def _world_location_facet_statistics(
+    conn: sqlite3.Connection,
+    filters: WorldReadFilter,
+    eligible_ids: set[str],
+    canonical_map: dict[str, str],
+    offset: int,
+    limit: int,
+) -> dict[str, object]:
+    """Page event-based locations without calculating unrelated activity models."""
+    if not eligible_ids:
+        return {"locations": [], "location_total_count": 0, "total": 0}
+    if eligible_ids != set(canonical_map.values()):
+        return _world_event_statistics(
+            conn, filters, eligible_ids, canonical_map=canonical_map,
+            location_offset=offset, location_limit=limit,
+        )
+    scope_sql, params = _world_scope_sql(filters, evidence=False)
+    rows = conn.execute(
+        f"""WITH scoped_events AS (
+                SELECT LOWER(TRIM(COALESCE(o.location, ''))) AS location_key,
+                       TRIM(COALESCE(o.location, '')) AS display_location
+                FROM observations o
+                     INDEXED BY idx_observations_finalized_time_location
+                WHERE {scope_sql}
+                  AND EXISTS (
+                      SELECT 1 FROM observation_participants p
+                      WHERE p.observation_id = o.observation_id
+                  )
+            ), grouped AS (
+                SELECT location_key,
+                       CASE WHEN location_key = '' THEN 'MISSING'
+                            ELSE MIN(display_location) END AS value,
+                       COUNT(*) AS event_count
+                FROM scoped_events
+                GROUP BY location_key
+            )
+            SELECT value, event_count,
+                   COUNT(*) OVER () AS facet_total_count,
+                   SUM(event_count) OVER () AS event_total_count
+            FROM grouped
+            ORDER BY event_count DESC, LOWER(value)
+            LIMIT ? OFFSET ?""",
+        [*params, limit, offset],
+    ).fetchall()
+    if not rows:
+        return {"locations": [], "location_total_count": 0, "total": 0}
+    return {
+        "locations": [
+            {"value": str(row["value"]), "count": int(row["event_count"])}
+            for row in rows
+        ],
+        "location_total_count": int(rows[0]["facet_total_count"]),
+        "total": int(rows[0]["event_total_count"]),
+    }
 
 
 def _world_cluster_read(
@@ -8964,7 +9124,10 @@ def _world_cluster_read(
     relationships = _world_relationship_scope(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
     )
-    activity = _world_activity_counts(conn, set(people_rows), context.filters)
+    activity = _world_event_statistics(
+        conn, context.filters, set(people_rows), canonical_map=canonical_map,
+        location_limit=1,
+    )["activity"]
     clusters = _world_clusters(
         context.revision, _world_filter_fingerprint(context.filters), relationships,
         people_rows, activity, min(context.limits.people, 10), context,
@@ -9020,7 +9183,9 @@ def _world_cluster_read(
         scope_totals={
             "people": cluster.member_count,
             "relationships": len(member_relationships), "clusters": 1,
-            "finalized_events": _world_scoped_event_count(conn, context.filters, member_set),
+            "finalized_events": _world_scoped_event_count(
+                conn, context.filters, member_set, canonical_map=canonical_map,
+            ),
         },
         pagination=pagination,
         people=people, clusters=(cluster_out,), relationships=relationship_models,
@@ -9038,16 +9203,30 @@ def _world_person_read(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
         focus_person_id=canonical_id,
     )
+    all_relationships = _world_relationship_scope(
+        conn, context.filters, set(people_rows), canonical_map=canonical_map,
+    )
+    memberships = tuple({
+        "cluster_id": cluster.cluster_id,
+        "graph_revision": cluster.graph_revision,
+        "member_count": cluster.member_count,
+        "grouping_algorithm": cluster.grouping_algorithm,
+        "algorithm_version": cluster.algorithm_version,
+    } for cluster in _world_clusters(
+        context.revision, _world_filter_fingerprint(context.filters),
+        all_relationships, people_rows, {},
+        min(context.limits.people, 10), context,
+    ) if canonical_id in cluster.member_ids)
     event_total = _world_person_event_count(
         conn, canonical_id, context.filters, canonical_map=canonical_map,
     )
     activity = {canonical_id: event_total}
     degree = _world_degree({canonical_id: people_rows[canonical_id]}, relationships)
-    root = _world_person(
+    root = replace(_world_person(
         canonical_id, people_rows[canonical_id], aliases.get(canonical_id, ()),
         activity.get(canonical_id, 0), degree.get(canonical_id, {}), context,
         selected_by_focus=True,
-    )
+    ), cluster_memberships=memberships)
     relationship_models: tuple[WorldRelationship, ...] = ()
     events: tuple[WorldEvent, ...] = ()
     people = (root,)
@@ -9062,8 +9241,8 @@ def _world_person_read(
         }
         people += tuple(
             _world_person(
-                person_id, people_rows[person_id], aliases.get(person_id, ()), 0,
-                {}, context, selected_by_focus=True,
+                person_id, people_rows[person_id], aliases.get(person_id, ()), None,
+                None, context, selected_by_focus=True,
             ) for person_id in sorted(neighbor_ids) if person_id in people_rows
         )
     else:
@@ -9074,7 +9253,8 @@ def _world_person_read(
         batch = _world_event_batch_data(conn, event_rows, canonical_map)
         events = tuple(_world_event_from_row(
             conn, row, participant_offset=0,
-            participant_limit=min(context.limits.people, 10), context=context,
+            participant_limit=0, provenance_offset=0, provenance_limit=0,
+            context=context,
             prepared=batch[str(row["observation_id"])],
         ) for row in event_rows)
     pagination = {
@@ -9104,13 +9284,21 @@ def _world_event_read(
     conn: sqlite3.Connection, context: _WorldReadContext,
 ) -> WorldGraphV2ReadModel:
     row = _world_event_row(conn, str(context.focus_id), context.filters)
-    participant_total = len(_world_event_participant_mapping(conn, str(context.focus_id))[0])
+    participant_mapping = _world_event_participant_mapping(conn, str(context.focus_id))
+    participant_total = len(participant_mapping[0])
+    provenance_total = len(participant_mapping[1])
+    evidence_summary = _world_event_evidence_summary(conn, str(context.focus_id))
     evidence_total = _world_event_evidence_count(conn, str(context.focus_id), context.filters)
     media_total = _world_event_media_count(conn, str(context.focus_id))
     participant_offset = context.offset if context.collection == WorldCollection.PARTICIPANTS else 0
+    provenance_offset = context.offset if context.collection == WorldCollection.PROVENANCE else 0
     event = _world_event_from_row(
         conn, row, participant_offset=participant_offset,
-        participant_limit=context.limits.people, context=context,
+        participant_limit=(context.limits.people if context.collection == WorldCollection.PARTICIPANTS else 0),
+        provenance_offset=provenance_offset,
+        provenance_limit=(context.limits.provenance if context.collection == WorldCollection.PROVENANCE else 0),
+        context=context,
+        prepared=(participant_mapping, evidence_summary, media_total),
     )
     evidence: tuple[WorldEvidence, ...] = ()
     media: tuple[WorldMediaReference, ...] = ()
@@ -9129,6 +9317,11 @@ def _world_event_read(
             context, WorldCollection.PARTICIPANTS, participant_total,
             len(event.participants), context.limits.people,
             offset=participant_offset,
+        ),
+        WorldCollection.PROVENANCE.value: _world_page_state(
+            context, WorldCollection.PROVENANCE, provenance_total,
+            len(event.participant_provenance), context.limits.provenance,
+            offset=provenance_offset,
         ),
         WorldCollection.EVIDENCE.value: _world_page_state(
             context, WorldCollection.EVIDENCE, evidence_total, len(evidence),
@@ -9154,18 +9347,49 @@ def _world_event_read(
 def _world_evidence_read(
     conn: sqlite3.Connection, context: _WorldReadContext,
 ) -> WorldGraphV2ReadModel:
-    total, items = _world_evidence_page(
-        conn, context.filters, context.focus_type, context.focus_id,
-        context.offset, context.limits.evidence,
-    )
-    evidence = tuple(items)
-    pagination = {WorldCollection.EVIDENCE.value: _world_page_state(
-        context, WorldCollection.EVIDENCE, total, len(evidence),
-        context.limits.evidence,
-    )}
+    evidence: tuple[WorldEvidence, ...] = ()
+    media: tuple[WorldMediaReference, ...] = ()
+    if context.collection == WorldCollection.MEDIA:
+        if context.focus_type != "EVIDENCE":
+            raise ValueError("EVIDENCE media requires an EVIDENCE focus")
+        evidence_total, detail = _world_evidence_page(
+            conn, context.filters, "EVIDENCE", context.focus_id, 0, 1,
+        )
+        if evidence_total != 1 or not detail:
+            raise KeyError("World evidence is unavailable in the effective scope")
+        evidence = tuple(detail)
+        item = detail[0]
+        reference = item.supporting_references[0]
+        if item.evidence_type == "CO_OBSERVED" and reference["source_entity_type"] == "OBSERVATION":
+            media_total, media = _world_event_media_page(
+                conn, str(reference["source_entity_id"]), context.offset,
+                context.limits.media, supporting_evidence_id=item.evidence_id,
+            )
+        else:
+            media_total = 0
+        total = 1
+    else:
+        total, items = _world_evidence_page(
+            conn, context.filters, context.focus_type, context.focus_id,
+            context.offset, context.limits.evidence,
+        )
+        evidence = tuple(items)
+        media_total = 0
+    pagination = {
+        WorldCollection.EVIDENCE.value: _world_page_state(
+            context, WorldCollection.EVIDENCE, total, len(evidence),
+            context.limits.evidence,
+            offset=(context.offset if context.collection == WorldCollection.EVIDENCE else 0),
+        ),
+        WorldCollection.MEDIA.value: _world_page_state(
+            context, WorldCollection.MEDIA, media_total, len(media),
+            context.limits.media,
+            offset=(context.offset if context.collection == WorldCollection.MEDIA else 0),
+        ),
+    }
     return _world_result(
-        context,
-        scope_totals={"evidence": total}, pagination=pagination, evidence=evidence,
+        context, scope_totals={"evidence": total, "media": media_total},
+        pagination=pagination, evidence=evidence, media=media,
     )
 
 
@@ -9294,7 +9518,7 @@ def _normalize_world_focus(
         WorldDetailLevel.CLUSTER: {"CLUSTER"},
         WorldDetailLevel.PERSON: {"PERSON"},
         WorldDetailLevel.EVENT: {"EVENT"},
-        WorldDetailLevel.EVIDENCE: {"RELATIONSHIP", "EVENT", "PERSON"},
+        WorldDetailLevel.EVIDENCE: {"RELATIONSHIP", "EVENT", "PERSON", "EVIDENCE"},
     }[level]
     normalized_type = str(focus_type or "").strip().upper()
     normalized_id = str(focus_id or "").strip()
@@ -9397,6 +9621,46 @@ def _world_scope_sql(filters: WorldReadFilter, *, evidence: bool) -> tuple[str, 
     return " AND ".join(clauses), params
 
 
+def _world_register_effective_evidence_function(
+    conn: sqlite3.Connection,
+    canonical_map: dict[str, str],
+):
+    """Register correction-before-canonical endpoint resolution for one read."""
+    corrections = {
+        (str(row["observation_id"]), str(row["from_person_id"])):
+            str(row["to_person_id"])
+        for row in conn.execute(
+            """SELECT observation_id, from_person_id, to_person_id
+               FROM identity_corrections
+               WHERE correction_type = 'OBSERVATION_IDENTITY'
+               ORDER BY created_at, correction_id"""
+        ).fetchall()
+    }
+
+    def effective_person(
+        evidence_type: object,
+        source_entity_type: object,
+        source_entity_id: object,
+        raw_person_id: object,
+    ) -> str:
+        current = str(raw_person_id)
+        if str(evidence_type) == "CO_OBSERVED" and str(source_entity_type) == "OBSERVATION":
+            seen: set[str] = set()
+            key = (str(source_entity_id), current)
+            while key in corrections:
+                if current in seen:
+                    raise RuntimeError("Observation identity correction cycle detected")
+                seen.add(current)
+                current = corrections[key]
+                key = (str(source_entity_id), current)
+        return canonical_map[current]
+
+    conn.create_function(
+        "world_effective_evidence_person", 4, effective_person, deterministic=True,
+    )
+    return effective_person
+
+
 def _world_relationship_scope(
     conn: sqlite3.Connection,
     filters: WorldReadFilter,
@@ -9406,6 +9670,7 @@ def _world_relationship_scope(
     focus_person_id: str | None = None,
 ) -> list[dict]:
     resolved = canonical_map or _world_canonical_map(conn)
+    evidence_person = _world_register_effective_evidence_function(conn, resolved)
     scope_sql, scope_params = _world_scope_sql(filters, evidence=False)
     evidence_clauses: list[str] = []
     evidence_params: list[object] = []
@@ -9416,15 +9681,13 @@ def _world_relationship_scope(
         evidence_clauses.append("e.relationship_type IN (%s)" % ",".join("?" for _ in filters.relationship_type))
         evidence_params.extend(filters.relationship_type)
     if focus_person_id:
-        raw_ids = sorted(
-            raw_id for raw_id, canonical_id in resolved.items()
-            if canonical_id == focus_person_id
-        )
-        placeholders = ",".join("?" for _ in raw_ids)
         evidence_clauses.append(
-            f"(e.source_person_id IN ({placeholders}) OR e.target_person_id IN ({placeholders}))"
+            "(world_effective_evidence_person(e.evidence_type, e.source_entity_type, "
+            "e.source_entity_id, e.source_person_id) = ? OR "
+            "world_effective_evidence_person(e.evidence_type, e.source_entity_type, "
+            "e.source_entity_id, e.target_person_id) = ?)"
         )
-        evidence_params.extend([*raw_ids, *raw_ids])
+        evidence_params.extend([focus_person_id, focus_person_id])
     non_observation_clauses = ["e.evidence_type <> 'CO_OBSERVED'"]
     non_observation_params: list[object] = []
     if filters.date_from:
@@ -9438,6 +9701,7 @@ def _world_relationship_scope(
     rows = conn.execute(
         f"""
         SELECT e.source_person_id, e.target_person_id, e.evidence_type,
+               e.source_entity_type, e.source_entity_id,
                e.relationship_type, e.directionality, COUNT(*) AS evidence_count,
                MIN(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) AS first_at,
                MAX(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) AS last_at
@@ -9449,14 +9713,21 @@ def _world_relationship_scope(
             OR ({' AND '.join(non_observation_clauses)} AND ? = 1)
         )
         GROUP BY e.source_person_id, e.target_person_id, e.evidence_type,
+                 e.source_entity_type, e.source_entity_id,
                  e.relationship_type, e.directionality
         """,
         [*evidence_params, *scope_params, *non_observation_params, int(non_observation_allowed)],
     ).fetchall()
     aggregates: dict[tuple[str, str], dict] = {}
     for row in rows:
-        source = resolved[str(row["source_person_id"])]
-        target = resolved[str(row["target_person_id"])]
+        source = evidence_person(
+            row["evidence_type"], row["source_entity_type"],
+            row["source_entity_id"], row["source_person_id"],
+        )
+        target = evidence_person(
+            row["evidence_type"], row["source_entity_type"],
+            row["source_entity_id"], row["target_person_id"],
+        )
         if source == target or source not in eligible_ids or target not in eligible_ids:
             continue
         pair = tuple(sorted((source, target)))
@@ -9586,12 +9857,17 @@ def _world_event_statistics(
     eligible_ids: set[str],
     *,
     canonical_map: dict[str, str] | None = None,
+    location_offset: int = 0,
+    location_limit: int = 100,
 ) -> dict[str, object]:
     """Calculate overview event metrics from one effective-participant projection."""
     if not eligible_ids:
-        return {"activity": {}, "locations": [], "total": 0, "missing": 0}
+        return {"activity": {}, "locations": [], "location_total_count": 0, "total": 0, "missing": 0}
     if canonical_map is not None and eligible_ids == set(canonical_map.values()):
-        return _world_full_scope_event_statistics(conn, filters, canonical_map)
+        return _world_full_scope_event_statistics(
+            conn, filters, canonical_map,
+            location_offset=location_offset, location_limit=location_limit,
+        )
     scope_sql, params = _world_scope_sql(filters, evidence=False)
     cte = _world_effective_participant_cte(scope_sql)
     placeholders = ",".join("?" for _ in eligible_ids)
@@ -9631,7 +9907,9 @@ def _world_event_statistics(
             missing = value
     locations.sort(key=lambda item: (-int(item["count"]), str(item["value"]).casefold()))
     return {
-        "activity": activity, "locations": locations[:100],
+        "activity": activity,
+        "locations": locations[location_offset:location_offset + location_limit],
+        "location_total_count": len(locations),
         "total": total, "missing": missing,
     }
 
@@ -9640,6 +9918,9 @@ def _world_full_scope_event_statistics(
     conn: sqlite3.Connection,
     filters: WorldReadFilter,
     canonical_map: dict[str, str],
+    *,
+    location_offset: int = 0,
+    location_limit: int = 100,
 ) -> dict[str, object]:
     """Fast exact aggregation when every terminal canonical identity is eligible."""
     scope_sql, params = _world_scope_sql(filters, evidence=False)
@@ -9701,7 +9982,9 @@ def _world_full_scope_event_statistics(
     } | correction_sources
     if not affected_ids:
         return {
-            "activity": activity, "locations": locations[:100],
+            "activity": activity,
+            "locations": locations[location_offset:location_offset + location_limit],
+            "location_total_count": len(locations),
             "total": total, "missing": missing,
         }
 
@@ -9715,8 +9998,12 @@ def _world_full_scope_event_statistics(
     adjustments = conn.execute(
         f"""WITH affected_events AS MATERIALIZED (
                 SELECT DISTINCT p.observation_id
-                FROM observations o JOIN observation_participants p USING(observation_id)
-                WHERE p.person_id IN ({placeholders}) AND {scope_sql}
+                FROM observation_participants p
+                     INDEXED BY idx_observation_participants_person
+                CROSS JOIN observations o
+                WHERE p.person_id IN ({placeholders})
+                  AND o.observation_id = p.observation_id
+                  AND {scope_sql}
             )
             SELECT 'NAIVE' AS kind, world_canonical_person(p.person_id) AS person_id,
                    COUNT(*) AS count
@@ -9735,7 +10022,9 @@ def _world_full_scope_event_statistics(
             count if str(row["kind"]) == "EFFECTIVE" else -count
         )
     return {
-        "activity": activity, "locations": locations[:100],
+        "activity": activity,
+        "locations": locations[location_offset:location_offset + location_limit],
+        "location_total_count": len(locations),
         "total": total, "missing": missing,
     }
 
@@ -9825,8 +10114,8 @@ def _world_person(
     person_id: str,
     row: sqlite3.Row,
     aliases: tuple[str, ...],
-    event_count: int,
-    degree: dict[str, int],
+    event_count: int | None,
+    degree: dict[str, int] | None,
     context: _WorldReadContext,
     *,
     rank_position: int | None = None,
@@ -9834,11 +10123,14 @@ def _world_person(
 ) -> WorldPerson:
     metadata = json.loads(row["metadata"] or "{}")
     priority = metadata.get("importance")
+    analytics_loaded = event_count is not None and degree is not None
+    relationships = degree.get("relationships", 0) if degree is not None else None
+    evidence_records = degree.get("evidence", 0) if degree is not None else None
     factors = (
         {"factor": "explicit_priority", "value": priority, "kind": "OPERATOR_ASSERTED"},
-        {"factor": "finalized_event_count", "value": event_count, "kind": "MEASURED"},
-        {"factor": "relationship_count", "value": degree.get("relationships", 0), "kind": "MEASURED"},
-        {"factor": "evidence_count", "value": degree.get("evidence", 0), "kind": "MEASURED"},
+        {"factor": "finalized_event_count", "value": event_count, "kind": "MEASURED" if analytics_loaded else "NOT_LOADED"},
+        {"factor": "relationship_count", "value": relationships, "kind": "MEASURED" if analytics_loaded else "NOT_LOADED"},
+        {"factor": "evidence_count", "value": evidence_records, "kind": "MEASURED" if analytics_loaded else "NOT_LOADED"},
     )
     ranking_reasons = {
         "SALIENCE": "Ordered by operator priority, finalized events, evidence count, then display name.",
@@ -9857,10 +10149,11 @@ def _world_person(
         "ranking_reason": ranking_reason,
         "metrics": {
             "finalized_events": event_count,
-            "relationships": degree.get("relationships", 0),
-            "evidence_records": degree.get("evidence", 0),
+            "relationships": relationships,
+            "evidence_records": evidence_records,
             "operator_priority": priority,
         },
+        "metrics_state": "LOADED" if analytics_loaded else "NOT_LOADED",
         "deterministic_tie_break": (
             ["operator_priority", "finalized_events", "evidence_records", "display_name", "canonical_person_id"]
             if context.ranking == "SALIENCE" else
@@ -9881,12 +10174,16 @@ def _world_person(
         biometric_state=str(row["biometric_status"]),
         display={"country": metadata.get("country"), "rank": metadata.get("rank")},
         intelligence_summary={
-            "relationship_count": degree.get("relationships", 0),
-            "relationship_evidence_count": degree.get("evidence", 0),
-            "activity_bucket": _world_activity_bucket(event_count),
+            "relationship_count": relationships,
+            "relationship_evidence_count": evidence_records,
+            "activity_bucket": (_world_activity_bucket(event_count) if event_count is not None else None),
         },
         importance_indicators=factors,
-        activity_summary={"finalized_event_count": event_count, "activity_bucket": _world_activity_bucket(event_count)},
+        activity_summary={
+            "finalized_event_count": event_count,
+            "activity_bucket": (_world_activity_bucket(event_count) if event_count is not None else None),
+            "state": "LOADED" if analytics_loaded else "NOT_LOADED",
+        },
         ranking=ranking_payload,
         allowed_actions=_graph_allowed_actions(str(row["lifecycle_status"])),
         explanation=WorldExplanation(
@@ -9895,13 +10192,14 @@ def _world_person(
             factual_factors=factors,
             derived_factors=({"factor": "ranking_intent", "value": context.ranking},),
             calculation_version=_WORLD_RANKING_VERSION,
-            evidence_count=degree.get("evidence", 0),
+            evidence_count=(evidence_records if analytics_loaded else None),
             evidence_expansion_token=None,
             calculation_scope=_world_explanation_scope(context),
             strongest_factors=factors[:3],
             method="deterministic_lexicographic_ordering",
             limitations=("No probabilistic importance or identity confidence is calculated.",),
         ),
+        analytics_state="LOADED" if analytics_loaded else "NOT_LOADED",
     )
 
 
@@ -10010,12 +10308,52 @@ def _world_clusters(
                 "evidence_count": evidence_count,
                 "evidence_type_counts": dict(sorted(type_counts.items())),
                 "strongest_relationships": list(strongest),
+                "strongest_relationships_total_count": len(member_edges),
+                "strongest_relationships_returned_count": len(strongest),
+                "strongest_relationships_truncated": len(strongest) < len(member_edges),
                 "location_context_role": "scope_only_not_membership",
             },
             explanation=explanation,
+            activity_summary={
+                "member_event_contributions": sum(activity.get(person_id, 0) for person_id in ordered),
+                "active_member_count": sum(1 for person_id in ordered if activity.get(person_id, 0) > 0),
+                "measurement": "deduplicated_person_event_contributions",
+            },
+            member_preview_state={
+                "total_count": len(ordered),
+                "returned_count": len(preview_ids),
+                "has_more": len(preview_ids) < len(ordered),
+                "truncated": len(preview_ids) < len(ordered),
+                "truncation_reason": (
+                    f"backend_preview_limit:{preview_limit}"
+                    if len(preview_ids) < len(ordered) else None
+                ),
+            },
             expansion_token=None,
         ))
-    return sorted(result, key=lambda item: (-item.member_count, item.cluster_id))
+    ordered_result = sorted(
+        result,
+        key=lambda item: (
+            -item.member_count,
+            -int(item.evidence_basis["evidence_count"]),
+            -int(item.activity_summary["member_event_contributions"]),
+            item.cluster_id,
+        ),
+    )
+    return [replace(item, ranking={
+        "intent": "CLUSTER_SCOPE_SALIENCE",
+        "rank_position": index + 1,
+        "measurements": {
+            "member_count": item.member_count,
+            "evidence_count": item.evidence_basis["evidence_count"],
+            "member_event_contributions": item.activity_summary["member_event_contributions"],
+        },
+        "deterministic_tie_break": [
+            "member_count", "evidence_count", "member_event_contributions", "cluster_id",
+        ],
+        "reason": "Ordered by member count, evidence count, member event contributions, then cluster ID.",
+        "value_semantics": "deterministic_ordering_not_confidence",
+    }) for index, item in enumerate(ordered_result)]
 
 
 def _world_relationship(
@@ -10091,18 +10429,34 @@ def _world_effective_participant_cte(scope_sql: str) -> str:
 
 
 def _world_scoped_event_count(
-    conn: sqlite3.Connection, filters: WorldReadFilter, eligible_person_ids: set[str],
+    conn: sqlite3.Connection,
+    filters: WorldReadFilter,
+    eligible_person_ids: set[str],
+    *,
+    canonical_map: dict[str, str] | None = None,
 ) -> int:
     if not eligible_person_ids:
         return 0
+    resolved = canonical_map or _world_canonical_map(conn)
+    candidates = _world_register_effective_person_function(
+        conn, resolved, focus_person_ids=eligible_person_ids,
+    )
+    if not candidates:
+        return 0
     scope_sql, params = _world_scope_sql(filters, evidence=False)
-    placeholders = ",".join("?" for _ in eligible_person_ids)
-    cte = _world_effective_participant_cte(scope_sql)
+    placeholders = ",".join("?" for _ in candidates)
     return int(conn.execute(
-        f"""{cte}
-            SELECT COUNT(DISTINCT observation_id) FROM effective
-            WHERE person_id IN ({placeholders})""",
-        [*params, *sorted(eligible_person_ids)],
+        f"""SELECT COUNT(DISTINCT p.observation_id)
+            FROM observation_participants p
+                 INDEXED BY idx_observation_participants_person
+            CROSS JOIN observations o
+            WHERE p.person_id IN ({placeholders})
+              AND o.observation_id = p.observation_id
+              AND {scope_sql}
+              AND world_effective_person_in_scope(
+                      p.observation_id, p.person_id
+                  ) = 1""",
+        [*sorted(candidates), *params],
     ).fetchone()[0])
 
 
@@ -10117,15 +10471,11 @@ def _world_person_event_count(
     candidates = _world_register_effective_person_function(conn, resolved, person_id)
     if not candidates:
         return 0
-    scope_sql, params = _world_scope_sql(filters, evidence=False)
-    placeholders = ",".join("?" for _ in candidates)
+    membership_sql, params = _world_person_event_membership_sql(
+        filters, candidates, person_id,
+    )
     return int(conn.execute(
-        f"""SELECT COUNT(DISTINCT p.observation_id)
-            FROM observation_participants p
-            JOIN observations o USING(observation_id)
-            WHERE p.person_id IN ({placeholders}) AND {scope_sql}
-              AND world_effective_person(p.observation_id, p.person_id) = ?""",
-        [*sorted(candidates), *params, person_id],
+        f"SELECT COUNT(DISTINCT p.observation_id) {membership_sql}", params,
     ).fetchone()[0])
 
 
@@ -10143,27 +10493,47 @@ def _world_person_events(
     candidates = _world_register_effective_person_function(conn, resolved, person_id)
     if not candidates:
         return 0, []
-    scope_sql, params = _world_scope_sql(filters, evidence=False)
-    placeholders = ",".join("?" for _ in candidates)
+    membership_sql, params = _world_person_event_membership_sql(
+        filters, candidates, person_id,
+    )
     total = known_total if known_total is not None else _world_person_event_count(
         conn, person_id, filters, canonical_map=resolved,
     )
     rows = conn.execute(
-        f"""SELECT DISTINCT o.* FROM observation_participants p
-            JOIN observations o USING(observation_id)
-            WHERE p.person_id IN ({placeholders}) AND {scope_sql}
-              AND world_effective_person(p.observation_id, p.person_id) = ?
+        f"""SELECT DISTINCT o.* {membership_sql}
             ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
             LIMIT ? OFFSET ?""",
-        [*sorted(candidates), *params, person_id, limit, offset],
+        [*params, limit, offset],
     ).fetchall()
     return total, rows
+
+
+def _world_person_event_membership_sql(
+    filters: WorldReadFilter,
+    candidates: set[str],
+    person_id: str,
+) -> tuple[str, list[object]]:
+    """Return the shared participant-first focused-event membership predicate."""
+    scope_sql, scope_params = _world_scope_sql(filters, evidence=False)
+    placeholders = ",".join("?" for _ in candidates)
+    return (
+        f"""FROM observation_participants p
+               INDEXED BY idx_observation_participants_person
+            CROSS JOIN observations o
+            WHERE p.person_id IN ({placeholders})
+              AND o.observation_id = p.observation_id
+              AND {scope_sql}
+              AND world_effective_person(p.observation_id, p.person_id) = ?""",
+        [*sorted(candidates), *scope_params, person_id],
+    )
 
 
 def _world_register_effective_person_function(
     conn: sqlite3.Connection,
     canonical_map: dict[str, str],
     focus_person_id: str | None = None,
+    *,
+    focus_person_ids: set[str] | None = None,
 ) -> set[str]:
     corrections = {
         (str(row["observation_id"]), str(row["from_person_id"])):
@@ -10187,11 +10557,18 @@ def _world_register_effective_person_function(
         return canonical_map[current]
 
     conn.create_function("world_effective_person", 2, effective_person, deterministic=True)
-    if focus_person_id is None:
+    if focus_person_id is not None and focus_person_ids is not None:
+        raise ValueError("World effective-person focus must be singular or a set")
+    target_ids = (
+        set(focus_person_ids) if focus_person_ids is not None
+        else {focus_person_id} if focus_person_id is not None
+        else None
+    )
+    if target_ids is None:
         return set(canonical_map)
     candidates = {
         raw_id for raw_id, canonical_id in canonical_map.items()
-        if canonical_id == focus_person_id
+        if canonical_id in target_ids
     }
     changed = True
     while changed:
@@ -10200,6 +10577,14 @@ def _world_register_effective_person_function(
             if target in candidates and source not in candidates:
                 candidates.add(source)
                 changed = True
+    if focus_person_ids is not None:
+        conn.create_function(
+            "world_effective_person_in_scope", 2,
+            lambda observation_id, raw_person_id: int(
+                effective_person(observation_id, raw_person_id) in target_ids
+            ),
+            deterministic=True,
+        )
     return candidates
 
 
@@ -10376,6 +10761,7 @@ def _world_event_media_count(conn: sqlite3.Connection, event_id: str) -> int:
 
 def _world_event_media_page(
     conn: sqlite3.Connection, event_id: str, offset: int, limit: int,
+    *, supporting_evidence_id: str | None = None,
 ) -> tuple[int, tuple[WorldMediaReference, ...]]:
     total = _world_event_media_count(conn, event_id)
     event = conn.execute(
@@ -10394,6 +10780,8 @@ def _world_event_media_page(
         media_reference=_optional_text(row["media_path"]),
         source=_optional_text(row["source"]),
         occurred_at=str(event["occurred_at"]),
+        supporting_event_id=event_id,
+        supporting_evidence_id=supporting_evidence_id,
     ) for row in rows)
 
 
@@ -10403,6 +10791,8 @@ def _world_event_from_row(
     *,
     participant_offset: int,
     participant_limit: int,
+    provenance_offset: int,
+    provenance_limit: int,
     context: _WorldReadContext,
     prepared: tuple[
         tuple[tuple[dict[str, object], ...], tuple[dict[str, object], ...]],
@@ -10420,11 +10810,9 @@ def _world_event_from_row(
     participants = all_participants[
         participant_offset:participant_offset + participant_limit
     ]
-    returned_participant_ids = {str(item["person_id"]) for item in participants}
-    page_provenance = tuple(
-        item for item in provenance
-        if str(item["effective_person_id"]) in returned_participant_ids
-    )
+    page_provenance = provenance[
+        provenance_offset:provenance_offset + provenance_limit
+    ]
     occurred_at = str(row["observed_at"] or row["created_at"])
     return WorldEvent(
         event_id=event_id,
@@ -10440,6 +10828,8 @@ def _world_event_from_row(
             "has_more": participant_offset + len(participants) < len(all_participants),
             "provenance_total_count": len(provenance),
             "provenance_returned_count": len(page_provenance),
+            "participants_state": "LOADED" if participant_limit else "NOT_REQUESTED",
+            "provenance_state": "LOADED" if provenance_limit else "NOT_REQUESTED",
         },
         evidence_summary=evidence_summary,
         media_summary={"total_count": media_count, "retrieval": "EVENT_MEDIA_COLLECTION"},
@@ -10478,6 +10868,16 @@ def _world_evidence_page(
     offset: int,
     limit: int,
 ) -> tuple[int, list[WorldEvidence]]:
+    canonical_map = _world_canonical_map(conn)
+    effective_person = _world_register_effective_evidence_function(conn, canonical_map)
+    effective_source = (
+        "world_effective_evidence_person(e.evidence_type, e.source_entity_type, "
+        "e.source_entity_id, e.source_person_id)"
+    )
+    effective_target = (
+        "world_effective_evidence_person(e.evidence_type, e.source_entity_type, "
+        "e.source_entity_id, e.target_person_id)"
+    )
     clauses = [
         "e.active = 1",
         "(e.evidence_type <> 'CO_OBSERVED' OR o.status = 'FINALIZED')",
@@ -10487,20 +10887,26 @@ def _world_evidence_page(
         parts = str(focus_id).split(":")
         if len(parts) != 3 or parts[0] != "relationship":
             raise ValueError("Invalid World relationship focus")
-        canonical_pair = set(parts[1:])
-        raw_ids = [str(row["person_id"]) for row in conn.execute("SELECT person_id FROM persons").fetchall() if _resolve_canonical_person_id(conn, str(row["person_id"])) in canonical_pair]
-        placeholders = ",".join("?" for _ in raw_ids)
-        clauses.append(f"e.source_person_id IN ({placeholders}) AND e.target_person_id IN ({placeholders})")
-        params.extend([*raw_ids, *raw_ids])
+        first, second = sorted(parts[1:])
+        if first == second or first not in canonical_map.values() or second not in canonical_map.values():
+            raise ValueError("Invalid World relationship focus")
+        clauses.append(
+            f"(({effective_source} = ? AND {effective_target} = ?) OR "
+            f"({effective_source} = ? AND {effective_target} = ?))"
+        )
+        params.extend([first, second, second, first])
     elif focus_type == "EVENT":
         clauses.append("e.source_entity_type = 'OBSERVATION' AND e.source_entity_id = ?")
         params.append(focus_id)
     elif focus_type == "PERSON":
-        canonical_id = _resolve_canonical_person_id(conn, str(focus_id))
-        raw_ids = [str(row["person_id"]) for row in conn.execute("SELECT person_id FROM persons").fetchall() if _resolve_canonical_person_id(conn, str(row["person_id"])) == canonical_id]
-        placeholders = ",".join("?" for _ in raw_ids)
-        clauses.append(f"(e.source_person_id IN ({placeholders}) OR e.target_person_id IN ({placeholders}))")
-        params.extend([*raw_ids, *raw_ids])
+        canonical_id = canonical_map.get(str(focus_id))
+        if canonical_id is None:
+            raise KeyError("World person is unavailable")
+        clauses.append(f"({effective_source} = ? OR {effective_target} = ?)")
+        params.extend([canonical_id, canonical_id])
+    elif focus_type == "EVIDENCE":
+        clauses.append("e.evidence_id = ?")
+        params.append(focus_id)
     if filters.evidence_type:
         clauses.append("e.evidence_type IN (%s)" % ",".join("?" for _ in filters.evidence_type))
         params.extend(filters.evidence_type)
@@ -10523,41 +10929,102 @@ def _world_evidence_page(
     elif filters.missing_location == "ONLY":
         clauses.append("(e.evidence_type <> 'CO_OBSERVED' OR TRIM(COALESCE(o.location, '')) = '')")
     where = " AND ".join(clauses)
-    source = "relationship_evidence e LEFT JOIN observations o ON e.evidence_type = 'CO_OBSERVED' AND o.observation_id = e.source_entity_id"
-    total = int(conn.execute(f"SELECT COUNT(*) FROM {source} WHERE {where}", params).fetchone()[0])
+    joined = "relationship_evidence e LEFT JOIN observations o ON e.evidence_type = 'CO_OBSERVED' AND o.observation_id = e.source_entity_id"
+    total = int(conn.execute(f"SELECT COUNT(*) FROM {joined} WHERE {where}", params).fetchone()[0])
     rows = conn.execute(
-        f"SELECT e.* FROM {source} WHERE {where} ORDER BY {occurrence} DESC, e.evidence_id LIMIT ? OFFSET ?",
+        f"SELECT e.*, {occurrence} AS effective_occurred_at FROM {joined} "
+        f"WHERE {where} ORDER BY {occurrence} DESC, e.evidence_id LIMIT ? OFFSET ?",
         [*params, limit, offset],
     ).fetchall()
+    observation_ids = sorted({
+        str(row["source_entity_id"]) for row in rows
+        if str(row["evidence_type"]) == "CO_OBSERVED"
+        and str(row["source_entity_type"]) == "OBSERVATION"
+    })
+    media_counts: dict[str, int] = {}
+    if observation_ids:
+        placeholders = ",".join("?" for _ in observation_ids)
+        media_counts = {
+            str(row["observation_id"]): int(row["count"])
+            for row in conn.execute(
+                f"""SELECT observation_id, COUNT(*) AS count FROM observation_media
+                    WHERE observation_id IN ({placeholders}) GROUP BY observation_id""",
+                observation_ids,
+            ).fetchall()
+        }
     result = []
     for row in rows:
-        source = _resolve_canonical_person_id(conn, str(row["source_person_id"]))
-        target = _resolve_canonical_person_id(conn, str(row["target_person_id"]))
-        occurred_at = str(row["created_at"])
-        if row["evidence_type"] == "CO_OBSERVED" and row["source_entity_type"] == "OBSERVATION":
-            observation = conn.execute(
-                "SELECT observed_at, created_at FROM observations WHERE observation_id = ? AND status = 'FINALIZED'",
-                (row["source_entity_id"],),
-            ).fetchone()
-            if observation is not None:
-                occurred_at = str(observation["observed_at"] or observation["created_at"])
+        source = effective_person(
+            row["evidence_type"], row["source_entity_type"],
+            row["source_entity_id"], row["source_person_id"],
+        )
+        target = effective_person(
+            row["evidence_type"], row["source_entity_type"],
+            row["source_entity_id"], row["target_person_id"],
+        )
+        occurred_at = str(row["effective_occurred_at"])
         supporting = ({
             "source_entity_type": str(row["source_entity_type"]),
             "source_entity_id": str(row["source_entity_id"]),
             "evidence_revision_id": str(row["evidence_revision_id"]),
         },)
+        raw_endpoints = (str(row["source_person_id"]), str(row["target_person_id"]))
+        effective_endpoints = (source, target)
+        is_observation = (
+            str(row["evidence_type"]) == "CO_OBSERVED"
+            and str(row["source_entity_type"]) == "OBSERVATION"
+        )
+        media_count = media_counts.get(str(row["source_entity_id"]), 0) if is_observation else 0
+        directionality = str(row["directionality"])
+        explanation = WorldExplanation(
+            summary=(
+                f"{row['evidence_type']} evidence records an authoritative "
+                f"{directionality.lower()} relationship fact from {row['source_entity_type']}."
+            ),
+            basis_type="AUTHORITATIVE_EVIDENCE_PROVENANCE",
+            factual_factors=(
+                {"factor": "raw_endpoints", "value": list(raw_endpoints)},
+                {"factor": "effective_endpoints", "value": list(effective_endpoints)},
+                {"factor": "directionality", "value": directionality},
+                {"factor": "authoritative_source", "value": {
+                    "type": str(row["source_entity_type"]),
+                    "id": str(row["source_entity_id"]),
+                }},
+            ),
+            calculation_version=_WORLD_CALCULATION_VERSION,
+            evidence_types=(str(row["evidence_type"]),), evidence_count=1,
+            first_occurrence_at=occurred_at, last_occurrence_at=occurred_at,
+            method="correction_before_terminal_canonical_resolution",
+            sample={"evidence_items": 1},
+            limitations=(
+                "This evidence is descriptive provenance, not confidence, risk, or inferred intent.",
+            ),
+        )
         result.append(WorldEvidence(
             evidence_id=str(row["evidence_id"]),
             provenance={
                 "created_operation_id": str(row["created_operation_id"]),
                 "source": row["source"],
                 "canonical_endpoints": [source, target],
-                "raw_endpoints": [str(row["source_person_id"]), str(row["target_person_id"])],
+                "raw_endpoints": list(raw_endpoints),
             },
             evidence_type=str(row["evidence_type"]), supporting_references=supporting,
             occurred_at=occurred_at,
-            explanation_links=(f"relationship:{min(source, target)}:{max(source, target)}",),
+            explanation_links=(
+                (f"relationship:{min(source, target)}:{max(source, target)}",)
+                if source != target else ()
+            ),
             active=bool(row["active"]),
+            directionality=directionality,
+            effective_endpoints=effective_endpoints, raw_endpoints=raw_endpoints,
+            occurrence_bounds={"first": occurred_at, "last": occurred_at},
+            explanation=explanation,
+            media_summary={
+                "total_count": media_count,
+                "availability": "AVAILABLE" if is_observation else "UNAVAILABLE",
+                "retrieval": "EVIDENCE_MEDIA_COLLECTION",
+                "reason": None if is_observation else "evidence_source_has_no_authoritative_media",
+            },
         ))
     return total, result
 
@@ -10621,6 +11088,7 @@ def _world_facets(
     eligible_person_ids: set[str],
     *,
     location_facets: list[dict[str, object]] | None = None,
+    pattern_count: int = 0,
 ) -> dict[str, object]:
     def facet(values: list[str]) -> list[dict[str, object]]:
         counts: dict[str, int] = {}
@@ -10656,7 +11124,10 @@ def _world_facets(
             {"value": value, "count": count}
             for value, count in sorted(evidence_counts.items())
         ],
-        "pattern_type": [{"value": "DATA_QUALITY", "count": 1}],
+        "pattern_type": (
+            [{"value": "DATA_QUALITY", "count": pattern_count}]
+            if pattern_count else []
+        ),
     }
 
 

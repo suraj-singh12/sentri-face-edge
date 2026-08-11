@@ -4,7 +4,7 @@ This document is a concise checkpoint of the stable implemented architecture. De
 
 ## Current phase
 
-P10-E World Intelligence read-model backend stabilization is implemented and its correctness/contract defects are closed, but the 2026-08-10 final freeze remains unapproved because the required consolidated sparse/dense cold/warm performance artifact did not complete. P0 through P10-D remain frozen. World UI remains a separate future phase and no frontend rendering or generated asset was changed.
+P10-E World Intelligence read-model backend stabilization is complete and frozen as of 2026-08-11. The consolidated post-optimization Dataset A/B sparse/dense matrix passes the existing performance gates, so P10-F World UI is safe to begin against the frozen v2 contract. P0 through P10-E are frozen; no frontend rendering or generated asset was changed during backend stabilization.
 
 ## Core principles
 
@@ -119,9 +119,9 @@ Compatibility stores are not current truth: `persons.notes` mirrors the latest n
 - Version 2 implements the P10-D object, explanation, scope, filter, hard-bound, and pagination rules. Evidence/event detail is lazy and bounded. Version 1 remains compatibility-only.
 - Revision-input tests cover finalized event visibility, relationship evidence, canonical/lifecycle/profile changes, stale cursor rejection, and irrelevant draft/tag metadata writes.
 - Version 1 still walks complete graph inputs and is unsuitable for medium/large World loading. Version 2 bounds serialized objects, pushes event/evidence scoping and pair aggregation into SQL, pages every selected collection, and dispatches focused person/event/evidence requests without global ranking or clustering. Global work is restricted to overview and cluster resolution.
-- No cache or dependency was added. The exact-scale benchmark isolates the remaining large unfiltered overview aggregation bottleneck; further optimization remains query-plan and fixture driven, and any later cache would remain revision-keyed, local, rebuildable, and non-authoritative.
+- No cache or dependency was added. Exact-scale acceptance shows the remaining dense work is bounded, set-based, and approximately scale-driven; no cache, materialized authority, worker, index, schema change, or new dependency is required for the P10 contract.
 
-## P10-E readiness history and 2026-08-10 freeze review
+## P10-E readiness history and 2026-08-11 freeze review
 
 The implemented hardening correctly deduplicates `(finalized observation, terminal canonical person)` before activity, ranking, patterns, and totals. Directed relationship aggregation preserves a single consistent direction. Explanation objects state calculation scope, method, strongest factors, thresholds/samples where applicable, and limitations; ranking objects state intent, reason, scoped metrics, position, deterministic tie-break, and that values are ordering measurements rather than confidence. The 2026-08-10 freeze review reopened the correctness and contract gates described below.
 
@@ -142,13 +142,13 @@ Query restructuring removed repeated overview scans, applies sparse correction/m
 
 The stabilization pass closed every recorded correctness and contract finding. World v2 reads now use one explicit SQLite snapshot beginning with the revision read. Effective evidence endpoints share correction-before-canonical resolution across projection and expansion, exact relationship predicates prevent self-edge/cross-edge leakage, and evidence counts agree with complete supporting cursor walks. The backend supplies bounded overview relationships, cluster ranking/activity, person cluster membership, exact evidence-to-media navigation, independent raw participant provenance, paged location facets, explicit unrequested children, and `NOT_LOADED` neighbour analytics. Expansion-token compatibility fields are absent from active JSON. Evidence materialization is batched: the representative 25-item EVENT page fell from 78 to 17 statements including event summaries, and the empty 1,000-person evidence read is at most 6 instead of 1,004.
 
-The final mandatory performance artifact is incomplete. Dataset A sparse/dense profiles and a Dataset B sparse smoke run completed, but Python allocation tracing over the 10,000-person/1,000,000-observation dense profile dominated runtime for more than one hour and the environment did not permit terminating the process. The benchmark fixture now reports dense-B peak allocation as not practical while preserving cold/warm latency, statement, payload, and returned-item measurements on a future rerun. Until that consolidated matrix completes, P10-F remains blocked. No cache, materialized view, worker, dependency, index, schema, or frontend change was introduced.
+The final mandatory matrix completed on 2026-08-11 in `docs/P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json` using three cold and five warm samples per read. Dataset B dense warm p50 improved from 206.09 seconds to 15.73 seconds for unfiltered overview, 111.06 seconds to 12.92 seconds for date filtering, 128.07 seconds to 11.51 seconds for location filtering, 415.76 seconds to 1.13 seconds for person events, 418.79 seconds to 1.00 second for correction-heavy person events, 209.27 seconds to 0.41 second for person relationships, and 248.93 seconds to 24.18 seconds for cluster members. The three-page location-facet walk improved from 674.42 seconds to 53.06 seconds. Corresponding Dataset A/B SQL counts remain constant, payloads and returned collections remain bounded, and every cursor walk completes exactly. Dense-B Python allocation is explicitly `NOT_PRACTICAL_DENSE_B_TRACEMALLOC_DISTORTS_RUNTIME`; product latency remains separately measured. P10-PERF-01 through P10-PERF-05 pass without a cache, materialized view, worker, dependency, index, schema, or frontend change.
 
 ## Person Graph reuse boundary
 
 - Reuse the opaque revision token, immutable replacement model, canonical/lifecycle semantics, backend `allowed_actions`, evidence-count strength, occurrence/provenance explanations, and the rule that React owns only presentation/interaction.
 - Do not reuse the person-centred radial membership model, complete-graph loading assumption, homogeneous person-node schema, client-only full-response refresh strategy, or the assumption that edge weight alone communicates importance. World requires scope-first levels, typed summary/detail objects, server-side ranking/clustering, bounded expansion, and density-aware presentation.
-- World UI must not start until the P10-E readiness gates above are closed and the additive v2 contract is re-reviewed. Disposable API inspection may use version 2; product UI must not encode the current gaps or acquire backend semantics.
+- P10-F World UI may start against the frozen additive v2 contract. Product UI must continue to render backend semantics rather than acquire canonical, topology, ranking, cluster, evidence, filter, or truncation authority.
 
 ## Known deferred work
 

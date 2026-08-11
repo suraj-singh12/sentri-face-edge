@@ -434,10 +434,13 @@ class WorldCollection(str, Enum):
     CLUSTERS = "CLUSTERS"
     MEMBERS = "MEMBERS"
     RELATIONSHIPS = "RELATIONSHIPS"
+    PATTERNS = "PATTERNS"
     EVENTS = "EVENTS"
     PARTICIPANTS = "PARTICIPANTS"
+    PROVENANCE = "PROVENANCE"
     EVIDENCE = "EVIDENCE"
     MEDIA = "MEDIA"
+    LOCATION_FACETS = "LOCATION_FACETS"
 
 
 @dataclass(frozen=True)
@@ -471,6 +474,8 @@ class WorldReadLimits:
     media: int = 25
     relationships: int = 50
     patterns: int = 10
+    provenance: int = 100
+    facets: int = 100
 
 
 @dataclass(frozen=True)
@@ -495,7 +500,7 @@ class WorldExplanation:
     derived_factors: tuple[dict[str, Any], ...] = ()
     calculation_version: str = "world-explanation-v1"
     evidence_types: tuple[str, ...] = ()
-    evidence_count: int = 0
+    evidence_count: int | None = 0
     first_occurrence_at: str | None = None
     last_occurrence_at: str | None = None
     evidence_expansion_token: str | None = None
@@ -522,6 +527,8 @@ class WorldPerson:
     ranking: dict[str, Any]
     allowed_actions: tuple[str, ...]
     explanation: WorldExplanation
+    analytics_state: str = "LOADED"
+    cluster_memberships: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -536,6 +543,9 @@ class WorldCluster:
     parameters: dict[str, Any]
     evidence_basis: dict[str, Any]
     explanation: WorldExplanation
+    activity_summary: dict[str, Any] = field(default_factory=dict)
+    ranking: dict[str, Any] = field(default_factory=dict)
+    member_preview_state: dict[str, Any] = field(default_factory=dict)
     expansion_token: str | None = None
 
 
@@ -564,6 +574,12 @@ class WorldEvidence:
     occurred_at: str
     explanation_links: tuple[str, ...]
     active: bool
+    directionality: str = "UNDIRECTED"
+    effective_endpoints: tuple[str, str] = ()
+    raw_endpoints: tuple[str, str] = ()
+    occurrence_bounds: dict[str, str] = field(default_factory=dict)
+    explanation: WorldExplanation | None = None
+    media_summary: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -599,6 +615,8 @@ class WorldMediaReference:
     media_reference: str | None
     source: str | None
     occurred_at: str
+    supporting_event_id: str | None = None
+    supporting_evidence_id: str | None = None
 
 
 @dataclass(frozen=True)

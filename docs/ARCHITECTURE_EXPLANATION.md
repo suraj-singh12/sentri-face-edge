@@ -10,7 +10,7 @@ Use it with, rather than instead of, the other architecture documents:
 - `ARCHITECTURE_STATE.md` records the concise implementation checkpoint.
 - `IMPLEMENTATION_PLAN.md` records phase order, completion, and remaining gates.
 
-This explanation covers the architecture implemented from P0 through P10-D and the stabilized P10-E backend as of 2026-08-10. P10-E correctness and contract behavior are implemented, but the backend is not frozen for P10-F because the mandatory consolidated sparse/dense cold/warm performance artifact remains incomplete. That distinction matters: implemented behavior is described here, while the remaining measurement gate stays visible rather than being normalized into readiness.
+This explanation covers the architecture implemented from P0 through P10-E and the frozen P10-E backend as of 2026-08-11. Correctness, contract, authority, boundedness, invariant, and consolidated performance gates pass. P10-F World UI is safe to begin against this frozen v2 contract; new backend concepts remain deferred unless UI implementation exposes an actual contract defect.
 
 The central question throughout is:
 
@@ -997,7 +997,7 @@ Selecting a cluster requests its revision-bound ID. Selecting a person requests 
 
 The final stabilization pass closed the reviewed correctness and contract defects without changing authority. One response uses one SQLite snapshot. Projection and evidence expansion apply correction before terminal canonical resolution and use exact effective endpoints, so self-edge evidence cannot leak into another relationship. Overview relationships, cluster ranking/activity, person cluster membership, independent event provenance, exact evidence media, paged location facets, and explicit not-requested children are backend-owned. Partial neighbours say `NOT_LOADED` instead of using zero. Evidence pages batch canonical, correction, occurrence, and media data; recorded statement counts fell from 78 to 17 for 25 EVENT evidence items and from 1,004 to at most 6 for an empty 1,000-person evidence read.
 
-P10-E remains unfrozen solely because the required consolidated performance artifact did not complete. Dataset A profiles and a Dataset B sparse smoke completed, but dense-B `tracemalloc` callback instrumentation dominated runtime for more than an hour. Future runs mark that peak-allocation field not practical while still measuring API latency, SQL count, payload, and returned items. The frontend must remain blocked until that matrix gate closes; it may not infer around it.
+The required consolidated performance artifact completed on 2026-08-11. It records Dataset A/B sparse/dense cold and warm distributions, SQL counts, payloads, returned collections, and complete cursor walks. Dense-B `tracemalloc` remains explicitly unavailable because callback instrumentation distorts product latency; that profiler limitation is kept separate from measured request latency. The existing performance gates pass, so P10-F may use the contract without inferring around it.
 
 ### Final stabilization decisions
 
@@ -1093,7 +1093,11 @@ An adaptive plan chooses:
 
 This is a narrow, measured optimization. It does not change authority or create a cache.
 
-The recorded diagnostic results show why the approach was chosen: focused Dataset B person-event reads improved from about 23.7 seconds and 134 statements to about 37 milliseconds and 11 statements. The adaptive sparse overview comparison improved the million single-participant observation p50 from about 3.26 seconds to 2.27 seconds, while the dense case remained effectively unchanged. These are diagnostic results, not the complete acceptance matrix.
+Earlier diagnostics showed why the first restructuring was chosen: focused sparse Dataset B person-event reads improved from about 23.7 seconds and 134 statements to about 37 milliseconds and a constant bounded statement count. The adaptive sparse overview comparison improved the million single-participant observation p50 from about 3.26 seconds to 2.27 seconds.
+
+The later dense failure exposed different query-shape problems rather than a need for new architecture. Observation-first focused person membership multiplied the observation universe by merged/corrected candidates; overview adjustment did the same for affected identities; each location-facet page re-entered unrelated complete-World work; and cluster scoped counting materialized recursive effective participation for the full scope. The chosen fixes start from indexed relevant participant identities, retain exact correction-before-canonical predicates, specialize explicit facet reads, and count cluster events from candidate participant rows. Persistent caching, materialized World tables, new indexes, workers, and frontend aggregation were rejected because request-local query changes preserved authority and removed the measured pathologies.
+
+The final artifact `docs/P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json` demonstrates the result. Dataset B dense warm p50 changed from 206.09 seconds to 15.73 seconds for unfiltered overview, 111.06 seconds to 12.92 seconds for date filtering, 128.07 seconds to 11.51 seconds for location filtering, 415.76 seconds to 1.13 seconds for person events, 418.79 seconds to 1.00 second for correction-heavy person events, 209.27 seconds to 0.41 second for person relationships, and 248.93 seconds to 24.18 seconds for cluster members. The complete three-page location-facet walk changed from 674.42 seconds to 53.06 seconds. Corresponding Dataset A/B statement counts are identical, bounded payload sizes do not grow with the database, and focused event/evidence/media reads remain millisecond-scale. The remaining dense time is finite set-based work over one million observations/four million participant rows, not observations multiplied by aliases or returned items.
 
 ### Example scenario
 
@@ -1109,11 +1113,9 @@ A one-million-observation database contains only one participant per observation
 
 If a cache is later proven necessary, it must be local, keyed by revision plus normalized filters and calculation versions, invalidated deterministically, bounded, and rebuildable. It must never become the only source for a World result.
 
-### Remaining performance edge cases
+### Final performance boundary
 
-The former N+1 evidence paths and silent facet cap are fixed with request-scoped maps, set-based queries, and revision-bound facet pages. Person membership also avoids computing global activity that its membership summary does not use, while cluster activity reuses the optimized exact overview aggregation.
-
-The remaining gate is measurement coverage: cold/warm p50/p95 across both target datasets and sparse/dense filtered/focused/cursor scenarios must complete in one consolidated artifact. Python peak-allocation tracing is retained where practical but explicitly unavailable for dense Dataset B because it distorts wall time. This blocks P10-E freeze because intended-scale performance must be measured, not extrapolated; it does not justify a cache, schema change, or frontend inference.
+The former N+1 evidence paths, silent facet cap, observation×candidate membership paths, and repeated complete-World facet work are fixed with request-scoped maps, set-based/indexed queries, revision-bound collection pages, and collection-specific execution. The complete matrix supplies cold/warm p50/p95 across both target datasets and sparse/dense filtered/focused/cursor scenarios. Python peak-allocation tracing remains measured where practical and explicitly unavailable for dense Dataset B because it distorts wall time. No measured result requires a cache, schema/index change, materialization, worker, dependency, or frontend inference. Further World backend features are deferred unless P10-F exposes an actual frozen-contract defect.
 
 ---
 
@@ -1291,7 +1293,7 @@ Compatibility data remains valuable, but value does not confer authority. Deleti
 
 Several capabilities are intentionally future work:
 
-- P10-F World UI waits for P10-E snapshot, evidence-expansion, navigation, bounds, and performance gates.
+- P10-F World UI may begin because the P10-E snapshot, evidence-expansion, navigation, bounds, and performance gates pass.
 - P11 will add broader integrity checking, transactional rebuild tooling, and guarded operation/merge revert.
 - P12 will extend portable backup/restore rules for every normalized record and derived state.
 - Future repeated-unknown tracking needs its own authoritative lifecycle.

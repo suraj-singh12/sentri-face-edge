@@ -65,6 +65,193 @@ class WorldGraphV2Test(unittest.TestCase):
         )
         return observation.observation_id
 
+    def _reference_world_aggregate(
+        self,
+        store: SQLiteIdentityStore,
+        filters: WorldReadFilter = WorldReadFilter(),
+    ) -> tuple[dict[str, int], int, list[dict[str, object]]]:
+        """Small authoritative oracle: correction, then terminal canonical identity."""
+        with store._connect() as conn:
+            person_rows = conn.execute(
+                "SELECT person_id, canonical_person_id FROM persons"
+            ).fetchall()
+            observation_rows = conn.execute(
+                """SELECT observation_id, observed_at, created_at, location, status
+                   FROM observations"""
+            ).fetchall()
+            participant_rows = conn.execute(
+                "SELECT observation_id, person_id FROM observation_participants"
+            ).fetchall()
+            correction_rows = conn.execute(
+                """SELECT observation_id, from_person_id, to_person_id
+                   FROM identity_corrections
+                   WHERE correction_type = 'OBSERVATION_IDENTITY'
+                   ORDER BY created_at, correction_id"""
+            ).fetchall()
+
+        parent = {
+            str(row["person_id"]): (
+                str(row["canonical_person_id"])
+                if row["canonical_person_id"] else None
+            )
+            for row in person_rows
+        }
+
+        def terminal(person_id: str) -> str:
+            current = person_id
+            seen: set[str] = set()
+            while parent[current] is not None:
+                if current in seen:
+                    raise AssertionError("reference canonical cycle")
+                seen.add(current)
+                current = str(parent[current])
+            return current
+
+        corrections = {
+            (str(row["observation_id"]), str(row["from_person_id"])):
+                str(row["to_person_id"])
+            for row in correction_rows
+        }
+        participants: dict[str, list[str]] = {}
+        for row in participant_rows:
+            participants.setdefault(str(row["observation_id"]), []).append(
+                str(row["person_id"])
+            )
+
+        activity: dict[str, int] = {}
+        locations: dict[str, dict[str, object]] = {}
+        total = 0
+        allowed_locations = {item.casefold() for item in filters.locations}
+        for row in observation_rows:
+            if str(row["status"]) != "FINALIZED":
+                continue
+            occurred_at = str(row["observed_at"] or row["created_at"])
+            if filters.date_from and occurred_at < filters.date_from:
+                continue
+            if filters.date_to and occurred_at > filters.date_to:
+                continue
+            raw_location = str(row["location"] or "").strip()
+            location_key = raw_location.casefold()
+            if allowed_locations and location_key not in allowed_locations:
+                continue
+            if filters.missing_location == "EXCLUDE" and not raw_location:
+                continue
+            if filters.missing_location == "ONLY" and raw_location:
+                continue
+
+            event_id = str(row["observation_id"])
+            effective: set[str] = set()
+            for raw_person_id in participants.get(event_id, []):
+                corrected = raw_person_id
+                seen: set[str] = set()
+                while (event_id, corrected) in corrections:
+                    if corrected in seen:
+                        raise AssertionError("reference correction cycle")
+                    seen.add(corrected)
+                    corrected = corrections[(event_id, corrected)]
+                effective.add(terminal(corrected))
+            if not effective:
+                continue
+            total += 1
+            for person_id in effective:
+                activity[person_id] = activity.get(person_id, 0) + 1
+            item = locations.setdefault(
+                location_key,
+                {"value": raw_location or "MISSING", "count": 0},
+            )
+            item["count"] = int(item["count"]) + 1
+            if raw_location and raw_location < str(item["value"]):
+                item["value"] = raw_location
+        ordered_locations = sorted(
+            locations.values(),
+            key=lambda item: (-int(item["count"]), str(item["value"]).casefold()),
+        )
+        return activity, total, ordered_locations
+
+    def _reference_scoped_event_count(
+        self,
+        store: SQLiteIdentityStore,
+        eligible_person_ids: set[str],
+        filters: WorldReadFilter = WorldReadFilter(),
+    ) -> int:
+        """Brute-force cluster count using correction-before-canonical semantics."""
+        with store._connect() as conn:
+            person_rows = conn.execute(
+                "SELECT person_id, canonical_person_id FROM persons"
+            ).fetchall()
+            observation_rows = conn.execute(
+                """SELECT observation_id, observed_at, created_at, location, status
+                   FROM observations"""
+            ).fetchall()
+            participant_rows = conn.execute(
+                "SELECT observation_id, person_id FROM observation_participants"
+            ).fetchall()
+            correction_rows = conn.execute(
+                """SELECT observation_id, from_person_id, to_person_id
+                   FROM identity_corrections
+                   WHERE correction_type = 'OBSERVATION_IDENTITY'
+                   ORDER BY created_at, correction_id"""
+            ).fetchall()
+        parent = {
+            str(row["person_id"]): (
+                str(row["canonical_person_id"])
+                if row["canonical_person_id"] else None
+            )
+            for row in person_rows
+        }
+
+        def terminal(person_id: str) -> str:
+            seen: set[str] = set()
+            current = person_id
+            while parent[current] is not None:
+                if current in seen:
+                    raise AssertionError("reference canonical cycle")
+                seen.add(current)
+                current = str(parent[current])
+            return current
+
+        corrections = {
+            (str(row["observation_id"]), str(row["from_person_id"])):
+                str(row["to_person_id"])
+            for row in correction_rows
+        }
+        participants: dict[str, list[str]] = {}
+        for row in participant_rows:
+            participants.setdefault(str(row["observation_id"]), []).append(
+                str(row["person_id"])
+            )
+        allowed_locations = {item.casefold() for item in filters.locations}
+        count = 0
+        for row in observation_rows:
+            if str(row["status"]) != "FINALIZED":
+                continue
+            occurred_at = str(row["observed_at"] or row["created_at"])
+            if filters.date_from and occurred_at < filters.date_from:
+                continue
+            if filters.date_to and occurred_at > filters.date_to:
+                continue
+            location = str(row["location"] or "").strip()
+            if allowed_locations and location.casefold() not in allowed_locations:
+                continue
+            if filters.missing_location == "EXCLUDE" and not location:
+                continue
+            if filters.missing_location == "ONLY" and location:
+                continue
+            observation_id = str(row["observation_id"])
+            effective: set[str] = set()
+            for raw_id in participants.get(observation_id, []):
+                current = raw_id
+                seen: set[str] = set()
+                while (observation_id, current) in corrections:
+                    if current in seen:
+                        raise AssertionError("reference correction cycle")
+                    seen.add(current)
+                    current = corrections[(observation_id, current)]
+                effective.add(terminal(current))
+            if effective & eligible_person_ids:
+                count += 1
+        return count
+
     def test_contract_parser_validates_levels_filters_limits_and_focus(self) -> None:
         request = _world_graph_v2_request_from_query(
             "version=2&level=PERSON&focus_type=person&focus_id=p1"
@@ -179,6 +366,153 @@ class WorldGraphV2Test(unittest.TestCase):
             self.assertEqual(relationship.strength_basis, "EVIDENCE_COUNT_IN_SCOPE")
             self.assertEqual(relationship.explanation.evidence_count, 3)
             self.assertNotEqual(relationship.source_person_id, relationship.target_person_id)
+
+    def test_cluster_scoped_event_count_matches_correction_canonical_oracle(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            first = store.create_person("Cluster first")
+            second = store.create_person("Cluster second")
+            direct_alias = store.create_person("Direct alias")
+            chain_source = store.create_person("Chain source")
+            chain_middle = store.create_person("Chain middle")
+            correction_source = store.create_person("Correction source")
+            correction_target = store.create_person("Correction target")
+            outsider = store.create_person("Cluster outsider")
+
+            for suffix, location, observed_at in (
+                ("hq", "HQ", "2026-08-01T10:00:00+00:00"),
+                ("missing", None, "2026-08-02T10:00:00+00:00"),
+                ("recent", "HQ", "2026-08-09T10:00:00+00:00"),
+            ):
+                self._observe(
+                    store, f"cluster-basis-{suffix}",
+                    [first.person_id, second.person_id],
+                    observed_at=observed_at, location=location,
+                )
+            self._observe(
+                store, "cluster-direct-alias", [direct_alias.person_id],
+                observed_at="2026-08-03T10:00:00+00:00", location="HQ",
+            )
+            self._observe(
+                store, "cluster-chain", [chain_source.person_id],
+                observed_at="2026-08-04T10:00:00+00:00", location="HQ",
+            )
+            collapsed = self._observe(
+                store, "cluster-collapsed", [direct_alias.person_id, first.person_id],
+                observed_at="2026-08-05T10:00:00+00:00", location="HQ",
+            )
+            corrected_in = self._observe(
+                store, "cluster-corrected-in", [correction_source.person_id],
+                observed_at="2026-08-06T10:00:00+00:00", location="HQ",
+            )
+            corrected_out = self._observe(
+                store, "cluster-corrected-out", [first.person_id],
+                observed_at="2026-08-07T10:00:00+00:00", location="HQ",
+            )
+            merge_then_correction = self._observe(
+                store, "cluster-merge-correction", [direct_alias.person_id],
+                observed_at="2026-08-08T10:00:00+00:00", location="HQ",
+            )
+
+            store.correct_observation_identity(
+                corrected_in, correction_source.person_id,
+                correction_target.person_id, "cluster-correct-in",
+            )
+            store.correct_observation_identity(
+                corrected_out, first.person_id, outsider.person_id,
+                "cluster-correct-out",
+            )
+            store.execute_identity_merge(
+                direct_alias.person_id, first.person_id, "cluster-direct-merge",
+            )
+            store.execute_identity_merge(
+                chain_source.person_id, chain_middle.person_id, "cluster-chain-one",
+            )
+            store.execute_identity_merge(
+                chain_middle.person_id, second.person_id, "cluster-chain-two",
+            )
+            store.execute_identity_merge(
+                correction_target.person_id, first.person_id,
+                "cluster-merge-after-correction",
+            )
+            store.correct_observation_identity(
+                merge_then_correction, direct_alias.person_id, outsider.person_id,
+                "cluster-correction-after-merge",
+            )
+
+            service = GraphReadService(store)
+            expected_members = {first.person_id, second.person_id}
+            scopes = (
+                WorldReadFilter(),
+                WorldReadFilter(date_from="2026-08-05T00:00:00+00:00"),
+                WorldReadFilter(locations=("HQ",)),
+                WorldReadFilter(missing_location="ONLY"),
+            )
+            for filters in scopes:
+                with self.subTest(filters=filters):
+                    overview = service.world_graph_v2(WorldGraphRequest(
+                        collection=WorldCollection.CLUSTERS, filters=filters,
+                    ))
+                    self.assertEqual(len(overview.clusters), 1)
+                    cluster = overview.clusters[0]
+                    detail = service.world_graph_v2(WorldGraphRequest(
+                        detail_level=WorldDetailLevel.CLUSTER,
+                        focus_type="CLUSTER", focus_id=cluster.cluster_id,
+                        collection=WorldCollection.MEMBERS, filters=filters,
+                        limits=WorldReadLimits(people=100),
+                    ))
+                    member_ids = {
+                        person.canonical_person_id for person in detail.people
+                    }
+                    self.assertEqual(member_ids, expected_members)
+                    self.assertEqual(cluster.member_count, len(expected_members))
+                    self.assertEqual(
+                        detail.scope_totals["finalized_events"],
+                        self._reference_scoped_event_count(
+                            store, expected_members, filters,
+                        ),
+                    )
+            self.assertIn(collapsed, {
+                row.event_id
+                for row in service.world_graph_v2(WorldGraphRequest(
+                    detail_level=WorldDetailLevel.PERSON,
+                    focus_type="PERSON", focus_id=first.person_id,
+                    collection=WorldCollection.EVENTS,
+                    limits=WorldReadLimits(events=100),
+                )).events
+            })
+
+    def test_large_cluster_scoped_event_count_counts_each_event_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            members = [store.create_person(f"Large cluster {index}") for index in range(30)]
+            self._observe(
+                store, "large-cluster-all",
+                [person.person_id for person in members],
+                observed_at="2026-08-01T10:00:00+00:00", location="HQ",
+            )
+            for index, person in enumerate(members):
+                self._observe(
+                    store, f"large-cluster-single-{index}", [person.person_id],
+                    observed_at="2026-08-02T10:00:00+00:00", location="HQ",
+                )
+            service = GraphReadService(store)
+            cluster = service.world_graph_v2(WorldGraphRequest(
+                collection=WorldCollection.CLUSTERS,
+            )).clusters[0]
+            detail = service.world_graph_v2(WorldGraphRequest(
+                detail_level=WorldDetailLevel.CLUSTER,
+                focus_type="CLUSTER", focus_id=cluster.cluster_id,
+                collection=WorldCollection.MEMBERS,
+                limits=WorldReadLimits(people=100),
+            ))
+            member_ids = {person.canonical_person_id for person in detail.people}
+            self.assertEqual(member_ids, {person.person_id for person in members})
+            self.assertEqual(detail.scope_totals["finalized_events"], 31)
+            self.assertEqual(
+                detail.scope_totals["finalized_events"],
+                self._reference_scoped_event_count(store, member_ids),
+            )
 
     def test_finalized_event_and_evidence_detail_preserve_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -330,6 +664,238 @@ class WorldGraphV2Test(unittest.TestCase):
                 {"value": "hq", "count": 1},
             ])
 
+    def test_overview_adjustment_matches_correction_before_canonical_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            terminal = store.create_person("Terminal")
+            other = store.create_person("Other")
+            extra = store.create_person("Extra")
+
+            self._observe(
+                store, "adjust-plain", [terminal.person_id, other.person_id],
+                observed_at="2026-08-01T10:00:00+00:00", location=" HQ ",
+            )
+            plain_reference = self._reference_world_aggregate(store)
+            plain = GraphReadService(store).world_graph_v2()
+            self.assertEqual(plain.scope_totals["finalized_events"], plain_reference[1])
+            self.assertEqual(plain.available_facets["locations"], plain_reference[2])
+
+            direct = store.create_person("Direct merge source")
+            self._observe(
+                store, "adjust-direct", [direct.person_id, other.person_id],
+                observed_at="2026-08-02T10:00:00+00:00", location="hq",
+            )
+            store.execute_identity_merge(
+                direct.person_id, terminal.person_id, "adjust-direct-merge",
+            )
+
+            chain_a = store.create_person("Chain A")
+            chain_b = store.create_person("Chain B")
+            self._observe(
+                store, "adjust-chain", [chain_a.person_id, other.person_id],
+                observed_at="2026-08-03T10:00:00+00:00", location="Field",
+            )
+            store.execute_identity_merge(
+                chain_a.person_id, chain_b.person_id, "adjust-chain-a-b",
+            )
+            store.execute_identity_merge(
+                chain_b.person_id, terminal.person_id, "adjust-chain-b-terminal",
+            )
+
+            correction_source = store.create_person("Correction source")
+            correction_target = store.create_person("Correction target")
+            correction_event = self._observe(
+                store, "adjust-correction", [correction_source.person_id, other.person_id],
+                observed_at="2026-08-04T10:00:00+00:00", location="Field",
+            )
+            store.correct_observation_identity(
+                correction_event, correction_source.person_id,
+                correction_target.person_id, "adjust-correction-only",
+            )
+
+            correction_merge_source = store.create_person("Correction merge source")
+            correction_merge_target = store.create_person("Correction merge target")
+            correction_merge_event = self._observe(
+                store, "adjust-correction-merge",
+                [correction_merge_source.person_id, other.person_id, extra.person_id],
+                observed_at="2026-08-05T10:00:00+00:00", location="Gate",
+            )
+            store.correct_observation_identity(
+                correction_merge_event, correction_merge_source.person_id,
+                correction_merge_target.person_id, "adjust-correction-before-merge",
+            )
+            store.execute_identity_merge(
+                correction_merge_target.person_id, terminal.person_id,
+                "adjust-merge-after-correction",
+            )
+
+            merge_first_source = store.create_person("Merge-first source")
+            merge_first_survivor = store.create_person("Merge-first survivor")
+            merge_first_event = self._observe(
+                store, "adjust-merge-correction",
+                [merge_first_source.person_id, other.person_id, extra.person_id],
+                observed_at="2026-08-06T10:00:00+00:00", location=None,
+            )
+            store.execute_identity_merge(
+                merge_first_source.person_id, merge_first_survivor.person_id,
+                "adjust-merge-before-correction",
+            )
+            store.correct_observation_identity(
+                merge_first_event, merge_first_survivor.person_id,
+                terminal.person_id, "adjust-correction-after-merge",
+            )
+
+            collapsed_a = store.create_person("Collapsed A")
+            collapsed_b = store.create_person("Collapsed B")
+            self._observe(
+                store, "adjust-collapsed",
+                [collapsed_a.person_id, collapsed_b.person_id,
+                 terminal.person_id, other.person_id],
+                observed_at="2026-08-07T10:00:00+00:00", location="Gate",
+            )
+            store.execute_identity_merge(
+                collapsed_a.person_id, terminal.person_id, "adjust-collapse-a",
+            )
+            store.execute_identity_merge(
+                collapsed_b.person_id, terminal.person_id, "adjust-collapse-b",
+            )
+            store.create_observation(
+                "adjust-draft", participant_ids=[terminal.person_id],
+                observed_at="2026-08-08T10:00:00+00:00", location="Gate",
+            )
+
+            service = GraphReadService(store)
+            scopes = (
+                WorldReadFilter(),
+                WorldReadFilter(date_from="2026-08-04T00:00:00+00:00"),
+                WorldReadFilter(locations=("Gate",)),
+                WorldReadFilter(missing_location="ONLY"),
+                WorldReadFilter(missing_location="EXCLUDE"),
+            )
+            for filters in scopes:
+                with self.subTest(filters=filters):
+                    expected_activity, expected_total, expected_locations = (
+                        self._reference_world_aggregate(store, filters)
+                    )
+                    model = service.world_graph_v2(WorldGraphRequest(filters=filters))
+                    actual_activity = {
+                        person.canonical_person_id:
+                            person.activity_summary["finalized_event_count"]
+                        for person in model.people
+                    }
+                    self.assertEqual(model.scope_totals["finalized_events"], expected_total)
+                    self.assertEqual(model.available_facets["locations"], expected_locations)
+                    self.assertEqual(
+                        {
+                            person_id: count for person_id, count in actual_activity.items()
+                            if count
+                        },
+                        expected_activity,
+                    )
+
+    def test_location_facet_collection_matches_authoritative_overview_semantics(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            service = GraphReadService(store)
+            empty = service.world_graph_v2(WorldGraphRequest(
+                collection=WorldCollection.LOCATION_FACETS,
+            ))
+            self.assertEqual(empty.available_facets["locations"], [])
+            self.assertEqual(empty.pagination["LOCATION_FACETS"].total_count, 0)
+
+            first = store.create_person("Facet first")
+            second = store.create_person("Facet second")
+            raw = store.create_person("Facet raw")
+            corrected = store.create_person("Facet corrected")
+            survivor = store.create_person("Facet survivor")
+            self._observe(
+                store, "facet-hq", [first.person_id, second.person_id],
+                observed_at="2026-08-01T10:00:00+00:00", location="HQ",
+            )
+            one_location = service.world_graph_v2(WorldGraphRequest(
+                collection=WorldCollection.LOCATION_FACETS,
+            ))
+            self.assertEqual(
+                one_location.available_facets["locations"],
+                [{"value": "HQ", "count": 1}],
+            )
+            corrected_event = self._observe(
+                store, "facet-missing", [raw.person_id, second.person_id],
+                observed_at="2026-08-02T10:00:00+00:00", location=None,
+            )
+            store.correct_observation_identity(
+                corrected_event, raw.person_id, corrected.person_id,
+                "facet-correction-before-merge",
+            )
+            store.execute_identity_merge(
+                corrected.person_id, survivor.person_id, "facet-merge-after-correction",
+            )
+            self._observe(
+                store, "facet-field", [survivor.person_id, first.person_id],
+                observed_at="2026-08-03T10:00:00+00:00", location="Field",
+            )
+
+            scopes = (
+                WorldReadFilter(),
+                WorldReadFilter(missing_location="EXCLUDE"),
+                WorldReadFilter(missing_location="ONLY"),
+                WorldReadFilter(date_from="2026-08-02T00:00:00+00:00"),
+                WorldReadFilter(locations=("HQ",)),
+                WorldReadFilter(activity=("LOW",)),
+            )
+            for filters in scopes:
+                with self.subTest(filters=filters):
+                    limits = WorldReadLimits(facets=100)
+                    authoritative = service.world_graph_v2(WorldGraphRequest(
+                        filters=filters, limits=limits,
+                    ))
+                    focused = service.world_graph_v2(WorldGraphRequest(
+                        collection=WorldCollection.LOCATION_FACETS,
+                        filters=filters, limits=limits,
+                    ))
+                    self.assertEqual(
+                        focused.available_facets["locations"],
+                        authoritative.available_facets["locations"],
+                    )
+                    self.assertEqual(
+                        focused.pagination["LOCATION_FACETS"].total_count,
+                        authoritative.pagination["LOCATION_FACETS"].total_count,
+                    )
+                    self.assertEqual(
+                        focused.scope_totals["finalized_events"],
+                        authoritative.scope_totals["finalized_events"],
+                    )
+
+            from sentriface.storage import sqlite_store as module
+
+            unrelated = (
+                "_world_relationship_scope", "_world_rank_people", "_world_clusters",
+                "_world_patterns", "_world_facets", "_world_person",
+                "_world_event_statistics", "_world_full_scope_event_statistics",
+            )
+            patches = [
+                patch.object(
+                    module, name,
+                    side_effect=AssertionError(f"unrelated location-facet work: {name}"),
+                )
+                for name in unrelated
+            ]
+            for active_patch in patches:
+                active_patch.start()
+            try:
+                isolated = service.world_graph_v2(WorldGraphRequest(
+                    collection=WorldCollection.LOCATION_FACETS,
+                    limits=WorldReadLimits(facets=2),
+                ))
+            finally:
+                for active_patch in reversed(patches):
+                    active_patch.stop()
+            self.assertEqual(len(isolated.available_facets["locations"]), 2)
+            self.assertEqual(isolated.people, ())
+            self.assertEqual(isolated.relationships, ())
+            self.assertEqual(isolated.clusters, ())
+            self.assertEqual(isolated.patterns, ())
+
     def test_revision_advances_for_finalized_world_event_but_not_draft_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             store = self._store(Path(temp))
@@ -426,6 +992,180 @@ class WorldGraphV2Test(unittest.TestCase):
                     }
                 ))
 
+    def test_person_event_count_and_pages_share_exact_effective_membership(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            terminal = store.create_person("Terminal")
+
+            plain_event = self._observe(
+                store, "focused-plain", [terminal.person_id],
+                observed_at="2026-08-01T10:00:00+00:00", location="Gate",
+            )
+
+            direct_source = store.create_person("Direct source")
+            direct_event = self._observe(
+                store, "focused-direct", [direct_source.person_id],
+                observed_at="2026-08-02T10:00:00+00:00", location="Gate",
+            )
+            store.execute_identity_merge(
+                direct_source.person_id, terminal.person_id, "focused-direct-merge",
+            )
+
+            chain_a = store.create_person("Chain A")
+            chain_b = store.create_person("Chain B")
+            chain_event = self._observe(
+                store, "focused-chain", [chain_a.person_id],
+                observed_at="2026-08-03T10:00:00+00:00", location="Gate",
+            )
+            store.execute_identity_merge(
+                chain_a.person_id, chain_b.person_id, "focused-chain-a-b",
+            )
+            store.execute_identity_merge(
+                chain_b.person_id, terminal.person_id, "focused-chain-b-terminal",
+            )
+
+            corrected_source = store.create_person("Corrected source")
+            corrected_target = store.create_person("Corrected target")
+            correction_then_merge_event = self._observe(
+                store, "focused-correct-merge", [corrected_source.person_id],
+                observed_at="2026-08-04T10:00:00+00:00", location="Annex",
+            )
+            store.correct_observation_identity(
+                correction_then_merge_event, corrected_source.person_id,
+                corrected_target.person_id, "focused-correct-before-merge",
+            )
+            store.execute_identity_merge(
+                corrected_target.person_id, terminal.person_id,
+                "focused-merge-after-correction",
+            )
+
+            merge_first_source = store.create_person("Merge-first source")
+            merge_first_survivor = store.create_person("Merge-first survivor")
+            merge_then_correction_event = self._observe(
+                store, "focused-merge-correct", [merge_first_source.person_id],
+                observed_at="2026-08-05T10:00:00+00:00", location=None,
+            )
+            store.execute_identity_merge(
+                merge_first_source.person_id, merge_first_survivor.person_id,
+                "focused-merge-before-correction",
+            )
+            store.correct_observation_identity(
+                merge_then_correction_event, merge_first_survivor.person_id,
+                terminal.person_id, "focused-correct-after-merge",
+            )
+
+            collapsed_a = store.create_person("Collapsed A")
+            collapsed_b = store.create_person("Collapsed B")
+            collapsed_event = self._observe(
+                store, "focused-collapse",
+                [collapsed_a.person_id, collapsed_b.person_id, terminal.person_id],
+                observed_at="2026-08-06T10:00:00+00:00", location="Gate",
+            )
+            store.execute_identity_merge(
+                collapsed_a.person_id, terminal.person_id, "focused-collapse-a",
+            )
+            store.execute_identity_merge(
+                collapsed_b.person_id, terminal.person_id, "focused-collapse-b",
+            )
+
+            unrelated = store.create_person("Unrelated")
+            self._observe(
+                store, "focused-unrelated", [unrelated.person_id],
+                observed_at="2026-08-07T10:00:00+00:00", location="Gate",
+            )
+            store.create_observation(
+                "focused-draft", participant_ids=[terminal.person_id],
+                observed_at="2026-08-08T10:00:00+00:00", location="Gate",
+            )
+
+            service = GraphReadService(store)
+            request = WorldGraphRequest(
+                detail_level=WorldDetailLevel.PERSON,
+                focus_type="PERSON", focus_id=terminal.person_id,
+                collection=WorldCollection.EVENTS,
+                limits=WorldReadLimits(events=2),
+                as_of="2026-08-09T00:00:00+00:00",
+            )
+            cursor = None
+            revision = None
+            walked: list[str] = []
+            expected_total = None
+            while True:
+                page = service.world_graph_v2(WorldGraphRequest(**{
+                    **request.__dict__, "cursor": cursor, "revision": revision,
+                }))
+                event_page = page.pagination["EVENTS"]
+                expected_total = event_page.total_count if expected_total is None else expected_total
+                self.assertEqual(event_page.total_count, expected_total)
+                self.assertEqual(
+                    page.people[0].activity_summary["finalized_event_count"],
+                    event_page.total_count,
+                )
+                walked.extend(item.event_id for item in page.events)
+                if not event_page.has_more:
+                    break
+                cursor = event_page.next_cursor
+                revision = page.graph_revision
+
+            expected = [
+                collapsed_event, merge_then_correction_event,
+                correction_then_merge_event, chain_event, direct_event, plain_event,
+            ]
+            self.assertEqual(walked, expected)
+            self.assertEqual(expected_total, len(expected))
+            self.assertEqual(len(set(walked)), len(walked))
+
+            recent = service.world_graph_v2(WorldGraphRequest(
+                **{
+                    **request.__dict__, "cursor": None, "revision": None,
+                    "filters": WorldReadFilter(
+                        date_from="2026-08-04T00:00:00+00:00",
+                    ),
+                    "limits": WorldReadLimits(events=10),
+                }
+            ))
+            self.assertEqual(
+                [item.event_id for item in recent.events],
+                [collapsed_event, merge_then_correction_event, correction_then_merge_event],
+            )
+            self.assertEqual(recent.pagination["EVENTS"].total_count, 3)
+
+            gate = service.world_graph_v2(WorldGraphRequest(
+                **{
+                    **request.__dict__, "cursor": None, "revision": None,
+                    "filters": WorldReadFilter(locations=("Gate",)),
+                    "limits": WorldReadLimits(events=10),
+                }
+            ))
+            self.assertEqual(
+                [item.event_id for item in gate.events],
+                [collapsed_event, chain_event, direct_event, plain_event],
+            )
+            self.assertEqual(gate.pagination["EVENTS"].total_count, 4)
+
+            missing = service.world_graph_v2(WorldGraphRequest(
+                **{
+                    **request.__dict__, "cursor": None, "revision": None,
+                    "filters": WorldReadFilter(missing_location="ONLY"),
+                    "limits": WorldReadLimits(events=10),
+                }
+            ))
+            self.assertEqual(
+                [item.event_id for item in missing.events],
+                [merge_then_correction_event],
+            )
+            self.assertEqual(missing.pagination["EVENTS"].total_count, 1)
+
+            provenance = service.world_graph_v2(WorldGraphRequest(
+                detail_level=WorldDetailLevel.EVENT,
+                focus_type="EVENT", focus_id=collapsed_event,
+                collection=WorldCollection.PROVENANCE,
+            )).events[0].participant_provenance
+            self.assertEqual(
+                {item["raw_person_id"] for item in provenance},
+                {collapsed_a.person_id, collapsed_b.person_id, terminal.person_id},
+            )
+
     def test_event_evidence_and_media_have_independent_bounded_pages(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             store = self._store(Path(temp))
@@ -474,8 +1214,9 @@ class WorldGraphV2Test(unittest.TestCase):
             store.execute_identity_merge(corrected.person_id, survivor.person_id, "merge-corrected")
             event = GraphReadService(store).world_graph_v2(WorldGraphRequest(
                 detail_level=WorldDetailLevel.EVENT, focus_type="EVENT", focus_id=event_id,
+                collection=WorldCollection.PROVENANCE,
             )).events[0]
-            self.assertEqual(event.participants, ({"person_id": survivor.person_id},))
+            self.assertEqual(event.participants, ())
             by_raw = {item["raw_person_id"]: item for item in event.participant_provenance}
             self.assertEqual(
                 by_raw[original.person_id]["relationship_to_effective_identity"],
@@ -509,12 +1250,13 @@ class WorldGraphV2Test(unittest.TestCase):
                 event = service.world_graph_v2(WorldGraphRequest(
                     detail_level=WorldDetailLevel.EVENT, focus_type="EVENT", focus_id=event_id,
                 ))
-                person = service.world_graph_v2(WorldGraphRequest(
-                    detail_level=WorldDetailLevel.PERSON, focus_type="PERSON",
-                    focus_id=first.person_id, collection=WorldCollection.EVENTS,
-                ))
+            person = service.world_graph_v2(WorldGraphRequest(
+                detail_level=WorldDetailLevel.PERSON, focus_type="PERSON",
+                focus_id=first.person_id, collection=WorldCollection.EVENTS,
+            ))
             self.assertEqual(len(event.events), 1)
             self.assertEqual(len(person.events), 1)
+            self.assertEqual(len(person.people[0].cluster_memberships), 1)
 
     def test_payload_is_v2_typed_and_does_not_expose_storage_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

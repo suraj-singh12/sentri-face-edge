@@ -3777,6 +3777,8 @@ def _world_graph_v2_request_from_query(query: str) -> WorldGraphRequest:
             events=integer("event_limit", 25), evidence=integer("evidence_limit", 25),
             media=integer("media_limit", 25),
             relationships=integer("relationship_limit", 50), patterns=integer("pattern_limit", 10),
+            provenance=integer("provenance_limit", 100),
+            facets=integer("facet_limit", 100),
         ),
         cursor=one("cursor"), revision=one("revision"), as_of=one("as_of"),
     )
@@ -3785,6 +3787,19 @@ def _world_graph_v2_request_from_query(query: str) -> WorldGraphRequest:
 def _world_graph_v2_payload(model: WorldGraphV2ReadModel) -> dict[str, Any]:
     # Normalize tuple-backed immutable models into their JSON array representation.
     payload = json.loads(json.dumps(asdict(model)))
+    def remove_dormant_tokens(value: Any) -> None:
+        if isinstance(value, dict):
+            for key in (
+                "expansion_tokens", "expansion_token", "evidence_expansion_token",
+            ):
+                value.pop(key, None)
+            for child in value.values():
+                remove_dormant_tokens(child)
+        elif isinstance(value, list):
+            for child in value:
+                remove_dormant_tokens(child)
+
+    remove_dormant_tokens(payload)
     payload.update({
         "contract": "sentriface.world-graph",
         "contract_version": 2,

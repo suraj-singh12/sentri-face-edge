@@ -77,6 +77,8 @@ This document is the authoritative PASS/FAIL checklist for freezing the P10 Worl
 - **P10-PERF-04 — Pathology gate:** PASS only if the matrix exposes no unbounded/pathological behavior at intended scale. A roughly 2.27-second large sparse overview alone is not a blocker when correctness, bounds, and focused reads are healthy.
 - **P10-PERF-05 — Architecture gate:** PASS only if acceptance requires no persistent cache, materialized World authority, worker, dependency, or schema redesign. If measured evidence proves one necessary, P10 freezes as failed pending a separately reviewed architecture change.
 
+Final result on 2026-08-11: **P10-PERF-01 through P10-PERF-05 PASS**. The consolidated post-optimization artifact is `docs/P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json`. It contains three cold and five warm samples for every defined read in Dataset A/B sparse/dense profiles, complete cursor walks, constant statement counts, bounded payload/item counts, and measured Python allocation except dense Dataset B, where the established `NOT_PRACTICAL_DENSE_B_TRACEMALLOC_DISTORTS_RUNTIME` justification applies. Large dense work remains set-based and approximately scale-driven; the former observation×alias, repeated complete-World page, and N+1 paths are absent.
+
 ## Freeze gate before P10-F
 
 P10-F may begin only when every BLOCKER is `FIXED`, every HIGH required by the existing contract is `FIXED`, all criteria above are PASS or explicitly inapplicable with evidence, the invariant/full relevant suites pass, navigation and authority boundaries are complete, snapshot/evidence/pagination correctness is proven, and the performance matrix is sufficient to expose intended-scale pathologies. MEDIUM/LOW items may be deferred only with a written justification that they do not violate the existing P10 contract, correctness, authority, bounds, or intended scale.
@@ -101,17 +103,17 @@ At freeze, every entry must be `FIXED`, `DEFERRED WITH JUSTIFICATION`, or `NOT A
 | P10-D12 | HIGH | Empty relationship evidence expansion resolves every person individually (measured 1,004 SELECTs/1,000 people). | FIXED — one canonical map and SQL effective-endpoint function replace per-person resolution; invariant threshold is at most 6 statements. |
 | P10-D13 | MEDIUM | Empty scope advertises a `DATA_QUALITY` pattern facet despite returning no pattern. | FIXED — pattern facet count derives from emitted supported patterns and is empty for empty scope. |
 | P10-D14 | MEDIUM | Dormant expansion-token fields imply unavailable behavior. | FIXED — compatibility fields remain internal only and are removed recursively from the active v2 JSON payload. |
-| P10-D15 | HIGH | Required cold/warm sparse/dense filtered/focused/cursor benchmark matrix is incomplete. | DEFERRED WITH JUSTIFICATION — A profiles and a B sparse smoke completed, but dense-B Python allocation tracing remained active for over one hour and the environment denied termination. The consolidated 3/3 matrix artifact was not produced, so freeze remains blocked. The fixture now records dense-B allocation as not practical on future runs. |
+| P10-D15 | HIGH | Required cold/warm sparse/dense filtered/focused/cursor benchmark matrix is incomplete. | FIXED — `P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json` records the complete A/B sparse/dense matrix with 3 cold and 5 warm samples, SQL counts, payloads, returned counts, cursor walks, and practical allocation measurements. Dense-B allocation alone is explicitly unavailable because tracing distorts product latency. P10-PERF-01 through P10-PERF-05 pass. |
 | P10-D16 | MEDIUM | Relationship evidence `evidence_count` can disagree with a complete supporting-evidence walk after canonical collapse/filtering. | FIXED — count and rows use identical exact effective-pair predicates; self-edge, chain, correction/merge, and collapsed-raw-edge walks agree. |
 
 ## Final adversarial review record
 
-Review date: 2026-08-10.
+Review date: 2026-08-11.
 
 - **BLOCKER:** none. Snapshot coherence and relationship-evidence correctness are fixed and proven by focused concurrency/invariant tests.
-- **HIGH:** P10-D15 only. The required consolidated cold/warm sparse/dense acceptance artifact is incomplete; this is a mandatory existing freeze gate, not a feature request.
-- **MEDIUM:** none unresolved. Dense cluster/activity scans are finite, bounded, and set-based, but their final p95 classification remains part of P10-D15.
+- **HIGH:** none unresolved. P10-D15 is fixed by the completed post-optimization artifact.
+- **MEDIUM:** none unresolved. Dense cluster/activity scans are finite, bounded, set-based, and measured by the final matrix.
 - **LOW:** the existing frontend production-build chunk-size warning remains unrelated to World backend behavior and does not block P10.
 - **DEFERRED:** dense-B `tracemalloc` peak allocation is not practical because callback instrumentation dominates runtime. Future matrix runs record this field unavailable with that reason while still measuring API latency, SQL count, payload, and returned items.
 
-Final gate result: **FAIL** solely because P10-PERF-01/P10-PERF-02 and defect P10-D15 are not complete. P10-F remains blocked. All other criteria are implemented and verified.
+Final gate result: **PASS**. P10-E is frozen. P10-F World UI is safe to begin against the frozen v2 contract; further World backend features remain deferred unless P10-F exposes an actual contract defect.
