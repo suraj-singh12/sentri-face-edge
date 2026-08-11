@@ -1,6 +1,6 @@
 # P11 integrity authority model, checker, and graph rebuild
 
-Status: **P11-C2A is complete; the complete note → mention → evidence → graph authority model is refrozen; P11-A/B remain complete; P11C-R01 is implemented; P11C-R02 remains unimplemented.** The two R02 safety stops are retained in the architecture record. P11-A1 corrected the occurrence-history contradiction. P11-C2A corrected the dependent evidence-history and shared graph-authority contradictions without changing normal note/evidence mutations, schema, API, or missing-occurrence coverage. `P11_STRUCTURED_REPAIR_DESIGN.md` records the refrozen two-entry catalog and R02 reachability proof. This does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
+Status: **P11-A/B/C are complete; the complete note → mention → evidence → graph authority model and the two-command structured-repair catalog are frozen.** Both R01 and R02 are implemented. The two R02 safety stops remain in the architecture record: P11-A1 corrected occurrence history, and P11-C2A corrected dependent evidence-history/shared graph authority without changing normal note/evidence mutations, schema, API, or missing-occurrence coverage. This does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
 
 ## State-authority map
 
@@ -130,7 +130,7 @@ The complete state table is:
 | any | retired row with missing deactivation operation/time or non-committed journal linkage | unchanged | invalid provenance — `P11-EVIDENCE-001` and/or `P11-JOURNAL-003` |
 | any | missing source, wrong endpoints, wrong source/type, non-directed, or non-`REFERENCES` note evidence | unchanged | invalid row provenance — `P11-EVIDENCE-001` |
 
-| Active support after canonical resolution | Expected graph | Revision effect of a future R02 reconciliation |
+| Active support after canonical resolution | Expected graph | R02 revision effect |
 | --- | --- | --- |
 | `NOTE_REFERENCE` only, distinct effective endpoints | directed `REFERENCES` edge | advance once when active evidence changes |
 | `NOTE_REFERENCE` plus `CO_OBSERVED` and/or `MANUAL_ASSOCIATION` | independent typed support remains aggregated | advance once; retiring note support cannot erase other types |
@@ -147,6 +147,12 @@ The scoped contradiction register is closed:
 5. Removing the old equality without a replacement cardinality guard would have allowed the generic evidence-deactivation path to commit an unsupported active occurrence. The shared authority now rejects that intermediate/final state, so normal mutation safety is unchanged.
 
 `P11-NOTE-003` and `P11-EVIDENCE-002` contained no history/current contradiction and were not weakened. `CO_OBSERVED` source/finalization/effective-participant rules and `MANUAL_ASSOCIATION` lifecycle/projection rules remain unchanged. Evidence retirement proof in schema v28 is the inactive flag together with non-null `deactivated_operation_id` and `deactivated_at`, foreign-key linkage, and a committed/reverted journal result; there is no replacement-link column to invent. Occurrence retirement additionally requires a same-note retirement revision at or after creation plus operation and timestamp.
+
+## P11-C structured repair execution
+
+R01 and R02 are the complete whitelist. R02 preparation is finding-bound to one existing note/person group and deterministically selects one of five frozen plans. Execution revalidates the full token under `BEGIN IMMEDIATE`, appends or retires occurrence/evidence rows without reactivation or deletion, validates with shared active-only graph authority, maintains only the affected directed aggregate, and advances graph revision once exactly when active evidence changes. A canonical self-collapse still advances because provenance changed; occurrence-only retirement without evidence does not. The committed repair and its journal share the transaction, and a full untruncated P11-A post-check is mandatory.
+
+R02 refuses wholly missing groups, multiple active occurrences, ambiguous multi-plan states, incomplete occurrence/evidence retirement provenance, wrong type/source/endpoints/direction, any `P11-EVIDENCE-002`, invalid correction/canonical state, unrelated blocking findings, stale fingerprints/revisions/journals, and graph drift outside the selected relationship key. Valid retired occurrence and evidence revisions remain byte-for-byte unchanged. `CO_OBSERVED` and `MANUAL_ASSOCIATION` evidence is never selected or mutated.
 
 ## P11-B explicit graph projection rebuild
 
@@ -180,6 +186,6 @@ These are architectural boundaries, not P11-A blockers. They constrain later rep
 1. **P11-A / P11-A1 / P11-C2A — Read-only integrity semantics:** complete and refrozen after correcting occurrence history, evidence revision history, and shared graph-authority current-cardinality semantics.
 2. **P11-B — Deterministic graph projection rebuild:** complete; explicit preflight-gated, atomic, journaled, revision-aware replacement with no authority rewrite.
 3. **P11-C1 — Structured repair authority audit/catalog/design:** complete and frozen. The only commands admitted are restoring an otherwise-valid archived terminal merge survivor and reconciling diagnosed note occurrence/reference state from immutable revision authority.
-4. **P11-C2 / R01:** implemented as explicit Python/service invocation with typed finding preconditions, in-transaction revalidation, immutable repair journaling, shared lifecycle mutation, exact projection/revision validation, and full P11-A post-check. **R02 remains unimplemented; all frozen R02 cases are now reachable under the consolidated refrozen authority model without history rewrite, so R02 is safe to implement in a separate task.**
+4. **P11-C2 / R01 and R02:** complete as explicit Python/service invocation with typed finding preconditions, in-transaction revalidation, immutable repair journaling, append/retire-only history preservation, exact projection/revision validation, rollback/idempotency rules, and full P11-A post-check. The whitelist remains exactly two.
 5. **P11-D — Revert execution:** future; operation-specific preconditions/inverse data and atomic journaled execution.
 6. **P11-E — Integrity/recovery UI and acceptance:** future; explicit invocation and factual reports, no polling/background scan.

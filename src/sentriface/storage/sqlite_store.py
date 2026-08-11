@@ -20,6 +20,8 @@ from sentriface.errors import (
 )
 from sentriface.models import (
     ArchivedCanonicalSurvivorRepairPrecondition,
+    NoteReferenceReconciliationPrecondition,
+    NoteReferenceRepairPlan,
     DetectedFace,
     Embedding,
     EmbeddingRecord,
@@ -4108,6 +4110,219 @@ class SQLiteIdentityStore:
                     "entity_type": "person",
                     "entity_id": details["survivor_person_id"],
                 }],
+                details=details,
+            )
+            _transition_journal_operation(conn, operation_id, "FAILED", details)
+
+    def prepare_note_reference_reconciliation(
+        self, note_id: str, referenced_person_id: str,
+    ) -> NoteReferenceReconciliationPrecondition:
+        """Diagnose and bind one authorized P11-C R02 note/person scope."""
+        normalized_note_id = str(note_id).strip()
+        normalized_person_id = str(referenced_person_id).strip()
+        if not normalized_note_id:
+            raise ValueError("Note ID is required")
+        if not normalized_person_id:
+            raise ValueError("Referenced person ID is required")
+        from sentriface.integrity import ReadOnlyIntegrityChecker
+
+        report = ReadOnlyIntegrityChecker(
+            self.db_path, database_key=self.database_key,
+        ).run()
+        with self._connect() as conn:
+            conn.execute("BEGIN")
+            return _r02_precondition_from_report(
+                conn, report, normalized_note_id, normalized_person_id,
+            )
+
+    def execute_note_reference_reconciliation(
+        self,
+        precondition: NoteReferenceReconciliationPrecondition,
+        operation_id: str,
+        *,
+        actor: dict,
+        reason: str,
+        source: str | None = None,
+    ) -> dict:
+        """Execute only P11C-R02; the caller performs the full P11-A post-check."""
+        normalized_operation_id = str(operation_id).strip()
+        if not normalized_operation_id:
+            raise ValueError("Operation ID is required")
+        if not isinstance(actor, dict) or not actor:
+            raise ValueError("Authenticated actor is required")
+        normalized_reason = str(reason).strip()
+        if not normalized_reason:
+            raise ValueError("Repair reason is required")
+        if len(normalized_reason) > 500:
+            raise ValueError("Repair reason must not exceed 500 characters")
+        _validate_r02_request_shape(precondition)
+
+        with self._connect() as conn:
+            existing = _r02_existing_result(
+                conn, normalized_operation_id, precondition,
+            )
+            if existing is not None:
+                return existing
+
+        from sentriface.integrity import ReadOnlyIntegrityChecker
+
+        report = ReadOnlyIntegrityChecker(
+            self.db_path, database_key=self.database_key,
+        ).run()
+        failure_details = {
+            "repair_id": precondition.repair_id,
+            "repair_spec_version": precondition.repair_spec_version,
+            "invariant_ids": list(precondition.invariant_ids),
+            "finding_fingerprint_version": precondition.finding_fingerprint_version,
+            "finding_fingerprint": precondition.finding_fingerprint,
+            "plan_type": precondition.plan.value,
+            "note_id": precondition.note_id,
+            "referenced_person_id": precondition.referenced_person_id,
+            "authoritative_revision_id": precondition.latest_revision_id,
+        }
+        try:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                existing = _r02_existing_result(
+                    conn, normalized_operation_id, precondition,
+                )
+                if existing is not None:
+                    return existing
+                current = _r02_precondition_from_report(
+                    conn,
+                    report,
+                    precondition.note_id,
+                    precondition.referenced_person_id,
+                )
+                if current != precondition:
+                    raise StructuredRepairRefused(
+                        "R02 refused because the diagnosed authoritative state is stale",
+                        report=report,
+                    )
+
+                immutable_before = _r02_immutable_fingerprint(conn)
+                unrelated_before = _r02_unrelated_fingerprint(
+                    conn, precondition, normalized_operation_id,
+                )
+                historical_before = _r02_retired_history_fingerprint(conn, precondition)
+                revision_before = _graph_revision_token(conn)
+                connection_count_before = int(conn.execute(
+                    "SELECT COUNT(*) FROM graph_connections"
+                ).fetchone()[0])
+                planned_occurrence_id, planned_evidence_id = _r02_planned_append_ids(
+                    precondition, normalized_operation_id,
+                )
+                _begin_journal_operation(
+                    conn,
+                    _R02_OPERATION_TYPE,
+                    operation_id=normalized_operation_id,
+                    actor=actor,
+                    source=source or "structured-repair-service",
+                    affected_entities=_r02_affected_entities(
+                        precondition,
+                        planned_occurrence_id=planned_occurrence_id,
+                        planned_evidence_id=planned_evidence_id,
+                    ),
+                    details={
+                        **failure_details,
+                        "reason": normalized_reason,
+                        "affected_entity_count": len(precondition.affected_entity_ids),
+                        "affected_entity_fingerprint": _r01_hash(
+                            precondition.affected_entity_ids
+                        ),
+                        "before_state_fingerprint": _r01_hash({
+                            "revision_history": precondition.revision_history_fingerprint,
+                            "occurrence_group": precondition.occurrence_group_fingerprint,
+                            "evidence_history": precondition.evidence_history_fingerprint,
+                            "canonical_state": precondition.canonical_state_fingerprint,
+                            "graph_projection": precondition.graph_projection_fingerprint,
+                            "relevant_operations": precondition.relevant_operation_fingerprint,
+                        }),
+                    },
+                )
+                _r02_failure_checkpoint("after_journal_started")
+                mutation = _apply_r02_plan(
+                    conn,
+                    precondition,
+                    normalized_operation_id,
+                    source=_optional_text(source),
+                    planned_occurrence_id=planned_occurrence_id,
+                )
+                if mutation["active_evidence_changed"]:
+                    _r02_maintain_affected_projection(conn, precondition)
+                    _r02_failure_checkpoint("after_graph_projection")
+                    _advance_graph_revision(conn)
+                    _r02_failure_checkpoint("after_graph_revision_advance")
+                post = _validate_r02_postconditions(
+                    conn,
+                    precondition,
+                    operation_id=normalized_operation_id,
+                    mutation=mutation,
+                    immutable_before=immutable_before,
+                    unrelated_before=unrelated_before,
+                    historical_before=historical_before,
+                    revision_before=revision_before,
+                )
+                _r02_failure_checkpoint("after_immediate_validation")
+                result = {
+                    **failure_details,
+                    "occurrences_appended": mutation["occurrences_appended"],
+                    "occurrences_retired": mutation["occurrences_retired"],
+                    "evidence_appended": mutation["evidence_appended"],
+                    "evidence_retired": mutation["evidence_retired"],
+                    "graph_revision_before": revision_before,
+                    "graph_revision_after": post["graph_revision_after"],
+                    "connection_count_before": connection_count_before,
+                    "connection_count_after": post["connection_count_after"],
+                    "changed": True,
+                    "immediate_validation_status": "PASS",
+                    "postcheck_status": "PENDING",
+                }
+                _r02_failure_checkpoint("before_commit")
+                _transition_journal_operation(
+                    conn, normalized_operation_id, "COMMITTED", result,
+                )
+                return result
+        except StructuredRepairRefused:
+            raise
+        except Exception as exc:
+            self._record_r02_attempt_failed(
+                normalized_operation_id,
+                actor=actor,
+                source=source,
+                details={
+                    **failure_details,
+                    "transaction_rolled_back": True,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:240],
+                },
+            )
+            raise
+
+    def _record_r02_attempt_failed(
+        self,
+        operation_id: str,
+        *,
+        actor: dict,
+        source: str | None,
+        details: dict,
+    ) -> None:
+        with self._connect() as conn:
+            if _get_journal_operation(conn, operation_id) is not None:
+                return
+            _begin_journal_operation(
+                conn,
+                _R02_OPERATION_TYPE,
+                operation_id=operation_id,
+                actor=actor,
+                source=source or "structured-repair-service",
+                affected_entities=[
+                    {"entity_type": "note", "entity_id": details["note_id"]},
+                    {
+                        "entity_type": "person",
+                        "entity_id": details["referenced_person_id"],
+                    },
+                ],
                 details=details,
             )
             _transition_journal_operation(conn, operation_id, "FAILED", details)
@@ -14283,6 +14498,1186 @@ def _validate_r01_postconditions(
     if revision_after != f"g{before_number + 1}":
         raise RuntimeError("R01 must advance graph revision exactly once")
     return {"graph_revision_after": revision_after, "projection": projection}
+
+
+_R02_REPAIR_ID = "P11C-R02-RECONCILE-NOTE-REFERENCE-STATE"
+_R02_SPEC_VERSION = 1
+_R02_FINGERPRINT_VERSION = "p11-a-schema28-repair-fingerprint-v1"
+_R02_OPERATION_TYPE = "integrity.repair.note-reference.reconcile"
+_R02_ALLOWED_INVARIANTS = {
+    "P11-NOTE-002", "P11-NOTE-003", "P11-EVIDENCE-001", "P11-GRAPH-001",
+}
+_R02_STALE_EVIDENCE_MESSAGE = (
+    "active evidence has no current active note mention source"
+)
+
+
+def _r02_failure_checkpoint(_phase: str) -> None:
+    """Patchable transaction checkpoint used only by focused rollback tests."""
+
+
+def _r02_rows_fingerprint(rows: list[sqlite3.Row]) -> str:
+    return _r01_hash([dict(row) for row in rows])
+
+
+def _r02_revision_snapshot(
+    conn: sqlite3.Connection, note_id: str,
+) -> tuple[sqlite3.Row, tuple[str, ...], str]:
+    note = conn.execute(
+        "SELECT * FROM notes WHERE note_id = ?", (note_id,),
+    ).fetchone()
+    if note is None:
+        raise StructuredRepairRefused("R02 refused because the selected note does not exist")
+    revisions = conn.execute(
+        "SELECT * FROM note_revisions WHERE note_id = ? ORDER BY revision_number",
+        (note_id,),
+    ).fetchall()
+    if not revisions or tuple(int(row["revision_number"]) for row in revisions) != tuple(
+        range(1, len(revisions) + 1)
+    ):
+        raise StructuredRepairRefused(
+            "R02 refused because immutable note revision history is malformed"
+        )
+    latest = revisions[-1]
+    mentions = tuple(str(row["referenced_person_id"]) for row in conn.execute(
+        """
+        SELECT referenced_person_id FROM note_revision_mentions
+        WHERE revision_id = ? ORDER BY referenced_person_id
+        """,
+        (latest["revision_id"],),
+    ))
+    all_mentions = conn.execute(
+        """
+        SELECT rm.* FROM note_revision_mentions rm
+        JOIN note_revisions r ON r.revision_id = rm.revision_id
+        WHERE r.note_id = ? ORDER BY r.revision_number, rm.referenced_person_id
+        """,
+        (note_id,),
+    ).fetchall()
+    fingerprint = _r01_hash({
+        "note": dict(note),
+        "revisions": [dict(row) for row in revisions],
+        "mentions": [dict(row) for row in all_mentions],
+    })
+    return latest, mentions, fingerprint
+
+
+def _r02_group_rows(
+    conn: sqlite3.Connection, note_id: str, referenced_person_id: str,
+) -> tuple[list[sqlite3.Row], list[sqlite3.Row]]:
+    occurrences = conn.execute(
+        """
+        SELECT m.*, created.note_id AS created_note_id,
+               created.revision_number AS created_revision_number,
+               retired.note_id AS retired_note_id,
+               retired.revision_number AS retired_revision_number
+        FROM note_mentions m
+        LEFT JOIN note_revisions created ON created.revision_id=m.created_revision_id
+        LEFT JOIN note_revisions retired ON retired.revision_id=m.retired_revision_id
+        WHERE m.note_id=? AND m.referenced_person_id=?
+        ORDER BY m.created_at, m.mention_id
+        """,
+        (note_id, referenced_person_id),
+    ).fetchall()
+    if not occurrences:
+        raise StructuredRepairRefused(
+            "R02 refused because a wholly missing occurrence group is outside P11-A coverage"
+        )
+    occurrence_ids = tuple(str(row["mention_id"]) for row in occurrences)
+    placeholders = ",".join("?" for _ in occurrence_ids)
+    evidence = conn.execute(
+        f"""
+        SELECT * FROM relationship_evidence
+        WHERE evidence_type='NOTE_REFERENCE'
+          AND source_entity_id IN ({placeholders})
+        ORDER BY created_at, evidence_id
+        """,
+        occurrence_ids,
+    ).fetchall()
+    return occurrences, evidence
+
+
+def _r02_validate_history(
+    conn: sqlite3.Connection,
+    note: sqlite3.Row,
+    occurrences: list[sqlite3.Row],
+    evidence: list[sqlite3.Row],
+    *,
+    allowed_started_operation_id: str | None = None,
+) -> tuple[str, str, tuple[str, ...]]:
+    operation_ids: set[str] = set()
+    note_active_shape = (
+        note["status"] == "ACTIVE"
+        and note["retired_operation_id"] is None
+        and note["retired_at"] is None
+    )
+    note_retired_shape = (
+        note["status"] == "RETIRED"
+        and note["retired_operation_id"] is not None
+        and note["retired_at"] is not None
+    )
+    if not (note_active_shape or note_retired_shape):
+        raise StructuredRepairRefused(
+            "R02 refused because note retirement provenance is malformed"
+        )
+    if note["created_operation_id"]:
+        operation_ids.add(str(note["created_operation_id"]))
+    if note["retired_operation_id"]:
+        operation_ids.add(str(note["retired_operation_id"]))
+    operation_ids.update(
+        str(row["operation_id"])
+        for row in conn.execute(
+            """
+            SELECT operation_id FROM note_revisions
+            WHERE note_id=? AND operation_id IS NOT NULL
+            """,
+            (note["note_id"],),
+        )
+    )
+    for row in occurrences:
+        active_shape = (
+            bool(row["active"])
+            and row["retired_revision_id"] is None
+            and row["retired_operation_id"] is None
+            and row["retired_at"] is None
+        )
+        retired_shape = (
+            not bool(row["active"])
+            and row["retired_revision_id"] is not None
+            and row["retired_operation_id"] is not None
+            and row["retired_at"] is not None
+            and row["created_note_id"] == row["note_id"]
+            and row["retired_note_id"] == row["note_id"]
+            and int(row["retired_revision_number"] or 0)
+                >= int(row["created_revision_number"] or 0)
+        )
+        if not (active_shape or retired_shape):
+            raise StructuredRepairRefused(
+                "R02 refused because occurrence retirement provenance is malformed"
+            )
+        operation_ids.add(str(row["created_operation_id"]))
+        if row["retired_operation_id"]:
+            operation_ids.add(str(row["retired_operation_id"]))
+    occurrence_by_id = {
+        str(row["mention_id"]): row for row in occurrences
+    }
+    for row in evidence:
+        source_occurrence = occurrence_by_id.get(str(row["source_entity_id"]))
+        active_shape = (
+            bool(row["active"])
+            and row["deactivated_operation_id"] is None
+            and row["deactivated_at"] is None
+        )
+        retired_shape = (
+            not bool(row["active"])
+            and row["deactivated_operation_id"] is not None
+            and row["deactivated_at"] is not None
+        )
+        coherent = (
+            source_occurrence is not None
+            and row["evidence_type"] == "NOTE_REFERENCE"
+            and row["source_entity_type"] == "NOTE"
+            and row["source_person_id"] == note["owner_person_id"]
+            and row["target_person_id"] == source_occurrence["referenced_person_id"]
+            and row["relationship_type"] == "REFERENCES"
+            and row["directionality"] == "DIRECTED"
+            and row["source_person_id"] != row["target_person_id"]
+        )
+        if not coherent:
+            raise StructuredRepairRefused(
+                "R02 refused because NOTE_REFERENCE provenance, endpoints, or direction are malformed"
+            )
+        if not (active_shape or retired_shape):
+            raise StructuredRepairRefused(
+                "R02 refused because evidence retirement provenance is malformed"
+            )
+        operation_ids.add(str(row["created_operation_id"]))
+        if row["deactivated_operation_id"]:
+            operation_ids.add(str(row["deactivated_operation_id"]))
+    linked_operation_ids = set(operation_ids)
+    relevant_entity_ids = {
+        str(note["note_id"]),
+        str(note["owner_person_id"]),
+        *[str(row["referenced_person_id"]) for row in occurrences],
+        *[str(row["mention_id"]) for row in occurrences],
+        *[str(row["evidence_id"]) for row in evidence],
+    }
+    for row in conn.execute(
+        "SELECT operation_id, affected_entities FROM operation_journal ORDER BY rowid"
+    ):
+        try:
+            affected_entities = json.loads(row["affected_entities"])
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise StructuredRepairRefused(
+                "R02 refused because relevant journal metadata is malformed"
+            ) from exc
+        if any(
+            isinstance(item, dict)
+            and str(item.get("entity_id")) in relevant_entity_ids
+            for item in affected_entities
+        ):
+            operation_ids.add(str(row["operation_id"]))
+    operation_snapshot: list[dict] = []
+    for operation_id in sorted(operation_ids):
+        operation = _get_journal_operation(conn, operation_id)
+        allowed_statuses = (
+            {"COMMITTED", "REVERTED"}
+            if operation_id in linked_operation_ids
+            else {"COMMITTED", "REVERTED", "FAILED", "ROLLED_BACK"}
+        )
+        if operation_id == allowed_started_operation_id:
+            allowed_statuses.add("STARTED")
+        if operation is None or operation["status"] not in allowed_statuses:
+            raise StructuredRepairRefused(
+                "R02 refused because occurrence/evidence operation history is incomplete"
+            )
+        operation_snapshot.append(operation)
+    retirement = {
+        "occurrences": [
+            {
+                key: row[key] for key in (
+                    "mention_id", "active", "retired_revision_id",
+                    "retired_operation_id", "retired_at",
+                )
+            }
+            for row in occurrences
+        ],
+        "evidence": [
+            {
+                key: row[key] for key in (
+                    "evidence_id", "active", "deactivated_operation_id",
+                    "deactivated_at",
+                )
+            }
+            for row in evidence
+        ],
+    }
+    return (
+        _r01_hash(retirement),
+        _r01_hash(operation_snapshot),
+        tuple(sorted(operation_ids)),
+    )
+
+
+def _r02_canonical_snapshot(
+    conn: sqlite3.Connection, person_ids: tuple[str, ...],
+) -> tuple[str, dict[str, str]]:
+    people = {
+        str(row["person_id"]): {
+            "lifecycle_status": str(row["lifecycle_status"]),
+            "deleted_at": row["deleted_at"],
+            "canonical_person_id": (
+                str(row["canonical_person_id"])
+                if row["canonical_person_id"] is not None else None
+            ),
+        }
+        for row in conn.execute(
+            """
+            SELECT person_id, lifecycle_status, deleted_at, canonical_person_id
+            FROM persons ORDER BY person_id
+            """
+        )
+    }
+    paths: dict[str, tuple[str, ...]] = {}
+    terminals: dict[str, str] = {}
+    relevant: set[str] = set()
+    for person_id in person_ids:
+        current = person_id
+        path: list[str] = []
+        seen: set[str] = set()
+        while True:
+            if current in seen:
+                raise StructuredRepairRefused(
+                    "R02 refused because a canonical cycle exists"
+                )
+            seen.add(current)
+            path.append(current)
+            relevant.add(current)
+            row = people.get(current)
+            if row is None:
+                raise StructuredRepairRefused(
+                    "R02 refused because a canonical target is dangling"
+                )
+            target = row["canonical_person_id"]
+            if row["lifecycle_status"] != "MERGED":
+                if target is not None:
+                    raise StructuredRepairRefused(
+                        "R02 refused because a correction/canonical chain is invalid"
+                    )
+                terminals[person_id] = current
+                paths[person_id] = tuple(path)
+                break
+            if target is None:
+                raise StructuredRepairRefused(
+                    "R02 refused because a merged canonical chain is incomplete"
+                )
+            current = str(target)
+    snapshot = {
+        "paths": paths,
+        "people": {person_id: people[person_id] for person_id in sorted(relevant)},
+    }
+    return _r01_hash(snapshot), terminals
+
+
+def _r02_plan_for_state(
+    *,
+    note: sqlite3.Row,
+    latest_mentions: tuple[str, ...],
+    referenced_person_id: str,
+    occurrences: list[sqlite3.Row],
+    evidence: list[sqlite3.Row],
+) -> NoteReferenceRepairPlan:
+    expected_occurrence = (
+        note["status"] == "ACTIVE"
+        and referenced_person_id in latest_mentions
+        and referenced_person_id != note["owner_person_id"]
+    )
+    active_occurrences = [row for row in occurrences if bool(row["active"])]
+    if len(active_occurrences) > 1:
+        raise StructuredRepairRefused(
+            "R02 refused because duplicate active occurrences make the plan ambiguous"
+        )
+    active_evidence = [row for row in evidence if bool(row["active"])]
+    active_occurrence_ids = {
+        str(row["mention_id"]) for row in active_occurrences
+    }
+    active_on_current = [
+        row for row in active_evidence
+        if str(row["source_entity_id"]) in active_occurrence_ids
+    ]
+    active_on_inactive = [
+        row for row in active_evidence
+        if str(row["source_entity_id"]) not in active_occurrence_ids
+    ]
+    if expected_occurrence:
+        if not active_occurrences:
+            if active_evidence:
+                raise StructuredRepairRefused(
+                    "R02 refused because occurrence append and stale-evidence retirement are both required"
+                )
+            return NoteReferenceRepairPlan.APPEND_OCCURRENCE_AND_EVIDENCE
+        if active_on_inactive:
+            raise StructuredRepairRefused(
+                "R02 refused because more than one repair plan applies"
+            )
+        if not active_on_current:
+            return NoteReferenceRepairPlan.APPEND_EVIDENCE
+        if len(active_on_current) > 1:
+            return NoteReferenceRepairPlan.REPLACE_DUPLICATE_ACTIVE_EVIDENCE
+        raise StructuredRepairRefused(
+            "R02 refused because the selected occurrence/evidence state is already healthy"
+        )
+    if active_occurrences:
+        if active_on_inactive:
+            raise StructuredRepairRefused(
+                "R02 refused because occurrence and unrelated stale-evidence plans conflict"
+            )
+        return NoteReferenceRepairPlan.RETIRE_OCCURRENCE_AND_EVIDENCE
+    if active_evidence:
+        return NoteReferenceRepairPlan.RETIRE_STALE_EVIDENCE
+    raise StructuredRepairRefused(
+        "R02 refused because the selected occurrence/evidence state is already healthy"
+    )
+
+
+def _r02_graph_key(
+    terminals: dict[str, str], owner_person_id: str, referenced_person_id: str,
+) -> tuple[str, str, str, str] | None:
+    source = terminals[owner_person_id]
+    target = terminals[referenced_person_id]
+    if source == target:
+        return None
+    return (source, target, "REFERENCES", "DIRECTED")
+
+
+def _r02_classify_findings(
+    report: object,
+    *,
+    note_id: str,
+    referenced_person_id: str,
+    occurrence_ids: tuple[str, ...],
+    evidence_ids: tuple[str, ...],
+    plan: NoteReferenceRepairPlan,
+    graph_key: tuple[str, str, str, str] | None,
+    active_evidence_changes: bool,
+) -> tuple[object, ...]:
+    selected: list[object] = []
+    saw_note002 = False
+    saw_note003 = False
+    saw_stale_evidence = False
+    for item in report.findings:
+        if item.severity.value not in {"CRITICAL", "ERROR"}:
+            continue
+        entities = dict(item.entity_ids)
+        if item.invariant_id not in _R02_ALLOWED_INVARIANTS:
+            raise StructuredRepairRefused(
+                "R02 refused because an unrelated critical/error finding blocks deterministic repair",
+                report=report,
+            )
+        if item.invariant_id == "P11-NOTE-002":
+            if (
+                item.message
+                != "Current note mention occurrence cardinality disagrees with the latest authoritative revision"
+                or entities.get("note_id") != note_id
+                or entities.get("person_id") != referenced_person_id
+            ):
+                raise StructuredRepairRefused(
+                    "R02 refused because P11-NOTE-002 is not the admitted current-cardinality shape",
+                    report=report,
+                )
+            saw_note002 = True
+        elif item.invariant_id == "P11-NOTE-003":
+            if (
+                item.message
+                != "NOTE_REFERENCE active evidence does not match authoritative mention state"
+                or entities.get("note_id") != note_id
+                or entities.get("person_id") != referenced_person_id
+                or entities.get("mention_id") not in occurrence_ids
+            ):
+                raise StructuredRepairRefused(
+                    "R02 refused because P11-NOTE-003 is outside the selected occurrence group",
+                    report=report,
+                )
+            saw_note003 = True
+        elif item.invariant_id == "P11-EVIDENCE-001":
+            if (
+                item.message != _R02_STALE_EVIDENCE_MESSAGE
+                or entities.get("evidence_id") not in evidence_ids
+            ):
+                raise StructuredRepairRefused(
+                    "R02 refused because P11-EVIDENCE-001 is not the exact admitted stale-active-source shape",
+                    report=report,
+                )
+            saw_stale_evidence = True
+        else:
+            evidence = dict(item.evidence)
+            finding_key = (
+                entities.get("source_person_id"),
+                entities.get("target_person_id"),
+                evidence.get("relationship_type"),
+                evidence.get("directionality"),
+            )
+            if not active_evidence_changes or graph_key is None or finding_key != graph_key:
+                raise StructuredRepairRefused(
+                    "R02 refused because graph drift is not caused by the selected note-reference scope",
+                    report=report,
+                )
+        selected.append(item)
+    if plan in {
+        NoteReferenceRepairPlan.APPEND_OCCURRENCE_AND_EVIDENCE,
+        NoteReferenceRepairPlan.RETIRE_OCCURRENCE_AND_EVIDENCE,
+    } and not saw_note002:
+        raise StructuredRepairRefused(
+            "R02 refused because the required P11-NOTE-002 finding is absent",
+            report=report,
+        )
+    if plan in {
+        NoteReferenceRepairPlan.APPEND_EVIDENCE,
+        NoteReferenceRepairPlan.REPLACE_DUPLICATE_ACTIVE_EVIDENCE,
+    } and not saw_note003:
+        raise StructuredRepairRefused(
+            "R02 refused because the required P11-NOTE-003 finding is absent",
+            report=report,
+        )
+    if plan is NoteReferenceRepairPlan.RETIRE_STALE_EVIDENCE and not (
+        saw_note003 and saw_stale_evidence
+    ):
+        raise StructuredRepairRefused(
+            "R02 refused because the exact stale active evidence findings are absent",
+            report=report,
+        )
+    return tuple(selected)
+
+
+def _r02_precondition_from_report(
+    conn: sqlite3.Connection,
+    report: object,
+    note_id: str,
+    referenced_person_id: str,
+) -> NoteReferenceReconciliationPrecondition:
+    if report.schema_version != SCHEMA_VERSION or SCHEMA_VERSION != 28:
+        raise StructuredRepairRefused("R02 requires schema version 28", report=report)
+    if report.findings_truncated:
+        raise StructuredRepairRefused("R02 requires an untruncated P11-A report", report=report)
+    graph_revision = _graph_revision_token(conn)
+    if graph_revision != report.graph_revision:
+        raise StructuredRepairRefused(
+            "R02 refused because graph authority changed after diagnosis", report=report,
+        )
+    note = conn.execute(
+        "SELECT * FROM notes WHERE note_id=?", (note_id,),
+    ).fetchone()
+    if note is None:
+        raise StructuredRepairRefused("R02 selected note no longer exists", report=report)
+    latest, latest_mentions, revision_fingerprint = _r02_revision_snapshot(conn, note_id)
+    occurrences, evidence = _r02_group_rows(conn, note_id, referenced_person_id)
+    retirement_fingerprint, operation_fingerprint, _operation_ids = _r02_validate_history(
+        conn, note, occurrences, evidence,
+    )
+    canonical_fingerprint, terminals = _r02_canonical_snapshot(
+        conn, (str(note["owner_person_id"]), referenced_person_id),
+    )
+    plan = _r02_plan_for_state(
+        note=note,
+        latest_mentions=latest_mentions,
+        referenced_person_id=referenced_person_id,
+        occurrences=occurrences,
+        evidence=evidence,
+    )
+    active_evidence_changes = (
+        plan is not NoteReferenceRepairPlan.RETIRE_OCCURRENCE_AND_EVIDENCE
+        or any(bool(row["active"]) for row in evidence)
+    )
+    occurrence_ids = tuple(str(row["mention_id"]) for row in occurrences)
+    evidence_ids = tuple(str(row["evidence_id"]) for row in evidence)
+    selected = _r02_classify_findings(
+        report,
+        note_id=note_id,
+        referenced_person_id=referenced_person_id,
+        occurrence_ids=occurrence_ids,
+        evidence_ids=evidence_ids,
+        plan=plan,
+        graph_key=_r02_graph_key(
+            terminals, str(note["owner_person_id"]), referenced_person_id,
+        ),
+        active_evidence_changes=active_evidence_changes,
+    )
+    finding_payload = [
+        {
+            "invariant_id": item.invariant_id,
+            "message": item.message,
+            "entity_ids": list(item.entity_ids),
+            "evidence": list(item.evidence),
+        }
+        for item in sorted(
+            selected,
+            key=lambda item: (item.invariant_id, item.entity_ids, item.message),
+        )
+    ]
+    occurrence_fingerprint = _r02_rows_fingerprint(occurrences)
+    evidence_fingerprint = _r02_rows_fingerprint(evidence)
+    graph_projection_fingerprint = _r01_hash([
+        dict(row) for row in conn.execute(
+            "SELECT * FROM graph_connections ORDER BY rowid"
+        )
+    ])
+    active_occurrence_ids = tuple(
+        str(row["mention_id"]) for row in occurrences if bool(row["active"])
+    )
+    active_evidence_ids = tuple(
+        str(row["evidence_id"]) for row in evidence if bool(row["active"])
+    )
+    affected = tuple(sorted({
+        note_id,
+        str(note["owner_person_id"]),
+        referenced_person_id,
+        *occurrence_ids,
+        *evidence_ids,
+    }))
+    state = {
+        "plan": plan.value,
+        "note_id": note_id,
+        "referenced_person_id": referenced_person_id,
+        "owner_person_id": note["owner_person_id"],
+        "note_status": note["status"],
+        "latest_revision_id": latest["revision_id"],
+        "latest_revision_number": latest["revision_number"],
+        "latest_revision_mentions": latest_mentions,
+        "revision_history_fingerprint": revision_fingerprint,
+        "occurrence_group_fingerprint": occurrence_fingerprint,
+        "evidence_history_fingerprint": evidence_fingerprint,
+        "retirement_provenance_fingerprint": retirement_fingerprint,
+        "canonical_state_fingerprint": canonical_fingerprint,
+        "graph_projection_fingerprint": graph_projection_fingerprint,
+        "relevant_operation_fingerprint": operation_fingerprint,
+    }
+    fingerprint = _r01_hash({
+        "checker_contract": _R02_FINGERPRINT_VERSION,
+        "repair_id": _R02_REPAIR_ID,
+        "repair_spec_version": _R02_SPEC_VERSION,
+        "findings": finding_payload,
+        "schema_version": report.schema_version,
+        "graph_revision": graph_revision,
+        "state": state,
+    })
+    return NoteReferenceReconciliationPrecondition(
+        repair_id=_R02_REPAIR_ID,
+        repair_spec_version=_R02_SPEC_VERSION,
+        invariant_ids=tuple(sorted({item.invariant_id for item in selected})),
+        affected_entity_ids=affected,
+        finding_entity_ids=tuple(sorted({
+            value for item in selected for _key, value in item.entity_ids
+        })),
+        plan=plan,
+        finding_fingerprint_version=_R02_FINGERPRINT_VERSION,
+        finding_fingerprint=fingerprint,
+        schema_version=SCHEMA_VERSION,
+        graph_revision=graph_revision,
+        note_id=note_id,
+        referenced_person_id=referenced_person_id,
+        owner_person_id=str(note["owner_person_id"]),
+        note_status=str(note["status"]),
+        latest_revision_id=str(latest["revision_id"]),
+        latest_revision_number=int(latest["revision_number"]),
+        latest_revision_mentions=latest_mentions,
+        revision_history_fingerprint=revision_fingerprint,
+        occurrence_ids=occurrence_ids,
+        active_occurrence_ids=active_occurrence_ids,
+        occurrence_group_fingerprint=occurrence_fingerprint,
+        evidence_ids=evidence_ids,
+        active_evidence_ids=active_evidence_ids,
+        evidence_history_fingerprint=evidence_fingerprint,
+        retirement_provenance_fingerprint=retirement_fingerprint,
+        canonical_state_fingerprint=canonical_fingerprint,
+        graph_projection_fingerprint=graph_projection_fingerprint,
+        relevant_operation_fingerprint=operation_fingerprint,
+    )
+
+
+def _validate_r02_request_shape(
+    precondition: NoteReferenceReconciliationPrecondition,
+) -> None:
+    if not isinstance(precondition, NoteReferenceReconciliationPrecondition):
+        raise ValueError("R02 requires its typed finding precondition")
+    if (
+        precondition.repair_id != _R02_REPAIR_ID
+        or precondition.repair_spec_version != _R02_SPEC_VERSION
+        or precondition.finding_fingerprint_version != _R02_FINGERPRINT_VERSION
+        or precondition.schema_version != SCHEMA_VERSION
+        or not isinstance(precondition.plan, NoteReferenceRepairPlan)
+        or not precondition.invariant_ids
+        or not set(precondition.invariant_ids).issubset(_R02_ALLOWED_INVARIANTS)
+    ):
+        raise StructuredRepairRefused(
+            "R02 request does not match the frozen repair specification"
+        )
+
+
+def _r02_existing_result(
+    conn: sqlite3.Connection,
+    operation_id: str,
+    precondition: NoteReferenceReconciliationPrecondition,
+) -> dict | None:
+    operation = _get_journal_operation(conn, operation_id)
+    if operation is None:
+        return None
+    if operation["operation_type"] != _R02_OPERATION_TYPE:
+        raise KeyError(f"Operation ID already exists: {operation_id}")
+    details = operation["details"]
+    if (
+        details.get("finding_fingerprint") != precondition.finding_fingerprint
+        or details.get("repair_id") != precondition.repair_id
+        or details.get("note_id") != precondition.note_id
+        or details.get("referenced_person_id") != precondition.referenced_person_id
+        or details.get("plan_type") != precondition.plan.value
+    ):
+        raise KeyError("Operation ID was already used for a different R02 diagnosis")
+    if operation["status"] != "COMMITTED":
+        raise RuntimeError(
+            f"Operation {operation_id} is {operation['status']} and cannot be retried"
+        )
+    return dict(operation["status_history"][-1]["details"])
+
+
+def _r02_affected_entities(
+    precondition: NoteReferenceReconciliationPrecondition,
+    *,
+    planned_occurrence_id: str | None,
+    planned_evidence_id: str | None,
+) -> list[dict]:
+    entities = [
+        {"entity_type": "note", "entity_id": precondition.note_id},
+        {"entity_type": "person", "entity_id": precondition.owner_person_id},
+        {"entity_type": "person", "entity_id": precondition.referenced_person_id},
+    ]
+    if planned_occurrence_id is not None:
+        entities.append({
+            "entity_type": "note_mention", "entity_id": planned_occurrence_id,
+        })
+    if planned_evidence_id is not None:
+        entities.append({
+            "entity_type": "relationship_evidence", "entity_id": planned_evidence_id,
+        })
+    entities.extend(
+        {"entity_type": "note_mention", "entity_id": item}
+        for item in precondition.occurrence_ids[:24]
+    )
+    entities.extend(
+        {"entity_type": "relationship_evidence", "entity_id": item}
+        for item in precondition.evidence_ids[:23]
+    )
+    return entities[:50]
+
+
+def _r02_planned_append_ids(
+    precondition: NoteReferenceReconciliationPrecondition,
+    operation_id: str,
+) -> tuple[str | None, str | None]:
+    occurrence_id: str | None = None
+    if precondition.plan is NoteReferenceRepairPlan.APPEND_OCCURRENCE_AND_EVIDENCE:
+        occurrence_id = str(uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            "|".join((
+                "sentriface", _R02_REPAIR_ID, operation_id, "note-mention",
+                precondition.note_id, precondition.referenced_person_id,
+            )),
+        ))
+    source_occurrence_id = occurrence_id
+    if precondition.plan in {
+        NoteReferenceRepairPlan.APPEND_EVIDENCE,
+        NoteReferenceRepairPlan.REPLACE_DUPLICATE_ACTIVE_EVIDENCE,
+    }:
+        source_occurrence_id = precondition.active_occurrence_ids[0]
+    evidence_id: str | None = None
+    if source_occurrence_id is not None:
+        normalized_source, normalized_target = _normalize_evidence_endpoints(
+            precondition.owner_person_id,
+            precondition.referenced_person_id,
+            "DIRECTED",
+        )
+        evidence_id = str(uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            "|".join((
+                "sentriface", "NOTE_REFERENCE", source_occurrence_id, operation_id,
+                normalized_source, normalized_target, "REFERENCES", "DIRECTED",
+            )),
+        ))
+    return occurrence_id, evidence_id
+
+
+def _r02_append_evidence(
+    conn: sqlite3.Connection,
+    *,
+    mention_id: str,
+    owner_person_id: str,
+    referenced_person_id: str,
+    operation_id: str,
+    source: str | None,
+    created_at: str,
+) -> str:
+    evidence_id = _insert_relationship_evidence(
+        conn,
+        evidence_type="NOTE_REFERENCE",
+        source_entity_type="NOTE",
+        source_entity_id=mention_id,
+        evidence_revision_id=operation_id,
+        source_person_id=owner_person_id,
+        target_person_id=referenced_person_id,
+        relationship_type="REFERENCES",
+        directionality="DIRECTED",
+        source=source,
+        created_operation_id=operation_id,
+        created_at=created_at,
+    )
+    row = conn.execute(
+        """
+        SELECT active, created_operation_id FROM relationship_evidence
+        WHERE evidence_id=?
+        """,
+        (evidence_id,),
+    ).fetchone()
+    if row is None or not bool(row["active"]) or row["created_operation_id"] != operation_id:
+        raise RuntimeError("R02 failed to append a repair-owned evidence revision")
+    return evidence_id
+
+
+def _apply_r02_plan(
+    conn: sqlite3.Connection,
+    precondition: NoteReferenceReconciliationPrecondition,
+    operation_id: str,
+    *,
+    source: str | None,
+    planned_occurrence_id: str | None,
+) -> dict:
+    created_at = utc_now()
+    mutation = {
+        "occurrences_appended": 0,
+        "occurrences_retired": 0,
+        "evidence_appended": 0,
+        "evidence_retired": 0,
+        "active_evidence_changed": False,
+        "appended_occurrence_ids": [],
+        "appended_evidence_ids": [],
+        "retired_occurrence_ids": [],
+        "retired_evidence_ids": [],
+    }
+    active_occurrence_id = (
+        precondition.active_occurrence_ids[0]
+        if precondition.active_occurrence_ids else None
+    )
+    if precondition.plan is NoteReferenceRepairPlan.APPEND_OCCURRENCE_AND_EVIDENCE:
+        if planned_occurrence_id is None:
+            raise RuntimeError("R02 occurrence append is missing its planned identity")
+        mention_id = planned_occurrence_id
+        conn.execute(
+            """
+            INSERT INTO note_mentions(
+                mention_id, note_id, referenced_person_id, active,
+                created_revision_id, created_operation_id, created_at
+            ) VALUES (?, ?, ?, 1, ?, ?, ?)
+            """,
+            (
+                mention_id,
+                precondition.note_id,
+                precondition.referenced_person_id,
+                precondition.latest_revision_id,
+                operation_id,
+                created_at,
+            ),
+        )
+        mutation["occurrences_appended"] = 1
+        mutation["appended_occurrence_ids"].append(mention_id)
+        _r02_failure_checkpoint("after_occurrence_append")
+        evidence_id = _r02_append_evidence(
+            conn,
+            mention_id=mention_id,
+            owner_person_id=precondition.owner_person_id,
+            referenced_person_id=precondition.referenced_person_id,
+            operation_id=operation_id,
+            source=source,
+            created_at=created_at,
+        )
+        mutation["evidence_appended"] = 1
+        mutation["appended_evidence_ids"].append(evidence_id)
+        mutation["active_evidence_changed"] = True
+        _r02_failure_checkpoint("after_evidence_append")
+    elif precondition.plan is NoteReferenceRepairPlan.RETIRE_OCCURRENCE_AND_EVIDENCE:
+        if active_occurrence_id is None:
+            raise RuntimeError("R02 retirement plan lost its active occurrence")
+        cursor = conn.execute(
+            """
+            UPDATE note_mentions
+            SET active=0, retired_revision_id=?, retired_operation_id=?, retired_at=?
+            WHERE mention_id=? AND active=1
+            """,
+            (
+                precondition.latest_revision_id,
+                operation_id,
+                created_at,
+                active_occurrence_id,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise RuntimeError("R02 failed to retire the selected occurrence")
+        mutation["occurrences_retired"] = 1
+        mutation["retired_occurrence_ids"].append(active_occurrence_id)
+        _r02_failure_checkpoint("after_occurrence_retirement")
+        rows = conn.execute(
+            """
+            SELECT evidence_id FROM relationship_evidence
+            WHERE evidence_type='NOTE_REFERENCE' AND source_entity_id=? AND active=1
+            ORDER BY evidence_id
+            """,
+            (active_occurrence_id,),
+        ).fetchall()
+        if rows:
+            conn.execute(
+                """
+                UPDATE relationship_evidence
+                SET active=0, deactivated_operation_id=?, deactivated_at=?
+                WHERE evidence_type='NOTE_REFERENCE' AND source_entity_id=? AND active=1
+                """,
+                (operation_id, created_at, active_occurrence_id),
+            )
+            mutation["evidence_retired"] = len(rows)
+            mutation["retired_evidence_ids"].extend(str(row[0]) for row in rows)
+            mutation["active_evidence_changed"] = True
+            _r02_failure_checkpoint("after_evidence_retirement")
+    elif precondition.plan is NoteReferenceRepairPlan.APPEND_EVIDENCE:
+        if active_occurrence_id is None:
+            raise RuntimeError("R02 evidence append plan lost its active occurrence")
+        evidence_id = _r02_append_evidence(
+            conn,
+            mention_id=active_occurrence_id,
+            owner_person_id=precondition.owner_person_id,
+            referenced_person_id=precondition.referenced_person_id,
+            operation_id=operation_id,
+            source=source,
+            created_at=created_at,
+        )
+        mutation["evidence_appended"] = 1
+        mutation["appended_evidence_ids"].append(evidence_id)
+        mutation["active_evidence_changed"] = True
+        _r02_failure_checkpoint("after_evidence_append")
+    elif precondition.plan is NoteReferenceRepairPlan.REPLACE_DUPLICATE_ACTIVE_EVIDENCE:
+        if active_occurrence_id is None:
+            raise RuntimeError("R02 duplicate replacement lost its active occurrence")
+        rows = conn.execute(
+            """
+            SELECT evidence_id FROM relationship_evidence
+            WHERE evidence_type='NOTE_REFERENCE' AND source_entity_id=? AND active=1
+            ORDER BY evidence_id
+            """,
+            (active_occurrence_id,),
+        ).fetchall()
+        if len(rows) < 2:
+            raise RuntimeError("R02 duplicate evidence plan no longer has duplicates")
+        conn.execute(
+            """
+            UPDATE relationship_evidence
+            SET active=0, deactivated_operation_id=?, deactivated_at=?
+            WHERE evidence_type='NOTE_REFERENCE' AND source_entity_id=? AND active=1
+            """,
+            (operation_id, created_at, active_occurrence_id),
+        )
+        mutation["evidence_retired"] = len(rows)
+        mutation["retired_evidence_ids"].extend(str(row[0]) for row in rows)
+        mutation["active_evidence_changed"] = True
+        _r02_failure_checkpoint("after_duplicate_evidence_retire_phase")
+        evidence_id = _r02_append_evidence(
+            conn,
+            mention_id=active_occurrence_id,
+            owner_person_id=precondition.owner_person_id,
+            referenced_person_id=precondition.referenced_person_id,
+            operation_id=operation_id,
+            source=source,
+            created_at=created_at,
+        )
+        mutation["evidence_appended"] = 1
+        mutation["appended_evidence_ids"].append(evidence_id)
+        _r02_failure_checkpoint("after_replacement_evidence_append")
+    elif precondition.plan is NoteReferenceRepairPlan.RETIRE_STALE_EVIDENCE:
+        placeholders = ",".join("?" for _ in precondition.occurrence_ids)
+        rows = conn.execute(
+            f"""
+            SELECT evidence_id FROM relationship_evidence
+            WHERE evidence_type='NOTE_REFERENCE' AND active=1
+              AND source_entity_id IN ({placeholders})
+            ORDER BY evidence_id
+            """,
+            precondition.occurrence_ids,
+        ).fetchall()
+        if not rows:
+            raise RuntimeError("R02 stale evidence plan no longer has active evidence")
+        conn.execute(
+            f"""
+            UPDATE relationship_evidence
+            SET active=0, deactivated_operation_id=?, deactivated_at=?
+            WHERE evidence_type='NOTE_REFERENCE' AND active=1
+              AND source_entity_id IN ({placeholders})
+            """,
+            (operation_id, created_at, *precondition.occurrence_ids),
+        )
+        mutation["evidence_retired"] = len(rows)
+        mutation["retired_evidence_ids"].extend(str(row[0]) for row in rows)
+        mutation["active_evidence_changed"] = True
+        _r02_failure_checkpoint("after_evidence_retirement")
+    else:  # pragma: no cover - the typed enum and request guard make this unreachable.
+        raise RuntimeError("Unsupported R02 plan")
+    return mutation
+
+
+def _r02_maintain_affected_projection(
+    conn: sqlite3.Connection,
+    precondition: NoteReferenceReconciliationPrecondition,
+) -> None:
+    """Replace only the one effective directed relationship aggregate R02 can affect."""
+    connections, errors, _ = _expected_graph_connections(conn)
+    if errors:
+        raise RuntimeError(
+            "R02 relationship evidence validation failed: " + "; ".join(errors[:10])
+        )
+    resolve = _batch_canonical_resolver(conn)
+    source_person_id = resolve(precondition.owner_person_id)
+    target_person_id = resolve(precondition.referenced_person_id)
+    if source_person_id == target_person_id:
+        return
+    key = (
+        source_person_id, target_person_id, "REFERENCES", "DIRECTED",
+    )
+    expected = [
+        item for item in connections
+        if _graph_connection_signature(item)[:4] == key
+    ]
+    if len(expected) > 1:
+        raise RuntimeError("R02 shared graph authority returned duplicate affected keys")
+    conn.execute(
+        """
+        DELETE FROM graph_connections
+        WHERE source_person_id=? AND target_person_id=?
+          AND relationship_type='REFERENCES' AND directionality='DIRECTED'
+        """,
+        (source_person_id, target_person_id),
+    )
+    _insert_graph_projection_rows(conn, expected)
+
+
+def _r02_immutable_fingerprint(conn: sqlite3.Connection) -> str:
+    tables = ("notes", "note_revisions", "note_revision_mentions")
+    return _r01_hash({
+        table: [dict(row) for row in conn.execute(
+            f"SELECT * FROM {table} ORDER BY rowid"
+        )]
+        for table in tables
+    })
+
+
+def _r02_unrelated_fingerprint(
+    conn: sqlite3.Connection,
+    precondition: NoteReferenceReconciliationPrecondition,
+    operation_id: str,
+) -> str:
+    tables = (
+        "persons", "embeddings", "biometric_enrollment_history", "observations",
+        "observation_media", "observation_participants", "observation_face_assignments",
+        "identity_corrections", "merge_operations", "merge_affected_items",
+        "merge_conflict_resolutions",
+    )
+    snapshot: dict[str, object] = {
+        table: [dict(row) for row in conn.execute(f"SELECT * FROM {table} ORDER BY rowid")]
+        for table in tables
+    }
+    snapshot["unrelated_occurrences"] = [dict(row) for row in conn.execute(
+        """
+        SELECT * FROM note_mentions
+        WHERE NOT (note_id=? AND referenced_person_id=?) ORDER BY rowid
+        """,
+        (precondition.note_id, precondition.referenced_person_id),
+    )]
+    snapshot["unrelated_evidence"] = [dict(row) for row in conn.execute(
+        """
+        SELECT e.* FROM relationship_evidence e
+        WHERE NOT (
+          e.evidence_type='NOTE_REFERENCE' AND EXISTS (
+            SELECT 1 FROM note_mentions m
+            WHERE m.mention_id=e.source_entity_id
+              AND m.note_id=? AND m.referenced_person_id=?
+          )
+        )
+        ORDER BY e.rowid
+        """,
+        (precondition.note_id, precondition.referenced_person_id),
+    )]
+    snapshot["prior_journal"] = [dict(row) for row in conn.execute(
+        "SELECT * FROM operation_journal WHERE operation_id<>? ORDER BY rowid",
+        (operation_id,),
+    )]
+    snapshot["prior_journal_history"] = [dict(row) for row in conn.execute(
+        """
+        SELECT * FROM operation_journal_status_history
+        WHERE operation_id<>? ORDER BY rowid
+        """,
+        (operation_id,),
+    )]
+    return _r01_hash(snapshot)
+
+
+def _r02_retired_history_fingerprint(
+    conn: sqlite3.Connection,
+    precondition: NoteReferenceReconciliationPrecondition,
+) -> str:
+    retired_occurrence_ids = tuple(
+        item for item in precondition.occurrence_ids
+        if item not in precondition.active_occurrence_ids
+    )
+    retired_evidence_ids = tuple(
+        item for item in precondition.evidence_ids
+        if item not in precondition.active_evidence_ids
+    )
+
+    def selected(table: str, column: str, ids: tuple[str, ...]) -> list[dict]:
+        if not ids:
+            return []
+        placeholders = ",".join("?" for _ in ids)
+        return [dict(row) for row in conn.execute(
+            f"SELECT * FROM {table} WHERE {column} IN ({placeholders}) ORDER BY rowid",
+            ids,
+        )]
+
+    return _r01_hash({
+        "occurrences": selected("note_mentions", "mention_id", retired_occurrence_ids),
+        "evidence": selected("relationship_evidence", "evidence_id", retired_evidence_ids),
+    })
+
+
+def _validate_r02_postconditions(
+    conn: sqlite3.Connection,
+    precondition: NoteReferenceReconciliationPrecondition,
+    *,
+    operation_id: str,
+    mutation: dict,
+    immutable_before: str,
+    unrelated_before: str,
+    historical_before: str,
+    revision_before: str,
+) -> dict:
+    if _r02_immutable_fingerprint(conn) != immutable_before:
+        raise RuntimeError("R02 changed immutable note revision authority")
+    if _r02_unrelated_fingerprint(conn, precondition, operation_id) != unrelated_before:
+        raise RuntimeError("R02 changed unrelated authoritative state")
+    if _r02_retired_history_fingerprint(conn, precondition) != historical_before:
+        raise RuntimeError("R02 rewrote pre-existing retired history")
+    latest, latest_mentions, revision_fingerprint = _r02_revision_snapshot(
+        conn, precondition.note_id,
+    )
+    if (
+        str(latest["revision_id"]) != precondition.latest_revision_id
+        or int(latest["revision_number"]) != precondition.latest_revision_number
+        or latest_mentions != precondition.latest_revision_mentions
+        or revision_fingerprint != precondition.revision_history_fingerprint
+    ):
+        raise RuntimeError("R02 latest revision authority changed")
+    occurrences, evidence = _r02_group_rows(
+        conn, precondition.note_id, precondition.referenced_person_id,
+    )
+    _r02_validate_history(
+        conn,
+        conn.execute("SELECT * FROM notes WHERE note_id=?", (precondition.note_id,)).fetchone(),
+        occurrences,
+        evidence,
+        allowed_started_operation_id=operation_id,
+    )
+    expected_occurrence = (
+        precondition.note_status == "ACTIVE"
+        and precondition.referenced_person_id in precondition.latest_revision_mentions
+        and precondition.referenced_person_id != precondition.owner_person_id
+    )
+    active_occurrences = [row for row in occurrences if bool(row["active"])]
+    if len(active_occurrences) != (1 if expected_occurrence else 0):
+        raise RuntimeError("R02 immediate NOTE-002 cardinality postcondition failed")
+    active_occurrence_ids = {
+        str(row["mention_id"]) for row in active_occurrences
+    }
+    active_evidence = [row for row in evidence if bool(row["active"])]
+    expected_evidence = 1 if expected_occurrence else 0
+    matching_active = [
+        row for row in active_evidence
+        if str(row["source_entity_id"]) in active_occurrence_ids
+        and row["source_person_id"] == precondition.owner_person_id
+        and row["target_person_id"] == precondition.referenced_person_id
+        and row["relationship_type"] == "REFERENCES"
+        and row["directionality"] == "DIRECTED"
+    ]
+    if len(active_evidence) != expected_evidence or len(matching_active) != expected_evidence:
+        raise RuntimeError("R02 immediate NOTE-003 cardinality postcondition failed")
+    projection = _validate_graph_projection(conn)
+    if not projection["valid"]:
+        raise RuntimeError(
+            "R02 graph/evidence postcondition failed: "
+            + "; ".join(projection["errors"][:10])
+        )
+    if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise RuntimeError("R02 foreign-key postcondition failed")
+    journal = _get_journal_operation(conn, operation_id)
+    if (
+        journal is None
+        or journal["operation_type"] != _R02_OPERATION_TYPE
+        or journal["status"] != "STARTED"
+        or tuple(item["to_status"] for item in journal["status_history"]) != ("STARTED",)
+    ):
+        raise RuntimeError("R02 transaction-local journal postcondition failed")
+    before_number = int(revision_before[1:])
+    revision_after = _graph_revision_token(conn)
+    expected_revision = (
+        f"g{before_number + 1}"
+        if mutation["active_evidence_changed"] else revision_before
+    )
+    if revision_after != expected_revision:
+        raise RuntimeError("R02 graph revision did not follow the frozen rule")
+    return {
+        "graph_revision_after": revision_after,
+        "connection_count_after": projection["actual_connection_count"],
+    }
 
 
 def _existing_person_operation(

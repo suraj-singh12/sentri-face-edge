@@ -24,6 +24,7 @@ from sentriface.merge_service import IdentityMergeService
 from sentriface.structured_repair_service import StructuredRepairService
 from sentriface.models import (
     ArchivedCanonicalSurvivorRepairPrecondition,
+    NoteReferenceReconciliationPrecondition,
     FaceBox,
     Match,
     MatchDecision,
@@ -728,6 +729,31 @@ class FaceEngine:
     ) -> dict:
         _require_mutation_context(operation_id, actor)
         return self.structured_repairs.restore_archived_canonical_survivor(
+            precondition,
+            operation_id,
+            actor=actor,
+            reason=reason,
+            source=source,
+        )
+
+    def prepare_note_reference_reconciliation(
+        self, note_id: str, referenced_person_id: str,
+    ) -> NoteReferenceReconciliationPrecondition:
+        return self.structured_repairs.prepare_note_reference_reconciliation(
+            note_id, referenced_person_id,
+        )
+
+    def repair_note_reference_state(
+        self,
+        precondition: NoteReferenceReconciliationPrecondition,
+        operation_id: str,
+        *,
+        actor: dict,
+        reason: str,
+        source: str | None = None,
+    ) -> dict:
+        _require_mutation_context(operation_id, actor)
+        return self.structured_repairs.reconcile_note_reference_state(
             precondition,
             operation_id,
             actor=actor,

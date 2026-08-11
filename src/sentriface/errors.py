@@ -59,7 +59,7 @@ class StructuredRepairRefused(SentriFaceError):
 
 
 class StructuredRepairPostcheckError(SentriFaceError):
-    """Raised when committed R01 state fails its read-only post-check."""
+    """Raised when a committed structured repair fails its read-only post-check."""
 
     def __init__(self, result: dict, report: object) -> None:
         super().__init__(

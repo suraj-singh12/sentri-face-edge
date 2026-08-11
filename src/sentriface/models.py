@@ -70,6 +70,50 @@ class ArchivedCanonicalSurvivorRepairPrecondition:
     relevant_operation_fingerprint: str
 
 
+class NoteReferenceRepairPlan(str, Enum):
+    """The five frozen P11C-R02 reconciliation transformations."""
+
+    APPEND_OCCURRENCE_AND_EVIDENCE = "APPEND_OCCURRENCE_AND_EVIDENCE"
+    RETIRE_OCCURRENCE_AND_EVIDENCE = "RETIRE_OCCURRENCE_AND_EVIDENCE"
+    APPEND_EVIDENCE = "APPEND_EVIDENCE"
+    REPLACE_DUPLICATE_ACTIVE_EVIDENCE = "REPLACE_DUPLICATE_ACTIVE_EVIDENCE"
+    RETIRE_STALE_EVIDENCE = "RETIRE_STALE_EVIDENCE"
+
+
+@dataclass(frozen=True)
+class NoteReferenceReconciliationPrecondition:
+    """Finding-bound, immutable R02 diagnosis token for one note/person group."""
+
+    repair_id: str
+    repair_spec_version: int
+    invariant_ids: tuple[str, ...]
+    affected_entity_ids: tuple[str, ...]
+    finding_entity_ids: tuple[str, ...]
+    plan: NoteReferenceRepairPlan
+    finding_fingerprint_version: str
+    finding_fingerprint: str
+    schema_version: int
+    graph_revision: str
+    note_id: str
+    referenced_person_id: str
+    owner_person_id: str
+    note_status: str
+    latest_revision_id: str
+    latest_revision_number: int
+    latest_revision_mentions: tuple[str, ...]
+    revision_history_fingerprint: str
+    occurrence_ids: tuple[str, ...]
+    active_occurrence_ids: tuple[str, ...]
+    occurrence_group_fingerprint: str
+    evidence_ids: tuple[str, ...]
+    active_evidence_ids: tuple[str, ...]
+    evidence_history_fingerprint: str
+    retirement_provenance_fingerprint: str
+    canonical_state_fingerprint: str
+    graph_projection_fingerprint: str
+    relevant_operation_fingerprint: str
+
+
 @dataclass(frozen=True)
 class EmbeddingRecord:
     embedding_id: str

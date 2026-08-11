@@ -1,6 +1,6 @@
 # P11 structured repair authority audit and execution design
 
-Status: **P11-C1 and the P11-C2A consolidated authority audit are frozen; P11C-R01 is implemented; P11C-R02 is not implemented; P11-C is not complete.** The first R02 safety stop led P11-A1 to correct `P11-NOTE-002`. The second led P11-C2A to correct `P11-EVIDENCE-001` and shared graph authority while preserving current cardinality validation. Every frozen R02 case is now reachable without history rewrite. The catalog remains exactly two commands and does not authorize generic repair, operation revert, recovery API/UI, automatic invocation, or P12 work.
+Status: **P11-C is complete and frozen: P11C-R01 and P11C-R02 are implemented against the P11-C1/C2A two-command authority model.** The first R02 safety stop led P11-A1 to correct `P11-NOTE-002`; the second led P11-C2A to correct `P11-EVIDENCE-001` and shared graph authority while preserving current cardinality validation. Both contradictions remain recorded below. R02 now executes every frozen case without history rewrite. The catalog remains exactly two commands and does not authorize generic repair, operation revert, recovery API/UI, automatic invocation, or P12 work.
 
 ## Scope and verified implementation basis
 
@@ -80,7 +80,7 @@ Only these repair IDs may be implemented by P11-C. The repair-spec version is `1
 - **Authoritative sources consulted:** the note row; complete ordered immutable revisions; the latest `note_revision_mentions` snapshot; all current/retired `note_mentions` for the note; all `NOTE_REFERENCE` evidence sourced by those occurrences; referenced `persons` and canonical state; relevant journal operation IDs; graph revision; the complete fresh P11-A report.
 - **Exact preconditions:** schema is exactly v28; report is not truncated; `P11-NOTE-001`, schema, identity/correction, `P11-EVIDENCE-002`, merge, and journal invariants are clean; `P11-EVIDENCE-001` is clean except for the exact stale-active `NOTE_REFERENCE`/inactive-source rows selected for this note; every allowed `P11-NOTE-002/003` finding belongs to the selected note; any `P11-GRAPH-001` finding is a consequence of this same note-reference state; note status/retirement shape is legal; revision numbering is contiguous and the latest revision ID/number and mention snapshot match diagnosis; every inactive occurrence has complete existing retirement provenance; every evidence row has coherent immutable type/source/endpoints/direction/lifecycle and legal journal linkage apart from the selected active/source-state conflict; fully retired evidence is accepted as history and is not required to mirror current occurrence state; exact note, revision, occurrence, evidence, canonical-state, and graph-revision fingerprints still match under `BEGIN IMMEDIATE`.
 - **Allowed finding shapes:** (1) an existing occurrence group has an active occurrence absent from the latest active non-self snapshot; (2) an existing occurrence group is required by the latest snapshot but has zero active occurrences; (3) a valid desired active occurrence has zero matching active evidence; (4) a valid desired active occurrence has more than one matching active evidence; (5) an active self occurrence or an active occurrence on a retired note has no conflicting active evidence; (6) an otherwise coherent active `NOTE_REFERENCE` is sourced by a valid inactive occurrence or retired note and is reported by the exact stale-active-source shape of `P11-EVIDENCE-001`. A wholly missing occurrence group with no finding, malformed retirement provenance, multiple active occurrences created through structural corruption, or any other `P11-EVIDENCE-001/002` finding is not allowed.
-- **Exact mutation:** compute the desired current raw person-ID set from the immutable latest revision when the note is active, excluding the raw owner. Retire undesired active occurrences using the current repair operation/revision/time and retire only their active `NOTE_REFERENCE` evidence. Where a desired occurrence has only retired history, append one new active occurrence tied to the existing latest revision and the repair operation; never reactivate an old row. For each desired active occurrence with zero or multiple matching active evidence rows, retire every active duplicate and append exactly one new directed `REFERENCES`/`NOTE_REFERENCE` evidence revision owned by this repair operation. Rebuild/validate `graph_connections` with the shared projection functions. Do not add an occurrence that P11-A did not diagnose as missing.
+- **Exact mutation:** compute the desired current raw person-ID set from the immutable latest revision when the note is active, excluding the raw owner. Retire undesired active occurrences using the current repair operation/revision/time and retire only their active `NOTE_REFERENCE` evidence. Where a desired occurrence has only retired history, append one new active occurrence tied to the existing latest revision and the repair operation; never reactivate an old row. For each desired active occurrence with zero or multiple matching active evidence rows, retire every active duplicate and append exactly one new directed `REFERENCES`/`NOTE_REFERENCE` evidence revision owned by this repair operation. Recompute authority with the shared projection function, replace only the affected directed relationship aggregate, and validate the complete projection. Do not add an occurrence that P11-A did not diagnose as missing.
 - **History preserved:** note content and every revision/mention snapshot remain immutable; retired occurrences/evidence remain present; existing occurrence/evidence identity and creation provenance are never changed; old journal records are not amended. New current state is represented only by repair-owned appended rows and one-way retirements.
 - **Journal operation type:** `integrity.repair.note-reference.reconcile`.
 - **Bounded journal result:** repair ID/spec version, invariant IDs, note ID, latest revision ID/number, diagnosis fingerprint version/value, counts of occurrences/evidence appended and retired, bounded affected ID lists or hashes, graph revision before/after, connection counts before/after, `changed: true`, and immediate postcondition status. Never store note content, full revision history, full finding evidence, or graph edges.
@@ -97,7 +97,7 @@ Only these repair IDs may be implemented by P11-C. The repair-spec version is `1
 
 P11-C needs no distributed lock or generic optimistic-locking framework. One diagnosis token plus exact local row fingerprints is sufficient.
 
-The future invocation must carry a `RepairPrecondition` equivalent containing:
+Each invocation carries a typed `RepairPrecondition` equivalent containing:
 
 - repair ID and repair-spec version;
 - schema version (`28` for this catalog);
@@ -115,7 +115,7 @@ After `BEGIN IMMEDIATE`, the command re-reads and compares every repair-specific
 
 No repair may run at startup, after checker execution, periodically, in a worker, through polling, or merely because a finding exists. There is no “repair all” command.
 
-The future flow is fixed:
+The implemented flow is fixed:
 
 ```text
 explicit P11-A report
@@ -133,9 +133,9 @@ explicit P11-A report
     -> return result or prominently report post-check failure
 ```
 
-The implemented service/store boundary is one explicit structured-repair service delegating to a typed SQLite R01 command. It does not accept table names, SQL fragments, arbitrary field/value patches, an open-ended invariant ID, or R02 input. R02 may extend this same bounded service later without creating a generic engine.
+The implemented service/store boundary is one explicit structured-repair service delegating only to typed SQLite R01 and R02 commands. It does not accept table names, SQL fragments, arbitrary field/value patches, open-ended invariant IDs, cross-note batches, or repair-all input.
 
-The current journal can represent both safe catalog operations. The private connection-scoped `_begin_journal_operation()` and `_transition_journal_operation()` pattern is suitable; public `begin_operation()`/normal domain methods cannot be composed because they open and commit their own connections. Future implementation therefore needs connection-scoped typed helpers, not a second transaction around public calls.
+The current journal represents both safe catalog operations. The implementation uses the private connection-scoped `_begin_journal_operation()` and `_transition_journal_operation()` pattern; public `begin_operation()`/normal domain methods are not composed because they open and commit their own connections. This keeps each typed repair inside one caller-owned transaction rather than adding a second transaction around public calls.
 
 For both entries, the immutable initial journal details contain the repair ID/spec version, selected invariant IDs, bounded operator reason, diagnosis fingerprint version/value, and repair-specific before-state fingerprint. `affected_entities` contains only the terminal/source person IDs for R01 or the note, occurrence, evidence, and endpoint person IDs for R02, subject to a fixed count cap plus a hash/count summary when the set is larger. The `COMMITTED` transition result contains the bounded after-state summary and immediate validation result defined in the catalog entry. It never replaces the initial details or changes any older operation. The same request fingerprint is used to distinguish an exact idempotent retry from operation-ID misuse.
 
@@ -178,7 +178,15 @@ The only domain mutation is `persons.lifecycle_status: ARCHIVED -> ACTIVE`, `del
 
 After commit the service refreshes the derived recognition index and runs full P11-A. It returns `postcheck_status: PASS` only when the selected finding is absent, the report is untruncated, and no `CRITICAL`/`ERROR` remains. An unexpected failure is surfaced without an automatic repair or journal rewrite. An exact committed operation-ID/fingerprint retry returns the committed result; a new ID against clean/stale state refuses; failed IDs cannot be reused and retry requires a fresh diagnosis and operation ID. Transaction failures roll authority and revision back before a bounded separate `STARTED -> FAILED` attempt is recorded. R01 remains `NOT_SAFELY_REVERSIBLE` and exposes no inverse.
 
-R02 remains design-only. No recovery API/UI, startup hook, scheduler, worker, polling, repair-all path, or revert has been added.
+## P11C-R02 implementation record
+
+`StructuredRepairService.prepare_note_reference_reconciliation(note_id, referenced_person_id)` runs fresh untruncated P11-A and returns a `NoteReferenceReconciliationPrecondition` for exactly one existing note/person occurrence group. The token fixes one of five plan values: `APPEND_OCCURRENCE_AND_EVIDENCE`, `RETIRE_OCCURRENCE_AND_EVIDENCE`, `APPEND_EVIDENCE`, `REPLACE_DUPLICATE_ACTIVE_EVIDENCE`, or `RETIRE_STALE_EVIDENCE`. It binds the selected findings, schema, note owner/status, complete latest revision mention snapshot, note revision/history hash, occurrence and evidence histories, retirement provenance, canonical paths, exact graph projection/revision, and relevant journal state. Wholly missing groups, multiple active occurrences, two simultaneously applicable plans, malformed history, any `P11-EVIDENCE-002`, and every non-admitted `P11-EVIDENCE-001` refuse.
+
+`reconcile_note_reference_state()` repeats the full classification under `BEGIN IMMEDIATE`, creates `integrity.repair.note-reference.reconcile`, and performs only the frozen append/retire transition. Appended IDs are deterministic for the fresh operation ID and are included in bounded journal entities. Existing inactive rows are never reactivated, deleted, retargeted, or rewritten. Duplicate active evidence is retired in full before one repair-owned replacement is appended. The shared expected-projection builder validates all evidence; only the one affected directed relationship aggregate is maintained, and the complete projection is immediately compared with shared authority.
+
+Every active-evidence-set change advances graph revision once, including canonical self-collapse; occurrence-only retirement with no evidence change leaves revision stable. Immediate validation proves immutable revisions/mention snapshots, pre-existing retired history, unrelated occurrences/evidence—including `CO_OBSERVED` and `MANUAL_ASSOCIATION`—persons, corrections, observations, merges, and prior journals are unchanged; verifies NOTE-002/003 cardinality, evidence lifecycle, graph equality, foreign keys, and transaction-local journal state; then commits `STARTED -> COMMITTED`. Failures roll the entire mutation/projection/revision/start back and record a bounded separate `FAILED` attempt. Exact committed retry returns its result; changed reuse, failed-ID reuse, stale state, and a new ID against clean state refuse. The service then runs mandatory full P11-A and reports unexpected post-check failure without a second repair or journal rewrite.
+
+R02 is Python/service-only. No recovery API/UI, startup hook, scheduler, worker, polling, repair-all path, or revert was added. P11-C is complete; P11-D remains the next phase.
 
 ### P11-A1 safety-stop resolution
 
@@ -217,7 +225,7 @@ The old equality was not merely removed. Shared graph authority now checks exact
 | 9. Correction then merge exists | note finding(s) only; correction/evidence/merge invariants clean | reconcile raw note occurrence/evidence against current canonical map | correction/merge/note revision history unchanged | correction applies only to observation evidence before canonical resolution; exact graph rebuilt; advance once if evidence changes | none |
 | 10. Merge then correction exists | same as case 9 | same fixed reconciliation after fresh fingerprint/revalidation | all transformations preserved | same deterministic active-only result | none |
 
-The matrix proves reachability, not implementation. Focused tests execute the allowed append/retire end states with normal journal/projection primitives and prove full P11-A cleanliness, repeated replacements, independent evidence support, canonical collapse, both correction/merge orders, and P11-B rebuild. They do not add an R02 service, API, recovery UI, or automatic repair path. A wholly missing occurrence group still has no `P11-NOTE-002/003` finding and remains outside R02 authorization.
+The matrix first proved reachability and now exactly matches the implemented plans. Focused R02 tests prove full P11-A cleanliness, repeated replacements, independent evidence support, canonical collapse, both correction/merge orders, rollback and retry behavior, and P11-B rebuild regression. A wholly missing occurrence group still has no `P11-NOTE-002/003` finding and remains outside R02 authorization.
 
 ## Test plan
 
@@ -261,7 +269,7 @@ Implementation is not authorized complete until every catalog entry has focused 
 - projection aggregation/direction/count/latest-time and canonical self-edge suppression remain correct;
 - wrong endpoint/type/direction, incomplete retirement provenance, any non-admitted `P11-EVIDENCE-001` shape, any `P11-EVIDENCE-002`, wholly missing occurrence, later note revision, later evidence retirement, correction, and merge all refuse.
 
-R01 has focused success, refusal, idempotency, rollback, postcondition, history, transitive-path, correction/evidence, graph-revision, and mutation-boundary coverage. R02 tests remain future. Run focused repair tests first, then `python -m pytest -q`, `npm --prefix frontend test`, and `npm --prefix frontend run build`.
+R01 and R02 have focused success, refusal, idempotency, rollback, postcondition, history, correction/merge, evidence-independence, graph-revision, post-check, and mutation-boundary coverage. The complete backend suite plus frontend test/build gates pass before P11-C is marked complete.
 
 ## P11-D boundary
 

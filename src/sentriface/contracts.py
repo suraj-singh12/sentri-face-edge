@@ -5,6 +5,7 @@ from typing import Callable, Protocol
 
 from sentriface.models import (
     ArchivedCanonicalSurvivorRepairPrecondition,
+    NoteReferenceReconciliationPrecondition,
     DetectedFace,
     Embedding,
     EmbeddingRecord,
@@ -518,6 +519,22 @@ class IdentityStore(Protocol):
         source: str | None = None,
     ) -> dict:
         """Execute only P11C-R01 under an immediate journaled transaction."""
+
+    def prepare_note_reference_reconciliation(
+        self, note_id: str, referenced_person_id: str,
+    ) -> NoteReferenceReconciliationPrecondition:
+        """Create a fresh finding-bound R02 precondition without mutation."""
+
+    def execute_note_reference_reconciliation(
+        self,
+        precondition: NoteReferenceReconciliationPrecondition,
+        operation_id: str,
+        *,
+        actor: dict,
+        reason: str,
+        source: str | None = None,
+    ) -> dict:
+        """Execute only P11C-R02 under an immediate journaled transaction."""
 
     def soft_delete_person(
         self, person_id: str, operation_id: str,
