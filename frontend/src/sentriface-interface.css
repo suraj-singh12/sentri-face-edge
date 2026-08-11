@@ -195,6 +195,115 @@
   background: color-mix(in srgb, var(--mantine-color-yellow-9) 8%, transparent);
 }
 
+/* P10-F2 Cluster drilldown: focused rendering of one revision-bound cluster response. */
+.world-cluster-shell {
+  min-height: 0;
+  height: 100%;
+}
+
+.world-cluster-back {
+  align-self: flex-start;
+}
+
+.world-cluster-loading {
+  min-height: 440px;
+}
+
+.world-cluster-header {
+  min-height: 42px;
+}
+
+.world-cluster-header-facts {
+  padding-left: 82px;
+}
+
+.world-cluster-header-fact {
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+  font-variant-numeric: tabular-nums;
+}
+
+.world-cluster-workarea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 10px;
+}
+
+.world-cluster-primary,
+.world-cluster-context {
+  min-width: 0;
+  min-height: 0;
+}
+
+.world-cluster-collection-bar {
+  min-height: 34px;
+  margin-bottom: 8px;
+}
+
+.world-cluster-collection {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.world-cluster-collection-loading {
+  min-height: 360px;
+}
+
+.world-cluster-member-row {
+  min-height: 66px;
+}
+
+.world-cluster-member-row[data-lifecycle="ARCHIVED"] {
+  box-shadow: inset 2px 0 var(--mantine-color-yellow-7);
+}
+
+.world-cluster-member-row[data-lifecycle="DELETED"] {
+  box-shadow: inset 2px 0 var(--mantine-color-red-8);
+  opacity: 0.8;
+}
+
+.world-cluster-member-photo {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.world-analytics-unavailable {
+  min-width: 120px;
+  text-align: right;
+}
+
+.world-cluster-relationship-row {
+  min-height: 66px;
+}
+
+.world-cluster-occurrence {
+  min-width: 132px;
+}
+
+.world-cluster-explanation,
+.world-cluster-inspector {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.world-cluster-explanation {
+  max-height: 300px;
+}
+
+.world-cluster-inspector {
+  flex: 1 1 auto;
+}
+
 @media (max-width: 76em) {
   .world-workarea {
     grid-template-columns: minmax(0, 1fr) 260px;
@@ -203,6 +312,10 @@
   .world-overview-grid {
     grid-template-columns: 1fr;
     height: auto;
+  }
+
+  .world-cluster-workarea {
+    grid-template-columns: minmax(0, 1fr) 290px;
   }
 }
 
@@ -231,6 +344,26 @@
 
   .world-person-metrics {
     min-width: 0;
+  }
+
+  .world-cluster-shell {
+    height: auto;
+  }
+
+  .world-cluster-header-facts {
+    padding-left: 0;
+  }
+
+  .world-cluster-workarea {
+    grid-template-columns: 1fr;
+  }
+
+  .world-cluster-explanation {
+    max-height: none;
+  }
+
+  .world-cluster-occurrence {
+    display: none;
   }
 }
 

@@ -306,6 +306,11 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onApplyScope={guarded(actions.applyWorldScope)}
               onCollection={guarded(actions.selectWorldCollection)}
               onNextPage={guarded(actions.nextWorldPage)}
+              onOpenCluster={guarded(actions.openWorldCluster)}
+              onCloseCluster={actions.closeWorldCluster}
+              onRefreshCluster={guarded(actions.refreshWorldCluster)}
+              onClusterCollection={guarded(actions.selectWorldClusterCollection)}
+              onNextClusterPage={guarded(actions.nextWorldClusterPage)}
             />
           </Tabs.Panel>
 

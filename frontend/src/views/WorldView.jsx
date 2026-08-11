@@ -37,6 +37,7 @@ import {
 } from "@tabler/icons-react";
 
 import { EMPTY_WORLD_FILTERS, worldPageFor } from "../utils/world.js";
+import { ClusterDrilldownView } from "./ClusterDrilldownView.jsx";
 
 const COLLECTION_TABS = [
   { label: "Overview", value: "PEOPLE" },
@@ -51,6 +52,11 @@ export function WorldView({
   onApplyScope,
   onCollection,
   onNextPage,
+  onOpenCluster,
+  onCloseCluster,
+  onRefreshCluster,
+  onClusterCollection,
+  onNextClusterPage,
 }) {
   const data = state.data;
   const [draft, setDraft] = useState(() => ({ ...EMPTY_WORLD_FILTERS }));
@@ -63,6 +69,18 @@ export function WorldView({
   }, [state.filters, state.ranking]);
 
   useEffect(() => setSelected(null), [data?.graph_revision, state.collection, state.pageNumber]);
+
+  if (state.cluster?.active) {
+    return (
+      <ClusterDrilldownView
+        cluster={state.cluster}
+        onBack={onCloseCluster}
+        onRefresh={onRefreshCluster}
+        onCollection={onClusterCollection}
+        onNextPage={onNextClusterPage}
+      />
+    );
+  }
 
   if (!data && state.loading) {
     return (
@@ -94,6 +112,8 @@ export function WorldView({
           The existing snapshot remains visible. {state.error.message}
         </Alert>
       ) : null}
+
+      {state.cluster?.notice ? <Alert color="yellow" title="Cluster view refreshed">{state.cluster.notice}</Alert> : null}
 
       <WorldScopeControls
         data={data}
@@ -130,7 +150,7 @@ export function WorldView({
       <Box className="world-workarea">
         <Box className="world-exploration">
           {state.loading ? <Box className="world-loading-stripe"><Loader size={16} /><Text size="xs">Replacing scope…</Text></Box> : null}
-          <WorldCollection data={data} collection={state.collection} onInspect={setSelected} selected={selected} />
+          <WorldCollection data={data} collection={state.collection} onInspect={setSelected} onOpenCluster={onOpenCluster} selected={selected} />
           {page?.has_more ? (
             <Group justify="center" mt="sm">
               <Button
@@ -322,14 +342,14 @@ function WorldTotals({ data }) {
   );
 }
 
-function WorldCollection({ data, collection, onInspect, selected }) {
-  if (collection === "PEOPLE") return <WorldOverview data={data} onInspect={onInspect} selected={selected} />;
-  if (collection === "CLUSTERS") return <ClusterGrid clusters={data.clusters} onInspect={onInspect} selected={selected} />;
+function WorldCollection({ data, collection, onInspect, onOpenCluster, selected }) {
+  if (collection === "PEOPLE") return <WorldOverview data={data} onInspect={onInspect} onOpenCluster={onOpenCluster} selected={selected} />;
+  if (collection === "CLUSTERS") return <ClusterGrid clusters={data.clusters} onOpenCluster={onOpenCluster} selected={selected} />;
   if (collection === "RELATIONSHIPS") return <RelationshipList relationships={data.relationships} onInspect={onInspect} selected={selected} />;
   return <PatternList patterns={data.patterns} onInspect={onInspect} selected={selected} />;
 }
 
-function WorldOverview({ data, onInspect, selected }) {
+function WorldOverview({ data, onInspect, onOpenCluster, selected }) {
   return (
     <Box className="world-overview-grid">
       <WorldSection title="Ranked people" subtitle="Canonical people ordered by the backend" count={data.pagination.PEOPLE?.total_count}>
@@ -337,7 +357,7 @@ function WorldOverview({ data, onInspect, selected }) {
       </WorldSection>
       <Stack gap="sm" className="world-overview-secondary">
         <WorldSection title="Evidence-connected clusters" subtitle="Revision-bound summaries, not affiliations" count={data.pagination.CLUSTERS?.total_count}>
-          <ClusterGrid clusters={data.clusters} onInspect={onInspect} selected={selected} compact />
+          <ClusterGrid clusters={data.clusters} onOpenCluster={onOpenCluster} selected={selected} compact />
         </WorldSection>
         <WorldSection title="Measured patterns" subtitle="Deterministic facts returned for this scope" count={data.pagination.PATTERNS?.total_count}>
           <PatternList patterns={data.patterns} onInspect={onInspect} selected={selected} compact />
@@ -383,10 +403,10 @@ function PeopleList({ people, onInspect, selected }) {
   ))}</Stack>;
 }
 
-function ClusterGrid({ clusters, onInspect, selected, compact = false }) {
+function ClusterGrid({ clusters, onOpenCluster, selected, compact = false }) {
   if (!clusters.length) return <WorldEmpty title="No evidence-connected clusters" detail="No qualifying backend cluster summaries exist in this scope." />;
   return <SimpleGrid cols={compact ? 1 : { base: 1, md: 2 }} spacing={0}>{clusters.map((cluster) => (
-    <button key={cluster.cluster_id} type="button" className="world-row world-cluster-row" data-selected={selected?.type === "cluster" && selected.value.cluster_id === cluster.cluster_id} onClick={() => onInspect({ type: "cluster", value: cluster })}>
+    <button key={cluster.cluster_id} type="button" className="world-row world-cluster-row" onClick={() => onOpenCluster(cluster)}>
       <span className="world-row-main">
         <Group gap="xs" wrap="nowrap"><Text component="span" size="sm" fw={800}>Cluster {cluster.ranking?.rank_position || "—"}</Text><Badge size="xs" variant="outline">{cluster.member_count} members</Badge></Group>
         <Text component="span" size="10px" c="dimmed">{cluster.member_preview.map((person) => person.display_name).join(", ") || "Member preview unavailable"}</Text>
@@ -466,7 +486,6 @@ function WorldInspector({ item }) {
           {(explanation.limitations || []).map((limitation) => <Text key={limitation} size="xs" c="dimmed">{limitation}</Text>)}
         </Box>
       ) : null}
-      {item.type === "cluster" ? <Text size="10px" c="dimmed">Cluster drilldown is reserved for P10-F2. Selection currently establishes inspection intent only.</Text> : null}
     </Stack>
   );
 }

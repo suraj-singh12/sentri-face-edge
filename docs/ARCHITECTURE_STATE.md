@@ -4,7 +4,7 @@ This document is a concise checkpoint of the stable implemented architecture. De
 
 ## Current phase
 
-P10-F World UI is in progress. P10-F1 World foundation and the `WORLD_SCOPE` experience are complete as of 2026-08-11 against the frozen World v2 backend. World is now a persistent top-level view with backend-normalized scope controls, authoritative totals/facets, ranked canonical people, revision-bound cluster summaries, measured patterns, typed relationship pages, structured explanation inspection, bounded response replacement, lifecycle revision validation, mutation invalidation, and no continuous polling. Full `CLUSTER`, `PERSON`, `EVENT`, and `EVIDENCE` drilldowns have not begun. P0 through P10-E remain frozen; P11 remains future work.
+P10-F World UI is in progress. P10-F1 World foundation and the `WORLD_SCOPE` experience plus P10-F2 `CLUSTER` drilldown are complete as of 2026-08-11 against the frozen World v2 backend. World is a persistent top-level view with backend-normalized scope controls, authoritative totals/facets, ranked canonical people, revision-bound cluster summaries, measured patterns, typed relationship pages, structured explanation inspection, bounded response replacement, lifecycle revision validation, mutation invalidation, and no continuous polling. Cluster selection performs a fresh revision/filter-bound `CLUSTER` read rather than expanding preview data; members and relationships are independently paged and replaced, and invalid cluster state returns to a reloaded authoritative `WORLD_SCOPE`. P10-F3 `PERSON`, P10-F4 `EVENT`, and P10-F5 `EVIDENCE`/media remain incomplete. P0 through P10-E remain frozen; P11 remains future work.
 
 ## Core principles
 
@@ -148,11 +148,11 @@ The final mandatory matrix completed on 2026-08-11 in `docs/P10_WORLD_BENCHMARK_
 
 - Reuse the opaque revision token, immutable replacement model, canonical/lifecycle semantics, backend `allowed_actions`, evidence-count strength, occurrence/provenance explanations, and the rule that React owns only presentation/interaction.
 - Do not reuse the person-centred radial membership model, complete-graph loading assumption, homogeneous person-node schema, client-only full-response refresh strategy, or the assumption that edge weight alone communicates importance. World requires scope-first levels, typed summary/detail objects, server-side ranking/clustering, bounded expansion, and density-aware presentation.
-- P10-F World UI may start against the frozen additive v2 contract. Product UI must continue to render backend semantics rather than acquire canonical, topology, ranking, cluster, evidence, filter, or truncation authority.
+- P10-F1 `WORLD_SCOPE` and P10-F2 `CLUSTER` are implemented against the frozen additive v2 contract. Remaining World UI must continue to render backend semantics rather than acquire canonical, topology, ranking, cluster, evidence, filter, or truncation authority.
 
 ## Known deferred work
 
 - P11 guarded merge/operation revert; normalized merge undo is intentionally not exposed yet.
 - P12 backup/restore hardening for normalized authoritative, journal, and projection records.
 - P13 fully offline BYOM/model-management work.
-- P10-F World rendering/query controls remain deferred, along with later integrity/rebuild/revert, packaging, and release work.
+- P10-F3 `PERSON`, P10-F4 `EVENT`, and P10-F5 `EVIDENCE`/media remain deferred, along with later integrity/rebuild/revert, packaging, and release work.
