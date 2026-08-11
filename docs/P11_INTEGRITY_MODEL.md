@@ -1,6 +1,6 @@
 # P11 integrity authority model, checker, and graph rebuild
 
-Status: **P11-A and P11-B complete; P11 as a whole remains incomplete.** This document fixes the P11 invariant IDs and authority boundary, records the read-only checker, and defines the explicit deterministic `graph_connections` rebuild. It does not authorize general repair, correction/merge/note/observation/journal repair, operation revert, vector-index rebuild, recovery UI, or P12 backup/restore work.
+Status: **P11-A and P11-B complete and frozen; P11-C1 design complete; P11-C as a whole remains unimplemented.** This document fixes the P11 invariant IDs and authority boundary, records the read-only checker, and defines the explicit deterministic `graph_connections` rebuild. `P11_STRUCTURED_REPAIR_DESIGN.md` records the P11-C1 authority audit, two-entry fixed future repair catalog, and execution design. It does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
 
 ## State-authority map
 
@@ -113,6 +113,7 @@ These are architectural boundaries, not P11-A blockers. They constrain later rep
 
 1. **P11-A — Read-only integrity checker:** complete.
 2. **P11-B — Deterministic graph projection rebuild:** complete; explicit preflight-gated, atomic, journaled, revision-aware replacement with no authority rewrite.
-3. **P11-C — Journal-aware structured repair:** future; only explicit non-guessing domain repairs.
-4. **P11-D — Revert execution:** future; operation-specific preconditions/inverse data and atomic journaled execution.
-5. **P11-E — Integrity/recovery UI and acceptance:** future; explicit invocation and factual reports, no polling/background scan.
+3. **P11-C1 — Structured repair authority audit/catalog/design:** complete as architecture only. The only future commands admitted are restoring an otherwise-valid archived terminal merge survivor and reconciling diagnosed note occurrence/reference state from immutable revision authority. No repair code or callable surface exists.
+4. **P11-C implementation:** future; implement only the fixed versioned catalog in `P11_STRUCTURED_REPAIR_DESIGN.md`, with finding-bound preconditions and explicit invocation.
+5. **P11-D — Revert execution:** future; operation-specific preconditions/inverse data and atomic journaled execution.
+6. **P11-E — Integrity/recovery UI and acceptance:** future; explicit invocation and factual reports, no polling/background scan.

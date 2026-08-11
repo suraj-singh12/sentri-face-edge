@@ -10,7 +10,7 @@ Use it with, rather than instead of, the other architecture documents:
 - `ARCHITECTURE_STATE.md` records the concise implementation checkpoint.
 - `IMPLEMENTATION_PLAN.md` records phase order, completion, and remaining gates.
 
-This explanation covers the architecture implemented and frozen from P0 through P10 as of 2026-08-11, plus the completed P11-A read-only integrity checker and P11-B explicit graph projection rebuild. P11-C repair, P11-D revert, and P11-E recovery UI remain deferred to their planned phases.
+This explanation covers the architecture implemented and frozen from P0 through P10 as of 2026-08-11, plus the completed P11-A read-only integrity checker and P11-B explicit graph projection rebuild. P11-C1 has completed only the structured-repair authority audit, fixed two-entry future catalog, and execution design in `P11_STRUCTURED_REPAIR_DESIGN.md`; no repair is implemented. P11-C implementation, P11-D revert, and P11-E recovery UI remain deferred to their planned phases.
 
 The central question throughout is:
 
@@ -1298,7 +1298,7 @@ Compatibility data remains valuable, but value does not confer authority. Deleti
 Several capabilities are intentionally future work:
 
 - P10-F World UI is complete and frozen after the final post-fix integration/runtime gate; P10-FR-01 through P10-FR-04 are fixed.
-- P11-A provides the fixed authority/invariant model and explicit query-only integrity checker. P11-B provides only deterministic graph projection rebuild with preflight refusal, atomic replacement, journal/revision/no-op semantics, postcheck, and zero authoritative rewriting. P11-C structured repair, P11-D operation revert, and P11-E recovery UI/acceptance remain future work.
+- P11-A provides the fixed authority/invariant model and explicit query-only integrity checker. P11-B provides only deterministic graph projection rebuild with preflight refusal, atomic replacement, journal/revision/no-op semantics, postcheck, and zero authoritative rewriting. P11-C1 fixes, but does not implement, two future repairs: restore an otherwise-valid archived terminal merge survivor, and reconcile diagnosed current note mention/evidence state from immutable revision authority. P11-C implementation, P11-D operation revert, and P11-E recovery UI/acceptance remain future work.
 - P12 will extend portable backup/restore rules for every normalized record and derived state.
 - Future repeated-unknown tracking needs its own authoritative lifecycle.
 - A normalized place model is required before location becomes an entity.
