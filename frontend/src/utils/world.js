@@ -1,6 +1,9 @@
 const WORLD_COLLECTIONS = new Set(["PEOPLE", "CLUSTERS", "RELATIONSHIPS", "PATTERNS"]);
 const WORLD_CLUSTER_COLLECTIONS = new Set(["MEMBERS", "RELATIONSHIPS"]);
+const WORLD_PERSON_COLLECTIONS = new Set(["RELATIONSHIPS", "EVENTS"]);
 const WORLD_LIFECYCLE_STATES = new Set(["ACTIVE", "ARCHIVED", "DELETED", "MERGED"]);
+const WORLD_IDENTITY_STATES = new Set(["IDENTIFIED", "UNIDENTIFIED"]);
+const WORLD_BIOMETRIC_STATES = new Set(["NO_FACE", "ENROLLED"]);
 const WORLD_ANALYTICS_STATES = new Set(["LOADED", "NOT_LOADED"]);
 
 export const EMPTY_WORLD_FILTERS = Object.freeze({
@@ -140,6 +143,64 @@ export function requireWorldClusterContract(payload, expected = {}) {
   return payload;
 }
 
+export function requireWorldPersonContract(payload, expected = {}) {
+  requireWorldContractIdentity(payload);
+  if (
+    payload.requested_detail_level !== "PERSON"
+    || payload.returned_detail_level !== "PERSON"
+    || payload.focus?.type !== "PERSON"
+    || !payload.focus.id
+    || !payload.graph_revision
+    || !payload.as_of
+  ) throw new Error("Incomplete World Person focus or revision contract");
+  if (expected.personId && payload.focus.id !== expected.personId) {
+    throw staleWorldPersonContractError("World Person focus does not match the requested identity");
+  }
+  if (expected.revision && payload.graph_revision !== expected.revision) {
+    throw staleWorldPersonContractError("World Person revision does not match the requested snapshot");
+  }
+  for (const field of ["scope_totals", "effective_filters", "pagination", "limits"]) {
+    if (!payload[field] || typeof payload[field] !== "object" || Array.isArray(payload[field])) {
+      throw new Error(`Incomplete World Person ${field} contract`);
+    }
+  }
+  for (const field of ["people", "relationships", "events"]) {
+    if (!Array.isArray(payload[field])) throw new Error(`Incomplete World Person ${field} collection`);
+  }
+  for (const collection of WORLD_PERSON_COLLECTIONS) {
+    if (!payload.pagination[collection]) throw new Error(`Missing World Person ${collection} page state`);
+  }
+  requireWorldPagination(payload.pagination);
+  if (!payload.people.length) throw new Error("World Person response must contain the focused person");
+  payload.people.forEach(requireWorldPerson);
+  payload.relationships.forEach(requireWorldRelationship);
+  payload.events.forEach(requireWorldEvent);
+  const root = payload.people[0];
+  if (expected.personId && root.canonical_person_id !== expected.personId) {
+    throw staleWorldPersonContractError("World Person canonical identity changed in the retained snapshot");
+  }
+  if (!Array.isArray(root.cluster_memberships)) {
+    throw new Error("Invalid World Person cluster membership contract");
+  }
+  for (const membership of root.cluster_memberships) {
+    if (
+      !membership?.cluster_id
+      || membership.graph_revision !== payload.graph_revision
+      || !Number.isFinite(Number(membership.member_count))
+      || !membership.grouping_algorithm
+      || !membership.algorithm_version
+    ) throw new Error("Invalid World Person cluster membership contract");
+  }
+  const requestedCollection = expected.collection || null;
+  if (requestedCollection === "RELATIONSHIPS" && payload.relationships.length !== payload.pagination.RELATIONSHIPS.returned_count) {
+    throw new Error("World Person relationship count does not match its page state");
+  }
+  if (requestedCollection === "EVENTS" && payload.events.length !== payload.pagination.EVENTS.returned_count) {
+    throw new Error("World Person event count does not match its page state");
+  }
+  return payload;
+}
+
 export function buildWorldScopeQuery({
   collection = "PEOPLE",
   filters = EMPTY_WORLD_FILTERS,
@@ -225,6 +286,38 @@ export function buildWorldClusterQuery({
   return `/api/world-graph?${query}`;
 }
 
+export function buildWorldPersonQuery({
+  personId,
+  collection = "RELATIONSHIPS",
+  filters = EMPTY_WORLD_FILTERS,
+  ranking = "SALIENCE",
+  cursor = null,
+  revision,
+  asOf,
+} = {}) {
+  if (!personId || !revision || !asOf) throw new Error("World Person requests require person, revision, and as_of binding");
+  const normalizedCollection = String(collection || "RELATIONSHIPS").toUpperCase();
+  if (!WORLD_PERSON_COLLECTIONS.has(normalizedCollection)) throw new Error("Unsupported World Person collection");
+  const query = new URLSearchParams({
+    version: "2",
+    level: "PERSON",
+    focus_type: "PERSON",
+    focus_id: personId,
+    collection: normalizedCollection,
+    ranking,
+    people_limit: "25",
+    event_limit: "25",
+    relationship_limit: "50",
+    cluster_limit: "10",
+    facet_limit: "100",
+    revision,
+    as_of: asOf,
+  });
+  appendWorldFilters(query, filters);
+  if (cursor) query.set("cursor", cursor);
+  return `/api/world-graph?${query}`;
+}
+
 export function filtersFromEffective(filters = {}) {
   const list = (value) => Array.isArray(value) ? [...value] : [];
   const recent = filters.recent_activity || "";
@@ -275,6 +368,15 @@ export function isInvalidWorldClusterError(error) {
     );
 }
 
+export function isInvalidWorldPersonError(error) {
+  return error?.code === "WORLD_PERSON_STALE"
+    || isStaleWorldError(error)
+    || (
+      [400, 404].includes(error?.status)
+      && /world person (is unavailable|focus|revision)|person.*revision|cursor does not match/i.test(error.message || "")
+    );
+}
+
 export function worldPageFor(data, collection) {
   return data?.pagination?.[collection] || null;
 }
@@ -303,15 +405,25 @@ function requireWorldPerson(person) {
     !person?.canonical_person_id
     || !person.display_name
     || !WORLD_LIFECYCLE_STATES.has(person.lifecycle_state)
+    || !WORLD_IDENTITY_STATES.has(person.identity_state)
+    || !WORLD_BIOMETRIC_STATES.has(person.biometric_state)
     || !WORLD_ANALYTICS_STATES.has(person.analytics_state)
     || !person.display
     || !person.intelligence_summary
     || !person.activity_summary
     || !person.ranking
     || !Array.isArray(person.historical_person_ids)
+    || !Array.isArray(person.importance_indicators)
     || !Array.isArray(person.allowed_actions)
     || !person.explanation
+    || !Array.isArray(person.explanation.factual_factors)
+    || !Array.isArray(person.explanation.limitations)
   ) throw new Error("Invalid World person contract");
+  if (person.analytics_state === "LOADED" && (
+    !Number.isFinite(Number(person.activity_summary.finalized_event_count))
+    || !Number.isFinite(Number(person.intelligence_summary.relationship_count))
+    || !Number.isFinite(Number(person.intelligence_summary.relationship_evidence_count))
+  )) throw new Error("Invalid loaded World person analytics contract");
 }
 
 function requireWorldRelationship(relationship) {
@@ -330,6 +442,39 @@ function requireWorldRelationship(relationship) {
     || !Array.isArray(relationship.explanation.factual_factors)
     || !Array.isArray(relationship.explanation.limitations)
   ) throw new Error("Invalid World relationship contract");
+}
+
+function requireWorldEvent(event) {
+  if (
+    !event?.event_id
+    || !event.finalized_at
+    || !event.occurred_at
+    || (event.location !== null && typeof event.location !== "string")
+    || !event.context_summary
+    || typeof event.context_summary.available !== "boolean"
+    || (event.source !== null && typeof event.source !== "string")
+    || !Array.isArray(event.participants)
+    || !Array.isArray(event.participant_provenance)
+    || !event.participant_summary
+    || !Number.isFinite(Number(event.participant_summary.total_count))
+    || !Number.isFinite(Number(event.participant_summary.returned_count))
+    || !event.participant_summary.participants_state
+    || !event.evidence_summary
+    || !Number.isFinite(Number(event.evidence_summary.total_count))
+    || !event.evidence_summary.evidence_type_counts
+    || !event.media_summary
+    || !Number.isFinite(Number(event.media_summary.total_count))
+    || !event.media_summary.retrieval
+    || !event.explanation
+    || !Array.isArray(event.explanation.factual_factors)
+    || !Array.isArray(event.explanation.limitations)
+  ) throw new Error("Invalid World event summary contract");
+}
+
+function staleWorldPersonContractError(message) {
+  const error = new Error(message);
+  error.code = "WORLD_PERSON_STALE";
+  return error;
 }
 
 function appendWorldFilters(query, filters) {

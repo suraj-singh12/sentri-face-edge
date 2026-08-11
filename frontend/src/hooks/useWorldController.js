@@ -2,13 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   buildWorldClusterQuery,
+  buildWorldPersonQuery,
   buildWorldScopeQuery,
   EMPTY_WORLD_FILTERS,
   filtersFromEffective,
   invalidateWorldSnapshot,
   isInvalidWorldClusterError,
+  isInvalidWorldPersonError,
   isStaleWorldError,
   requireWorldClusterContract,
+  requireWorldPersonContract,
   requireWorldScopeContract,
   worldEntryMode,
 } from "../utils/world.js";
@@ -45,19 +48,47 @@ function emptyWorldCluster(values = {}) {
   };
 }
 
+function emptyPersonCollection() {
+  return { data: null, loading: false, error: null, pageNumber: 1 };
+}
+
+function emptyWorldPerson(values = {}) {
+  return {
+    active: false,
+    personId: null,
+    collection: "RELATIONSHIPS",
+    root: null,
+    binding: null,
+    origin: null,
+    notice: null,
+    collections: {
+      RELATIONSHIPS: emptyPersonCollection(),
+      EVENTS: emptyPersonCollection(),
+    },
+    ...values,
+  };
+}
+
 export function useWorldController({ activeView, apiGet }) {
   const [world, setWorld] = useState(INITIAL_WORLD_STATE);
   const [worldCluster, setWorldCluster] = useState(() => emptyWorldCluster());
+  const [worldPerson, setWorldPerson] = useState(() => emptyWorldPerson());
   const requestRef = useRef({ generation: 0, abort: null });
   const clusterRequestsRef = useRef({
     MEMBERS: { generation: 0, abort: null },
     RELATIONSHIPS: { generation: 0, abort: null },
   });
+  const personRequestsRef = useRef({
+    RELATIONSHIPS: { generation: 0, abort: null },
+    EVENTS: { generation: 0, abort: null },
+  });
   const worldRef = useRef(world);
   const worldClusterRef = useRef(worldCluster);
+  const worldPersonRef = useRef(worldPerson);
   const previousActiveViewRef = useRef(activeView);
   worldRef.current = world;
   worldClusterRef.current = worldCluster;
+  worldPersonRef.current = worldPerson;
 
   const loadWorld = useCallback(async ({
     collection,
@@ -133,7 +164,9 @@ export function useWorldController({ activeView, apiGet }) {
 
   const applyWorldScope = useCallback((filters, ranking) => {
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
+    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
     setWorldCluster(emptyWorldCluster());
+    setWorldPerson(emptyWorldPerson());
     return loadWorld({
       collection: worldRef.current.collection,
       filters,
@@ -168,6 +201,7 @@ export function useWorldController({ activeView, apiGet }) {
       RELATIONSHIPS: { generation: clusterRequestsRef.current.RELATIONSHIPS.generation + 1, abort: null },
     };
     setWorldCluster(emptyWorldCluster({ notice: message }));
+    setWorldPerson(emptyWorldPerson());
     return loadWorld({
       collection: worldRef.current.collection,
       filters: worldRef.current.filters,
@@ -255,6 +289,8 @@ export function useWorldController({ activeView, apiGet }) {
       return recoverStaleCluster();
     }
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
+    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
+    setWorldPerson(emptyWorldPerson());
     const nextCluster = emptyWorldCluster({
       active: true,
       clusterId: clusterSummary.cluster_id,
@@ -302,19 +338,169 @@ export function useWorldController({ activeView, apiGet }) {
     preserve: true,
   }), [loadWorldClusterCollection]);
 
+  const recoverStalePerson = useCallback(async (message = "World changed, so the previous person view was closed and the authoritative scope was reloaded.") => {
+    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
+    personRequestsRef.current = {
+      RELATIONSHIPS: { generation: personRequestsRef.current.RELATIONSHIPS.generation + 1, abort: null },
+      EVENTS: { generation: personRequestsRef.current.EVENTS.generation + 1, abort: null },
+    };
+    for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
+    setWorldPerson(emptyWorldPerson({ notice: message }));
+    setWorldCluster(emptyWorldCluster());
+    return loadWorld({
+      collection: worldRef.current.collection,
+      filters: worldRef.current.filters,
+      ranking: worldRef.current.ranking,
+      pageNumber: 1,
+      preserve: false,
+    });
+  }, [loadWorld]);
+
+  const loadWorldPersonCollection = useCallback(async ({
+    collection,
+    cursor = null,
+    pageNumber = 1,
+    preserve = false,
+  } = {}) => {
+    const person = worldPersonRef.current;
+    const nextCollection = collection || person.collection || "RELATIONSHIPS";
+    if (!person.active || !person.personId || !person.binding) return null;
+    const previousRequest = personRequestsRef.current[nextCollection];
+    previousRequest.abort?.abort();
+    const abort = new AbortController();
+    const generation = previousRequest.generation + 1;
+    personRequestsRef.current[nextCollection] = { generation, abort };
+    setWorldPerson((current) => ({
+      ...current,
+      collection: nextCollection,
+      collections: {
+        ...current.collections,
+        [nextCollection]: {
+          ...current.collections[nextCollection],
+          data: preserve ? current.collections[nextCollection].data : null,
+          loading: true,
+          error: null,
+          pageNumber,
+        },
+      },
+    }));
+    try {
+      const payload = requireWorldPersonContract(await apiGet(buildWorldPersonQuery({
+        personId: person.personId,
+        collection: nextCollection,
+        filters: person.binding.filters,
+        ranking: person.binding.ranking,
+        cursor,
+        revision: person.binding.revision,
+        asOf: person.binding.asOf,
+      }), { dedupe: false, signal: abort.signal, silent: true, timeoutMs: 120_000 }), {
+        personId: person.personId,
+        collection: nextCollection,
+        revision: person.binding.revision,
+      });
+      if (personRequestsRef.current[nextCollection].generation === generation) {
+        setWorldPerson((current) => ({
+          ...current,
+          root: payload.people[0],
+          collection: nextCollection,
+          collections: {
+            ...current.collections,
+            [nextCollection]: { data: payload, loading: false, error: null, pageNumber },
+          },
+        }));
+      }
+      return payload;
+    } catch (error) {
+      if (error?.name === "AbortError") return null;
+      if (personRequestsRef.current[nextCollection].generation !== generation) return null;
+      if (isInvalidWorldPersonError(error)) return recoverStalePerson();
+      setWorldPerson((current) => ({
+        ...current,
+        collections: {
+          ...current.collections,
+          [nextCollection]: { ...current.collections[nextCollection], loading: false, error },
+        },
+      }));
+      throw error;
+    }
+  }, [apiGet, recoverStalePerson]);
+
+  const openWorldPerson = useCallback((personSummary) => {
+    const scope = worldRef.current.data;
+    const cluster = worldClusterRef.current;
+    const binding = cluster.active ? cluster.binding : (
+      scope?.graph_revision && scope?.as_of ? {
+        revision: scope.graph_revision,
+        asOf: scope.as_of,
+        filters: filtersFromEffective(scope.effective_filters),
+        ranking: scope.ranking,
+      } : null
+    );
+    if (!personSummary?.canonical_person_id || !binding) return null;
+    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
+    const nextPerson = emptyWorldPerson({
+      active: true,
+      personId: personSummary.canonical_person_id,
+      binding,
+      origin: cluster.active
+        ? { level: "CLUSTER", clusterId: cluster.clusterId }
+        : { level: "WORLD_SCOPE" },
+    });
+    worldPersonRef.current = nextPerson;
+    setWorldPerson(nextPerson);
+    return loadWorldPersonCollection({ collection: "RELATIONSHIPS" });
+  }, [loadWorldPersonCollection]);
+
+  const closeWorldPerson = useCallback(() => {
+    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
+    setWorldPerson((current) => ({ ...current, active: false, notice: null }));
+  }, []);
+
+  const selectWorldPersonCollection = useCallback((collection) => {
+    const person = worldPersonRef.current;
+    if (!person.active || !person.collections[collection]) return null;
+    setWorldPerson((current) => ({ ...current, collection }));
+    if (person.collections[collection].data) return person.collections[collection].data;
+    return loadWorldPersonCollection({ collection, pageNumber: 1, preserve: false });
+  }, [loadWorldPersonCollection]);
+
+  const nextWorldPersonPage = useCallback(() => {
+    const person = worldPersonRef.current;
+    const state = person.collections[person.collection];
+    const page = state?.data?.pagination?.[person.collection];
+    if (!page?.has_more || !page.next_cursor) return null;
+    return loadWorldPersonCollection({
+      collection: person.collection,
+      cursor: page.next_cursor,
+      pageNumber: state.pageNumber + 1,
+      preserve: false,
+    });
+  }, [loadWorldPersonCollection]);
+
+  const refreshWorldPerson = useCallback(() => loadWorldPersonCollection({
+    collection: worldPersonRef.current.collection,
+    pageNumber: 1,
+    preserve: true,
+  }), [loadWorldPersonCollection]);
+
   const invalidateWorld = useCallback((mutation = null) => {
     requestRef.current.abort?.abort();
     requestRef.current = { generation: requestRef.current.generation + 1, abort: null };
     setWorld((current) => invalidateWorldSnapshot(current, mutation));
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
+    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
     setWorldCluster((current) => emptyWorldCluster({
       notice: current.active ? "World changed, so the previous revision-bound cluster was closed." : current.notice,
+    }));
+    setWorldPerson((current) => emptyWorldPerson({
+      notice: current.active ? "World changed, so the previous scoped person view was closed." : current.notice,
     }));
   }, []);
 
   useEffect(() => () => {
     requestRef.current.abort?.abort();
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
+    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
   }, []);
 
   useEffect(() => {
@@ -348,7 +534,7 @@ export function useWorldController({ activeView, apiGet }) {
   }, [activeView, apiGet, loadWorld]);
 
   return {
-    state: { world: { ...world, cluster: worldCluster } },
+    state: { world: { ...world, cluster: worldCluster, person: worldPerson } },
     actions: {
       loadWorld,
       refreshWorld,
@@ -360,6 +546,11 @@ export function useWorldController({ activeView, apiGet }) {
       selectWorldClusterCollection,
       nextWorldClusterPage,
       refreshWorldCluster,
+      openWorldPerson,
+      closeWorldPerson,
+      selectWorldPersonCollection,
+      nextWorldPersonPage,
+      refreshWorldPerson,
       invalidateWorld,
     },
   };

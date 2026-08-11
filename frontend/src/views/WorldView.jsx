@@ -38,6 +38,7 @@ import {
 
 import { EMPTY_WORLD_FILTERS, worldPageFor } from "../utils/world.js";
 import { ClusterDrilldownView } from "./ClusterDrilldownView.jsx";
+import { WorldPersonDrilldownView } from "./WorldPersonDrilldownView.jsx";
 
 const COLLECTION_TABS = [
   { label: "Overview", value: "PEOPLE" },
@@ -57,6 +58,11 @@ export function WorldView({
   onRefreshCluster,
   onClusterCollection,
   onNextClusterPage,
+  onOpenPerson,
+  onClosePerson,
+  onRefreshPerson,
+  onPersonCollection,
+  onNextPersonPage,
 }) {
   const data = state.data;
   const [draft, setDraft] = useState(() => ({ ...EMPTY_WORLD_FILTERS }));
@@ -70,6 +76,18 @@ export function WorldView({
 
   useEffect(() => setSelected(null), [data?.graph_revision, state.collection, state.pageNumber]);
 
+  if (state.person?.active) {
+    return (
+      <WorldPersonDrilldownView
+        person={state.person}
+        onBack={onClosePerson}
+        onRefresh={onRefreshPerson}
+        onCollection={onPersonCollection}
+        onNextPage={onNextPersonPage}
+      />
+    );
+  }
+
   if (state.cluster?.active) {
     return (
       <ClusterDrilldownView
@@ -78,6 +96,7 @@ export function WorldView({
         onRefresh={onRefreshCluster}
         onCollection={onClusterCollection}
         onNextPage={onNextClusterPage}
+        onOpenPerson={onOpenPerson}
       />
     );
   }
@@ -114,6 +133,7 @@ export function WorldView({
       ) : null}
 
       {state.cluster?.notice ? <Alert color="yellow" title="Cluster view refreshed">{state.cluster.notice}</Alert> : null}
+      {state.person?.notice ? <Alert color="yellow" title="Person view refreshed">{state.person.notice}</Alert> : null}
 
       <WorldScopeControls
         data={data}
@@ -166,7 +186,7 @@ export function WorldView({
           ) : null}
         </Box>
         <Paper withBorder radius="md" className="world-inspector">
-          <WorldInspector item={selected} />
+          <WorldInspector item={selected} onOpenPerson={onOpenPerson} />
         </Paper>
       </Box>
     </Stack>
@@ -445,7 +465,7 @@ function PatternList({ patterns, onInspect, selected, compact = false }) {
   ))}</Stack>;
 }
 
-function WorldInspector({ item }) {
+function WorldInspector({ item, onOpenPerson }) {
   if (!item) return (
     <Stack gap="xs" p="sm">
       <Text fw={800}>World inspector</Text>
@@ -486,6 +506,7 @@ function WorldInspector({ item }) {
           {(explanation.limitations || []).map((limitation) => <Text key={limitation} size="xs" c="dimmed">{limitation}</Text>)}
         </Box>
       ) : null}
+      {item.type === "person" ? <Button size="xs" variant="light" rightSection={<IconArrowRight size={14} />} onClick={() => onOpenPerson(value)}>Open scoped person</Button> : null}
     </Stack>
   );
 }

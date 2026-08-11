@@ -304,6 +304,113 @@
   flex: 1 1 auto;
 }
 
+/* P10-F3 World Person: focused scoped intelligence from the frozen PERSON contract. */
+.world-person-shell {
+  min-height: 0;
+  height: 100%;
+}
+
+.world-person-back {
+  align-self: flex-start;
+}
+
+.world-person-loading {
+  min-height: 440px;
+}
+
+.world-person-header {
+  min-height: 46px;
+}
+
+.world-person-header-photo {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.world-person-header-facts {
+  padding-left: 92px;
+}
+
+.world-person-header-fact,
+.world-person-actions {
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+  font-variant-numeric: tabular-nums;
+}
+
+.world-person-workarea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 10px;
+}
+
+.world-person-primary,
+.world-person-context {
+  min-width: 0;
+  min-height: 0;
+}
+
+.world-person-collection-bar {
+  min-height: 34px;
+  margin-bottom: 8px;
+}
+
+.world-person-collection {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.world-person-collection-loading {
+  min-height: 360px;
+}
+
+.world-person-relationship-row,
+.world-person-event-row {
+  min-height: 68px;
+}
+
+.world-person-neighbor-state {
+  min-width: 150px;
+}
+
+.world-event-metrics {
+  display: flex;
+  min-width: 136px;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.world-person-clusters,
+.world-person-inspector {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.world-person-clusters {
+  max-height: 230px;
+}
+
+.world-person-inspector {
+  flex: 1 1 auto;
+}
+
+.world-person-membership {
+  padding: 7px 8px;
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: var(--mantine-radius-sm);
+  background: color-mix(in srgb, var(--sentriface-muted-surface) 82%, transparent);
+}
+
 @media (max-width: 76em) {
   .world-workarea {
     grid-template-columns: minmax(0, 1fr) 260px;
@@ -315,6 +422,10 @@
   }
 
   .world-cluster-workarea {
+    grid-template-columns: minmax(0, 1fr) 290px;
+  }
+
+  .world-person-workarea {
     grid-template-columns: minmax(0, 1fr) 290px;
   }
 }
@@ -363,6 +474,26 @@
   }
 
   .world-cluster-occurrence {
+    display: none;
+  }
+
+  .world-person-shell {
+    height: auto;
+  }
+
+  .world-person-header-facts {
+    padding-left: 0;
+  }
+
+  .world-person-workarea {
+    grid-template-columns: 1fr;
+  }
+
+  .world-person-clusters {
+    max-height: none;
+  }
+
+  .world-person-neighbor-state {
     display: none;
   }
 }

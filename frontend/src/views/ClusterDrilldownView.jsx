@@ -40,6 +40,7 @@ export function ClusterDrilldownView({
   onRefresh,
   onCollection,
   onNextPage,
+  onOpenPerson,
 }) {
   const collectionState = cluster.collections[cluster.collection];
   const data = collectionState?.data;
@@ -121,7 +122,7 @@ export function ClusterDrilldownView({
             <ClusterExplanation summary={summary} effectiveFilters={data?.effective_filters || cluster.binding?.filters} />
           </Paper>
           <Paper withBorder radius="md" className="world-cluster-inspector">
-            <ClusterSelectionInspector item={selected} />
+            <ClusterSelectionInspector item={selected} onOpenPerson={onOpenPerson} />
           </Paper>
         </Stack>
       </Box>
@@ -269,7 +270,7 @@ function ClusterExplanation({ summary, effectiveFilters }) {
   );
 }
 
-function ClusterSelectionInspector({ item }) {
+function ClusterSelectionInspector({ item, onOpenPerson }) {
   if (!item) return <Stack gap="xs" p="sm"><Text fw={800}>Selection details</Text><Text size="sm" c="dimmed">Select a member or relationship for its authoritative summary.</Text></Stack>;
   if (item.type === "person") {
     const person = item.value;
@@ -281,7 +282,8 @@ function ClusterSelectionInspector({ item }) {
         <InspectorRow label="Biometric state" value={humanize(person.biometric_state)} />
         <InspectorRow label="Analytics" value={humanize(person.analytics_state)} />
         <InspectorRow label="Allowed actions" value={person.allowed_actions.map(humanize).join(", ") || "None"} />
-        <Text size="xs" c="dimmed">Person selection is prepared for the frozen World PERSON contract in P10-F3. No profile API or person drilldown is opened in this phase.</Text>
+        <Button size="xs" variant="light" rightSection={<IconArrowRight size={14} />} onClick={() => onOpenPerson(person)}>Open scoped person</Button>
+        <Text size="xs" c="dimmed">This opens a fresh World PERSON request. The member preview is not reused as person detail.</Text>
       </Stack>
     );
   }

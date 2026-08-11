@@ -4,12 +4,15 @@ import test from "node:test";
 
 import {
   buildWorldClusterQuery,
+  buildWorldPersonQuery,
   buildWorldScopeQuery,
   filtersFromEffective,
   invalidateWorldSnapshot,
   isInvalidWorldClusterError,
+  isInvalidWorldPersonError,
   isStaleWorldError,
   requireWorldClusterContract,
+  requireWorldPersonContract,
   requireWorldScopeContract,
   worldEntryMode,
 } from "../src/utils/world.js";
@@ -51,9 +54,11 @@ function person(values = {}) {
     intelligence_summary: { relationship_count: null, relationship_evidence_count: null, activity_bucket: null },
     activity_summary: { finalized_event_count: null, activity_bucket: null, state: "NOT_LOADED" },
     ranking: { applied: false, intent: "SALIENCE", rank_position: null, ranking_reason: "Selected by cluster membership.", metrics_state: "NOT_LOADED" },
+    importance_indicators: [],
     analytics_state: "NOT_LOADED",
     allowed_actions: ["OPEN"],
     explanation: explanation(),
+    cluster_memberships: [],
     ...values,
   };
 }
@@ -154,6 +159,81 @@ function clusterPayload(collection = "MEMBERS", values = {}) {
     clusters: [clusterSummary({ member_ids: collection === "MEMBERS" ? ["person-a"] : [] })],
     relationships,
     patterns: [], events: [], evidence: [], media: [],
+    ...values,
+  };
+}
+
+function worldEvent(values = {}) {
+  return {
+    event_id: "event-a",
+    finalized_at: "2026-08-05T10:05:00Z",
+    occurred_at: "2026-08-05T10:00:00Z",
+    location: null,
+    context_summary: { available: true, event_type: "arrival" },
+    source: "camera-1",
+    participants: [],
+    participant_provenance: [],
+    participant_summary: {
+      total_count: 2,
+      returned_count: 0,
+      has_more: true,
+      provenance_total_count: 2,
+      provenance_returned_count: 0,
+      participants_state: "NOT_REQUESTED",
+      provenance_state: "NOT_REQUESTED",
+    },
+    evidence_summary: { total_count: 4, evidence_type_counts: { CO_OBSERVED: 4 } },
+    media_summary: { total_count: 1, retrieval: "EVENT_MEDIA_COLLECTION" },
+    explanation: explanation({
+      basis_type: "FINALIZED_OBSERVATION",
+      factual_factors: [{ factor: "participant_count", value: 2 }],
+      limitations: ["Media and evidence details use separate collections."],
+    }),
+    ...values,
+  };
+}
+
+function personPayload(collection = "RELATIONSHIPS", values = {}) {
+  const root = person({
+    display_name: "Ananya Rao",
+    analytics_state: "LOADED",
+    intelligence_summary: { relationship_count: 1, relationship_evidence_count: 4, activity_bucket: "MEDIUM" },
+    activity_summary: { finalized_event_count: 3, activity_bucket: "MEDIUM", state: "LOADED" },
+    ranking: { applied: false, intent: "SALIENCE", rank_position: null, ranking_reason: "Requested person focus; global ranking was not used.", metrics_state: "LOADED" },
+    cluster_memberships: [{
+      cluster_id: "cluster:scope-a",
+      graph_revision: "opaque-g7",
+      member_count: 2,
+      grouping_algorithm: "EVIDENCE_CONNECTED_COMPONENT",
+      algorithm_version: "connected-evidence-components-v1",
+    }],
+  });
+  const neighbor = person({ canonical_person_id: "person-b", display_name: "B", analytics_state: "NOT_LOADED" });
+  const relationships = collection === "RELATIONSHIPS" ? [relationship()] : [];
+  const events = collection === "EVENTS" ? [worldEvent()] : [];
+  return {
+    contract: "sentriface.world-graph",
+    contract_version: 2,
+    requested_detail_level: "PERSON",
+    returned_detail_level: "PERSON",
+    graph_revision: "opaque-g7",
+    as_of: "2026-08-11T12:00:00+00:00",
+    focus: { type: "PERSON", id: "person-a" },
+    scope_totals: { people: 1, relationships: 1, clusters: 0, finalized_events: 3 },
+    effective_filters: { recent_activity: "LAST_30_DAYS", missing_location: "INCLUDE" },
+    limits: { people: 25, relationships: 50, events: 25 },
+    pagination: {
+      RELATIONSHIPS: collection === "RELATIONSHIPS"
+        ? page("RELATIONSHIPS", 1)
+        : { ...page("RELATIONSHIPS", 1), returned_count: 0, has_more: true, truncated: true, truncation_reason: "collection_not_requested" },
+      EVENTS: collection === "EVENTS"
+        ? { collection: "EVENTS", total_count: 3, returned_count: 1, has_more: true, next_cursor: "events-next", truncated: true, truncation_reason: "backend_limit:1" }
+        : { ...page("EVENTS", 3), returned_count: 0, has_more: true, truncated: true, truncation_reason: "collection_not_requested" },
+    },
+    people: collection === "RELATIONSHIPS" ? [root, neighbor] : [root],
+    relationships,
+    events,
+    clusters: [], patterns: [], evidence: [], media: [],
     ...values,
   };
 }
@@ -330,7 +410,7 @@ test("Cluster view renders header, explanation, member states, relationships, an
   assert.match(view, /relationship\.evidence_type_counts/);
   assert.match(view, /relationship\.strength_basis/);
   assert.match(view, /Member navigation intent/);
-  assert.match(view, /No profile API or person drilldown is opened/);
+  assert.match(view, /fresh World PERSON request/);
   assert.match(view, /Next authoritative page/);
   assert.doesNotMatch(view, /inferCluster|deriveMembers|dedupeRelationships|combineRelationships|person-associations|\/api\/person/);
 });
@@ -366,4 +446,146 @@ test("Cluster stale revision and invalid ID close drilldown and reload WORLD_SCO
   assert.match(controller, /recoverStaleCluster[\s\S]*loadWorld\(\{/);
   assert.match(controller, /refreshWorldCluster[\s\S]*preserve: true/);
   assert.doesNotMatch(controller, /setInterval|visibilitychange|addEventListener\(["']focus/);
+});
+
+test("World Person requests bind canonical focus, revision, as_of, effective scope, and collection", () => {
+  const request = new URL(buildWorldPersonQuery({
+    personId: "person-a",
+    collection: "EVENTS",
+    revision: "opaque-g7",
+    asOf: "2026-08-11T12:00:00+00:00",
+    ranking: "RECENT_ACTIVITY",
+    filters: { recent_activity: "LAST_30_DAYS", locations: ["Dock"], lifecycle: ["ACTIVE"], missing_location: "EXCLUDE" },
+    cursor: "events-next",
+  }), "http://localhost");
+  assert.equal(request.searchParams.get("level"), "PERSON");
+  assert.equal(request.searchParams.get("focus_type"), "PERSON");
+  assert.equal(request.searchParams.get("focus_id"), "person-a");
+  assert.equal(request.searchParams.get("collection"), "EVENTS");
+  assert.equal(request.searchParams.get("revision"), "opaque-g7");
+  assert.equal(request.searchParams.get("as_of"), "2026-08-11T12:00:00+00:00");
+  assert.equal(request.searchParams.get("recent_activity"), "LAST_30_DAYS");
+  assert.deepEqual(request.searchParams.getAll("location"), ["Dock"]);
+  assert.equal(request.searchParams.get("cursor"), "events-next");
+});
+
+test("World Person contract validates focused intelligence and independent relationship and event pages", () => {
+  const relationships = requireWorldPersonContract(personPayload("RELATIONSHIPS"), {
+    personId: "person-a", collection: "RELATIONSHIPS", revision: "opaque-g7",
+  });
+  assert.equal(relationships.people[0].activity_summary.finalized_event_count, 3);
+  assert.equal(relationships.people[0].cluster_memberships[0].cluster_id, "cluster:scope-a");
+  assert.equal(relationships.people[1].analytics_state, "NOT_LOADED");
+  assert.equal(relationships.relationships[0].directionality, "UNDIRECTED");
+
+  const events = requireWorldPersonContract(personPayload("EVENTS"), {
+    personId: "person-a", collection: "EVENTS", revision: "opaque-g7",
+  });
+  assert.equal(events.events[0].location, null);
+  assert.equal(events.events[0].participant_summary.participants_state, "NOT_REQUESTED");
+  assert.equal(events.pagination.EVENTS.truncated, true);
+  assert.equal(events.pagination.EVENTS.next_cursor, "events-next");
+});
+
+test("World Person contract fails closed for missing semantics and changed canonical identity", () => {
+  assert.throws(() => requireWorldPersonContract(personPayload("EVENTS", {
+    people: [person({ importance_indicators: undefined })],
+  }), { personId: "person-a", collection: "EVENTS", revision: "opaque-g7" }), /Invalid World person contract/);
+  assert.throws(() => requireWorldPersonContract(personPayload("EVENTS", {
+    people: [person({
+      analytics_state: "LOADED",
+      intelligence_summary: { relationship_count: undefined, relationship_evidence_count: 4 },
+      activity_summary: { finalized_event_count: 3, state: "LOADED" },
+    })],
+  }), { personId: "person-a", collection: "EVENTS", revision: "opaque-g7" }), /Invalid loaded World person analytics contract/);
+  assert.throws(() => requireWorldPersonContract(personPayload("EVENTS", {
+    events: [worldEvent({ media_summary: undefined })],
+  }), { personId: "person-a", collection: "EVENTS", revision: "opaque-g7" }), /Invalid World event summary contract/);
+  assert.equal(isInvalidWorldPersonError({ status: 404, message: "World person is unavailable in the effective scope" }), true);
+  assert.throws(() => requireWorldPersonContract(personPayload("RELATIONSHIPS", {
+    people: [person({ canonical_person_id: "person-survivor", cluster_memberships: [] })],
+  }), { personId: "person-a", collection: "RELATIONSHIPS", revision: "opaque-g7" }), /canonical identity changed/);
+});
+
+test("WORLD_SCOPE and CLUSTER person intents issue fresh World PERSON reads with retained origins", async () => {
+  const [scopeView, clusterView, controller, app] = await Promise.all([
+    read("../src/views/WorldView.jsx"),
+    read("../src/views/ClusterDrilldownView.jsx"),
+    read("../src/hooks/useWorldController.js"),
+    read("../src/SentriFaceApp.jsx"),
+  ]);
+  assert.match(scopeView, /Open scoped person/);
+  assert.match(scopeView, /onOpenPerson\(value\)/);
+  assert.match(clusterView, /onOpenPerson\(person\)/);
+  assert.match(controller, /buildWorldPersonQuery/);
+  assert.match(controller, /origin: cluster\.active[\s\S]*level: "CLUSTER"[\s\S]*level: "WORLD_SCOPE"/);
+  assert.match(controller, /return loadWorldPersonCollection\(\{ collection: "RELATIONSHIPS" \}\)/);
+  assert.match(app, /onOpenPerson=\{guarded\(actions\.openWorldPerson\)\}/);
+  assert.doesNotMatch(controller, /personSummary[\s\S]{0,220}root:/);
+});
+
+test("World Person view renders scoped header, authoritative memberships, relationships, and event intent", async () => {
+  const view = await read("../src/views/WorldPersonDrilldownView.jsx");
+  assert.match(view, /data-world-level="PERSON"/);
+  assert.match(view, /person\.lifecycle_state/);
+  assert.match(view, /person\.identity_state/);
+  assert.match(view, /person\.biometric_state/);
+  assert.match(view, /person\.allowed_actions/);
+  assert.match(view, /person\.analytics_state === "LOADED"/);
+  assert.match(view, /Scoped analytics not loaded/);
+  assert.match(view, /root\.cluster_memberships/);
+  assert.match(view, /revision-bound memberships/);
+  assert.match(view, /not organizations or affiliations/);
+  assert.match(view, /relationship\.directionality/);
+  assert.match(view, /relationship\.strength_basis/);
+  assert.match(view, /relationship\.evidence_type_counts/);
+  assert.match(view, /Neighbor analytics/);
+  assert.match(view, /event\.participant_summary\.total_count/);
+  assert.match(view, /event\.evidence_summary\.total_count/);
+  assert.match(view, /event\.media_summary\.total_count/);
+  assert.match(view, /Location not recorded/);
+  assert.match(view, /Event navigation intent/);
+  assert.match(view, /Participants, evidence, and media are not loaded/);
+  assert.match(view, /Next authoritative page/);
+  assert.doesNotMatch(view, /inferCluster|deriveMembership|calculateSightings|calculateRank|dedupeRelationships|combineRelationships|\/api\/person|\/api\/observations/);
+});
+
+test("World Person collections keep independent lifecycle, replacement pagination, refresh, and stale recovery", async () => {
+  const controller = await read("../src/hooks/useWorldController.js");
+  assert.match(controller, /RELATIONSHIPS: emptyPersonCollection\(\)/);
+  assert.match(controller, /EVENTS: emptyPersonCollection\(\)/);
+  assert.match(controller, /\[nextCollection\]: \{ data: payload, loading: false, error: null, pageNumber \}/);
+  assert.match(controller, /page = state\?\.data\?\.pagination\?\.\[person\.collection\]/);
+  assert.match(controller, /cursor: page\.next_cursor/);
+  assert.match(controller, /refreshWorldPerson[\s\S]*preserve: true/);
+  assert.match(controller, /isInvalidWorldPersonError\(error\)[\s\S]*recoverStalePerson/);
+  assert.match(controller, /recoverStalePerson[\s\S]*setWorldCluster\(emptyWorldCluster\(\)\)[\s\S]*loadWorld\(\{/);
+  assert.match(controller, /closeWorldPerson[\s\S]*active: false/);
+  assert.doesNotMatch(controller, /mergePersonPages|\.concat\(|push\(\.\.\.payload|setInterval|visibilitychange|addEventListener\(["']focus/);
+});
+
+test("World Person empty collections and totals remain backend-owned", async () => {
+  const emptyRelationships = personPayload("RELATIONSHIPS", {
+    relationships: [],
+    people: [personPayload("RELATIONSHIPS").people[0]],
+    pagination: {
+      RELATIONSHIPS: page("RELATIONSHIPS", 0),
+      EVENTS: { ...page("EVENTS", 3), returned_count: 0, has_more: true, truncated: true, truncation_reason: "collection_not_requested" },
+    },
+  });
+  assert.equal(requireWorldPersonContract(emptyRelationships, {
+    personId: "person-a", collection: "RELATIONSHIPS", revision: "opaque-g7",
+  }).pagination.RELATIONSHIPS.total_count, 0);
+  const emptyEvents = personPayload("EVENTS", {
+    events: [],
+    pagination: {
+      RELATIONSHIPS: { ...page("RELATIONSHIPS", 1), returned_count: 0, has_more: true, truncated: true, truncation_reason: "collection_not_requested" },
+      EVENTS: page("EVENTS", 0),
+    },
+  });
+  assert.equal(requireWorldPersonContract(emptyEvents, {
+    personId: "person-a", collection: "EVENTS", revision: "opaque-g7",
+  }).pagination.EVENTS.total_count, 0);
+  const view = await read("../src/views/WorldPersonDrilldownView.jsx");
+  assert.doesNotMatch(view, /relationships\.length[^\n]*relationship_count|events\.length[^\n]*finalized_event_count|cluster_memberships\s*=|reduce\([^\n]*(events|relationships)/);
 });
