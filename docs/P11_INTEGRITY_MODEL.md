@@ -1,6 +1,6 @@
 # P11 integrity authority model, checker, and graph rebuild
 
-Status: **P11-A1 corrected and refroze `P11-NOTE-002`; P11-A/B remain complete and frozen; P11C-R01 is implemented; P11C-R02 is unimplemented.** The R02 safety stop exposed a false-positive occurrence model, now corrected without changing note mutation/history semantics or expanding missing-occurrence coverage. `P11_STRUCTURED_REPAIR_DESIGN.md` records the fixed two-entry catalog and the finding-bound R01 implementation. It does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
+Status: **P11-C2A is complete; the complete note → mention → evidence → graph authority model is refrozen; P11-A/B remain complete; P11C-R01 is implemented; P11C-R02 remains unimplemented.** The two R02 safety stops are retained in the architecture record. P11-A1 corrected the occurrence-history contradiction. P11-C2A corrected the dependent evidence-history and shared graph-authority contradictions without changing normal note/evidence mutations, schema, API, or missing-occurrence coverage. `P11_STRUCTURED_REPAIR_DESIGN.md` records the refrozen two-entry catalog and R02 reachability proof. This does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
 
 ## State-authority map
 
@@ -16,7 +16,7 @@ The classification is verified against schema v28, storage writes, services, tri
 | `identity_corrections` | C — Historical / immutable | Ordered append-only transformations. Interpretation applies corrections before canonical resolution. |
 | completed `photo_reviews` and `photo_review_faces` | C — Historical / immutable | Explicit final decisions and completion linkage. `IN_PROGRESS` rows/staged sources are D until atomically completed; cancelled rows create no identity/graph truth. |
 | `pending_additions`, `init_sessions`, `init_faces`, `init_groups`, exclusions | D — Ephemeral / non-authoritative | Persisted staging/proposal state. It cannot create identity or graph truth before finalization. |
-| active and retired `relationship_evidence` | A — Authoritative | Independent evidence provenance/revisions are graph truth. Retirement changes current support without deleting history. A manual assertion is currently its `MANUAL_ASSOCIATION` evidence row; no second manual-assertion table exists. |
+| active and retired `relationship_evidence` | A — Authoritative | Independent evidence provenance/revisions are graph truth. Active rows are current support. Fully deactivated rows are immutable historical provenance and need not mirror a source occurrence that is current again or still current. A manual assertion is currently its `MANUAL_ASSOCIATION` evidence row; no second manual-assertion table exists. |
 | `graph_connections` | B — Derived / rebuildable | Deterministic aggregate of active evidence after canonical resolution and self-edge suppression. It is the P11-A `SAFE_REBUILD` state. |
 | `graph_state` revision | B — Derived / rebuildable | Opaque invalidation metadata, not evidence or an operation count. P11-A does not infer a “correct” numeric revision. |
 | `notes` identity/lifecycle | A — Authoritative | Stable note identity, owner/subject, and active/retired state. |
@@ -58,7 +58,7 @@ The executable registry is `sentriface.integrity.INTEGRITY_INVARIANTS`. Every fi
 | `P11-OBSERVATION-002` | Observation / Error | Raw keys and current effective participants obey uniqueness/existence rules. | Manual review |
 | `P11-OBSERVATION-003` | Observation / Error | Observation media has a non-empty ID and durable database provenance. | Manual review |
 | `P11-REVIEW-001` | Review / Critical | Completed decisions, journal result, optional finalized observation, and completion fields agree. | Manual review |
-| `P11-EVIDENCE-001` | Evidence / Error | Type/source/direction/raw endpoints/active fields and typed source are coherent. | Manual review |
+| `P11-EVIDENCE-001` | Evidence / Error | Type/source/direction/raw endpoints/lifecycle provenance and typed source are coherent. An active `NOTE_REFERENCE` requires an active occurrence on an active note; a fully retired evidence revision remains valid history regardless of whether that occurrence is current now. | Manual review |
 | `P11-EVIDENCE-002` | Evidence / Error | Active evidence resolves legally and co-observation endpoints remain effective participants. Canonically collapsed self-evidence is legal history. | Manual review |
 | `P11-GRAPH-001` | Projection / Error | Stored graph exactly equals the active-evidence aggregate; missing, extra, malformed, wrong-support, and self-edge rows fail. | Safe rebuild |
 | `P11-NOTE-001` | Note / Error | Every note has contiguous revisions and valid revision mentions. | Manual review |
@@ -80,7 +80,7 @@ Individual SQL failures become findings and later checks continue when safe. Fin
 
 Set-based joins cover foreign keys, finalization, review state, evidence sources, notes, journal linkage, and known results. Evidence is streamed. Canonical people, corrections, effective-participant working sets, and unique expected graph aggregates are request-local memory bounded by normalized person/correction/edge cardinality; no persistent cache or integrity table is created. A 500-person fixture confirms the SQL statement count does not grow with person count (76–86 traced read statements depending on empty-database `integrity_check` internals).
 
-Expected graph state is calculated without mutation. Active evidence is canonically resolved, undirected endpoints are ordered, collapsed self-links are suppressed, and remaining rows group by endpoints/type/direction with exact count, evidence-type set, and latest time. Missing, extra, and unequal stored rows are separately reported.
+Expected graph state is calculated without mutation. Only active evidence is canonically resolved, undirected endpoints are ordered, collapsed self-links are suppressed, and remaining rows group by endpoints/type/direction with exact count, evidence-type set, and latest time. Retired evidence is validated as history but never projected. For `NOTE_REFERENCE`, the shared authority validates per-row provenance plus current active cardinality per occurrence; it does not require every historical revision to mirror current source state. Missing, extra, and unequal stored rows are separately reported.
 
 ### P11-A1 note-occurrence correction and refreeze
 
@@ -89,6 +89,64 @@ The original `P11-NOTE-002` implementation compared every occurrence row indepen
 The refrozen checker first validates each occurrence's own state. Active rows have no retirement fields. Inactive historical rows require a retirement revision belonging to the same note at or after their creation revision, plus retirement operation and timestamp. It then groups only existing occurrence rows by raw note/person identity and compares current active cardinality with the immutable latest revision: one active occurrence for a required active non-self mention, otherwise none. Inactive historical rows do not contribute to current cardinality. No row ID or timestamp ordering is used to select a current occurrence.
 
 Coverage remains deliberately unchanged when the latest revision mentions a person for whom no `note_mentions` occurrence row exists: `P11-NOTE-002` still emits no finding. `P11-NOTE-003` is unchanged and continues to require exactly one matching active directed `NOTE_REFERENCE` only for a current active non-self occurrence. Regression tests prove valid remove/re-add cycles are clean, malformed provenance and wrong active cardinality still fail, historical evidence stays inactive, and the frozen R02 append/retire result can theoretically clear its finding without rewriting history.
+
+### P11-C2A consolidated note/evidence/graph authority model
+
+P11-C2A proved the lifecycle model from the one-way schema triggers and normal storage commands. `note_revisions` and `note_revision_mentions` are immutable snapshots. A `note_mentions` row has immutable identity/creation provenance and may only transition active → inactive; re-add creates another occurrence. A `relationship_evidence` row likewise has immutable identity/source/endpoints/creation provenance and may only transition active → inactive; replacement support is another evidence revision. Therefore retired rows describe completed history, while active-row cardinality describes current truth.
+
+Authority is split as follows:
+
+| Layer | Historical authority | Current authority | Derived current state |
+| --- | --- | --- | --- |
+| Note | every immutable ordered revision and exact `note_revision_mentions` snapshot | latest revision plus note lifecycle | rendered current note |
+| Occurrence | every occurrence row and its creation/retirement provenance | active rows per existing raw note/person group | none |
+| `NOTE_REFERENCE` | every evidence revision and its creation/deactivation provenance | active evidence rows per current occurrence | effective/canonical endpoints |
+| Graph | raw historical evidence remains queryable | current active evidence only | `graph_connections` aggregate and opaque graph revision |
+
+Current cardinality ownership is intentionally non-overlapping. `P11-NOTE-002` requires one active occurrence for each existing group required by an active latest revision and zero otherwise. `P11-NOTE-003` requires one matching active directed `REFERENCES`/`NOTE_REFERENCE` row for each active non-self occurrence on an active note and zero active rows for every other occurrence. `P11-EVIDENCE-001` validates each evidence row's type, source, endpoints, direction, relationship type, and lifecycle provenance; it rejects active evidence without a current active source but does not reinterpret a fully retired row as current support. `P11-EVIDENCE-002` validates only current active evidence under correction-before-canonical resolution and retains legal canonical self-collapse as suppressed history. `P11-GRAPH-001` owns exact stored-versus-expected projection equality.
+
+The complete state table is:
+
+| Latest revision / note | Occurrence history in an existing group | Expected active occurrence | Validity / owner |
+| --- | --- | ---: | --- |
+| active note mentions A | one active | 1 | valid — `P11-NOTE-002` |
+| active note mentions A | retired + newer active, or several retired + one active | 1 | valid; retired rows remain history |
+| active note mentions A | retired rows only | 1 | invalid current cardinality — `P11-NOTE-002` |
+| active note mentions A | duplicate active | 1 | invalid current cardinality — `P11-NOTE-002` |
+| active note does not mention A | retired rows only | 0 | valid history |
+| active note does not mention A | stale active row | 0 | invalid current cardinality — `P11-NOTE-002` |
+| retired note | all occurrences retired | 0 | valid history |
+| any | inactive row missing same-note retirement revision/operation/time | as above | invalid row provenance — `P11-NOTE-002` |
+| active note mentions A | no occurrence group ever existed | not evaluated | preserved checker-coverage boundary |
+
+| Source occurrence/note | Evidence history | Expected active `NOTE_REFERENCE` | Validity / owner |
+| --- | --- | ---: | --- |
+| active non-self occurrence on active note | one active | 1 | valid |
+| active non-self occurrence on active note | retired + newer active, or many retired + one active | 1 | valid; retired revisions remain history |
+| active non-self occurrence on active note | retired only / zero active | 1 | invalid current cardinality — `P11-NOTE-003` |
+| active non-self occurrence on active note | duplicate active | 1 | invalid current cardinality — `P11-NOTE-003` |
+| inactive occurrence or retired note | retired evidence only | 0 | valid history |
+| inactive occurrence or retired note | stale active evidence | 0 | invalid source/current state — `P11-EVIDENCE-001`, cardinality consequence in `P11-NOTE-003` |
+| any | retired row with missing deactivation operation/time or non-committed journal linkage | unchanged | invalid provenance — `P11-EVIDENCE-001` and/or `P11-JOURNAL-003` |
+| any | missing source, wrong endpoints, wrong source/type, non-directed, or non-`REFERENCES` note evidence | unchanged | invalid row provenance — `P11-EVIDENCE-001` |
+
+| Active support after canonical resolution | Expected graph | Revision effect of a future R02 reconciliation |
+| --- | --- | --- |
+| `NOTE_REFERENCE` only, distinct effective endpoints | directed `REFERENCES` edge | advance once when active evidence changes |
+| `NOTE_REFERENCE` plus `CO_OBSERVED` and/or `MANUAL_ASSOCIATION` | independent typed support remains aggregated | advance once; retiring note support cannot erase other types |
+| endpoints collapse canonically | no self-edge; raw evidence remains | advance once for active-evidence provenance change even if projection stays empty |
+| retired `NOTE_REFERENCE` only | no note-derived edge | no retired row contributes |
+| correction → merge or merge → correction | correction applies to observation authority before canonical resolution; note raw endpoints use canonical resolution | exact shared projection remains rebuildable |
+
+The scoped contradiction register is closed:
+
+1. The former `P11-NOTE-002` row-by-row latest-membership rule rejected valid retired occurrences. P11-A1 corrected it to current group cardinality.
+2. The former `P11-EVIDENCE-001` equality `evidence.active == occurrence.active && note.active` rejected valid retired evidence revisions attached to a current occurrence. P11-C2A now applies current-source compatibility only to active evidence; retired rows retain strict provenance validation.
+3. The shared `_expected_graph_connections` repeated the same row equality and blocked normal projection validation, P11-B authority calculation, and the frozen R02 replacement result. It now validates historical rows independently, enforces current `NOTE_REFERENCE` cardinality per occurrence, and projects only active evidence.
+4. The former frozen R02 precondition rejected every `P11-EVIDENCE-001` finding, yet a stale active `NOTE_REFERENCE` on a proven inactive occurrence necessarily owns that finding and was explicitly required in the R02 case matrix. The refrozen model admits only that exact stale-active/inactive-source shape inside R02; all malformed source/type/endpoint/direction/retirement and all `P11-EVIDENCE-002` findings still refuse.
+5. Removing the old equality without a replacement cardinality guard would have allowed the generic evidence-deactivation path to commit an unsupported active occurrence. The shared authority now rejects that intermediate/final state, so normal mutation safety is unchanged.
+
+`P11-NOTE-003` and `P11-EVIDENCE-002` contained no history/current contradiction and were not weakened. `CO_OBSERVED` source/finalization/effective-participant rules and `MANUAL_ASSOCIATION` lifecycle/projection rules remain unchanged. Evidence retirement proof in schema v28 is the inactive flag together with non-null `deactivated_operation_id` and `deactivated_at`, foreign-key linkage, and a committed/reverted journal result; there is no replacement-link column to invent. Occurrence retirement additionally requires a same-note retirement revision at or after creation plus operation and timestamp.
 
 ## P11-B explicit graph projection rebuild
 
@@ -119,9 +177,9 @@ These are architectural boundaries, not P11-A blockers. They constrain later rep
 
 ## Remaining P11 sequence
 
-1. **P11-A / P11-A1 — Read-only integrity checker:** complete and refrozen after correcting `P11-NOTE-002` historical/current occurrence semantics.
+1. **P11-A / P11-A1 / P11-C2A — Read-only integrity semantics:** complete and refrozen after correcting occurrence history, evidence revision history, and shared graph-authority current-cardinality semantics.
 2. **P11-B — Deterministic graph projection rebuild:** complete; explicit preflight-gated, atomic, journaled, revision-aware replacement with no authority rewrite.
 3. **P11-C1 — Structured repair authority audit/catalog/design:** complete and frozen. The only commands admitted are restoring an otherwise-valid archived terminal merge survivor and reconciling diagnosed note occurrence/reference state from immutable revision authority.
-4. **P11-C2 / R01:** implemented as explicit Python/service invocation with typed finding preconditions, in-transaction revalidation, immutable repair journaling, shared lifecycle mutation, exact projection/revision validation, and full P11-A post-check. **R02 remains unimplemented and may restart against the refrozen checker contract.**
+4. **P11-C2 / R01:** implemented as explicit Python/service invocation with typed finding preconditions, in-transaction revalidation, immutable repair journaling, shared lifecycle mutation, exact projection/revision validation, and full P11-A post-check. **R02 remains unimplemented; all frozen R02 cases are now reachable under the consolidated refrozen authority model without history rewrite, so R02 is safe to implement in a separate task.**
 5. **P11-D — Revert execution:** future; operation-specific preconditions/inverse data and atomic journaled execution.
 6. **P11-E — Integrity/recovery UI and acceptance:** future; explicit invocation and factual reports, no polling/background scan.

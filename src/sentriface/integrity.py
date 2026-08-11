@@ -105,7 +105,7 @@ INTEGRITY_INVARIANTS: tuple[IntegrityInvariant, ...] = (
     _invariant("P11-OBSERVATION-002", "OBSERVATION", IntegritySeverity.ERROR, "observation_participants plus corrections/canonical mapping", "Raw participant keys are unique and current effective participants are unique existing identities.", "observation and duplicate/effective person IDs", FutureIntegrityHandling.MANUAL_REVIEW),
     _invariant("P11-OBSERVATION-003", "OBSERVATION", IntegritySeverity.ERROR, "observation_media and durable media provenance", "Each observation media row retains a non-empty identifier and a durable database provenance reference.", "observation ID, media ID and path", FutureIntegrityHandling.MANUAL_REVIEW),
     _invariant("P11-REVIEW-001", "REVIEW", IntegritySeverity.CRITICAL, "photo_reviews, face decisions, observations and journal", "Completed reviews have complete decisions and agree with their committed operation and optional finalized observation; other reviews have no completion result.", "review, face, observation and operation IDs", FutureIntegrityHandling.MANUAL_REVIEW),
-    _invariant("P11-EVIDENCE-001", "GRAPH_EVIDENCE", IntegritySeverity.ERROR, "relationship_evidence and typed source records", "Evidence types, source kinds, directionality, endpoint ordering, lifecycle fields and source references are coherent.", "evidence ID, raw endpoints and source ID", FutureIntegrityHandling.MANUAL_REVIEW),
+    _invariant("P11-EVIDENCE-001", "GRAPH_EVIDENCE", IntegritySeverity.ERROR, "relationship_evidence and typed source records", "Evidence types, source kinds, directionality, endpoint ordering, lifecycle fields and source references are coherent; active NOTE_REFERENCE rows require a current active source occurrence, while fully retired rows remain historical provenance.", "evidence ID, raw endpoints and source ID", FutureIntegrityHandling.MANUAL_REVIEW),
     _invariant("P11-EVIDENCE-002", "GRAPH_EVIDENCE", IntegritySeverity.ERROR, "active relationship_evidence plus correction/canonical interpretation", "Active evidence resolves to legal effective endpoints; canonical self-links remain historical evidence but are not projected.", "evidence ID and effective endpoints", FutureIntegrityHandling.MANUAL_REVIEW),
     _invariant("P11-GRAPH-001", "GRAPH_PROJECTION", IntegritySeverity.ERROR, "active relationship_evidence", "graph_connections exactly equals the deterministic aggregate of active evidence after canonical resolution and self-edge suppression.", "edge key and expected/stored aggregate", FutureIntegrityHandling.SAFE_REBUILD),
     _invariant("P11-NOTE-001", "NOTE", IntegritySeverity.ERROR, "notes, note_revisions and note_revision_mentions", "Every note has contiguous immutable revisions and revision mention references belong to existing revisions and persons.", "note/revision/person IDs", FutureIntegrityHandling.MANUAL_REVIEW),
@@ -596,9 +596,13 @@ class ReadOnlyIntegrityChecker:
                         or row["target_person_id"] != row["mention_person_id"]
                     ):
                         problems.append("endpoints do not match note mention")
-                    should_be_active = bool(row["mention_active"]) and row["note_status"] == "ACTIVE"
-                    if bool(row["active"]) != should_be_active:
-                        problems.append("active state does not match note mention")
+                    if row["relationship_type"] != "REFERENCES":
+                        problems.append("invalid relationship type for note reference")
+                    if bool(row["active"]) and not (
+                        bool(row["mention_active"])
+                        and row["note_status"] == "ACTIVE"
+                    ):
+                        problems.append("active evidence has no current active note mention source")
             if problems:
                 self._add("P11-EVIDENCE-001", "; ".join(problems), entities={"evidence_id": row["evidence_id"], "source_entity_id": row["source_entity_id"]}, evidence={"evidence_type": row["evidence_type"], "source_person_id": row["source_person_id"], "target_person_id": row["target_person_id"], "active": row["active"]})
 

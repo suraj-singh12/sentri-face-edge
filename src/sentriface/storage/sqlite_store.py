@@ -8630,11 +8630,29 @@ def _expected_graph_connections(
             """
         )
     }
+    note_reference_state: dict[str, dict[str, int]] = {
+        mention_id: {"active": 0, "matching_active": 0}
+        for mention_id in note_mentions
+    }
     active_evidence_count = 0
     for row in conn.execute(
         "SELECT * FROM relationship_evidence ORDER BY created_at, evidence_id"
     ):
         evidence_id = str(row["evidence_id"])
+        active_shape = (
+            bool(row["active"])
+            and row["deactivated_operation_id"] is None
+            and row["deactivated_at"] is None
+        )
+        retired_shape = (
+            not bool(row["active"])
+            and row["deactivated_operation_id"] is not None
+            and row["deactivated_at"] is not None
+        )
+        if not (active_shape or retired_shape):
+            errors.append(
+                f"Evidence {evidence_id} has invalid active/deactivation provenance"
+            )
         if row["evidence_type"] == "CO_OBSERVED":
             observation_id = str(row["source_entity_id"])
             observation_status = observation_statuses.get(observation_id)
@@ -8660,18 +8678,42 @@ def _expected_graph_connections(
             if not endpoints_valid:
                 errors.append(f"Evidence {evidence_id} endpoints are not observation participants")
         elif row["evidence_type"] == "NOTE_REFERENCE":
-            mention = note_mentions.get(str(row["source_entity_id"]))
+            mention_id = str(row["source_entity_id"])
+            mention = note_mentions.get(mention_id)
             if mention is None:
                 errors.append(f"Evidence {evidence_id} has a missing note mention source")
             else:
+                state = note_reference_state[mention_id]
+                if bool(row["active"]):
+                    state["active"] = int(state["active"]) + 1
                 if (
                     row["source_person_id"] != mention["owner_person_id"]
                     or row["target_person_id"] != mention["referenced_person_id"]
                 ):
                     errors.append(f"Evidence {evidence_id} endpoints do not match its note mention")
-                should_be_active = bool(mention["active"]) and mention["status"] == "ACTIVE"
-                if bool(row["active"]) != should_be_active:
-                    errors.append(f"Evidence {evidence_id} active state does not match its note")
+                matching_shape = (
+                    row["source_person_id"] == mention["owner_person_id"]
+                    and row["target_person_id"] == mention["referenced_person_id"]
+                    and row["relationship_type"] == "REFERENCES"
+                    and row["directionality"] == "DIRECTED"
+                )
+                if bool(row["active"]) and matching_shape:
+                    state["matching_active"] = int(state["matching_active"]) + 1
+                if row["relationship_type"] != "REFERENCES":
+                    errors.append(
+                        f"Evidence {evidence_id} has an invalid NOTE_REFERENCE relationship type"
+                    )
+                if row["directionality"] != "DIRECTED":
+                    errors.append(
+                        f"Evidence {evidence_id} has invalid NOTE_REFERENCE directionality"
+                    )
+                if bool(row["active"]) and not (
+                    bool(mention["active"])
+                    and mention["status"] == "ACTIVE"
+                ):
+                    errors.append(
+                        f"Evidence {evidence_id} has no current active note mention source"
+                    )
         if not bool(row["active"]):
             continue
         active_evidence_count += 1
@@ -8699,6 +8741,21 @@ def _expected_graph_connections(
         aggregate["count"] += 1
         aggregate["types"].add(str(row["evidence_type"]))
         aggregate["last"] = max(aggregate["last"], str(row["created_at"]))
+    for mention_id, mention in sorted(note_mentions.items()):
+        state = note_reference_state[mention_id]
+        expected_active = 1 if (
+            bool(mention["active"])
+            and mention["status"] == "ACTIVE"
+            and mention["owner_person_id"] != mention["referenced_person_id"]
+        ) else 0
+        actual_active = int(state["active"])
+        matching_active = int(state["matching_active"])
+        if actual_active != expected_active or matching_active != expected_active:
+            errors.append(
+                "NOTE_REFERENCE current active cardinality disagrees for mention "
+                f"{mention_id}: expected {expected_active}, matching {matching_active}, "
+                f"all active {actual_active}"
+            )
     connections = [
         GraphConnection(
             source_person_id=key[0],

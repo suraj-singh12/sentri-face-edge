@@ -10,7 +10,7 @@ Use it with, rather than instead of, the other architecture documents:
 - `ARCHITECTURE_STATE.md` records the concise implementation checkpoint.
 - `IMPLEMENTATION_PLAN.md` records phase order, completion, and remaining gates.
 
-This explanation covers the architecture implemented and frozen from P0 through P10 as of 2026-08-11, plus the completed P11-A/P11-A1 read-only integrity checker, P11-B explicit graph projection rebuild, and P11C-R01 archived canonical-survivor repair. P11-A1 corrected and refroze note occurrence integrity after the R02 safety stop; R02 itself remains unimplemented. P11-C1 fixes the two-entry catalog and execution design in `P11_STRUCTURED_REPAIR_DESIGN.md`; P11-D revert and P11-E recovery UI remain deferred.
+This explanation covers the architecture implemented and frozen from P0 through P10 as of 2026-08-11, plus the completed P11-A/P11-A1/P11-C2A integrity semantics, P11-B explicit graph projection rebuild, and P11C-R01 archived canonical-survivor repair. P11-A1 corrected note occurrence history after the first R02 safety stop. P11-C2A completed and refroze the dependent note-evidence-graph lifecycle after the second safety stop; R02 itself remains unimplemented. P11-C1 fixes the two-entry catalog and execution design in `P11_STRUCTURED_REPAIR_DESIGN.md`; P11-D revert and P11-E recovery UI remain deferred.
 
 The central question throughout is:
 
@@ -443,7 +443,7 @@ Plain text such as “Met @Alex” is ambiguous. Names are not stable IDs, two p
 
 Notes are normalized, revisioned records. Mentions are explicit saved occurrences referencing person IDs. Display text helps the operator, but it is not the source of relationship truth.
 
-An active mention occurrence creates directed `NOTE_REFERENCE` evidence from the note owner to the referenced person. Editing a note diffs exact mention IDs: removed occurrences retire only their evidence; unchanged occurrences remain; new occurrences create new evidence.
+An active mention occurrence requires exactly one current directed `NOTE_REFERENCE` evidence row from the note owner to the referenced person. Editing a note diffs exact mention IDs: removed occurrences retire only their active evidence; unchanged occurrences remain; new occurrences create new evidence. A later evidence replacement for an unchanged current occurrence retires the old evidence revision and appends a new one; it never reactivates or deletes the old row.
 
 #### How it works internally
 
@@ -452,6 +452,28 @@ Each note has immutable revisions containing content, actor/author, operation ID
 Merge note conflict resolution also appends a normalized revision before updating the compatibility mirror. Existing raw mentions may remain editable after the referenced identity is merged, while new mentions must resolve through permitted active identity rules.
 
 Legacy profile and recognition-detail text migrates into note history without parsing `@` strings. Legacy `automatic_mention` associations are not promoted when the exact note occurrence cannot be proven.
+
+#### Historical rows versus current note-reference truth
+
+Two R02 safety stops made an implicit lifecycle rule explicit. The first checker treated every old occurrence as though it had to match the latest revision. The second checker and shared graph builder treated every old evidence revision as though it had to match its occurrence's current active state. Both assumptions contradicted the one-way append/retire schema.
+
+The consolidated model is:
+
+```text
+immutable note revisions and mention snapshots
+    -> append-only occurrence identities; active rows are current occurrence truth
+    -> append-only evidence revision identities; active rows are current support truth
+    -> correction/canonical effective endpoints
+    -> active-only graph projection
+```
+
+Historical occurrence and evidence rows answer what happened. They can remain retired forever, including when the same raw person is mentioned again in a later occurrence or when the same occurrence receives a newer evidence revision. They are not required to become active again or mirror the newest row. Current cardinality is enforced separately: one active occurrence per required existing note/person group, then one matching active `NOTE_REFERENCE` per active non-self occurrence on an active note.
+
+Retirement is not accepted from `active = 0` alone. An occurrence additionally needs its same-note retirement revision at or after its creation revision, retirement operation ID, timestamp, foreign-key linkage, and legal journal result. Evidence needs deactivation operation ID, timestamp, foreign-key linkage, and legal journal result. Schema v28 has no replacement-link field, so integrity logic cannot invent or require one.
+
+The shared graph authority validates every evidence row's immutable source/endpoints/type/direction and lifecycle shape. For active note evidence it also requires a current active occurrence on an active note. For retired evidence it validates historical provenance without comparing the row to current source state. It then verifies current active evidence cardinality per occurrence and aggregates only active rows. This retains the normal safety property that a generic deactivation cannot commit while leaving an active occurrence unsupported.
+
+`CO_OBSERVED` and `MANUAL_ASSOCIATION` did not share the history/current contradiction. Their source, direction, correction, participant, canonical, lifecycle, and projection rules remain unchanged. Retiring note evidence never removes their independent support. Canonical collapse suppresses a current self-edge without deleting raw note evidence. Correction continues to transform observation evidence before canonical resolution; it does not rewrite note endpoints.
 
 #### Example scenario
 
@@ -684,7 +706,7 @@ Represents an operator-created authoritative assertion with `MANUAL_ASSERTION` p
 For every evidence row, rebuild:
 
 1. validates source provenance, including finalized observation and saved mention rules;
-2. skips inactive evidence for current projection;
+2. validates active/deactivation provenance, preserves valid inactive rows as history, and skips them for current projection;
 3. resolves both raw endpoints through terminal canonical identity;
 4. suppresses the row if both endpoints become the same person;
 5. normalizes endpoint order for undirected evidence while preserving direction for directed evidence;
@@ -692,7 +714,7 @@ For every evidence row, rebuild:
 7. records evidence count, evidence types, and last occurrence;
 8. replaces `graph_connections` and advances graph revision in the same transaction.
 
-Incremental mutation paths, P11-A comparison, validation, and P11-B all call the same expected-projection semantics. The projection can therefore be discarded and recreated from evidence without recognition inference or frontend state.
+Incremental mutation paths, P11-A comparison, validation, and P11-B all call the same expected-projection semantics. For note evidence that shared authority validates active-source compatibility and current per-occurrence cardinality rather than requiring each retired revision to mirror current state. The projection can therefore be discarded and recreated from evidence without recognition inference or frontend state.
 
 P11-B makes exceptional replacement explicit. The service runs the P11-A checker first and permits only projection-only `P11-GRAPH-001` drift. Authoritative error/critical findings or truncated diagnostics produce a bounded failed journal attempt and no graph/revision write. Inside `BEGIN IMMEDIATE`, it recomputes authority, compares normalized signatures, replaces the full derived table only when different, validates exact equality, advances revision once only on change, and commits the bounded journal result. Insert, validation, or revision failures roll the old projection back. A second read-only integrity report follows commit; no automatic second repair is attempted.
 
@@ -1298,7 +1320,7 @@ Compatibility data remains valuable, but value does not confer authority. Deleti
 Several capabilities are intentionally future work:
 
 - P10-F World UI is complete and frozen after the final post-fix integration/runtime gate; P10-FR-01 through P10-FR-04 are fixed.
-- P11-A provides the fixed authority/invariant model and explicit query-only checker. P11-A1 corrected the former row-by-row NOTE-002 assumption: active rows form the current occurrence layer, while completely retired same-note occurrences remain historical even when their person is mentioned again later. Current active cardinality is evaluated per existing note/person group; zero-row missing groups remain outside coverage, and NOTE-003 is unchanged. P11-B provides deterministic graph projection rebuild. P11-C1 fixes two repairs. R01 is implemented; R02 note reference reconciliation may restart against the refrozen checker contract. P11-D operation revert and P11-E recovery UI/acceptance remain future work.
+- P11-A provides the fixed authority/invariant model and explicit query-only checker. P11-A1 corrected occurrence history: active rows form the current occurrence layer, while retired same-note occurrences remain historical even when their person appears later. P11-C2A corrected the dependent evidence/graph history rule: retired evidence revisions remain valid with complete deactivation provenance, current evidence cardinality is separate, and only active evidence projects. Zero-row missing occurrence groups remain outside coverage. P11-B provides deterministic graph projection rebuild. P11-C1 fixes two repairs. R01 is implemented; every frozen R02 case is now proven reachable but R02 remains unimplemented. P11-D operation revert and P11-E recovery UI/acceptance remain future work.
 - P12 will extend portable backup/restore rules for every normalized record and derived state.
 - Future repeated-unknown tracking needs its own authoritative lifecycle.
 - A normalized place model is required before location becomes an entity.
