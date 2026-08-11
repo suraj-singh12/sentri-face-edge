@@ -31,6 +31,7 @@ import {
 } from "@tabler/icons-react";
 
 import { SafeImage } from "../components/Shared.jsx";
+import { WorldMediaPreview } from "../components/WorldMediaPreview.jsx";
 import { mediaUrl } from "../utils.js";
 
 const EVENT_COLLECTIONS = [
@@ -40,12 +41,13 @@ const EVENT_COLLECTIONS = [
   { label: "Media", value: "MEDIA" },
 ];
 
-export function WorldEventDrilldownView({ event, onBack, onRefresh, onCollection, onNextPage }) {
+export function WorldEventDrilldownView({ event, onBack, onRefresh, onCollection, onNextPage, onOpenEvidence }) {
   const collectionState = event.collections[event.collection];
   const data = collectionState?.data;
   const summary = event.summary || data?.events?.[0] || null;
   const page = data?.pagination?.[event.collection] || null;
   const [selected, setSelected] = useState(null);
+  const [previewMedia, setPreviewMedia] = useState(null);
 
   useEffect(() => setSelected(null), [event.collection, collectionState?.pageNumber, data?.graph_revision]);
 
@@ -93,9 +95,10 @@ export function WorldEventDrilldownView({ event, onBack, onRefresh, onCollection
 
         <Stack gap="sm" className="world-event-context">
           <Paper withBorder radius="md" className="world-event-explanation"><EventExplanation summary={summary} binding={event.binding} /></Paper>
-          <Paper withBorder radius="md" className="world-event-inspector"><EventSelectionInspector item={selected} eventId={summary.event_id} binding={event.binding} /></Paper>
+          <Paper withBorder radius="md" className="world-event-inspector"><EventSelectionInspector item={selected} eventId={summary.event_id} binding={event.binding} onOpenEvidence={onOpenEvidence} onPreviewMedia={setPreviewMedia} /></Paper>
         </Stack>
       </Box>
+      <WorldMediaPreview item={previewMedia} opened={Boolean(previewMedia)} onClose={() => setPreviewMedia(null)} origin={{ type: "EVENT", eventId: summary.event_id }} />
     </Stack>
   );
 }
@@ -193,7 +196,7 @@ function EventExplanation({ summary, binding }) {
   );
 }
 
-function EventSelectionInspector({ item, eventId, binding }) {
+function EventSelectionInspector({ item, eventId, binding, onOpenEvidence, onPreviewMedia }) {
   if (!item) return <Stack gap="xs" p="sm"><Text fw={800}>Selection details</Text><Text size="sm" c="dimmed">Select an event child record for its authoritative facts or later-phase navigation intent.</Text></Stack>;
   if (item.type === "participant") return <Stack gap="sm" p="sm"><Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Effective participant</Text><Text fw={800}>{item.value.person_id}</Text></Box><Text size="xs" c="dimmed">The frozen EVENT participant entry supplies a canonical ID but no allowed actions or person presentation state. PERSON navigation is therefore not enabled here.</Text></Stack>;
   if (item.type === "provenance") {
@@ -202,10 +205,10 @@ function EventSelectionInspector({ item, eventId, binding }) {
   }
   if (item.type === "media") {
     const value = item.value;
-    return <Stack gap="sm" p="sm"><Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Media navigation intent</Text><Text fw={800}>{shortId(value.media_id)}</Text></Box><InspectorRow label="Event" value={value.supporting_event_id} /><InspectorRow label="Supporting evidence" value={value.supporting_evidence_id || "None supplied"} /><InspectorRow label="Occurred" value={formatDateTime(value.occurred_at)} /><InspectorRow label="Revision binding" value={shortId(binding?.revision)} /><Text size="xs" c="dimmed">The authorized reference may be previewed here. Full media navigation remains P10-F5.</Text></Stack>;
+    return <Stack gap="sm" p="sm"><Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Event media</Text><Text fw={800}>{shortId(value.media_id)}</Text></Box><InspectorRow label="Event" value={value.supporting_event_id} /><InspectorRow label="Supporting evidence" value={value.supporting_evidence_id || "None supplied"} /><InspectorRow label="Occurred" value={formatDateTime(value.occurred_at)} /><InspectorRow label="Revision binding" value={shortId(binding?.revision)} /><Button size="xs" variant="light" leftSection={<IconPhoto size={14} />} onClick={() => onPreviewMedia(value)}>Inspect event media</Button></Stack>;
   }
   const value = item.value;
-  return <Stack gap="sm" p="sm"><Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Evidence navigation intent</Text><Text fw={800}>{shortId(value.evidence_id)}</Text></Box><InspectorRow label="Event" value={eventId} /><InspectorRow label="Type" value={humanize(value.evidence_type)} /><InspectorRow label="Directionality" value={humanize(value.directionality)} /><InspectorRow label="Effective endpoints" value={endpointLabel(value.effective_endpoints)} /><InspectorRow label="Raw endpoints" value={endpointLabel(value.raw_endpoints)} /><InspectorRow label="Occurrence" value={formatDateTime(value.occurred_at)} /><InspectorRow label="Media availability" value={`${humanize(value.media_summary.availability)} · ${value.media_summary.total_count}`} /><InspectorRow label="Revision binding" value={shortId(binding?.revision)} /><Text size="sm">{value.explanation.summary}</Text><Text size="10px" c="dimmed">Full evidence provenance and Evidence → Media navigation remain P10-F5.</Text></Stack>;
+  return <Stack gap="sm" p="sm"><Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Evidence detail</Text><Text fw={800}>{shortId(value.evidence_id)}</Text></Box><InspectorRow label="Event" value={eventId} /><InspectorRow label="Type" value={humanize(value.evidence_type)} /><InspectorRow label="Directionality" value={humanize(value.directionality)} /><InspectorRow label="Effective endpoints" value={endpointLabel(value.effective_endpoints)} /><InspectorRow label="Raw endpoints" value={endpointLabel(value.raw_endpoints)} /><InspectorRow label="Occurrence" value={formatDateTime(value.occurred_at)} /><InspectorRow label="Media availability" value={`${humanize(value.media_summary.availability)} · ${value.media_summary.total_count}`} /><InspectorRow label="Revision binding" value={shortId(binding?.revision)} /><Text size="sm">{value.explanation.summary}</Text><Button size="xs" variant="light" leftSection={<IconFileDescription size={14} />} onClick={() => onOpenEvidence(value)}>Open authoritative evidence</Button></Stack>;
 }
 
 function FactorRows({ factors }) {

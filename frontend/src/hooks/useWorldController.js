@@ -18,6 +18,7 @@ import {
   requireWorldScopeContract,
   worldEntryMode,
 } from "../utils/world.js";
+import { useWorldEvidenceController } from "./useWorldEvidenceController.js";
 
 const INITIAL_WORLD_STATE = {
   data: null,
@@ -197,6 +198,34 @@ export function useWorldController({ activeView, apiGet }) {
 
   const refreshWorld = useCallback(() => loadWorld({ preserve: true }), [loadWorld]);
 
+  const recoverStaleEvidence = useCallback(() => {
+    for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
+    for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
+    for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
+    setWorldEvent(emptyWorldEvent());
+    setWorldPerson(emptyWorldPerson());
+    setWorldCluster(emptyWorldCluster());
+    return loadWorld({
+      collection: worldRef.current.collection,
+      filters: worldRef.current.filters,
+      ranking: worldRef.current.ranking,
+      pageNumber: 1,
+      preserve: false,
+    });
+  }, [loadWorld]);
+
+  const getWorldEvent = useCallback(() => worldEventRef.current, []);
+  const evidenceController = useWorldEvidenceController({ apiGet, getEvent: getWorldEvent, onStale: recoverStaleEvidence });
+  const worldEvidence = evidenceController.state;
+  const {
+    openWorldEvidence,
+    closeWorldEvidence,
+    selectWorldEvidenceCollection,
+    nextWorldEvidencePage,
+    refreshWorldEvidence,
+    resetWorldEvidence,
+  } = evidenceController.actions;
+
   const applyWorldScope = useCallback((filters, ranking) => {
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
     for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
@@ -204,6 +233,7 @@ export function useWorldController({ activeView, apiGet }) {
     setWorldCluster(emptyWorldCluster());
     setWorldPerson(emptyWorldPerson());
     setWorldEvent(emptyWorldEvent());
+    resetWorldEvidence();
     return loadWorld({
       collection: worldRef.current.collection,
       filters,
@@ -211,7 +241,7 @@ export function useWorldController({ activeView, apiGet }) {
       pageNumber: 1,
       preserve: true,
     });
-  }, [loadWorld]);
+  }, [loadWorld, resetWorldEvidence]);
 
   const selectWorldCollection = useCallback((collection) => {
     if (collection === worldRef.current.collection && worldRef.current.data) return null;
@@ -240,6 +270,7 @@ export function useWorldController({ activeView, apiGet }) {
     setWorldCluster(emptyWorldCluster({ notice: message }));
     setWorldPerson(emptyWorldPerson());
     setWorldEvent(emptyWorldEvent());
+    resetWorldEvidence();
     return loadWorld({
       collection: worldRef.current.collection,
       filters: worldRef.current.filters,
@@ -247,7 +278,7 @@ export function useWorldController({ activeView, apiGet }) {
       pageNumber: 1,
       preserve: false,
     });
-  }, [loadWorld]);
+  }, [loadWorld, resetWorldEvidence]);
 
   const loadWorldClusterCollection = useCallback(async ({
     collection,
@@ -331,6 +362,7 @@ export function useWorldController({ activeView, apiGet }) {
     for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
     setWorldPerson(emptyWorldPerson());
     setWorldEvent(emptyWorldEvent());
+    resetWorldEvidence();
     const nextCluster = emptyWorldCluster({
       active: true,
       clusterId: clusterSummary.cluster_id,
@@ -344,7 +376,7 @@ export function useWorldController({ activeView, apiGet }) {
     worldClusterRef.current = nextCluster;
     setWorldCluster(nextCluster);
     return loadWorldClusterCollection({ collection: "MEMBERS" });
-  }, [loadWorldClusterCollection, recoverStaleCluster]);
+  }, [loadWorldClusterCollection, recoverStaleCluster, resetWorldEvidence]);
 
   const closeWorldCluster = useCallback(() => {
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
@@ -387,6 +419,7 @@ export function useWorldController({ activeView, apiGet }) {
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
     setWorldPerson(emptyWorldPerson({ notice: message }));
     setWorldEvent(emptyWorldEvent());
+    resetWorldEvidence();
     setWorldCluster(emptyWorldCluster());
     return loadWorld({
       collection: worldRef.current.collection,
@@ -395,7 +428,7 @@ export function useWorldController({ activeView, apiGet }) {
       pageNumber: 1,
       preserve: false,
     });
-  }, [loadWorld]);
+  }, [loadWorld, resetWorldEvidence]);
 
   const loadWorldPersonCollection = useCallback(async ({
     collection,
@@ -481,6 +514,7 @@ export function useWorldController({ activeView, apiGet }) {
     for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
     for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
     setWorldEvent(emptyWorldEvent());
+    resetWorldEvidence();
     const nextPerson = emptyWorldPerson({
       active: true,
       personId: personSummary.canonical_person_id,
@@ -492,14 +526,15 @@ export function useWorldController({ activeView, apiGet }) {
     worldPersonRef.current = nextPerson;
     setWorldPerson(nextPerson);
     return loadWorldPersonCollection({ collection: "RELATIONSHIPS" });
-  }, [loadWorldPersonCollection]);
+  }, [loadWorldPersonCollection, resetWorldEvidence]);
 
   const closeWorldPerson = useCallback(() => {
     for (const request of Object.values(personRequestsRef.current)) request.abort?.abort();
     for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
     setWorldEvent(emptyWorldEvent());
+    resetWorldEvidence();
     setWorldPerson((current) => ({ ...current, active: false, notice: null }));
-  }, []);
+  }, [resetWorldEvidence]);
 
   const selectWorldPersonCollection = useCallback((collection) => {
     const person = worldPersonRef.current;
@@ -541,6 +576,7 @@ export function useWorldController({ activeView, apiGet }) {
     setWorldEvent(emptyWorldEvent({ notice: message }));
     setWorldPerson(emptyWorldPerson());
     setWorldCluster(emptyWorldCluster());
+    resetWorldEvidence();
     return loadWorld({
       collection: worldRef.current.collection,
       filters: worldRef.current.filters,
@@ -548,7 +584,7 @@ export function useWorldController({ activeView, apiGet }) {
       pageNumber: 1,
       preserve: false,
     });
-  }, [loadWorld]);
+  }, [loadWorld, resetWorldEvidence]);
 
   const loadWorldEventCollection = useCallback(async ({
     collection,
@@ -622,6 +658,7 @@ export function useWorldController({ activeView, apiGet }) {
     const person = worldPersonRef.current;
     if (!person.active || !eventSummary?.event_id || !person.binding) return null;
     for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
+    resetWorldEvidence();
     const nextEvent = emptyWorldEvent({
       active: true,
       eventId: eventSummary.event_id,
@@ -636,12 +673,13 @@ export function useWorldController({ activeView, apiGet }) {
     worldEventRef.current = nextEvent;
     setWorldEvent(nextEvent);
     return loadWorldEventCollection({ collection: "PARTICIPANTS" });
-  }, [loadWorldEventCollection]);
+  }, [loadWorldEventCollection, resetWorldEvidence]);
 
   const closeWorldEvent = useCallback(() => {
     for (const request of Object.values(eventRequestsRef.current)) request.abort?.abort();
+    resetWorldEvidence();
     setWorldEvent((current) => ({ ...current, active: false, notice: null }));
-  }, []);
+  }, [resetWorldEvidence]);
 
   const selectWorldEventCollection = useCallback((collection) => {
     const event = worldEventRef.current;
@@ -686,7 +724,8 @@ export function useWorldController({ activeView, apiGet }) {
     setWorldEvent((current) => emptyWorldEvent({
       notice: current.active ? "World changed, so the previous finalized event view was closed." : current.notice,
     }));
-  }, []);
+    resetWorldEvidence({ notice: worldEvidence.active ? "World changed, so the previous evidence view was closed." : worldEvidence.notice });
+  }, [resetWorldEvidence, worldEvidence.active, worldEvidence.notice]);
 
   useEffect(() => () => {
     requestRef.current.abort?.abort();
@@ -726,7 +765,7 @@ export function useWorldController({ activeView, apiGet }) {
   }, [activeView, apiGet, loadWorld]);
 
   return {
-    state: { world: { ...world, cluster: worldCluster, person: worldPerson, event: worldEvent } },
+    state: { world: { ...world, cluster: worldCluster, person: worldPerson, event: worldEvent, evidence: worldEvidence } },
     actions: {
       loadWorld,
       refreshWorld,
@@ -748,6 +787,11 @@ export function useWorldController({ activeView, apiGet }) {
       selectWorldEventCollection,
       nextWorldEventPage,
       refreshWorldEvent,
+      openWorldEvidence,
+      closeWorldEvidence,
+      selectWorldEvidenceCollection,
+      nextWorldEvidencePage,
+      refreshWorldEvidence,
       invalidateWorld,
     },
   };

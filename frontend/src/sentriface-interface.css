@@ -521,6 +521,135 @@
   background: var(--sentriface-page-bg);
 }
 
+/* P10-F5 World Evidence: factual provenance and bounded supporting media. */
+.world-evidence-shell {
+  min-height: 0;
+  height: 100%;
+}
+
+.world-evidence-back {
+  align-self: flex-start;
+}
+
+.world-evidence-loading {
+  min-height: 440px;
+}
+
+.world-evidence-header {
+  min-height: 44px;
+}
+
+.world-evidence-header-facts {
+  padding-left: 90px;
+}
+
+.world-evidence-header-fact {
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+  font-variant-numeric: tabular-nums;
+}
+
+.world-evidence-collection-bar {
+  min-height: 34px;
+}
+
+.world-evidence-workarea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 10px;
+}
+
+.world-evidence-primary,
+.world-evidence-context {
+  min-width: 0;
+  min-height: 0;
+}
+
+.world-evidence-endpoints,
+.world-evidence-provenance,
+.world-evidence-context > .mantine-Paper-root,
+.world-evidence-media-collection {
+  background: var(--sentriface-card-bg);
+  border-color: var(--sentriface-card-border);
+}
+
+.world-evidence-endpoint-panel,
+.world-evidence-source-row {
+  background: color-mix(in srgb, var(--sentriface-muted-surface) 82%, transparent);
+}
+
+.world-evidence-source-row {
+  padding: 7px 8px;
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: var(--mantine-radius-sm);
+}
+
+.world-evidence-media-collection {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+}
+
+.world-evidence-media-loading {
+  min-height: 360px;
+}
+
+.world-evidence-media-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
+  color: var(--mantine-color-text);
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: var(--mantine-radius-sm);
+  background: var(--sentriface-muted-surface);
+}
+
+.world-evidence-media-card:hover,
+.world-evidence-media-card:focus-visible {
+  border-color: var(--mantine-color-blue-6);
+  outline: none;
+}
+
+.world-evidence-media-thumb {
+  width: 100%;
+  height: 126px;
+  object-fit: contain;
+  border-radius: var(--mantine-radius-sm);
+  background: var(--sentriface-page-bg);
+}
+
+.world-media-modal {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.world-media-modal-body {
+  padding-top: 4px;
+}
+
+.world-media-preview-frame {
+  display: grid;
+  min-height: 220px;
+  max-height: 43vh;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: var(--mantine-radius-md);
+  background: var(--sentriface-page-bg);
+}
+
+.world-media-preview-image {
+  width: 100%;
+  max-height: 43vh;
+  object-fit: contain;
+}
+
 @media (max-width: 76em) {
   .world-workarea {
     grid-template-columns: minmax(0, 1fr) 260px;
@@ -541,6 +670,10 @@
 
   .world-event-workarea {
     grid-template-columns: minmax(0, 1fr) 300px;
+  }
+
+  .world-evidence-workarea {
+    grid-template-columns: minmax(0, 1fr) 310px;
   }
 }
 
@@ -625,6 +758,18 @@
 
   .world-event-explanation {
     max-height: none;
+  }
+
+  .world-evidence-shell {
+    height: auto;
+  }
+
+  .world-evidence-header-facts {
+    padding-left: 0;
+  }
+
+  .world-evidence-workarea {
+    grid-template-columns: 1fr;
   }
 }
 

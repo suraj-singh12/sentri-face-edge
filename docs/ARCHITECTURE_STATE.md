@@ -4,7 +4,7 @@ This document is a concise checkpoint of the stable implemented architecture. De
 
 ## Current phase
 
-P10-F World UI is in progress. P10-F1 `WORLD_SCOPE`, P10-F2 `CLUSTER`, P10-F3 scoped `PERSON`, and P10-F4 finalized `EVENT` drilldown are complete as of 2026-08-11 against the frozen World v2 backend. World is a persistent top-level view with backend-normalized scope controls, authoritative totals/facets, ranked canonical people, revision-bound clusters and memberships, measured patterns, typed relationship pages, bounded finalized-event summaries, effective participants, independent raw provenance, bounded evidence summaries and media references, structured explanation inspection, bounded response replacement, lifecycle revision validation, mutation invalidation, and no continuous polling. Every semantic level performs a fresh revision/filter-bound read rather than expanding preview data. EVENT retains its PERSON origin; participants, provenance, evidence, and media are independently paged and replaced; and invalid event state returns to a reloaded authoritative `WORLD_SCOPE`. P10-F5 `EVIDENCE`/media remains incomplete. P0 through P10-E remain frozen; P11 remains future work.
+P10-F World UI implementation is complete through P10-F5 as of 2026-08-11 against the frozen World v2 backend; the final P10 integration/adversarial freeze review remains pending. World is a persistent top-level view with backend-normalized scope controls, authoritative totals/facets, ranked canonical people, revision-bound clusters and memberships, measured patterns, typed relationship pages, bounded finalized-event summaries, effective participants, independent raw provenance, exact evidence detail, and bounded supporting media references. Every semantic level performs a fresh revision/filter-bound read rather than expanding preview data. `EVIDENCE` preserves backend type/direction, raw and current-effective endpoints, source provenance, factual explanation, and explicit media availability; EVENT and EVIDENCE media share an inspection-only preview while retaining distinct origins. Collection pages are replaced rather than concatenated, retained detail is invalidated by lifecycle revision changes, and no continuous polling is used. P0 through P10-E remain frozen; P11 remains future work.
 
 ## Core principles
 
@@ -148,11 +148,11 @@ The final mandatory matrix completed on 2026-08-11 in `docs/P10_WORLD_BENCHMARK_
 
 - Reuse the opaque revision token, immutable replacement model, canonical/lifecycle semantics, backend `allowed_actions`, evidence-count strength, occurrence/provenance explanations, and the rule that React owns only presentation/interaction.
 - Do not reuse the person-centred radial membership model, complete-graph loading assumption, homogeneous person-node schema, client-only full-response refresh strategy, or the assumption that edge weight alone communicates importance. World requires scope-first levels, typed summary/detail objects, server-side ranking/clustering, bounded expansion, and density-aware presentation.
-- P10-F1 `WORLD_SCOPE`, P10-F2 `CLUSTER`, P10-F3 `PERSON`, and P10-F4 `EVENT` are implemented against the frozen additive v2 contract. Remaining World UI must continue to render backend semantics rather than acquire canonical, topology, ranking, cluster, evidence, media, filter, or truncation authority.
+- P10-F1 `WORLD_SCOPE`, P10-F2 `CLUSTER`, P10-F3 `PERSON`, P10-F4 `EVENT`, and P10-F5 `EVIDENCE`/supporting media are implemented against the frozen additive v2 contract. The pending final integration/adversarial review must verify the full chain without granting the frontend canonical, topology, ranking, cluster, evidence, media, filter, or truncation authority.
 
 ## Known deferred work
 
 - P11 guarded merge/operation revert; normalized merge undo is intentionally not exposed yet.
 - P12 backup/restore hardening for normalized authoritative, journal, and projection records.
 - P13 fully offline BYOM/model-management work.
-- P10-F5 `EVIDENCE`/media remains deferred, along with later integrity/rebuild/revert, packaging, and release work.
+- The final P10 integration/adversarial freeze review remains deferred, along with later integrity/rebuild/revert, packaging, and release work.

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   buildWorldClusterQuery,
+  buildWorldEvidenceQuery,
   buildWorldEventQuery,
   buildWorldPersonQuery,
   buildWorldScopeQuery,
@@ -11,10 +12,12 @@ import {
   invalidateWorldSnapshot,
   isInvalidWorldClusterError,
   isInvalidWorldEventError,
+  isInvalidWorldEvidenceError,
   isInvalidWorldPersonError,
   isStaleWorldError,
   requireWorldClusterContract,
   requireWorldEventContract,
+  requireWorldEvidenceContract,
   requireWorldPersonContract,
   requireWorldScopeContract,
   worldEntryMode,
@@ -41,6 +44,7 @@ function explanation(values = {}) {
     factual_factors: [],
     strongest_factors: [],
     limitations: [],
+    method: "backend_method",
     ...values,
   };
 }
@@ -319,6 +323,35 @@ function eventPayload(collection = "PARTICIPANTS", values = {}) {
     events: [event],
     evidence: collection === "EVIDENCE" ? [worldEvidence()] : [],
     media: collection === "MEDIA" ? [worldMedia()] : [],
+    ...values,
+  };
+}
+
+function evidencePayload(collection = "EVIDENCE", values = {}) {
+  const detail = values.detail || worldEvidence();
+  const media = collection === "MEDIA"
+    ? (values.media || [worldMedia({ supporting_evidence_id: detail.evidence_id })])
+    : [];
+  const mediaTotal = collection === "MEDIA" ? (values.mediaTotal ?? detail.media_summary.total_count) : 0;
+  const evidencePage = page("EVIDENCE", 1);
+  const mediaPage = collection === "MEDIA"
+    ? { ...page("MEDIA", mediaTotal), returned_count: media.length, has_more: media.length < mediaTotal, next_cursor: media.length < mediaTotal ? "media-next" : null, truncated: media.length < mediaTotal, truncation_reason: media.length < mediaTotal ? `backend_limit:${media.length}` : null }
+    : page("MEDIA", 0);
+  return {
+    contract: "sentriface.world-graph",
+    contract_version: 2,
+    requested_detail_level: "EVIDENCE",
+    returned_detail_level: "EVIDENCE",
+    graph_revision: "opaque-g7",
+    as_of: "2026-08-11T12:00:00+00:00",
+    focus: { type: "EVIDENCE", id: detail.evidence_id },
+    scope_totals: { evidence: 1, media: mediaTotal },
+    effective_filters: { recent_activity: "LAST_30_DAYS", missing_location: "INCLUDE" },
+    limits: { evidence: 25, media: 25 },
+    pagination: { EVIDENCE: evidencePage, MEDIA: mediaPage },
+    people: [], clusters: [], relationships: [], patterns: [], events: [],
+    evidence: [detail],
+    media,
     ...values,
   };
 }
@@ -771,9 +804,9 @@ test("World Event workspace renders authoritative overview and four bounded chil
   assert.match(view, /value\.raw_endpoints/);
   assert.match(view, /item\.media_summary\.availability/);
   assert.match(view, /mediaUrl\(item\.media_reference\)/);
-  assert.match(view, /Evidence navigation intent/);
-  assert.match(view, /Media navigation intent/);
-  assert.match(view, /Full evidence provenance and Evidence → Media navigation remain P10-F5/);
+  assert.match(view, /Open authoritative evidence/);
+  assert.match(view, /Inspect event media/);
+  assert.match(view, /WorldMediaPreview/);
   assert.match(view, /Next authoritative page/);
   assert.doesNotMatch(view, /deriveParticipants|inferEvidence|profile.*photo|reconstructChain|function reconstruct|\/api\/observations|\/api\/person/);
 });
@@ -800,4 +833,153 @@ test("World Event never derives totals or treats provenance as the participant p
   assert.match(view, /event\?\.participant_provenance \|\| \[\]/);
   assert.match(view, /participant entry supplies a canonical ID but no allowed actions/);
   assert.match(view, /PERSON navigation is therefore not enabled/);
+});
+
+test("World Evidence requests bind evidence focus, revision, as_of, effective scope, collection, and cursor", () => {
+  const request = new URL(buildWorldEvidenceQuery({
+    evidenceId: "evidence-a",
+    collection: "MEDIA",
+    revision: "opaque-g7",
+    asOf: "2026-08-11T12:00:00+00:00",
+    filters: { recent_activity: "LAST_30_DAYS", locations: ["Dock"], evidence_type: ["CO_OBSERVED"], missing_location: "EXCLUDE" },
+    cursor: "media-next",
+  }), "http://localhost");
+  assert.equal(request.searchParams.get("level"), "EVIDENCE");
+  assert.equal(request.searchParams.get("focus_type"), "EVIDENCE");
+  assert.equal(request.searchParams.get("focus_id"), "evidence-a");
+  assert.equal(request.searchParams.get("collection"), "MEDIA");
+  assert.equal(request.searchParams.get("revision"), "opaque-g7");
+  assert.equal(request.searchParams.get("as_of"), "2026-08-11T12:00:00+00:00");
+  assert.equal(request.searchParams.get("recent_activity"), "LAST_30_DAYS");
+  assert.equal(request.searchParams.get("location"), "Dock");
+  assert.equal(request.searchParams.get("cursor"), "media-next");
+});
+
+test("World Evidence validates exact type, direction, raw/effective endpoints, provenance, explanation, and media", () => {
+  const detail = requireWorldEvidenceContract(evidencePayload("EVIDENCE"), { evidenceId: "evidence-a", collection: "EVIDENCE", revision: "opaque-g7" });
+  assert.equal(detail.evidence[0].evidence_type, "CO_OBSERVED");
+  assert.equal(detail.evidence[0].directionality, "UNDIRECTED");
+  assert.deepEqual(detail.evidence[0].raw_endpoints, ["person-raw", "person-b"]);
+  assert.deepEqual(detail.evidence[0].effective_endpoints, ["person-a", "person-b"]);
+  assert.equal(detail.evidence[0].supporting_references[0].source_entity_type, "OBSERVATION");
+
+  const media = requireWorldEvidenceContract(evidencePayload("MEDIA"), { evidenceId: "evidence-a", collection: "MEDIA", revision: "opaque-g7" });
+  assert.equal(media.media[0].supporting_evidence_id, "evidence-a");
+  assert.equal(media.media[0].supporting_event_id, "event-a");
+
+  const directed = requireWorldEvidenceContract(evidencePayload("EVIDENCE", { detail: worldEvidence({ evidence_type: "NOTE_REFERENCE", directionality: "DIRECTED", media_summary: { total_count: 0, availability: "UNAVAILABLE", retrieval: "EVIDENCE_MEDIA_COLLECTION", reason: "evidence_source_has_no_authoritative_media" } }) }), { evidenceId: "evidence-a", collection: "EVIDENCE", revision: "opaque-g7" });
+  assert.equal(directed.evidence[0].directionality, "DIRECTED");
+  assert.equal(directed.evidence[0].media_summary.availability, "UNAVAILABLE");
+  const historical = requireWorldEvidenceContract(evidencePayload("EVIDENCE", { detail: worldEvidence({
+    raw_endpoints: ["deleted-historical-person", "archived-person"],
+    effective_endpoints: ["surviving-canonical-person", "archived-person"],
+    provenance: { created_operation_id: "operation-a", source: "event-finalization", canonical_endpoints: ["surviving-canonical-person", "archived-person"], raw_endpoints: ["deleted-historical-person", "archived-person"] },
+  }) }), { evidenceId: "evidence-a", collection: "EVIDENCE", revision: "opaque-g7" });
+  assert.deepEqual(historical.evidence[0].raw_endpoints, ["deleted-historical-person", "archived-person"]);
+  assert.deepEqual(historical.evidence[0].effective_endpoints, ["surviving-canonical-person", "archived-person"]);
+});
+
+test("Evidence media preserves unavailable, requested-empty, multiple, truncated, and page-replacement truth", () => {
+  for (const evidenceType of ["NOTE_REFERENCE", "MANUAL_ASSOCIATION"]) {
+    const detail = worldEvidence({ evidence_type: evidenceType, directionality: "DIRECTED", media_summary: { total_count: 0, availability: "UNAVAILABLE", retrieval: "EVIDENCE_MEDIA_COLLECTION", reason: "evidence_source_has_no_authoritative_media" } });
+    const response = requireWorldEvidenceContract(evidencePayload("MEDIA", { detail, media: [], mediaTotal: 0 }), { evidenceId: "evidence-a", collection: "MEDIA", revision: "opaque-g7" });
+    assert.equal(response.evidence[0].media_summary.availability, "UNAVAILABLE");
+    assert.equal(response.pagination.MEDIA.total_count, 0);
+  }
+  const empty = requireWorldEvidenceContract(evidencePayload("MEDIA", { detail: worldEvidence({ media_summary: { total_count: 0, availability: "AVAILABLE", retrieval: "EVIDENCE_MEDIA_COLLECTION", reason: null } }), media: [], mediaTotal: 0 }), { evidenceId: "evidence-a", collection: "MEDIA", revision: "opaque-g7" });
+  assert.equal(empty.evidence[0].media_summary.availability, "AVAILABLE");
+  assert.equal(empty.media.length, 0);
+  const truncated = requireWorldEvidenceContract(evidencePayload("MEDIA", { detail: worldEvidence({ media_summary: { total_count: 2, availability: "AVAILABLE", retrieval: "EVIDENCE_MEDIA_COLLECTION", reason: null } }), media: [worldMedia({ supporting_evidence_id: "evidence-a" })], mediaTotal: 2 }), { evidenceId: "evidence-a", collection: "MEDIA", revision: "opaque-g7" });
+  assert.equal(truncated.pagination.MEDIA.has_more, true);
+  assert.equal(truncated.pagination.MEDIA.next_cursor, "media-next");
+});
+
+test("World Evidence contract fails explicitly for missing authority, stale identity, and inconsistent media provenance", () => {
+  assert.throws(() => requireWorldEvidenceContract(evidencePayload("EVIDENCE", { detail: worldEvidence({ directionality: undefined }) }), { evidenceId: "evidence-a", collection: "EVIDENCE", revision: "opaque-g7" }), /Evidence evidence contract/);
+  assert.throws(() => requireWorldEvidenceContract(evidencePayload("EVIDENCE", { detail: worldEvidence({ raw_endpoints: undefined }) }), { evidenceId: "evidence-a", collection: "EVIDENCE", revision: "opaque-g7" }), /Evidence evidence contract/);
+  assert.throws(() => requireWorldEvidenceContract(evidencePayload("EVIDENCE", { detail: worldEvidence({ evidence_type: "GENERIC_CONNECTION" }) }), { evidenceId: "evidence-a", collection: "EVIDENCE", revision: "opaque-g7" }), /Evidence evidence contract/);
+  assert.throws(() => requireWorldEvidenceContract(evidencePayload("MEDIA", { media: [worldMedia({ supporting_evidence_id: "different-evidence" })] }), { evidenceId: "evidence-a", collection: "MEDIA", revision: "opaque-g7" }), /supporting evidence/);
+  assert.throws(() => requireWorldEvidenceContract(evidencePayload("EVIDENCE", { graph_revision: "opaque-g8" }), { evidenceId: "evidence-a", collection: "EVIDENCE", revision: "opaque-g7" }), /revision does not match/);
+  assert.equal(isInvalidWorldEvidenceError({ code: "WORLD_EVIDENCE_STALE" }), true);
+  assert.equal(isInvalidWorldEvidenceError({ status: 404, message: "World evidence is unavailable in the effective scope" }), true);
+  assert.equal(isInvalidWorldEvidenceError({ status: 400, message: "World cursor does not match the requested revision" }), true);
+});
+
+test("EVENT Evidence selection opens a fresh authoritative EVIDENCE request and retains EVENT origin", async () => {
+  const [eventView, worldView, controller, evidenceController, app] = await Promise.all([
+    read("../src/views/WorldEventDrilldownView.jsx"),
+    read("../src/views/WorldView.jsx"),
+    read("../src/hooks/useWorldController.js"),
+    read("../src/hooks/useWorldEvidenceController.js"),
+    read("../src/SentriFaceApp.jsx"),
+  ]);
+  assert.match(eventView, /onOpenEvidence\(value\)/);
+  assert.match(worldView, /state\.evidence\?\.active[\s\S]*WorldEvidenceDrilldownView/);
+  assert.match(evidenceController, /buildWorldEvidenceQuery/);
+  assert.match(evidenceController, /origin: \{[\s\S]*level: "EVENT"[\s\S]*eventId: event\.eventId[\s\S]*collection: event\.collection/);
+  assert.match(evidenceController, /return loadWorldEvidenceCollection\(\{ collection: "EVIDENCE" \}\)/);
+  assert.match(app, /onOpenEvidence=\{guarded\(actions\.openWorldEvidence\)\}/);
+  assert.doesNotMatch(evidenceController, /evidenceSummary[\s\S]{0,220}detail:/);
+  assert.match(controller, /evidence: worldEvidence/);
+});
+
+test("World Evidence workspace renders factual type, direction, endpoints, provenance, explanation, and state distinctions", async () => {
+  const view = await read("../src/views/WorldEvidenceDrilldownView.jsx");
+  assert.match(view, /data-world-level="EVIDENCE"/);
+  assert.match(view, /evidence\.evidence_type/);
+  assert.match(view, /evidence\.directionality/);
+  assert.match(view, /Raw endpoints/);
+  assert.match(view, /Current effective endpoints/);
+  assert.match(view, /evidence\.raw_endpoints/);
+  assert.match(view, /evidence\.effective_endpoints/);
+  assert.match(view, /evidence\.provenance\.created_operation_id/);
+  assert.match(view, /supporting_references\.map/);
+  assert.match(view, /explanation\.factual_factors/);
+  assert.match(view, /explanation\.limitations/);
+  assert.match(view, /No supporting media for this evidence type/);
+  assert.match(view, /The collection is not requested until opened/);
+  assert.match(view, /No supporting media returned/);
+  assert.match(view, /The media collection was requested and is empty/);
+  assert.doesNotMatch(view, /likely close|suspicious|risk|affiliation|inferEndpoint|resolveCanonical|reconstructChain|deriveEvidence/);
+});
+
+test("Evidence and Event media share inspection infrastructure while keeping origins explicit", async () => {
+  const [eventView, evidenceView, preview] = await Promise.all([
+    read("../src/views/WorldEventDrilldownView.jsx"),
+    read("../src/views/WorldEvidenceDrilldownView.jsx"),
+    read("../src/components/WorldMediaPreview.jsx"),
+  ]);
+  assert.match(eventView, /origin=\{\{ type: "EVENT", eventId: summary\.event_id \}\}/);
+  assert.match(evidenceView, /origin=\{\{ type: "EVIDENCE", evidenceId: detail\.evidence_id/);
+  assert.match(preview, /Opened from Event/);
+  assert.match(preview, /Opened as supporting media for Evidence/);
+  assert.match(preview, /mediaUrl\(item\.media_reference\)/);
+  assert.match(preview, /Media preview unavailable/);
+  assert.match(preview, /does not run recognition or create World identity, evidence, participant, or relationship state/);
+  assert.doesNotMatch(preview, /recognize\(|apiPost|apiPut|apiDelete|new WebSocket|EventSource/);
+});
+
+test("World Evidence collections replace pages independently, refresh manually, recover stale state, and never poll", async () => {
+  const hook = await read("../src/hooks/useWorldEvidenceController.js");
+  assert.match(hook, /EVIDENCE: emptyEvidenceCollection\(\)/);
+  assert.match(hook, /MEDIA: emptyEvidenceCollection\(\)/);
+  assert.match(hook, /\[nextCollection\]: \{ data: payload, loading: false, error: null, pageNumber \}/);
+  assert.match(hook, /page = collectionState\?\.data\?\.pagination\?\.\[current\.collection\]/);
+  assert.match(hook, /cursor: page\.next_cursor/);
+  assert.match(hook, /refreshWorldEvidence[\s\S]*preserve: true/);
+  assert.match(hook, /isInvalidWorldEvidenceError\(error\)[\s\S]*resetWorldEvidence[\s\S]*onStale/);
+  assert.match(hook, /apiGet\(buildWorldEvidenceQuery/);
+  assert.doesNotMatch(hook, /\.concat\(|push\(\.\.\.payload|setInterval|setTimeout|visibilitychange|addEventListener\(["']focus|WebSocket|EventSource/);
+});
+
+test("World Evidence UI never calculates endpoints, provenance, evidence, or media totals from loaded pages", async () => {
+  const [view, hook] = await Promise.all([
+    read("../src/views/WorldEvidenceDrilldownView.jsx"),
+    read("../src/hooks/useWorldEvidenceController.js"),
+  ]);
+  assert.doesNotMatch(view, /media\.length\s*[+*/-]|(total|count)\s*[:=]\s*media\.length|reduce\([^\n]*(endpoint|evidence|media)|raw_endpoints\s*=|effective_endpoints\s*=|canonical_(person|endpoint)\s*=/);
+  assert.doesNotMatch(hook, /media\.length[^\n]*(total|count)|mergeEvidencePages|derive|infer|resolveAlias/);
+  assert.match(view, /page\.returned_count/);
+  assert.match(view, /page\.total_count/);
+  assert.match(view, /evidence\.media_summary\.availability/);
 });

@@ -40,6 +40,7 @@ import { EMPTY_WORLD_FILTERS, worldPageFor } from "../utils/world.js";
 import { ClusterDrilldownView } from "./ClusterDrilldownView.jsx";
 import { WorldPersonDrilldownView } from "./WorldPersonDrilldownView.jsx";
 import { WorldEventDrilldownView } from "./WorldEventDrilldownView.jsx";
+import { WorldEvidenceDrilldownView } from "./WorldEvidenceDrilldownView.jsx";
 
 const COLLECTION_TABS = [
   { label: "Overview", value: "PEOPLE" },
@@ -69,6 +70,11 @@ export function WorldView({
   onRefreshEvent,
   onEventCollection,
   onNextEventPage,
+  onOpenEvidence,
+  onCloseEvidence,
+  onRefreshEvidence,
+  onEvidenceCollection,
+  onNextEvidencePage,
 }) {
   const data = state.data;
   const [draft, setDraft] = useState(() => ({ ...EMPTY_WORLD_FILTERS }));
@@ -82,6 +88,18 @@ export function WorldView({
 
   useEffect(() => setSelected(null), [data?.graph_revision, state.collection, state.pageNumber]);
 
+  if (state.evidence?.active) {
+    return (
+      <WorldEvidenceDrilldownView
+        evidence={state.evidence}
+        onBack={onCloseEvidence}
+        onRefresh={onRefreshEvidence}
+        onCollection={onEvidenceCollection}
+        onNextPage={onNextEvidencePage}
+      />
+    );
+  }
+
   if (state.event?.active) {
     return (
       <WorldEventDrilldownView
@@ -90,6 +108,7 @@ export function WorldView({
         onRefresh={onRefreshEvent}
         onCollection={onEventCollection}
         onNextPage={onNextEventPage}
+        onOpenEvidence={onOpenEvidence}
       />
     );
   }
@@ -154,6 +173,7 @@ export function WorldView({
       {state.cluster?.notice ? <Alert color="yellow" title="Cluster view refreshed">{state.cluster.notice}</Alert> : null}
       {state.person?.notice ? <Alert color="yellow" title="Person view refreshed">{state.person.notice}</Alert> : null}
       {state.event?.notice ? <Alert color="yellow" title="Event view refreshed">{state.event.notice}</Alert> : null}
+      {state.evidence?.notice ? <Alert color="yellow" title="Evidence view refreshed">{state.evidence.notice}</Alert> : null}
 
       <WorldScopeControls
         data={data}
