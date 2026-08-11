@@ -1,6 +1,7 @@
 const WORLD_COLLECTIONS = new Set(["PEOPLE", "CLUSTERS", "RELATIONSHIPS", "PATTERNS"]);
 const WORLD_CLUSTER_COLLECTIONS = new Set(["MEMBERS", "RELATIONSHIPS"]);
 const WORLD_PERSON_COLLECTIONS = new Set(["RELATIONSHIPS", "EVENTS"]);
+const WORLD_EVENT_COLLECTIONS = new Set(["PARTICIPANTS", "PROVENANCE", "EVIDENCE", "MEDIA"]);
 const WORLD_LIFECYCLE_STATES = new Set(["ACTIVE", "ARCHIVED", "DELETED", "MERGED"]);
 const WORLD_IDENTITY_STATES = new Set(["IDENTIFIED", "UNIDENTIFIED"]);
 const WORLD_BIOMETRIC_STATES = new Set(["NO_FACE", "ENROLLED"]);
@@ -201,6 +202,63 @@ export function requireWorldPersonContract(payload, expected = {}) {
   return payload;
 }
 
+export function requireWorldEventContract(payload, expected = {}) {
+  requireWorldContractIdentity(payload);
+  if (
+    payload.requested_detail_level !== "EVENT"
+    || payload.returned_detail_level !== "EVENT"
+    || payload.focus?.type !== "EVENT"
+    || !payload.focus.id
+    || !payload.graph_revision
+    || !payload.as_of
+  ) throw new Error("Incomplete World Event focus or revision contract");
+  if (expected.eventId && payload.focus.id !== expected.eventId) {
+    throw staleWorldEventContractError("World Event focus does not match the requested observation");
+  }
+  if (expected.revision && payload.graph_revision !== expected.revision) {
+    throw staleWorldEventContractError("World Event revision does not match the requested snapshot");
+  }
+  for (const field of ["scope_totals", "effective_filters", "pagination", "limits"]) {
+    if (!payload[field] || typeof payload[field] !== "object" || Array.isArray(payload[field])) {
+      throw new Error(`Incomplete World Event ${field} contract`);
+    }
+  }
+  for (const field of ["events", "evidence", "media"]) {
+    if (!Array.isArray(payload[field])) throw new Error(`Incomplete World Event ${field} collection`);
+  }
+  for (const collection of WORLD_EVENT_COLLECTIONS) {
+    if (!payload.pagination[collection]) throw new Error(`Missing World Event ${collection} page state`);
+  }
+  requireWorldPagination(payload.pagination);
+  if (payload.events.length !== 1) throw new Error("World Event response must contain exactly one finalized observation");
+  const event = payload.events[0];
+  requireWorldEvent(event);
+  if (event.event_id !== payload.focus.id) {
+    throw staleWorldEventContractError("World Event identity changed in the retained snapshot");
+  }
+  event.participants.forEach(requireWorldParticipant);
+  event.participant_provenance.forEach(requireWorldParticipantProvenance);
+  payload.evidence.forEach(requireWorldEvidence);
+  payload.media.forEach(requireWorldMediaReference);
+  const requestedCollection = expected.collection || null;
+  if (requestedCollection === "PARTICIPANTS" && (
+    event.participants.length !== payload.pagination.PARTICIPANTS.returned_count
+    || event.participant_summary.total_count !== payload.pagination.PARTICIPANTS.total_count
+  )) throw new Error("World Event participant page does not match its page state");
+  if (requestedCollection === "PROVENANCE" && (
+    event.participant_provenance.length !== payload.pagination.PROVENANCE.returned_count
+    || event.participant_summary.provenance_total_count !== payload.pagination.PROVENANCE.total_count
+  )) throw new Error("World Event provenance page does not match its page state");
+  if (requestedCollection === "EVIDENCE" && payload.evidence.length !== payload.pagination.EVIDENCE.returned_count) {
+    throw new Error("World Event evidence page does not match its page state");
+  }
+  if (requestedCollection === "MEDIA" && (
+    payload.media.length !== payload.pagination.MEDIA.returned_count
+    || event.media_summary.total_count !== payload.pagination.MEDIA.total_count
+  )) throw new Error("World Event media page does not match its page state");
+  return payload;
+}
+
 export function buildWorldScopeQuery({
   collection = "PEOPLE",
   filters = EMPTY_WORLD_FILTERS,
@@ -318,6 +376,36 @@ export function buildWorldPersonQuery({
   return `/api/world-graph?${query}`;
 }
 
+export function buildWorldEventQuery({
+  eventId,
+  collection = "PARTICIPANTS",
+  filters = EMPTY_WORLD_FILTERS,
+  cursor = null,
+  revision,
+  asOf,
+} = {}) {
+  if (!eventId || !revision || !asOf) throw new Error("World Event requests require event, revision, and as_of binding");
+  const normalizedCollection = String(collection || "PARTICIPANTS").toUpperCase();
+  if (!WORLD_EVENT_COLLECTIONS.has(normalizedCollection)) throw new Error("Unsupported World Event collection");
+  const query = new URLSearchParams({
+    version: "2",
+    level: "EVENT",
+    focus_type: "EVENT",
+    focus_id: eventId,
+    collection: normalizedCollection,
+    people_limit: "25",
+    provenance_limit: "100",
+    evidence_limit: "25",
+    media_limit: "25",
+    facet_limit: "100",
+    revision,
+    as_of: asOf,
+  });
+  appendWorldFilters(query, filters);
+  if (cursor) query.set("cursor", cursor);
+  return `/api/world-graph?${query}`;
+}
+
 export function filtersFromEffective(filters = {}) {
   const list = (value) => Array.isArray(value) ? [...value] : [];
   const recent = filters.recent_activity || "";
@@ -374,6 +462,15 @@ export function isInvalidWorldPersonError(error) {
     || (
       [400, 404].includes(error?.status)
       && /world person (is unavailable|focus|revision)|person.*revision|cursor does not match/i.test(error.message || "")
+    );
+}
+
+export function isInvalidWorldEventError(error) {
+  return error?.code === "WORLD_EVENT_STALE"
+    || isStaleWorldError(error)
+    || (
+      [400, 404].includes(error?.status)
+      && /world event (is unavailable|focus|revision)|event.*revision|cursor does not match/i.test(error.message || "")
     );
 }
 
@@ -458,7 +555,11 @@ function requireWorldEvent(event) {
     || !event.participant_summary
     || !Number.isFinite(Number(event.participant_summary.total_count))
     || !Number.isFinite(Number(event.participant_summary.returned_count))
+    || typeof event.participant_summary.has_more !== "boolean"
+    || !Number.isFinite(Number(event.participant_summary.provenance_total_count))
+    || !Number.isFinite(Number(event.participant_summary.provenance_returned_count))
     || !event.participant_summary.participants_state
+    || !event.participant_summary.provenance_state
     || !event.evidence_summary
     || !Number.isFinite(Number(event.evidence_summary.total_count))
     || !event.evidence_summary.evidence_type_counts
@@ -471,9 +572,58 @@ function requireWorldEvent(event) {
   ) throw new Error("Invalid World event summary contract");
 }
 
+function requireWorldParticipant(participant) {
+  if (!participant?.person_id) throw new Error("Invalid World Event participant contract");
+}
+
+function requireWorldParticipantProvenance(item) {
+  if (
+    !item?.raw_person_id
+    || !item.effective_person_id
+    || !item.relationship_to_effective_identity
+    || !Array.isArray(item.correction_operation_ids)
+  ) throw new Error("Invalid World Event provenance contract");
+}
+
+function requireWorldEvidence(evidence) {
+  if (
+    !evidence?.evidence_id
+    || !evidence.evidence_type
+    || !evidence.directionality
+    || typeof evidence.active !== "boolean"
+    || !evidence.occurred_at
+    || !Array.isArray(evidence.effective_endpoints)
+    || !Array.isArray(evidence.raw_endpoints)
+    || !Array.isArray(evidence.supporting_references)
+    || !evidence.provenance
+    || !evidence.occurrence_bounds
+    || !evidence.explanation
+    || !Array.isArray(evidence.explanation.factual_factors)
+    || !Array.isArray(evidence.explanation.limitations)
+    || !evidence.media_summary
+    || !Number.isFinite(Number(evidence.media_summary.total_count))
+    || !evidence.media_summary.availability
+  ) throw new Error("Invalid World Event evidence contract");
+}
+
+function requireWorldMediaReference(media) {
+  if (
+    !media?.media_id
+    || (media.media_reference !== null && typeof media.media_reference !== "string")
+    || !media.occurred_at
+    || !media.supporting_event_id
+  ) throw new Error("Invalid World Event media reference contract");
+}
+
 function staleWorldPersonContractError(message) {
   const error = new Error(message);
   error.code = "WORLD_PERSON_STALE";
+  return error;
+}
+
+function staleWorldEventContractError(message) {
+  const error = new Error(message);
+  error.code = "WORLD_EVENT_STALE";
   return error;
 }
 

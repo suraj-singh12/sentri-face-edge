@@ -39,6 +39,7 @@ import {
 import { EMPTY_WORLD_FILTERS, worldPageFor } from "../utils/world.js";
 import { ClusterDrilldownView } from "./ClusterDrilldownView.jsx";
 import { WorldPersonDrilldownView } from "./WorldPersonDrilldownView.jsx";
+import { WorldEventDrilldownView } from "./WorldEventDrilldownView.jsx";
 
 const COLLECTION_TABS = [
   { label: "Overview", value: "PEOPLE" },
@@ -63,6 +64,11 @@ export function WorldView({
   onRefreshPerson,
   onPersonCollection,
   onNextPersonPage,
+  onOpenEvent,
+  onCloseEvent,
+  onRefreshEvent,
+  onEventCollection,
+  onNextEventPage,
 }) {
   const data = state.data;
   const [draft, setDraft] = useState(() => ({ ...EMPTY_WORLD_FILTERS }));
@@ -76,6 +82,18 @@ export function WorldView({
 
   useEffect(() => setSelected(null), [data?.graph_revision, state.collection, state.pageNumber]);
 
+  if (state.event?.active) {
+    return (
+      <WorldEventDrilldownView
+        event={state.event}
+        onBack={onCloseEvent}
+        onRefresh={onRefreshEvent}
+        onCollection={onEventCollection}
+        onNextPage={onNextEventPage}
+      />
+    );
+  }
+
   if (state.person?.active) {
     return (
       <WorldPersonDrilldownView
@@ -84,6 +102,7 @@ export function WorldView({
         onRefresh={onRefreshPerson}
         onCollection={onPersonCollection}
         onNextPage={onNextPersonPage}
+        onOpenEvent={onOpenEvent}
       />
     );
   }
@@ -134,6 +153,7 @@ export function WorldView({
 
       {state.cluster?.notice ? <Alert color="yellow" title="Cluster view refreshed">{state.cluster.notice}</Alert> : null}
       {state.person?.notice ? <Alert color="yellow" title="Person view refreshed">{state.person.notice}</Alert> : null}
+      {state.event?.notice ? <Alert color="yellow" title="Event view refreshed">{state.event.notice}</Alert> : null}
 
       <WorldScopeControls
         data={data}

@@ -4,14 +4,17 @@ import test from "node:test";
 
 import {
   buildWorldClusterQuery,
+  buildWorldEventQuery,
   buildWorldPersonQuery,
   buildWorldScopeQuery,
   filtersFromEffective,
   invalidateWorldSnapshot,
   isInvalidWorldClusterError,
+  isInvalidWorldEventError,
   isInvalidWorldPersonError,
   isStaleWorldError,
   requireWorldClusterContract,
+  requireWorldEventContract,
   requireWorldPersonContract,
   requireWorldScopeContract,
   worldEntryMode,
@@ -234,6 +237,88 @@ function personPayload(collection = "RELATIONSHIPS", values = {}) {
     relationships,
     events,
     clusters: [], patterns: [], evidence: [], media: [],
+    ...values,
+  };
+}
+
+function worldEvidence(values = {}) {
+  return {
+    evidence_id: "evidence-a",
+    provenance: { created_operation_id: "operation-a", source: "event-finalization", canonical_endpoints: ["person-a", "person-b"], raw_endpoints: ["person-raw", "person-b"] },
+    evidence_type: "CO_OBSERVED",
+    supporting_references: [{ source_entity_type: "OBSERVATION", source_entity_id: "event-a", evidence_revision_id: "revision-a" }],
+    occurred_at: "2026-08-05T10:00:00Z",
+    explanation_links: ["relationship:person-a:person-b"],
+    active: true,
+    directionality: "UNDIRECTED",
+    effective_endpoints: ["person-a", "person-b"],
+    raw_endpoints: ["person-raw", "person-b"],
+    occurrence_bounds: { first: "2026-08-05T10:00:00Z", last: "2026-08-05T10:00:00Z" },
+    explanation: explanation({
+      basis_type: "AUTHORITATIVE_EVIDENCE_PROVENANCE",
+      factual_factors: [{ factor: "raw_endpoints", value: ["person-raw", "person-b"] }],
+      limitations: ["This evidence is descriptive provenance."],
+    }),
+    media_summary: { total_count: 1, availability: "AVAILABLE", retrieval: "EVIDENCE_MEDIA_COLLECTION", reason: null },
+    ...values,
+  };
+}
+
+function worldMedia(values = {}) {
+  return {
+    media_id: "media-a",
+    media_reference: "events/event-a/photo.jpg",
+    source: "camera-1",
+    occurred_at: "2026-08-05T10:00:00Z",
+    supporting_event_id: "event-a",
+    supporting_evidence_id: null,
+    ...values,
+  };
+}
+
+function eventPayload(collection = "PARTICIPANTS", values = {}) {
+  const participants = collection === "PARTICIPANTS" ? [{ person_id: "person-a" }, { person_id: "person-b" }] : [];
+  const provenance = collection === "PROVENANCE" ? [{
+    raw_person_id: "person-raw",
+    effective_person_id: "person-a",
+    relationship_to_effective_identity: "CORRECTED_PARTICIPANT",
+    correction_operation_ids: ["correction-a"],
+  }] : [];
+  const event = worldEvent({
+    participants,
+    participant_provenance: provenance,
+    participant_summary: {
+      total_count: 2,
+      returned_count: participants.length,
+      has_more: false,
+      provenance_total_count: 1,
+      provenance_returned_count: provenance.length,
+      participants_state: collection === "PARTICIPANTS" ? "LOADED" : "NOT_REQUESTED",
+      provenance_state: collection === "PROVENANCE" ? "LOADED" : "NOT_REQUESTED",
+    },
+  });
+  const unrequested = (name, total) => ({ ...page(name, total), returned_count: 0, has_more: total > 0, truncated: total > 0, truncation_reason: "collection_not_requested" });
+  return {
+    contract: "sentriface.world-graph",
+    contract_version: 2,
+    requested_detail_level: "EVENT",
+    returned_detail_level: "EVENT",
+    graph_revision: "opaque-g7",
+    as_of: "2026-08-11T12:00:00+00:00",
+    focus: { type: "EVENT", id: "event-a" },
+    scope_totals: { people: 2, relationships: 0, clusters: 0, finalized_events: 1, evidence: 1, media: 1 },
+    effective_filters: { recent_activity: "LAST_30_DAYS", missing_location: "INCLUDE" },
+    limits: { people: 25, provenance: 100, evidence: 25, media: 25 },
+    pagination: {
+      PARTICIPANTS: collection === "PARTICIPANTS" ? page("PARTICIPANTS", 2) : unrequested("PARTICIPANTS", 2),
+      PROVENANCE: collection === "PROVENANCE" ? page("PROVENANCE", 1) : unrequested("PROVENANCE", 1),
+      EVIDENCE: collection === "EVIDENCE" ? page("EVIDENCE", 1) : unrequested("EVIDENCE", 1),
+      MEDIA: collection === "MEDIA" ? page("MEDIA", 1) : unrequested("MEDIA", 1),
+    },
+    people: [], clusters: [], relationships: [], patterns: [],
+    events: [event],
+    evidence: collection === "EVIDENCE" ? [worldEvidence()] : [],
+    media: collection === "MEDIA" ? [worldMedia()] : [],
     ...values,
   };
 }
@@ -545,7 +630,7 @@ test("World Person view renders scoped header, authoritative memberships, relati
   assert.match(view, /event\.media_summary\.total_count/);
   assert.match(view, /Location not recorded/);
   assert.match(view, /Event navigation intent/);
-  assert.match(view, /Participants, evidence, and media are not loaded/);
+  assert.match(view, /fresh World EVENT request/);
   assert.match(view, /Next authoritative page/);
   assert.doesNotMatch(view, /inferCluster|deriveMembership|calculateSightings|calculateRank|dedupeRelationships|combineRelationships|\/api\/person|\/api\/observations/);
 });
@@ -588,4 +673,131 @@ test("World Person empty collections and totals remain backend-owned", async () 
   }).pagination.EVENTS.total_count, 0);
   const view = await read("../src/views/WorldPersonDrilldownView.jsx");
   assert.doesNotMatch(view, /relationships\.length[^\n]*relationship_count|events\.length[^\n]*finalized_event_count|cluster_memberships\s*=|reduce\([^\n]*(events|relationships)/);
+});
+
+test("World Event requests bind event focus, revision, as_of, effective scope, and one child collection", () => {
+  const request = new URL(buildWorldEventQuery({
+    eventId: "event-a",
+    collection: "PROVENANCE",
+    revision: "opaque-g7",
+    asOf: "2026-08-11T12:00:00+00:00",
+    filters: { recent_activity: "LAST_30_DAYS", locations: ["Dock"], missing_location: "EXCLUDE" },
+    cursor: "provenance-next",
+  }), "http://localhost");
+  assert.equal(request.searchParams.get("level"), "EVENT");
+  assert.equal(request.searchParams.get("focus_type"), "EVENT");
+  assert.equal(request.searchParams.get("focus_id"), "event-a");
+  assert.equal(request.searchParams.get("collection"), "PROVENANCE");
+  assert.equal(request.searchParams.get("revision"), "opaque-g7");
+  assert.equal(request.searchParams.get("as_of"), "2026-08-11T12:00:00+00:00");
+  assert.equal(request.searchParams.get("recent_activity"), "LAST_30_DAYS");
+  assert.equal(request.searchParams.get("cursor"), "provenance-next");
+});
+
+test("World Event contract validates participants, provenance, evidence, and media independently", () => {
+  const participants = requireWorldEventContract(eventPayload("PARTICIPANTS"), { eventId: "event-a", collection: "PARTICIPANTS", revision: "opaque-g7" });
+  assert.deepEqual(participants.events[0].participants.map((item) => item.person_id), ["person-a", "person-b"]);
+  assert.equal(participants.events[0].participant_provenance.length, 0);
+  assert.equal(participants.pagination.PROVENANCE.truncation_reason, "collection_not_requested");
+
+  const provenance = requireWorldEventContract(eventPayload("PROVENANCE"), { eventId: "event-a", collection: "PROVENANCE", revision: "opaque-g7" });
+  assert.equal(provenance.events[0].participant_provenance[0].relationship_to_effective_identity, "CORRECTED_PARTICIPANT");
+  assert.equal(provenance.events[0].participants.length, 0);
+
+  const evidence = requireWorldEventContract(eventPayload("EVIDENCE"), { eventId: "event-a", collection: "EVIDENCE", revision: "opaque-g7" });
+  assert.deepEqual(evidence.evidence[0].effective_endpoints, ["person-a", "person-b"]);
+  assert.equal(evidence.evidence[0].media_summary.availability, "AVAILABLE");
+
+  const media = requireWorldEventContract(eventPayload("MEDIA"), { eventId: "event-a", collection: "MEDIA", revision: "opaque-g7" });
+  assert.equal(media.media[0].media_reference, "events/event-a/photo.jpg");
+  assert.equal(media.evidence.length, 0);
+});
+
+test("World Event contract fails closed for missing child semantics and stale identity", () => {
+  assert.throws(() => requireWorldEventContract(eventPayload("PARTICIPANTS", {
+    events: [worldEvent({ participants: [{ person_id: undefined }] })],
+  }), { eventId: "event-a", collection: "PARTICIPANTS", revision: "opaque-g7" }), /participant contract/);
+  assert.throws(() => requireWorldEventContract(eventPayload("PROVENANCE", {
+    events: [worldEvent({ participant_provenance: [{ raw_person_id: "raw", effective_person_id: "effective", correction_operation_ids: [] }] })],
+  }), { eventId: "event-a", collection: "PROVENANCE", revision: "opaque-g7" }), /provenance contract/);
+  assert.throws(() => requireWorldEventContract(eventPayload("EVIDENCE", {
+    evidence: [worldEvidence({ effective_endpoints: undefined })],
+  }), { eventId: "event-a", collection: "EVIDENCE", revision: "opaque-g7" }), /evidence contract/);
+  assert.throws(() => requireWorldEventContract(eventPayload("MEDIA", {
+    media: [worldMedia({ supporting_event_id: undefined })],
+  }), { eventId: "event-a", collection: "MEDIA", revision: "opaque-g7" }), /media reference contract/);
+  assert.equal(isInvalidWorldEventError({ status: 404, message: "World event is unavailable in the effective scope" }), true);
+  assert.throws(() => requireWorldEventContract(eventPayload("PARTICIPANTS", {
+    events: [worldEvent({ event_id: "event-replaced", participants: [{ person_id: "person-a" }, { person_id: "person-b" }] })],
+  }), { eventId: "event-a", collection: "PARTICIPANTS", revision: "opaque-g7" }), /identity changed/);
+});
+
+test("PERSON event selection opens a fresh EVENT request and retains the PERSON origin", async () => {
+  const [personView, worldView, controller, app] = await Promise.all([
+    read("../src/views/WorldPersonDrilldownView.jsx"),
+    read("../src/views/WorldView.jsx"),
+    read("../src/hooks/useWorldController.js"),
+    read("../src/SentriFaceApp.jsx"),
+  ]);
+  assert.match(personView, /onOpenEvent\(event\)/);
+  assert.match(personView, /PERSON event summary is not reused as event detail/);
+  assert.match(worldView, /state\.event\?\.active[\s\S]*WorldEventDrilldownView/);
+  assert.match(controller, /buildWorldEventQuery/);
+  assert.match(controller, /origin: \{[\s\S]*level: "PERSON"[\s\S]*personId: person\.personId[\s\S]*collection: person\.collection/);
+  assert.match(controller, /return loadWorldEventCollection\(\{ collection: "PARTICIPANTS" \}\)/);
+  assert.match(app, /onOpenEvent=\{guarded\(actions\.openWorldEvent\)\}/);
+  assert.doesNotMatch(controller, /eventSummary[\s\S]{0,220}summary:/);
+});
+
+test("World Event workspace renders authoritative overview and four bounded child collections", async () => {
+  const view = await read("../src/views/WorldEventDrilldownView.jsx");
+  assert.match(view, /data-world-level="EVENT"/);
+  assert.match(view, /Finalized observation/);
+  assert.match(view, /summary\.event_id/);
+  assert.match(view, /summary\.occurred_at/);
+  assert.match(view, /Location not recorded/);
+  assert.match(view, /summary\.participant_summary\.total_count/);
+  assert.match(view, /summary\.participant_summary\.provenance_total_count/);
+  assert.match(view, /summary\.evidence_summary\.total_count/);
+  assert.match(view, /summary\.media_summary\.total_count/);
+  assert.match(view, /Participants.*PARTICIPANTS/);
+  assert.match(view, /Provenance.*PROVENANCE/);
+  assert.match(view, /Evidence.*EVIDENCE/);
+  assert.match(view, /Media.*MEDIA/);
+  assert.match(view, /Backend-returned effective canonical participant/);
+  assert.match(view, /Raw → effective/);
+  assert.match(view, /relationship_to_effective_identity/);
+  assert.match(view, /item\.effective_endpoints/);
+  assert.match(view, /value\.raw_endpoints/);
+  assert.match(view, /item\.media_summary\.availability/);
+  assert.match(view, /mediaUrl\(item\.media_reference\)/);
+  assert.match(view, /Evidence navigation intent/);
+  assert.match(view, /Media navigation intent/);
+  assert.match(view, /Full evidence provenance and Evidence → Media navigation remain P10-F5/);
+  assert.match(view, /Next authoritative page/);
+  assert.doesNotMatch(view, /deriveParticipants|inferEvidence|profile.*photo|reconstructChain|function reconstruct|\/api\/observations|\/api\/person/);
+});
+
+test("World Event child state is independent, page-replacing, refreshable, and stale-safe", async () => {
+  const controller = await read("../src/hooks/useWorldController.js");
+  for (const collection of ["PARTICIPANTS", "PROVENANCE", "EVIDENCE", "MEDIA"]) {
+    assert.match(controller, new RegExp(`${collection}: emptyEventCollection\\(\\)`));
+  }
+  assert.match(controller, /\[nextCollection\]: \{ data: payload, loading: false, error: null, pageNumber \}/);
+  assert.match(controller, /page = state\?\.data\?\.pagination\?\.\[event\.collection\]/);
+  assert.match(controller, /cursor: page\.next_cursor/);
+  assert.match(controller, /refreshWorldEvent[\s\S]*preserve: true/);
+  assert.match(controller, /isInvalidWorldEventError\(error\)[\s\S]*recoverStaleEvent/);
+  assert.match(controller, /recoverStaleEvent[\s\S]*setWorldPerson\(emptyWorldPerson\(\)\)[\s\S]*setWorldCluster\(emptyWorldCluster\(\)\)[\s\S]*loadWorld\(\{/);
+  assert.match(controller, /closeWorldEvent[\s\S]*active: false/);
+  assert.doesNotMatch(controller, /mergeEventPages|\.concat\(|push\(\.\.\.payload|setInterval|visibilitychange|addEventListener\(["']focus/);
+});
+
+test("World Event never derives totals or treats provenance as the participant page", async () => {
+  const view = await read("../src/views/WorldEventDrilldownView.jsx");
+  assert.doesNotMatch(view, /participants\.length[^\n]*(total|count)|evidence\.length[^\n]*(total|count)|media\.length[^\n]*(total|count)|participant_provenance\s*=.*participants|reduce\([^\n]*(participants|evidence|media)/);
+  assert.match(view, /event\?\.participants \|\| \[\]/);
+  assert.match(view, /event\?\.participant_provenance \|\| \[\]/);
+  assert.match(view, /participant entry supplies a canonical ID but no allowed actions/);
+  assert.match(view, /PERSON navigation is therefore not enabled/);
 });

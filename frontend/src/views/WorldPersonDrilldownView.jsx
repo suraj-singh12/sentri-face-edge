@@ -42,6 +42,7 @@ export function WorldPersonDrilldownView({
   onRefresh,
   onCollection,
   onNextPage,
+  onOpenEvent,
 }) {
   const collectionState = person.collections[person.collection];
   const data = collectionState?.data;
@@ -109,7 +110,7 @@ export function WorldPersonDrilldownView({
 
         <Stack gap="sm" className="world-person-context">
           <Paper withBorder radius="md" className="world-person-clusters"><ClusterMemberships memberships={root.cluster_memberships} /></Paper>
-          <Paper withBorder radius="md" className="world-person-inspector"><PersonSelectionInspector item={selected} binding={person.binding} /></Paper>
+          <Paper withBorder radius="md" className="world-person-inspector"><PersonSelectionInspector item={selected} binding={person.binding} onOpenEvent={onOpenEvent} /></Paper>
         </Stack>
       </Box>
     </Stack>
@@ -223,7 +224,7 @@ function PersonEmpty({ page, noun }) {
   return <Stack gap={2} align="center" ta="center" p="lg"><Text size="sm" fw={700}>{complete ? `No scoped ${noun}` : `No ${noun} returned on this page`}</Text><Text size="xs" c="dimmed">{page ? `${page.returned_count} returned of ${page.total_count} authoritative ${noun}.` : "Page state is unavailable."}</Text></Stack>;
 }
 
-function PersonSelectionInspector({ item, binding }) {
+function PersonSelectionInspector({ item, binding, onOpenEvent }) {
   if (!item) return <Stack gap="xs" p="sm"><Text fw={800}>Selection details</Text><Text size="sm" c="dimmed">Select a relationship or event for its authoritative scoped summary.</Text></Stack>;
   if (item.type === "event") {
     const event = item.value;
@@ -238,7 +239,8 @@ function PersonSelectionInspector({ item, binding }) {
         <InspectorRow label="Media" value={event.media_summary.total_count} />
         <InspectorRow label="Revision binding" value={shortId(binding?.revision)} />
         <Text size="xs">{event.explanation.summary}</Text>
-        <Text size="10px" c="dimmed">Event selection is prepared for the frozen World EVENT contract in P10-F4. Participants, evidence, and media are not loaded in this phase.</Text>
+        <Button size="xs" variant="light" rightSection={<IconArrowRight size={14} />} onClick={() => onOpenEvent(event)}>Open finalized event</Button>
+        <Text size="10px" c="dimmed">This issues a fresh World EVENT request. The PERSON event summary is not reused as event detail.</Text>
       </Stack>
     );
   }
