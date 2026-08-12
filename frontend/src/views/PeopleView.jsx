@@ -257,13 +257,13 @@ export function PeopleView({
                 />
               ) : (
                 <>
-                  <PeopleStatsStrip
+                  {/* <PeopleStatsStrip
                     people={statsCollection}
                     totalPhotos={peopleStats.totalPhotos}
                     favoriteCount={statsCollection.filter((person) => person.favorite).length}
                     addedToday={peopleStats.addedToday}
                     archived={filter === "archived"}
-                  />
+                  /> */}
                   <Box ref={resultsRef} className="people-results-scroll">
                     {pagePeople.length ? (
                       <PeopleResults
@@ -640,39 +640,39 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
   );
 }
 
-function PeopleStatsStrip({ people, totalPhotos, favoriteCount, addedToday, archived }) {
-  const stats = archived ? [
-    { label: "Archived Records", value: people.length, icon: IconArchive, color: "gray" },
-    { label: "Retained Photos", value: totalPhotos.toLocaleString(), icon: IconImageInPicture, color: "violet" },
-    { label: "Merged Records", value: people.filter((person) => person.metadata?.merged_into).length, icon: IconSwitchHorizontal, color: "blue" },
-    { label: "Archived Today", value: people.filter((person) => isTodayLike(person.deleted_at)).length, icon: IconRefresh, color: "green" },
-  ] : [
-    { label: "Total People", value: people.length, icon: IconUser, color: "teal" },
-    { label: "With Photos", value: people.filter((person) => Number(person.embedding_count || 0)).length, icon: IconImageInPicture, color: "violet" },
-    { label: "No Photos", value: people.filter((person) => !Number(person.embedding_count || 0)).length, icon: IconUser, color: "indigo" },
-    { label: "Favorites", value: favoriteCount, icon: IconStar, color: "yellow" },
-    { label: "Seen in last 7 days", value: people.filter((person) => daysSince(person.last_seen_at) <= 7).length, icon: IconEye, color: "blue" },
-    { label: "Added Today", value: addedToday, icon: IconRefresh, color: "blue" },
-  ];
-  return (
-    <SimpleGrid cols={{ base: 2, sm: 3, lg: archived ? 4 : 6 }} spacing="sm" className="people-stats-strip">
-      {stats.map((item) => {
-        const Icon = item.icon;
-        return (
-          <Paper key={item.label} withBorder radius="md" p="md" className="people-stat-card">
-            <Group wrap="nowrap">
-              <ThemeIcon size={42} radius="md" color={item.color} variant="light"><Icon size={24} /></ThemeIcon>
-              <Box>
-                <Text fw={900} size="xl">{item.value}</Text>
-                <Text size="xs" c="dimmed">{item.label}</Text>
-              </Box>
-            </Group>
-          </Paper>
-        );
-      })}
-    </SimpleGrid>
-  );
-}
+// function PeopleStatsStrip({ people, totalPhotos, favoriteCount, addedToday, archived }) {
+//   const stats = archived ? [
+//     { label: "Archived Records", value: people.length, icon: IconArchive, color: "gray" },
+//     { label: "Retained Photos", value: totalPhotos.toLocaleString(), icon: IconImageInPicture, color: "violet" },
+//     { label: "Merged Records", value: people.filter((person) => person.metadata?.merged_into).length, icon: IconSwitchHorizontal, color: "blue" },
+//     { label: "Archived Today", value: people.filter((person) => isTodayLike(person.deleted_at)).length, icon: IconRefresh, color: "green" },
+//   ] : [
+//     { label: "Total People", value: people.length, icon: IconUser, color: "teal" },
+//     { label: "With Photos", value: people.filter((person) => Number(person.embedding_count || 0)).length, icon: IconImageInPicture, color: "violet" },
+//     { label: "No Photos", value: people.filter((person) => !Number(person.embedding_count || 0)).length, icon: IconUser, color: "indigo" },
+//     { label: "Favorites", value: favoriteCount, icon: IconStar, color: "yellow" },
+//     { label: "Seen in last 7 days", value: people.filter((person) => daysSince(person.last_seen_at) <= 7).length, icon: IconEye, color: "blue" },
+//     { label: "Added Today", value: addedToday, icon: IconRefresh, color: "blue" },
+//   ];
+//   return (
+//     <SimpleGrid cols={{ base: 2, sm: 3, lg: archived ? 4 : 6 }} spacing="sm" className="people-stats-strip">
+//       {stats.map((item) => {
+//         const Icon = item.icon;
+//         return (
+//           <Paper key={item.label} withBorder radius="md" p="md" className="people-stat-card">
+//             <Group wrap="nowrap">
+//               <ThemeIcon size={42} radius="md" color={item.color} variant="light"><Icon size={24} /></ThemeIcon>
+//               <Box>
+//                 <Text fw={900} size="xl">{item.value}</Text>
+//                 <Text size="xs" c="dimmed">{item.label}</Text>
+//               </Box>
+//             </Group>
+//           </Paper>
+//         );
+//       })}
+//     </SimpleGrid>
+//   );
+// }
 
 function PeopleResults({ people, groupBy, viewMode, archived, canDestroy, onOpen, onFavorite, onDelete }) {
   const groups = useMemo(() => groupPeople(people, groupBy), [groupBy, people]);
