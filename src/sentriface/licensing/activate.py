@@ -5,30 +5,31 @@ from sentriface.licensing.fingerprint import generate_machine_id
 def activate():
 
     print()
-    print("SentriFace Edge Activation")
+    print("==============================")
+    print(" SentriFace Edge Activation")
+    print("==============================")
     print()
+
+    machine_id = generate_machine_id()
 
     print("Machine ID:")
-    print(generate_machine_id())
+    print(machine_id)
 
     print()
 
-    key = input("Activation Key: ")
+    key = input("Activation Key: ").strip()
 
     try:
-
         save_activation_key(key)
 
-        print(
-            "Activation successful."
-        )
+        print()
+        print("Activation successful.")
 
         return True
 
     except Exception:
 
-        print(
-            "Invalid key."
-        )
+        print()
+        print("Invalid activation key.")
 
         return False
