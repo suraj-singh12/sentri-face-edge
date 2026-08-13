@@ -14,5 +14,34 @@ logs/
 installer_output/
 dist_old/
 
-# model files required at runtime
-./packaging/runtime/core/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Type-checker and linter caches
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+# Build-tool diagnostics
+nuitka-crash-report*.xml
+vsenv.txt
+
+# Editor backup files
+*.save
+*.bak
+*.tmp
+*~
+.vscode/
+.idea/
+
+# Windows-generated metadata
+Thumbs.db
+Desktop.ini
+
+# Packaged model binaries
+packaging/runtime/core/*.dat
