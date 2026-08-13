@@ -12,3 +12,7 @@ dist/
 *.egg-info/
 logs/
 installer_output/
+dist_old/
+
+# model files required at runtime
+./packaging/runtime/core/

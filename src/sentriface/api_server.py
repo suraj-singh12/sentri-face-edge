@@ -16,6 +16,8 @@ import threading
 import time
 import uuid
 import zipfile
+import time
+import webbrowser
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -214,6 +216,14 @@ class OperationGate:
                 self._exclusive_active = False
                 self._condition.notify_all()
 
+    def busy(self) -> bool:
+        with self._condition:
+            return (
+                self._active_operations > 0
+                or self._exclusive_active
+                or self._exclusive_waiters > 0
+            )
+
 
 class SentriFaceApiServer(ThreadingHTTPServer):
     def __init__(
@@ -272,6 +282,17 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.auth = AuthService(config.db_path, config.storage_key)
         self._scavenge_stale_files()
         self.maintenance_stop = threading.Event()
+
+        self.browser_seen = False
+        self.last_browser_heartbeat = time.monotonic()
+
+        self.browser_shutdown_thread = threading.Thread(
+            target=self._browser_shutdown_loop,
+            name="sentriface-browser-shutdown",
+            daemon=True,
+        )
+        self.browser_shutdown_thread.start()
+
         self.maintenance_thread = threading.Thread(
             target=self._maintenance_loop,
             name="sentriface-retention",
@@ -288,6 +309,35 @@ class SentriFaceApiServer(ThreadingHTTPServer):
                 daemon=True,
             )
             self.network_policy_thread.start()
+
+    def _browser_shutdown_loop(self) -> None:
+        while not self.maintenance_stop.wait(5):
+            if not self.browser_seen:
+                continue
+
+            idle_seconds = time.monotonic() - self.last_browser_heartbeat
+
+            if idle_seconds < 30:
+                continue
+
+            if self.active_queue_jobs:
+                continue
+
+            if self.operation_gate.busy():
+                continue
+
+            self.log_event(
+                "browser-session-ended",
+                idle_seconds=round(idle_seconds, 1),
+            )
+
+            threading.Thread(
+                target=self.shutdown,
+                name="sentriface-clean-shutdown",
+                daemon=True,
+            ).start()
+
+            return
 
     def indexed_upload_objects(self) -> dict[str, Path]:
         """Build the legacy upload hash index once, then reuse it in memory."""
@@ -831,10 +881,17 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         super().end_headers()
+
     def do_GET(self) -> None:
         if self._reject_invalid_host():
             return
         parsed = urlparse(self.path)
+        if parsed.path == "/api/browser-heartbeat":
+            self.server.browser_seen = True
+            self.server.last_browser_heartbeat = time.monotonic()
+            self._json({"ok": True})
+            return
+        
         if parsed.path.startswith("/api/") or parsed.path == "/media":
             if (
                 self._reject_invalid_origin()
@@ -2542,7 +2599,9 @@ def main() -> int:
     ) as exc:
         print(f"SentriFace could not start safely: {exc}")
         return 2
-    print(f"SentriFace UI running at http://{args.host}:{server.server_port}")
+    # print(f"SentriFace UI running at http://{args.host}:{server.server_port}")
+    url = f"http://{args.host}:{server.server_port}"
+    webbrowser.open(url, new=1)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

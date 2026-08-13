@@ -30,7 +30,8 @@ def get_bios_uuid():
                 "(Get-CimInstance Win32_ComputerSystemProduct).UUID"
             ],
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
         )
 
         return result.strip()
@@ -48,7 +49,8 @@ def get_baseboard_serial():
                 "(Get-CimInstance Win32_BaseBoard).SerialNumber"
             ],
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
         )
 
         return result.strip()

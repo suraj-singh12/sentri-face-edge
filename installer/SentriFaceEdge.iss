@@ -12,6 +12,9 @@ AppPublisher={#MyPublisher}
 DefaultDirName={autopf}\SentriFace Edge
 DefaultGroupName=SentriFace Edge
 
+SetupIconFile=..\packaging\windows\SentriFaceEdge.ico
+UninstallDisplayIcon={app}\SentriFaceEdge.exe
+
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -26,8 +29,6 @@ WizardStyle=modern
 DisableProgramGroupPage=yes
 CloseApplications=yes
 RestartApplications=no
-
-UninstallDisplayIcon={app}\{#MyExeName}
 
 VersionInfoVersion=1.0.0.0
 VersionInfoProductName={#MyAppName}

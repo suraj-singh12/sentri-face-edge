@@ -202,6 +202,7 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
             text=True,
             timeout=10,
             env={**os.environ, "LC_ALL": "C"},
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return subprocess.CompletedProcess(command, 127, "", str(exc))

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ActionIcon, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Menu, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, UnstyledButton, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconChevronDown, IconDatabaseExport, IconKey, IconLogout, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
@@ -28,6 +28,20 @@ function ShellNotice({ color, title, children, action }) {
 }
 
 export default function SentriFaceApp() {
+
+  useEffect(() => {
+    const heartbeat = () => {
+        fetch("/api/browser-heartbeat", {
+            cache: "no-store",
+        }).catch(() => {});
+    };
+    heartbeat();
+    const timer = setInterval(heartbeat, 5000);
+    return () => {
+        clearInterval(timer);
+    };
+  }, []);
+
   return (
     <MantineProvider
       defaultColorScheme="light"
