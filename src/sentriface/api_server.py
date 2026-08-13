@@ -886,12 +886,6 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if self._reject_invalid_host():
             return
         parsed = urlparse(self.path)
-        if parsed.path == "/api/browser-heartbeat":
-            self.server.browser_seen = True
-            self.server.last_browser_heartbeat = time.monotonic()
-            self._json({"ok": True})
-            return
-        
         if parsed.path.startswith("/api/") or parsed.path == "/media":
             if (
                 self._reject_invalid_origin()
@@ -914,6 +908,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         ):
             return
         parsed = urlparse(self.path)
+        if parsed.path == "/api/browser-heartbeat":
+            self.server.browser_seen = True
+            self.server.last_browser_heartbeat = time.monotonic()
+            self._json({"ok": True})
+            return
         if self._reject_user_authorization("POST", parsed.path):
             return
         if self._reject_model_readiness(parsed.path):

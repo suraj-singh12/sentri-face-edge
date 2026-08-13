@@ -30,10 +30,13 @@ function ShellNotice({ color, title, children, action }) {
 export default function SentriFaceApp() {
 
   useEffect(() => {
+    const sessionToken = document.querySelector('meta[name="sentriface-session-token"]')?.content || "";
     const heartbeat = () => {
-        fetch("/api/browser-heartbeat", {
-            cache: "no-store",
-        }).catch(() => {});
+      fetch("/api/browser-heartbeat", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "X-SentriFace-Session": sessionToken },
+      }).catch(() => {});
     };
     heartbeat();
     const timer = setInterval(heartbeat, 5000);
