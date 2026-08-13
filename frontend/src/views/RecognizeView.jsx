@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Box,
@@ -62,6 +62,7 @@ export function RecognizeView({
   onFollowupSubmit,
   onFollowupClear,
 }) {
+  const followupRef = useRef(null);
   const faces = recognition?.faces || [];
   const selectedFace = faces.find((face) => face.index === selectedFaceIndex) || faces[0] || null;
   const [manualMatches, setManualMatches] = useState({});
@@ -90,6 +91,11 @@ export function RecognizeView({
     setPeopleQuery("");
     setPeopleCandidates({});
   }, [recognition?.inputPath]);
+
+  useEffect(() => {
+    if (!recognitionFollowup) return;
+    followupRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [recognitionFollowup?.action, recognitionFollowup?.faceIndex]);
 
   const requestFaceAction = (action, faceIndex) => {
     if (!canAdd) return;
@@ -315,13 +321,15 @@ export function RecognizeView({
         onSelect={choosePerson}
       />
       {recognitionFollowup && (
-        <RecognitionFollowupForm
-          values={recognitionFollowup}
-          confirmed={recognitionFollowupDone}
-          onChange={onFollowupChange}
-          onSubmit={onFollowupSubmit}
-          onClear={onFollowupClear}
-        />
+        <Box ref={followupRef}>
+          <RecognitionFollowupForm
+            values={recognitionFollowup}
+            confirmed={recognitionFollowupDone}
+            onChange={onFollowupChange}
+            onSubmit={onFollowupSubmit}
+            onClear={onFollowupClear}
+          />
+        </Box>
       )}
       {recognition?.metrics && <Metrics metrics={recognition.metrics} />}
     </>
