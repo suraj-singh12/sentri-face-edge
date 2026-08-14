@@ -86,6 +86,220 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPo
 
 [Code]
 
+var
+  ActivationPage: TWizardPage;
+  ActivationStatusLabel: TNewStaticText;
+  ActivationMachineLabel: TNewStaticText;
+  ActivationMachineEdit: TNewEdit;
+  ActivationCopyButton: TNewButton;
+  ActivationKeyLabel: TNewStaticText;
+  ActivationKeyEdit: TNewEdit;
+  ActivationButton: TNewButton;
+  ActivationMessageLabel: TNewStaticText;
+  ActivationPageLoaded: Boolean;
+  ActivationMachineId: String;
+
+
+function LoadActivationResult(
+  ResultFile: String;
+  var Activated: Boolean;
+  var MachineId: String;
+  var MessageText: String
+): Boolean;
+var
+  Lines: TArrayOfString;
+begin
+  Result := False;
+  Activated := False;
+  MachineId := '';
+  MessageText := '';
+  if not LoadStringsFromFile(ResultFile, Lines) then
+    exit;
+  if GetArrayLength(Lines) < 2 then
+    exit;
+  Activated := Lines[0] = '1';
+  MachineId := Lines[1];
+  if GetArrayLength(Lines) >= 3 then
+    MessageText := Lines[2];
+  Result := True;
+end;
+
+
+function RunActivationHelper(
+  Action: String;
+  KeyFile: String;
+  var Activated: Boolean;
+  var MachineId: String;
+  var MessageText: String
+): Boolean;
+var
+  ResultFile: String;
+  Params: String;
+  ResultCode: Integer;
+begin
+  ResultFile := GetTempFileName(
+    ExpandConstant('{commonappdata}\SentriFace Edge\cache')
+  );
+  DeleteFile(ResultFile);
+  if Action = 'status' then
+    Params := '--activation-helper status "' + ResultFile + '"'
+  else
+    Params := '--activation-helper activate "' + KeyFile + '" "' + ResultFile + '"';
+
+  Result := ExecAsOriginalUser(
+    ExpandConstant('{app}\{#MyExeName}'),
+    Params,
+    ExpandConstant('{app}'),
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
+  if Result then
+    Result := LoadActivationResult(ResultFile, Activated, MachineId, MessageText);
+  DeleteFile(ResultFile);
+end;
+
+
+procedure ShowActivationState(Activated: Boolean; MessageText: String);
+begin
+  ActivationMachineLabel.Visible := not Activated;
+  ActivationMachineEdit.Visible := not Activated;
+  ActivationCopyButton.Visible := not Activated;
+  ActivationKeyLabel.Visible := not Activated;
+  ActivationKeyEdit.Visible := not Activated;
+  ActivationButton.Visible := not Activated;
+  if Activated then
+  begin
+    ActivationStatusLabel.Caption := 'SentriFace is activated.';
+    ActivationStatusLabel.Font.Color := clGreen;
+    ActivationMessageLabel.Caption := '';
+  end
+  else
+  begin
+    ActivationStatusLabel.Caption := 'SentriFace is not activated.';
+    ActivationStatusLabel.Font.Color := clWindowText;
+    ActivationMachineEdit.Text := ActivationMachineId;
+    ActivationMessageLabel.Caption := MessageText;
+  end;
+end;
+
+
+procedure CopyMachineIdClick(Sender: TObject);
+begin
+  SetClipboardText(ActivationMachineId);
+  ActivationMessageLabel.Caption := 'Machine ID copied.';
+  ActivationMessageLabel.Font.Color := clGreen;
+end;
+
+
+procedure ActivateNowClick(Sender: TObject);
+var
+  KeyFile: String;
+  Activated: Boolean;
+  MachineId: String;
+  MessageText: String;
+begin
+  if Trim(ActivationKeyEdit.Text) = '' then
+  begin
+    ActivationMessageLabel.Caption := 'Enter an activation key.';
+    ActivationMessageLabel.Font.Color := clRed;
+    exit;
+  end;
+
+  KeyFile := GetTempFileName(
+    ExpandConstant('{commonappdata}\SentriFace Edge\cache')
+  );
+  SaveStringToFile(KeyFile, Trim(ActivationKeyEdit.Text), False);
+  ActivationButton.Enabled := False;
+  ActivationMessageLabel.Caption := 'Checking activation key...';
+  try
+    if not RunActivationHelper(
+      'activate', KeyFile, Activated, MachineId, MessageText
+    ) then
+    begin
+      Activated := False;
+      MessageText := 'SentriFace could not check the activation key.';
+    end;
+  finally
+    DeleteFile(KeyFile);
+    ActivationButton.Enabled := True;
+  end;
+
+  if MachineId <> '' then
+    ActivationMachineId := MachineId;
+  if Activated then
+    ActivationMessageLabel.Font.Color := clGreen
+  else
+    ActivationMessageLabel.Font.Color := clRed;
+  ShowActivationState(Activated, MessageText);
+end;
+
+
+procedure InitializeWizard;
+begin
+  ActivationPage := CreateCustomPage(
+    wpInstalling,
+    'Activate SentriFace Edge',
+    'Activate now or continue and activate when SentriFace starts.'
+  );
+
+  ActivationStatusLabel := TNewStaticText.Create(ActivationPage);
+  ActivationStatusLabel.Parent := ActivationPage.Surface;
+  ActivationStatusLabel.Left := 0;
+  ActivationStatusLabel.Top := 0;
+  ActivationStatusLabel.Width := ActivationPage.SurfaceWidth;
+  ActivationStatusLabel.Font.Style := [fsBold];
+
+  ActivationMachineLabel := TNewStaticText.Create(ActivationPage);
+  ActivationMachineLabel.Parent := ActivationPage.Surface;
+  ActivationMachineLabel.Left := 0;
+  ActivationMachineLabel.Top := ScaleY(30);
+  ActivationMachineLabel.Caption := 'Machine ID';
+
+  ActivationMachineEdit := TNewEdit.Create(ActivationPage);
+  ActivationMachineEdit.Parent := ActivationPage.Surface;
+  ActivationMachineEdit.Left := 0;
+  ActivationMachineEdit.Top := ScaleY(48);
+  ActivationMachineEdit.Width := ScaleX(340);
+  ActivationMachineEdit.ReadOnly := True;
+
+  ActivationCopyButton := TNewButton.Create(ActivationPage);
+  ActivationCopyButton.Parent := ActivationPage.Surface;
+  ActivationCopyButton.Left := ScaleX(350);
+  ActivationCopyButton.Top := ScaleY(47);
+  ActivationCopyButton.Width := ScaleX(70);
+  ActivationCopyButton.Caption := 'Copy';
+  ActivationCopyButton.OnClick := @CopyMachineIdClick;
+
+  ActivationKeyLabel := TNewStaticText.Create(ActivationPage);
+  ActivationKeyLabel.Parent := ActivationPage.Surface;
+  ActivationKeyLabel.Left := 0;
+  ActivationKeyLabel.Top := ScaleY(84);
+  ActivationKeyLabel.Caption := 'Activation key';
+
+  ActivationKeyEdit := TNewEdit.Create(ActivationPage);
+  ActivationKeyEdit.Parent := ActivationPage.Surface;
+  ActivationKeyEdit.Left := 0;
+  ActivationKeyEdit.Top := ScaleY(102);
+  ActivationKeyEdit.Width := ScaleX(420);
+
+  ActivationButton := TNewButton.Create(ActivationPage);
+  ActivationButton.Parent := ActivationPage.Surface;
+  ActivationButton.Left := 0;
+  ActivationButton.Top := ScaleY(136);
+  ActivationButton.Width := ScaleX(110);
+  ActivationButton.Caption := 'Activate now';
+  ActivationButton.OnClick := @ActivateNowClick;
+
+  ActivationMessageLabel := TNewStaticText.Create(ActivationPage);
+  ActivationMessageLabel.Parent := ActivationPage.Surface;
+  ActivationMessageLabel.Left := ScaleX(122);
+  ActivationMessageLabel.Top := ScaleY(143);
+  ActivationMessageLabel.Width := ScaleX(298);
+  ActivationMessageLabel.AutoSize := False;
+  ActivationMessageLabel.WordWrap := True;
+end;
+
 procedure InstallOfflinePolicy;
 var
   PowerShell: String;
@@ -149,5 +363,30 @@ begin
   if CurStep = ssPostInstall then
   begin
     InstallOfflinePolicy;
+  end;
+end;
+
+
+procedure CurPageChanged(CurPageID: Integer);
+var
+  Activated: Boolean;
+  MachineId: String;
+  MessageText: String;
+begin
+  if (CurPageID = ActivationPage.ID) and not ActivationPageLoaded then
+  begin
+    ActivationPageLoaded := True;
+    if RunActivationHelper(
+      'status', '', Activated, MachineId, MessageText
+    ) then
+    begin
+      ActivationMachineId := MachineId;
+      ShowActivationState(Activated, MessageText);
+    end
+    else
+    begin
+      ActivationMachineId := '';
+      ShowActivationState(False, 'Activation status could not be checked. You can activate when SentriFace starts.');
+    end;
   end;
 end;

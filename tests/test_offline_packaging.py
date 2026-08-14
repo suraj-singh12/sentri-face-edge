@@ -34,6 +34,16 @@ class OfflinePackagingTest(unittest.TestCase):
         self.assertIn("-Action Block", script)
         self.assertIn("Refusing to block a shared Python interpreter", script)
 
+    def test_windows_installer_offers_original_user_activation(self) -> None:
+        installer = (ROOT / "installer" / "SentriFaceEdge.iss").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("--activation-helper status", installer)
+        self.assertIn("--activation-helper activate", installer)
+        self.assertIn("ExecAsOriginalUser", installer)
+        self.assertIn("SentriFace is not activated.", installer)
+        self.assertIn("Activation key", installer)
+
 
 if __name__ == "__main__":
     unittest.main()

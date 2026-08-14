@@ -18,7 +18,7 @@ def decode_base64(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + padding)
 
 
-def verify_activation_key(key: str) -> bool:
+def verify_activation_key(key: str, machine_id: str | None = None) -> bool:
     try:
         parts = key.strip().split(".")
 
@@ -66,7 +66,7 @@ def verify_activation_key(key: str) -> bool:
         licensed_machine = data.get("machine")
 
 
-        current_machine = generate_machine_id()
+        current_machine = machine_id or generate_machine_id()
 
 
         if licensed_machine != current_machine:
@@ -84,9 +84,9 @@ def verify_activation_key(key: str) -> bool:
 
 
 
-def save_activation_key(key: str):
+def save_activation_key(key: str, machine_id: str | None = None):
 
-    if not verify_activation_key(key):
+    if not verify_activation_key(key, machine_id=machine_id):
         raise ValueError(
             "Invalid activation key"
         )
@@ -129,7 +129,7 @@ def load_activation_key():
 
 
 
-def is_activated() -> bool:
+def is_activated(machine_id: str | None = None) -> bool:
 
     key = load_activation_key()
 
@@ -137,4 +137,4 @@ def is_activated() -> bool:
         return False
 
 
-    return verify_activation_key(key)
+    return verify_activation_key(key, machine_id=machine_id)
