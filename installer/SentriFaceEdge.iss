@@ -137,8 +137,8 @@ var
   Params: String;
   ResultCode: Integer;
 begin
-  ResultFile := GetTempFileName(
-    ExpandConstant('{commonappdata}\SentriFace Edge\cache')
+  ResultFile := ExpandConstant(
+    '{commonappdata}\SentriFace Edge\cache\activation-result.txt'
   );
   DeleteFile(ResultFile);
   if Action = 'status' then
@@ -206,9 +206,10 @@ begin
     exit;
   end;
 
-  KeyFile := GetTempFileName(
-    ExpandConstant('{commonappdata}\SentriFace Edge\cache')
+  KeyFile := ExpandConstant(
+    '{commonappdata}\SentriFace Edge\cache\activation-key.txt'
   );
+  DeleteFile(KeyFile);
   SaveStringToFile(KeyFile, Trim(ActivationKeyEdit.Text), False);
   ActivationButton.Enabled := False;
   ActivationMessageLabel.Caption := 'Checking activation key...';

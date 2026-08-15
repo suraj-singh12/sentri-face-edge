@@ -35,6 +35,10 @@ Write-Host "[4/4] Building installer..."
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
 ".\installer\SentriFaceEdge.iss"
 
+if ($LASTEXITCODE -ne 0) {
+    throw "Inno Setup failed with exit code $LASTEXITCODE"
+}
+
 Write-Host ""
 Write-Host "===================================="
 Write-Host "BUILD COMPLETE"
