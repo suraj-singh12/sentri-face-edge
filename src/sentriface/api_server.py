@@ -36,7 +36,12 @@ from sentriface.auth import (
     AuthUser,
     auth_status_payload,
 )
-from sentriface.backup_service import BackupError, BackupRecord, BackupService
+from sentriface.backup_service import (
+    BackupError,
+    BackupRecord,
+    BackupRestoreError,
+    BackupService,
+)
 from sentriface.cli import build_dev_engine, build_onnx_engine
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
 from sentriface.engine import DomainWorkflowUnavailableError, IMAGE_EXTENSIONS, FaceEngine
@@ -336,6 +341,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             supported_database_version=SCHEMA_VERSION,
             database_key=config.storage_key,
         )
+        recovered_restores = self.backups.recover_interrupted_restores()
+        for recovery_result in recovered_restores:
+            self.log_event("backup-restore-interrupted-recovered", **recovery_result)
         self.recovery = RecoveryService(config.data_dir, config.storage_key, self.backups)
         self.auth = AuthService(config.db_path, config.storage_key)
         self.integrity_recovery = IntegrityRecoveryApplication(
@@ -697,7 +705,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
     def _maintenance_loop(self) -> None:
         while not self.maintenance_stop.is_set():
             try:
-                with self.operation_gate.shared():
+                with self.operation_gate.exclusive():
                     self.purge_expired_deleted_faces()
                     automatic = self.recovery.automatic_backup_if_due(self.config.automatic_backup_interval_hours)
                     if automatic is not None:
@@ -883,6 +891,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             self.server.runtime == "dev"
             or path in MODEL_SETUP_ALLOWED_ENDPOINTS
             or path in INTEGRITY_RECOVERY_ENDPOINTS
+            or path == "/api/backup-db"
+            or path.startswith("/api/backups")
             or path.startswith("/api/auth/")
         ):
             return False
@@ -946,9 +956,18 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/queue-cancel":
             self._do_POST()
             return
+        exclusive_backup_paths = {
+            "/api/backups",
+            "/api/backup-db",
+            "/api/backups/restore",
+            "/api/person-archive",
+            "/api/person-purge",
+            "/api/person-photo-delete",
+            "/api/person-photo-purge",
+        }
         gate = (
             self.server.operation_gate.exclusive()
-            if parsed.path in {"/api/backups/restore", "/api/models/install"}
+            if parsed.path in {*exclusive_backup_paths, "/api/models/install"}
             else self.server.operation_gate.shared()
         )
         with gate:
@@ -1508,9 +1527,16 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json(result)
                 return
             if parsed.path == "/api/backups/restore":
-                raise DomainWorkflowUnavailableError(
-                    "Backup restore is temporarily unavailable until P12 validates normalized domain state"
+                _validate_backup_restore_payload(payload)
+                result = self.server.backups.restore_backup(
+                    _required(payload, "backup_id"),
+                    _required(payload, "operation_id"),
+                    actor=self._operation_actor(),
+                    reason=payload.get("reason"),
+                    reload_callback=self.server.engine.reload_after_restore,
                 )
+                self._json({"restore": result})
+                return
             if parsed.path == "/api/photo-review":
                 faces = payload.get("faces")
                 if not isinstance(faces, list):
@@ -2699,6 +2725,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             RecoveryPreparationRefused,
             RecoveryTokenError,
             StructuredRepairRefused,
+            BackupRestoreError,
         ))
         validation_error = isinstance(
             exc,
@@ -2749,6 +2776,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 else "operation_refused"
             )
             payload["committed"] = False
+        if isinstance(exc, BackupRestoreError):
+            payload["code"] = exc.code
+            payload["outcome"] = exc.outcome
+            payload["committed"] = exc.committed
         self._json(payload, status=status)
 
     def _media(self, raw_path: str) -> None:
@@ -3056,6 +3087,29 @@ def _validate_integrity_recovery_payload(path: str, payload: dict[str, Any]) -> 
         raise InputValidationError(
             "Integrity recovery requests contain only server-defined fields",
             "unsupported_recovery_fields",
+        )
+
+
+def _validate_backup_restore_payload(payload: dict[str, Any]) -> None:
+    allowed = {"backup_id", "operation_id", "reason"}
+    unexpected = set(payload) - allowed
+    if unexpected:
+        raise InputValidationError(
+            "Backup restore accepts only backup ID, operation ID, and reason",
+            "unsupported_restore_fields",
+        )
+    for field in ("backup_id", "operation_id"):
+        value = payload.get(field)
+        if not isinstance(value, str) or not value.strip() or len(value) > 200:
+            raise InputValidationError(
+                "Backup restore requires a bounded backup ID and operation ID",
+                "invalid_restore_identity",
+            )
+    reason = payload.get("reason")
+    if reason is not None and (not isinstance(reason, str) or len(reason.strip()) > 500):
+        raise InputValidationError(
+            "Backup restore reason must be at most 500 characters",
+            "invalid_restore_reason",
         )
 
 
@@ -4641,6 +4695,8 @@ def _backup(record: BackupRecord) -> dict[str, Any]:
         "file_count": record.file_count,
         "missing_file_count": record.missing_file_count,
         "reference_count": record.reference_count,
+        "restorable": record.restorable,
+        "integrity_status": record.integrity_status,
     }
 
 

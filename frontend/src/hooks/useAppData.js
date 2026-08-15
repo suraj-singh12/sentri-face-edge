@@ -289,7 +289,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   };
 
   const requestRestoreBackup = (backup) => {
-    if (!backupRestoring && backup?.verified && backup?.portable && backup?.complete) {
+    if (!backupRestoring && backup?.verified && backup?.portable && backup?.restorable) {
       setRestoreBackupSelection(backup);
     }
   };
@@ -307,7 +307,6 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
       const payload = await apiPost("/api/backups/restore", {
         backup_id: backup.backup_id,
         operation_id: crypto.randomUUID(),
-        allow_incomplete: false,
       });
       const result = payload.restore;
       window.sessionStorage.setItem(

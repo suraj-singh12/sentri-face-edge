@@ -11,9 +11,22 @@ import uuid
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
-from sentriface.backup_service import BackupError, BackupService
-from sentriface.storage.sqlite_store import SCHEMA_VERSION, SQLiteIdentityStore
+from sentriface.backup_service import (
+    BackupError,
+    BackupService,
+    _with_manifest_fingerprint,
+)
+from sentriface.graph_service import GlobalIdentityGraphService
+from sentriface.integrity import ReadOnlyIntegrityChecker
+from sentriface.secure_files import ProtectedFileError, authenticate_protected_file, write_protected_bytes
+from sentriface.storage.sqlite_store import (
+    SCHEMA_VERSION,
+    SQLiteIdentityStore,
+    _schema_migrations,
+    migrate_staged_database,
+)
 
 
 class BackupServiceTest(unittest.TestCase):
@@ -41,7 +54,9 @@ class BackupServiceTest(unittest.TestCase):
             self.assertTrue(service.verify_backup(record.backup_id))
             self.assertTrue(record.portable)
             self.assertTrue(record.complete)
-            self.assertEqual(record.format_version, 2)
+            self.assertEqual(record.format_version, 3)
+            self.assertTrue(record.restorable)
+            self.assertEqual(record.integrity_status, "PASS")
 
     def test_duplicate_timestamp_gets_unique_backup_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -291,9 +306,6 @@ class BackupServiceTest(unittest.TestCase):
             backup = service.create_backup(reason="known-good")
             with closing(sqlite3.connect(db_path)) as conn, conn:
                 conn.execute("UPDATE persons SET name = 'Changed after backup'")
-            source.unlink()
-            crop.unlink()
-            sighting.unlink()
             reloads = []
 
             result = service.restore_backup(
@@ -307,33 +319,314 @@ class BackupServiceTest(unittest.TestCase):
             self.assertNotEqual(result["safety_backup_id"], backup.backup_id)
             self.assertTrue(service.verify_backup(result["safety_backup_id"]))
             with closing(sqlite3.connect(db_path)) as conn, conn:
-                self.assertEqual(
-                    conn.execute("SELECT name FROM persons").fetchone()[0],
-                    "Backup Person",
-                )
+                self.assertEqual(conn.execute("SELECT name FROM persons").fetchone()[0], "Backup Person")
                 paths = [
-                    *conn.execute(
-                        "SELECT source_image, crop_path FROM embeddings"
-                    ).fetchone(),
-                    conn.execute(
-                        "SELECT image_path FROM recognition_details"
-                    ).fetchone()[0],
+                    *conn.execute("SELECT source_image, crop_path FROM embeddings").fetchone(),
+                    conn.execute("SELECT image_path FROM recognition_details").fetchone()[0],
                 ]
             for path in paths:
                 restored = Path(path)
                 self.assertTrue(restored.is_file())
-                self.assertIn(restored.name.split(".")[0], {
-                    asset["sha256"]
-                    for asset in json.loads(
-                        (
-                            service._backup_path(backup.backup_id) / "backup.json"
-                        ).read_text(encoding="utf-8")
-                    )["assets"]
-                })
-            self.assertEqual(
-                {Path(path).read_bytes() for path in paths},
-                set(original_bytes.values()),
+                self.assertIn("restored-media", restored.parts)
+            self.assertEqual({Path(path).read_bytes() for path in paths}, set(original_bytes.values()))
+
+    def test_every_database_image_path_column_is_captured_and_rewritten(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "data" / "sentriface.db"
+            db_path.parent.mkdir(parents=True)
+            shared_image = root / "shared.jpg"
+            shared_image.write_bytes(b"shared-image")
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                conn.executescript(
+                    """
+                    CREATE TABLE embeddings(embedding_id TEXT PRIMARY KEY, source_image TEXT, crop_path TEXT);
+                    CREATE TABLE pending_additions(pending_id TEXT PRIMARY KEY, source_image TEXT, crop_path TEXT);
+                    CREATE TABLE init_faces(init_face_id TEXT PRIMARY KEY, source_image TEXT, crop_path TEXT);
+                    CREATE TABLE recognition_details(detail_id TEXT PRIMARY KEY, image_path TEXT);
+                    CREATE TABLE observation_media(observation_id TEXT, media_id TEXT, media_path TEXT, PRIMARY KEY(observation_id, media_id));
+                    CREATE TABLE photo_reviews(review_id TEXT PRIMARY KEY, media_path TEXT);
+                    """
+                )
+                conn.execute("INSERT INTO embeddings VALUES ('e1', ?, ?)", (str(shared_image), str(shared_image)))
+                conn.execute("INSERT INTO pending_additions VALUES ('p1', ?, ?)", (str(shared_image), str(shared_image)))
+                conn.execute("INSERT INTO init_faces VALUES ('i1', ?, ?)", (str(shared_image), str(shared_image)))
+                conn.execute("INSERT INTO recognition_details VALUES ('d1', ?)", (str(shared_image),))
+                conn.execute("INSERT INTO observation_media VALUES ('o1', 'm1', ?)", (str(shared_image),))
+                conn.execute("INSERT INTO photo_reviews VALUES ('r1', ?)", (str(shared_image),))
+            service = self._service(db_path, root / "data" / "backups")
+
+            backup = service.create_backup()
+            manifest = json.loads(
+                (service._backup_path(backup.backup_id) / "backup.json").read_text(encoding="utf-8")
             )
+            registry_ids = {item["registry_id"] for item in manifest["path_references"]}
+
+            self.assertEqual(backup.reference_count, 9)
+            self.assertEqual(backup.file_count, 1)
+            self.assertEqual(
+                registry_ids,
+                {
+                    "embeddings.source_image", "embeddings.crop_path",
+                    "pending_additions.source_image", "pending_additions.crop_path",
+                    "init_faces.source_image", "init_faces.crop_path",
+                    "recognition_details.image_path", "observation_media.media_path",
+                    "photo_reviews.media_path",
+                },
+            )
+
+    def test_manifest_cannot_silently_omit_a_database_file_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "data" / "sentriface.db"
+            self._seed_database_with_media(db_path, root)
+            service = self._service(db_path, root / "data" / "backups")
+            backup = service.create_backup()
+            metadata_path = service._backup_path(backup.backup_id) / "backup.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["path_references"] = metadata["path_references"][1:]
+            metadata["reference_count"] -= 1
+            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+            with self.assertRaisesRegex(BackupError, "fingerprint|closure"):
+                service.verify_backup(backup.backup_id)
+
+    def test_future_manifest_version_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "data" / "sentriface.db"
+            self._seed_database(db_path)
+            service = self._service(db_path, root / "data" / "backups")
+            backup = service.create_backup()
+            metadata_path = service._backup_path(backup.backup_id) / "backup.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["format_version"] = 4
+            metadata["manifest_version"] = 4
+            metadata_path.write_text(
+                json.dumps(_with_manifest_fingerprint(metadata)), encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(BackupError, "Unsupported portable backup format"):
+                service.verify_backup(backup.backup_id)
+
+    def test_manifest_rejects_unknown_and_duplicate_registry_bindings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "data" / "sentriface.db"
+            self._seed_database_with_media(db_path, root)
+            service = self._service(db_path, root / "data" / "backups")
+            backup = service.create_backup()
+            metadata_path = service._backup_path(backup.backup_id) / "backup.json"
+            original = json.loads(metadata_path.read_text(encoding="utf-8"))
+            for mutate, message in (
+                (lambda value: value["path_references"][0].update(
+                    {"registry_id": "client_controlled.table"}
+                ), "registry-owned"),
+                (lambda value: value["path_references"].append(
+                    dict(value["path_references"][0])
+                ), "duplicate media binding"),
+            ):
+                with self.subTest(message=message):
+                    metadata = json.loads(json.dumps(original))
+                    mutate(metadata)
+                    metadata_path.write_text(
+                        json.dumps(_with_manifest_fingerprint(metadata)), encoding="utf-8"
+                    )
+                    with self.assertRaisesRegex(BackupError, message):
+                        service.verify_backup(backup.backup_id)
+            metadata_path.write_text(json.dumps(original), encoding="utf-8")
+
+    def test_media_change_during_capture_aborts_without_publishing_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "data" / "sentriface.db"
+            source, _, _ = self._seed_database_with_media(db_path, root)
+            service = self._service(db_path, root / "data" / "backups")
+            from sentriface import backup_service as backup_module
+
+            real_copy = backup_module.copy_into_protected_storage
+
+            def copy_then_change(source_path, destination, key):
+                result = real_copy(source_path, destination, key)
+                if Path(source_path).resolve() == source.resolve():
+                    source.write_bytes(source.read_bytes() + b"changed")
+                return result
+
+            with patch.object(
+                backup_module, "copy_into_protected_storage", side_effect=copy_then_change,
+            ):
+                with self.assertRaisesRegex(BackupError, "changed during backup"):
+                    service.create_backup()
+            self.assertEqual(service.list_backups(), [])
+
+    def test_manifest_is_bounded_evidence_and_contains_no_secrets_or_raw_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "data" / "sentriface.db"
+            source, _, _ = self._seed_database_with_media(db_path, root)
+            service = self._service(db_path, root / "data" / "backups")
+            backup = service.create_backup(reason="ordinary safety backup")
+            raw = (service._backup_path(backup.backup_id) / "backup.json").read_text(
+                encoding="utf-8"
+            )
+            self.assertNotIn(str(source), raw)
+            for forbidden in ("master_key", "recovery_code", "export_passphrase", "SELECT "):
+                self.assertNotIn(forbidden, raw)
+            metadata = json.loads(raw)
+            self.assertIn("storage_key_id", metadata)
+            self.assertNotIn("table", json.dumps(metadata["path_references"]))
+            self.assertNotIn("column", json.dumps(metadata["path_references"]))
+
+    def test_protected_media_authentication_detects_corruption_and_wrong_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "protected.bin"
+            key = b"k" * 32
+            write_protected_bytes(path, b"authenticated media", key)
+            self.assertEqual(authenticate_protected_file(path, key), (True, 19))
+            with self.assertRaises(ProtectedFileError):
+                authenticate_protected_file(path, b"w" * 32)
+            damaged = bytearray(path.read_bytes())
+            damaged[-1] ^= 1
+            path.write_bytes(damaged)
+            with self.assertRaises(ProtectedFileError):
+                authenticate_protected_file(path, key)
+
+    def test_every_registered_older_schema_migrates_only_on_staged_copy(self) -> None:
+        for source_version in range(SCHEMA_VERSION):
+            with self.subTest(source_version=source_version), tempfile.TemporaryDirectory() as temp:
+                source = Path(temp) / "source.db"
+                with closing(sqlite3.connect(source)) as conn, conn:
+                    conn.row_factory = sqlite3.Row
+                    for migration in _schema_migrations():
+                        if migration.to_version > source_version:
+                            break
+                        migration.apply(conn)
+                staged = Path(temp) / "staged.db"
+                shutil.copy2(source, staged)
+                self.assertEqual(
+                    migrate_staged_database(staged),
+                    (source_version, SCHEMA_VERSION),
+                )
+                with closing(sqlite3.connect(source)) as conn:
+                    self.assertEqual(
+                        conn.execute("PRAGMA user_version").fetchone()[0], source_version,
+                    )
+
+    def test_pre_journal_schema_portable_restore_uses_registered_staged_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source_db = root / "source" / "sentriface.db"
+            source_db.parent.mkdir(parents=True)
+            with closing(sqlite3.connect(source_db)) as conn:
+                conn.execute("PRAGMA user_version = 0")
+            source_service = BackupService(
+                source_db,
+                root / "source" / "backups",
+                now=self._fixed_now,
+                supported_database_version=SCHEMA_VERSION,
+            )
+            old = source_service.create_backup(reason="schema-v0")
+            self.assertEqual(old.integrity_status, "PENDING_MIGRATION")
+            archive = source_service.export_backup(old.backup_id, root / "schema-v0")
+
+            target_db = root / "target" / "sentriface.db"
+            self._seed_database(target_db)
+            target_service = BackupService(
+                target_db,
+                root / "target" / "backups",
+                now=self._fixed_now,
+                supported_database_version=SCHEMA_VERSION,
+            )
+            imported = target_service.import_backup(archive)
+            result = target_service.restore_backup(imported.backup_id, str(uuid.uuid4()))
+
+            self.assertEqual((result["source_schema"], result["final_schema"]), (0, SCHEMA_VERSION))
+            self.assertEqual(ReadOnlyIntegrityChecker(target_db).run().status, "PASS")
+
+    def test_restore_rebuilds_untrusted_graph_and_preserves_source_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "data" / "sentriface.db"
+            store = SQLiteIdentityStore(db_path, embedding_dim=4)
+            store.initialize()
+            owner = store.create_person("Owner")
+            mentioned = store.create_person("Mentioned")
+            note = GlobalIdentityGraphService(store).create_note(
+                owner.person_id,
+                "Known relationship",
+                str(uuid.uuid4()),
+                mentioned_person_ids=[mentioned.person_id],
+            )
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                source_history = conn.execute(
+                    "SELECT operation_id, operation_type, status FROM operation_journal ORDER BY operation_id"
+                ).fetchall()
+                conn.execute("DELETE FROM graph_connections")
+            service = self._service(db_path, root / "data" / "backups")
+            backup = service.create_backup(reason="projection-drift")
+            self.assertEqual(backup.integrity_status, "PROJECTION_DRIFT")
+            self.assertTrue(backup.restorable)
+            GlobalIdentityGraphService(store).rebuild_projection(str(uuid.uuid4()))
+
+            operation_id = str(uuid.uuid4())
+            result = service.restore_backup(backup.backup_id, operation_id)
+
+            self.assertEqual(result["outcome"], "COMMITTED")
+            report = ReadOnlyIntegrityChecker(db_path).run()
+            self.assertEqual(report.status, "PASS")
+            with closing(sqlite3.connect(db_path)) as conn:
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM graph_connections").fetchone()[0], 1)
+                self.assertEqual(conn.execute("SELECT content FROM note_revisions WHERE note_id = ?", (note.note_id,)).fetchone()[0], "Known relationship")
+                restored_history = conn.execute(
+                    "SELECT operation_id, operation_type, status FROM operation_journal ORDER BY operation_id"
+                ).fetchall()
+            for row in source_history:
+                self.assertIn(row, restored_history)
+            self.assertIn((operation_id, "backup.restore", "COMMITTED"), restored_history)
+
+    def test_failure_injection_at_every_restore_boundary_leaves_old_authority(self) -> None:
+        checkpoints = (
+            "before_safety_backup", "after_safety_backup", "before_staging",
+            "after_database_staging", "before_migration", "after_migration",
+            "after_media_staging", "before_media_rewrite", "after_media_rewrite",
+            "before_graph_rebuild", "after_graph_rebuild", "before_staged_integrity",
+            "after_staged_integrity", "before_media_install", "after_media_install",
+            "before_database_swap", "after_database_swap", "before_reload",
+            "after_reload", "before_final_integrity", "after_final_integrity",
+            "before_receipt",
+        )
+        for checkpoint in checkpoints:
+            with self.subTest(checkpoint=checkpoint), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                db_path = root / "data" / "sentriface.db"
+                self._seed_database_with_media(db_path, root)
+                base = self._service(db_path, root / "data" / "backups")
+                target = base.create_backup(reason="target")
+                with closing(sqlite3.connect(db_path)) as conn, conn:
+                    conn.execute("UPDATE persons SET name = 'Current authority'")
+                operation_id = str(uuid.uuid4())
+
+                def fail(name):
+                    if name == checkpoint:
+                        raise RuntimeError(f"failure at {name}")
+
+                service = BackupService(
+                    db_path,
+                    root / "data" / "backups",
+                    now=self._fixed_now,
+                    failure_injector=fail,
+                )
+                with self.assertRaisesRegex(BackupError, "rolled back safely"):
+                    service.restore_backup(target.backup_id, operation_id)
+                with closing(sqlite3.connect(db_path)) as conn:
+                    self.assertEqual(conn.execute("SELECT name FROM persons").fetchone()[0], "Current authority")
+                    self.assertEqual(conn.execute(
+                        "SELECT status FROM operation_journal WHERE operation_id = ?",
+                        (operation_id,),
+                    ).fetchone()[0], "FAILED")
+                self.assertEqual(ReadOnlyIntegrityChecker(db_path).run().status, "PASS")
+                restored = root / "data" / "restored-media"
+                self.assertFalse(restored.exists() and any(restored.iterdir()))
 
     def test_restore_callback_failure_rolls_back_database_and_new_media(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -384,6 +677,61 @@ class BackupServiceTest(unittest.TestCase):
 
             self.assertEqual(first, second)
             self.assertEqual(len(service.list_backups()), backup_count)
+
+    def test_restore_operation_id_conflict_is_refused_without_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "data" / "sentriface.db"
+            self._seed_database_with_media(db_path, root)
+            service = self._service(db_path, root / "data" / "backups")
+            first_target = service.create_backup(reason="first")
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                conn.execute("UPDATE persons SET name = 'Second target'")
+            second_target = service.create_backup(reason="second")
+            operation_id = str(uuid.uuid4())
+            service.restore_backup(first_target.backup_id, operation_id)
+            with closing(sqlite3.connect(db_path)) as conn:
+                name_before = conn.execute("SELECT name FROM persons").fetchone()[0]
+
+            with self.assertRaisesRegex(BackupError, "conflicts"):
+                service.restore_backup(second_target.backup_id, operation_id)
+
+            with closing(sqlite3.connect(db_path)) as conn:
+                self.assertEqual(conn.execute("SELECT name FROM persons").fetchone()[0], name_before)
+
+    def test_restart_recovers_committed_restore_missing_only_its_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "data" / "sentriface.db"
+            self._seed_database_with_media(db_path, root)
+            base = self._service(db_path, root / "data" / "backups")
+            target = base.create_backup(reason="target")
+            with closing(sqlite3.connect(db_path)) as conn, conn:
+                conn.execute("UPDATE persons SET name = 'Displaced live state'")
+            operation_id = str(uuid.uuid4())
+
+            def simulate_process_exit(name):
+                if name == "before_receipt":
+                    raise SystemExit("simulated process termination")
+
+            interrupted = BackupService(
+                db_path,
+                root / "data" / "backups",
+                now=self._fixed_now,
+                failure_injector=simulate_process_exit,
+            )
+            with self.assertRaises(SystemExit):
+                interrupted.restore_backup(target.backup_id, operation_id)
+            self.assertTrue(interrupted._restore_intent_path(operation_id).is_file())
+            self.assertFalse(interrupted._restore_receipt_path(target.backup_id, operation_id).exists())
+
+            restarted = self._service(db_path, root / "data" / "backups")
+            outcomes = restarted.recover_interrupted_restores()
+
+            self.assertEqual(outcomes, [{"operation_id": operation_id, "outcome": "COMMITTED"}])
+            self.assertTrue(restarted._restore_receipt_path(target.backup_id, operation_id).is_file())
+            self.assertFalse(restarted._restore_intent_path(operation_id).exists())
+            self.assertEqual(ReadOnlyIntegrityChecker(db_path).run().status, "PASS")
 
     def test_malicious_or_unexpected_archive_entries_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -446,101 +794,16 @@ class BackupServiceTest(unittest.TestCase):
             metadata["database"]["size_bytes"] = backup_db.stat().st_size
             metadata["database_size_bytes"] = backup_db.stat().st_size
             metadata["size_bytes"] = backup_db.stat().st_size
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            metadata["integrity"] = service._integrity_metadata(
+                backup_db, SCHEMA_VERSION + 1,
+            )
+            metadata["restorable"] = False
+            metadata_path.write_text(
+                json.dumps(_with_manifest_fingerprint(metadata)), encoding="utf-8"
+            )
 
             with self.assertRaisesRegex(BackupError, "newer"):
                 service.restore_backup(backup.backup_id, str(uuid.uuid4()))
-
-    def test_every_database_image_path_column_is_captured_and_rewritten(self) -> None:
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            db_path = root / "data" / "sentriface.db"
-            db_path.parent.mkdir(parents=True)
-            shared_image = root / "shared.jpg"
-            shared_image.write_bytes(b"shared-image")
-            with closing(sqlite3.connect(db_path)) as conn, conn:
-                conn.executescript(
-                    """
-                    CREATE TABLE embeddings(source_image TEXT, crop_path TEXT);
-                    CREATE TABLE pending_additions(source_image TEXT, crop_path TEXT);
-                    CREATE TABLE init_faces(source_image TEXT, crop_path TEXT);
-                    CREATE TABLE recognition_details(image_path TEXT);
-                    """
-                )
-                conn.execute(
-                    "INSERT INTO embeddings VALUES (?, ?)",
-                    (str(shared_image), str(shared_image)),
-                )
-                conn.execute(
-                    "INSERT INTO pending_additions VALUES (?, ?)",
-                    (str(shared_image), str(shared_image)),
-                )
-                conn.execute(
-                    "INSERT INTO init_faces VALUES (?, ?)",
-                    (str(shared_image), str(shared_image)),
-                )
-                conn.execute(
-                    "INSERT INTO recognition_details VALUES (?)",
-                    (str(shared_image),),
-                )
-            service = self._service(db_path, root / "data" / "backups")
-
-            backup = service.create_backup()
-            manifest = json.loads(
-                (
-                    service._backup_path(backup.backup_id) / "backup.json"
-                ).read_text(encoding="utf-8")
-            )
-            locations = {
-                (item["table"], item["column"])
-                for item in manifest["path_references"][0]["locations"]
-            }
-
-            self.assertEqual(backup.reference_count, 1)
-            self.assertEqual(backup.file_count, 1)
-            self.assertEqual(
-                locations,
-                {
-                    ("embeddings", "source_image"),
-                    ("embeddings", "crop_path"),
-                    ("pending_additions", "source_image"),
-                    ("pending_additions", "crop_path"),
-                    ("init_faces", "source_image"),
-                    ("init_faces", "crop_path"),
-                    ("recognition_details", "image_path"),
-                },
-            )
-            service.restore_backup(backup.backup_id, str(uuid.uuid4()))
-            with closing(sqlite3.connect(db_path)) as conn, conn:
-                restored_values = {
-                    conn.execute("SELECT source_image FROM embeddings").fetchone()[0],
-                    conn.execute("SELECT crop_path FROM embeddings").fetchone()[0],
-                    conn.execute("SELECT source_image FROM pending_additions").fetchone()[0],
-                    conn.execute("SELECT crop_path FROM pending_additions").fetchone()[0],
-                    conn.execute("SELECT source_image FROM init_faces").fetchone()[0],
-                    conn.execute("SELECT crop_path FROM init_faces").fetchone()[0],
-                    conn.execute("SELECT image_path FROM recognition_details").fetchone()[0],
-                }
-            self.assertEqual(len(restored_values), 1)
-            restored_path = Path(restored_values.pop())
-            self.assertTrue(restored_path.is_file())
-            self.assertEqual(restored_path.read_bytes(), b"shared-image")
-
-    def test_manifest_cannot_silently_omit_a_database_file_reference(self) -> None:
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            db_path = root / "data" / "sentriface.db"
-            self._seed_database_with_media(db_path, root)
-            service = self._service(db_path, root / "data" / "backups")
-            backup = service.create_backup()
-            metadata_path = service._backup_path(backup.backup_id) / "backup.json"
-            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            metadata["path_references"] = metadata["path_references"][1:]
-            metadata["reference_count"] -= 1
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
-
-            with self.assertRaisesRegex(BackupError, "does not match its database"):
-                service.verify_backup(backup.backup_id)
 
     def _seed_database(self, db_path: Path) -> None:
         store = SQLiteIdentityStore(db_path, embedding_dim=4)

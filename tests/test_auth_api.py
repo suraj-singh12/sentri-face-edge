@@ -53,10 +53,12 @@ class AuthenticationApiTest(unittest.TestCase):
             self.assertNotIn("db_path", profile)
             self.assertEqual(self._request(server, "GET", "/api/events", cookie=viewer_cookie)[0], 403)
             self.assertEqual(self._request(server, "POST", "/api/person-archive", {"person_id": "missing"}, cookie=viewer_cookie)[0], 403)
+            self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": "missing"}, cookie=viewer_cookie)[0], 403)
 
             operator_cookie = self._login_cookie(server, "operator", "operator password long enough")
             self.assertEqual(self._request(server, "POST", "/api/queue-cancel", {"job_id": "role-test"}, cookie=operator_cookie)[0], 200)
             self.assertEqual(self._request(server, "POST", "/api/person-archive", {"person_id": "missing"}, cookie=operator_cookie)[0], 403)
+            self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": "missing"}, cookie=operator_cookie)[0], 403)
 
             custodian_cookie = self._login_cookie(server, "custodian", "custodian password long enough")
             self.assertNotEqual(self._request(server, "POST", "/api/person-archive", {"person_id": "missing"}, cookie=custodian_cookie)[0], 403)
@@ -68,6 +70,7 @@ class AuthenticationApiTest(unittest.TestCase):
             self.assertEqual(status, 200)
             backup_id = created["backup"]["backup_id"]
             self.assertEqual(self._request(server, "DELETE", f"/api/backups/{backup_id}?confirm={backup_id}", cookie=technician_cookie)[0], 403)
+            self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": backup_id}, cookie=technician_cookie)[0], 403)
 
     def test_disaster_recovery_requires_explicit_administrator_acknowledgement(self) -> None:
         with self._running_server() as server:

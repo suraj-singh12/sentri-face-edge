@@ -73,6 +73,40 @@ def read_protected_bytes(path: Path, key: bytes | None) -> bytes:
     return plaintext
 
 
+def authenticate_protected_file(path: Path, key: bytes | None) -> tuple[bool, int]:
+    """Authenticate a managed file without retaining its plaintext in memory."""
+    if not is_protected_file(path):
+        return False, path.stat().st_size
+    if key is None:
+        raise ProtectedFileError("This managed file requires the SentriFace storage key")
+    with path.open("rb") as source:
+        prefix, header = _read_header(source)
+        plaintext_size = int(header["plaintext_size"])
+        ciphertext_size = path.stat().st_size - len(prefix) - TAG_LENGTH
+        if plaintext_size < 0 or ciphertext_size != plaintext_size:
+            raise ProtectedFileError("Managed encrypted file has an invalid size")
+        source.seek(-TAG_LENGTH, os.SEEK_END)
+        tag = source.read(TAG_LENGTH)
+        source.seek(len(prefix))
+        decryptor = Cipher(
+            algorithms.AES(_validate_key(key)),
+            modes.GCM(_decode_hex(header["nonce"], 12), tag),
+        ).decryptor()
+        decryptor.authenticate_additional_data(prefix)
+        remaining = ciphertext_size
+        try:
+            while remaining:
+                chunk = source.read(min(CHUNK_SIZE, remaining))
+                if not chunk:
+                    raise ProtectedFileError("Managed encrypted file is truncated")
+                remaining -= len(chunk)
+                decryptor.update(chunk)
+            decryptor.finalize()
+        except InvalidTag as exc:
+            raise ProtectedFileError("Managed encrypted file failed authentication") from exc
+    return True, plaintext_size
+
+
 def copy_into_protected_storage(source: Path, destination: Path, key: bytes | None) -> Path:
     """Copy a file, encrypting plaintext when a storage key is configured."""
     if key is None or is_protected_file(source):

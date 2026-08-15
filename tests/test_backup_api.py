@@ -17,6 +17,48 @@ from sentriface.backup_crypto import MAGIC
 
 
 class PortableBackupApiTest(unittest.TestCase):
+    def test_restore_is_admin_only_session_attributed_and_model_independent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            server = create_server(port=0, data_dir=Path(temp) / "data", runtime="dev", debug=False)
+            server._test_admin_cookie = bootstrap_admin_cookie(server)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                status, created = self._json_request(server, "POST", "/api/backups", {})
+                self.assertEqual(status, 200)
+                backup_id = created["backup"]["backup_id"]
+                operation_id = str(uuid.uuid4())
+                status, refused = self._json_request(server, "POST", "/api/backups/restore", {
+                    "backup_id": backup_id,
+                    "operation_id": operation_id,
+                    "actor": {"display_name": "spoofed"},
+                })
+                self.assertEqual(status, 422)
+                self.assertEqual(refused["reason"], "unsupported_restore_fields")
+
+                server.model_ready = False
+                status, payload = self._json_request(server, "POST", "/api/backups/restore", {
+                    "backup_id": backup_id,
+                    "operation_id": operation_id,
+                    "reason": "administrator confirmed test restore",
+                })
+                self.assertEqual(status, 200)
+                self.assertEqual(payload["restore"]["outcome"], "COMMITTED")
+                operation = server.engine.store.get_operation(operation_id)
+                self.assertEqual(operation["actor"]["display_name"], "Test Administrator")
+                self.assertNotEqual(operation["actor"]["display_name"], "spoofed")
+
+                retry_status, retry = self._json_request(server, "POST", "/api/backups/restore", {
+                    "backup_id": backup_id,
+                    "operation_id": operation_id,
+                })
+                self.assertEqual(retry_status, 200)
+                self.assertEqual(retry["restore"], payload["restore"])
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
     def test_encrypted_download_import_and_wrong_password_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             server = create_server(port=0, data_dir=Path(temp) / "data", runtime="dev", debug=False)

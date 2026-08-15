@@ -8246,7 +8246,44 @@ def _validated_migration_registry() -> tuple[SchemaMigration, ...]:
     return migrations
 
 
-def _apply_schema_migrations(conn: sqlite3.Connection, current_version: int) -> None:
+def migrate_staged_database(
+    database_path: Path,
+    *,
+    database_key: bytes | None = None,
+) -> tuple[int, int]:
+    """Migrate and validate a disposable restore candidate in place.
+
+    The caller owns the staged copy and its safety boundary. Unlike normal
+    startup this deliberately creates no pre-migration backup and never opens
+    or mutates the live configured database.
+    """
+    with closing(connect_database(database_path, database_key, row_factory=True)) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        source_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        _require_supported_schema_version(source_version)
+        _apply_schema_migrations(
+            conn, source_version, allow_graph_projection_drift=True,
+        )
+        final_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        if final_version == SCHEMA_VERSION and source_version == final_version:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                _validate_current_domain_state(
+                    conn, allow_graph_projection_drift=True,
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+        return source_version, final_version
+
+
+def _apply_schema_migrations(
+    conn: sqlite3.Connection,
+    current_version: int,
+    *,
+    allow_graph_projection_drift: bool = False,
+) -> None:
     migrations = _validated_migration_registry()
     if current_version == SCHEMA_VERSION:
         return
@@ -8277,14 +8314,21 @@ def _apply_schema_migrations(conn: sqlite3.Connection, current_version: int) -> 
                     f"v{migration.to_version} reported schema v{migrated_version}."
                 )
             version = migrated_version
-        _validate_current_domain_state(conn)
+        _validate_current_domain_state(
+            conn,
+            allow_graph_projection_drift=allow_graph_projection_drift,
+        )
         conn.commit()
     except Exception:
         conn.rollback()
         raise
 
 
-def _validate_current_domain_state(conn: sqlite3.Connection) -> None:
+def _validate_current_domain_state(
+    conn: sqlite3.Connection,
+    *,
+    allow_graph_projection_drift: bool = False,
+) -> None:
     foreign_key_errors = conn.execute("PRAGMA foreign_key_check").fetchall()
     authoritative_foreign_key_errors = [
         row for row in foreign_key_errors if str(row[0]) != "graph_connections"
@@ -8347,7 +8391,7 @@ def _validate_current_domain_state(conn: sqlite3.Connection) -> None:
             + "; ".join(evidence_errors)
         )
     validation = _validate_graph_projection(conn)
-    if not validation["valid"]:
+    if not validation["valid"] and not allow_graph_projection_drift:
         raise SchemaMigrationError(
             "Database graph projection validation failed; run the explicit P11-B "
             "graph projection rebuild after reviewing integrity findings: "

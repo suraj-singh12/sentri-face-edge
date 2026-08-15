@@ -92,11 +92,16 @@ class ProductionMutationSurfaceTest(unittest.TestCase):
         self.assertFalse(hasattr(SQLiteIdentityStore, "set_canonical_person_id"))
         self.assertFalse(hasattr(SQLiteIdentityStore, "rename_person"))
 
-    def test_restore_is_gated_before_backup_service_mutation(self) -> None:
+    def test_restore_routes_only_bounded_session_attributed_input_to_p12(self) -> None:
         api_source = (Path(__file__).parents[1] / "src/sentriface/api_server.py").read_text()
-        gate = 'if parsed.path == "/api/backups/restore":\n                raise DomainWorkflowUnavailableError('
-        self.assertIn(gate, api_source)
-        self.assertNotIn("self.server.backups.restore_backup(", api_source)
+        restore_branch = api_source.split(
+            'if parsed.path == "/api/backups/restore":', 1,
+        )[1].split('if parsed.path == "/api/backups/import":', 1)[0]
+        self.assertIn("_validate_backup_restore_payload(payload)", restore_branch)
+        self.assertIn("self.server.backups.restore_backup(", restore_branch)
+        self.assertIn("actor=self._operation_actor()", restore_branch)
+        self.assertNotIn("allow_incomplete", restore_branch)
+        self.assertNotIn('payload.get("actor")', restore_branch)
 
     def test_cli_rename_routes_through_engine_domain_service(self) -> None:
         cli_source = (Path(__file__).parents[1] / "src/sentriface/cli.py").read_text()

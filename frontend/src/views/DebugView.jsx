@@ -516,8 +516,8 @@ function DatabaseBackupsPanel({
                   <td>{backup.embedding_count.toLocaleString()}</td>
                   <td>{(backup.file_count || 0).toLocaleString()}</td>
                   <td>
-                    <Badge color={backup.complete ? "teal" : backup.portable ? "yellow" : "gray"} variant="light">
-                      {backup.complete ? "Complete" : backup.portable ? "Incomplete" : "Legacy DB only"}
+                    <Badge color={backup.restorable ? "teal" : backup.complete ? "red" : backup.portable ? "yellow" : "gray"} variant="light">
+                      {backup.restorable ? "Restorable" : backup.complete ? "Not restorable" : backup.portable ? "Incomplete" : "Legacy DB only"}
                     </Badge>
                   </td>
                   <td>
@@ -538,12 +538,12 @@ function DatabaseBackupsPanel({
                         </ActionIcon>
                       </span>
                     </Tooltip>
-                    <Tooltip label={backup.complete && backup.portable ? "Restore this verified backup" : "Only complete portable backups can be restored"}>
+                    <Tooltip label={backup.restorable ? "Restore this verified backup" : "This backup did not pass the server restore-eligibility checks"}>
                       <span>
                         <ActionIcon
                           variant="subtle"
                           color="teal"
-                          disabled={!canRestore || !backup.complete || !backup.portable || !backup.verified}
+                          disabled={!canRestore || !backup.restorable || !backup.portable || !backup.verified}
                           onClick={() => onRestore(backup)}
                           aria-label={`Restore backup ${formatDateTime(backup.created_at)}`}
                         >

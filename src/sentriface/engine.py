@@ -153,6 +153,11 @@ class FaceEngine:
         self._rebuild_index()
         self.metrics.increment("embeddings_loaded", len(self.store.list_embeddings()))
 
+    def reload_after_restore(self) -> None:
+        """Revalidate storage and republish only derived in-memory state."""
+        self.store.initialize()
+        self._rebuild_index()
+
     def recognize(self, image_path: Path) -> list[RecognitionResult]:
         results: list[RecognitionResult] = []
         with self.metrics.timer("total_recognize_ms"):
