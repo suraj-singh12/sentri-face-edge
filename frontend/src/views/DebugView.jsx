@@ -36,6 +36,7 @@ import {
   IconRefresh,
   IconRestore,
   IconSearch,
+  IconShieldCheck,
   IconTrash,
   IconUpload,
   IconUsers,
@@ -43,6 +44,7 @@ import {
 import { AccountsPanel } from "./AccountsPanel.jsx";
 import { AboutSupportPanel } from "./AboutSupportPanel.jsx";
 import { MachineProfilePanel } from "./MachineProfilePanel.jsx";
+import { RecoveryPanel } from "./RecoveryPanel.jsx";
 
 export function DebugView({
   capabilities = [],
@@ -60,11 +62,14 @@ export function DebugView({
   onDownloadBackup,
   onRestoreBackup,
   onExportSupportPackage,
+  recovery,
+  recoveryActions,
 }) {
   const capabilitySet = useMemo(() => new Set(capabilities), [capabilities]);
   const navItems = useMemo(() => [
     capabilitySet.has("backups") ? { key: "database", label: "Backups & restore", icon: IconDatabase } : null,
     capabilitySet.has("administer") ? { key: "accounts", label: "User accounts", icon: IconUsers } : null,
+    capabilitySet.has("recovery") ? { key: "integrity", label: "Integrity & recovery", icon: IconShieldCheck } : null,
     capabilitySet.has("technical") ? { key: "profile", label: "System details", icon: IconCpu } : null,
     capabilitySet.has("technical") ? { key: "events", label: "Activity log", icon: IconInfoCircle } : null,
     capabilitySet.has("technical") ? { key: "about", label: "About & support", icon: IconHelpCircle } : null,
@@ -176,6 +181,8 @@ export function DebugView({
             <MachineProfilePanel profile={profile} onConfigureRecovery={onConfigureRecovery} canConfigureRecovery={capabilitySet.has("recovery")} />
           ) : section === "accounts" ? (
             <AccountsPanel currentUser={currentUser} />
+          ) : section === "integrity" ? (
+            <RecoveryPanel state={recovery} actions={recoveryActions} />
           ) : (
             <DatabaseBackupsPanel
               backups={backups}

@@ -40,8 +40,25 @@ from sentriface.backup_service import BackupError, BackupRecord, BackupService
 from sentriface.cli import build_dev_engine, build_onnx_engine
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
 from sentriface.engine import DomainWorkflowUnavailableError, IMAGE_EXTENSIONS, FaceEngine
-from sentriface.errors import InputImageError, InputValidationError, ModelSetupError, QueueCancellationError, SentriFaceError
+from sentriface.errors import (
+    GraphProjectionPostcheckError,
+    GraphProjectionRebuildRefused,
+    InputImageError,
+    InputValidationError,
+    ModelSetupError,
+    OperationRevertPostcheckError,
+    OperationRevertRefused,
+    QueueCancellationError,
+    SentriFaceError,
+    StructuredRepairPostcheckError,
+    StructuredRepairRefused,
+)
 from sentriface.hardware import assess_hardware
+from sentriface.integrity_recovery_service import (
+    IntegrityRecoveryApplication,
+    RecoveryPreparationRefused,
+    RecoveryTokenError,
+)
 from sentriface.paths import default_data_dir, default_log_dir
 from sentriface.recovery import RecoveryError, RecoveryService, available_recovery_destinations, recover_master_key
 from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key
@@ -123,6 +140,29 @@ MODEL_SETUP_ALLOWED_ENDPOINTS = {
     "/api/models/install",
     "/api/support-package",
 }
+INTEGRITY_RECOVERY_ENDPOINTS = {
+    "/api/integrity/check",
+    "/api/integrity/graph-rebuild/prepare",
+    "/api/integrity/graph-rebuild/execute",
+    "/api/integrity/repairs/r01/prepare",
+    "/api/integrity/repairs/r01/execute",
+    "/api/integrity/repairs/r02/prepare",
+    "/api/integrity/repairs/r02/execute",
+    "/api/integrity/revert-operations",
+    "/api/integrity/reverts/prepare",
+    "/api/integrity/reverts/execute",
+}
+INTEGRITY_RECOVERY_REQUEST_FIELDS = {
+    "/api/integrity/check": frozenset(),
+    "/api/integrity/graph-rebuild/prepare": frozenset({"report_token", "action_id"}),
+    "/api/integrity/graph-rebuild/execute": frozenset({"token", "operation_id", "reason"}),
+    "/api/integrity/repairs/r01/prepare": frozenset({"report_token", "action_id"}),
+    "/api/integrity/repairs/r01/execute": frozenset({"token", "operation_id", "reason"}),
+    "/api/integrity/repairs/r02/prepare": frozenset({"report_token", "action_id"}),
+    "/api/integrity/repairs/r02/execute": frozenset({"token", "operation_id", "reason"}),
+    "/api/integrity/reverts/prepare": frozenset({"operation_id"}),
+    "/api/integrity/reverts/execute": frozenset({"token", "operation_id", "reason"}),
+}
 
 
 PUBLIC_AUTH_ENDPOINTS = {
@@ -142,6 +182,8 @@ def _required_capability(method: str, path: str) -> str | None:
         return "administer"
     if path in {"/api/models/install", "/api/models/upload"}:
         return "administer"
+    if path in INTEGRITY_RECOVERY_ENDPOINTS:
+        return "recovery"
     if method == "GET":
         if path == "/api/events":
             return "technical"
@@ -296,6 +338,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         )
         self.recovery = RecoveryService(config.data_dir, config.storage_key, self.backups)
         self.auth = AuthService(config.db_path, config.storage_key)
+        self.integrity_recovery = IntegrityRecoveryApplication(
+            engine, token_secret=secrets.token_urlsafe(32),
+        )
         self._scavenge_stale_files()
         self.maintenance_stop = threading.Event()
         self.maintenance_thread = threading.Thread(
@@ -837,6 +882,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if (
             self.server.runtime == "dev"
             or path in MODEL_SETUP_ALLOWED_ENDPOINTS
+            or path in INTEGRITY_RECOVERY_ENDPOINTS
             or path.startswith("/api/auth/")
         ):
             return False
@@ -958,6 +1004,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/recovery":
                 self._json(self.server.recovery.status())
+                return
+            if parsed.path == "/api/integrity/revert-operations":
+                self._json(self.server.integrity_recovery.list_revert_operations())
                 return
             if parsed.path == "/api/persons":
                 self._json(_people_collection_payload(self.server.engine))
@@ -1354,6 +1403,110 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             payload = self._read_json()
+            if parsed.path in INTEGRITY_RECOVERY_REQUEST_FIELDS:
+                _validate_integrity_recovery_payload(parsed.path, payload)
+            if parsed.path == "/api/integrity/check":
+                self._json(self.server.integrity_recovery.check())
+                return
+            if parsed.path == "/api/integrity/graph-rebuild/prepare":
+                self._json(self.server.integrity_recovery.prepare_graph_rebuild(
+                    _required(payload, "report_token"),
+                    _required(payload, "action_id"),
+                ))
+                return
+            if parsed.path == "/api/integrity/graph-rebuild/execute":
+                try:
+                    result = self.server.integrity_recovery.execute_graph_rebuild(
+                        _required(payload, "token"),
+                        _operation_id(payload),
+                        actor=self._operation_actor(),
+                        reason=_integrity_reason(payload),
+                        source=parsed.path,
+                    )
+                except GraphProjectionPostcheckError as exc:
+                    self._json(
+                        self.server.integrity_recovery.postcheck_failure_payload(
+                            "GRAPH_REBUILD", exc.result, exc.report,
+                        ),
+                        status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    )
+                    return
+                self._json(result)
+                return
+            if parsed.path == "/api/integrity/repairs/r01/prepare":
+                self._json(self.server.integrity_recovery.prepare_r01(
+                    _required(payload, "report_token"),
+                    _required(payload, "action_id"),
+                ))
+                return
+            if parsed.path == "/api/integrity/repairs/r01/execute":
+                try:
+                    result = self.server.integrity_recovery.execute_r01(
+                        _required(payload, "token"),
+                        _operation_id(payload),
+                        actor=self._operation_actor(),
+                        reason=_integrity_reason(payload),
+                        source=parsed.path,
+                    )
+                except StructuredRepairPostcheckError as exc:
+                    self._json(
+                        self.server.integrity_recovery.postcheck_failure_payload(
+                            "R01", exc.result, exc.report,
+                        ),
+                        status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    )
+                    return
+                self._json(result)
+                return
+            if parsed.path == "/api/integrity/repairs/r02/prepare":
+                self._json(self.server.integrity_recovery.prepare_r02(
+                    _required(payload, "report_token"),
+                    _required(payload, "action_id"),
+                ))
+                return
+            if parsed.path == "/api/integrity/repairs/r02/execute":
+                try:
+                    result = self.server.integrity_recovery.execute_r02(
+                        _required(payload, "token"),
+                        _operation_id(payload),
+                        actor=self._operation_actor(),
+                        reason=_integrity_reason(payload),
+                        source=parsed.path,
+                    )
+                except StructuredRepairPostcheckError as exc:
+                    self._json(
+                        self.server.integrity_recovery.postcheck_failure_payload(
+                            "R02", exc.result, exc.report,
+                        ),
+                        status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    )
+                    return
+                self._json(result)
+                return
+            if parsed.path == "/api/integrity/reverts/prepare":
+                self._json(self.server.integrity_recovery.prepare_revert(
+                    _required(payload, "operation_id"),
+                ))
+                return
+            if parsed.path == "/api/integrity/reverts/execute":
+                try:
+                    result = self.server.integrity_recovery.execute_revert(
+                        _required(payload, "token"),
+                        _operation_id(payload),
+                        actor=self._operation_actor(),
+                        reason=_integrity_reason(payload),
+                        source=parsed.path,
+                    )
+                except OperationRevertPostcheckError as exc:
+                    self._json(
+                        self.server.integrity_recovery.postcheck_failure_payload(
+                            "REVERT", exc.result, exc.report,
+                        ),
+                        status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    )
+                    return
+                self._json(result)
+                return
             if parsed.path == "/api/backups/restore":
                 raise DomainWorkflowUnavailableError(
                     "Backup restore is temporarily unavailable until P12 validates normalized domain state"
@@ -2540,6 +2693,13 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
 
     def _error(self, exc: Exception) -> None:
         message = str(exc).strip("'")
+        recovery_refusal = isinstance(exc, (
+            GraphProjectionRebuildRefused,
+            OperationRevertRefused,
+            RecoveryPreparationRefused,
+            RecoveryTokenError,
+            StructuredRepairRefused,
+        ))
         validation_error = isinstance(
             exc,
             (InputValidationError, InputImageError, KeyError, ValueError, TypeError),
@@ -2568,6 +2728,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             status = HTTPStatus.SERVICE_UNAVAILABLE
         if isinstance(exc, AuthError):
             status = exc.status
+        if recovery_refusal:
+            status = HTTPStatus.CONFLICT
         payload = {"error": message}
         if isinstance(exc, EngineBusyError):
             payload["code"] = "engine_busy"
@@ -2578,6 +2740,15 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if validation_error:
             payload["code"] = "invalid_input"
             payload["reason"] = getattr(exc, "reason", "invalid_request")
+        if recovery_refusal:
+            stale_terms = ("stale", "fingerprint", "changed", "token")
+            payload["code"] = (
+                "stale_precondition"
+                if isinstance(exc, RecoveryTokenError)
+                or any(term in message.casefold() for term in stale_terms)
+                else "operation_refused"
+            )
+            payload["committed"] = False
         self._json(payload, status=status)
 
     def _media(self, raw_path: str) -> None:
@@ -2861,6 +3032,31 @@ def _operation_id(payload: dict[str, Any]) -> str:
         return str(uuid.UUID(value))
     except ValueError as exc:
         raise KeyError("operation_id must be a UUID") from exc
+
+
+def _integrity_reason(payload: dict[str, Any]) -> str:
+    reason = str(payload.get("reason") or "").strip()
+    if not reason:
+        raise InputValidationError(
+            "A recovery reason is required",
+            "recovery_reason_required",
+        )
+    if len(reason) > 500:
+        raise InputValidationError(
+            "Recovery reason must be 500 characters or fewer",
+            "recovery_reason_too_long",
+        )
+    return reason
+
+
+def _validate_integrity_recovery_payload(path: str, payload: dict[str, Any]) -> None:
+    allowed = INTEGRITY_RECOVERY_REQUEST_FIELDS[path]
+    unknown = sorted(set(payload) - allowed)
+    if unknown:
+        raise InputValidationError(
+            "Integrity recovery requests contain only server-defined fields",
+            "unsupported_recovery_fields",
+        )
 
 
 def _face_index(payload: dict[str, Any]) -> int:

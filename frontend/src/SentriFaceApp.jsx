@@ -59,7 +59,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
   const nextColorScheme = computedColorScheme === "dark" ? "light" : "dark";
   const capabilities = new Set(user?.capabilities || []);
   const can = (capability) => capabilities.has(capability);
-  const visibleViews = VIEWS.filter((view) => view !== "queue" || can("add")).filter((view) => view !== "debug" || can("technical") || can("backups") || can("administer"));
+  const visibleViews = VIEWS.filter((view) => view !== "queue" || can("add")).filter((view) => view !== "debug" || can("technical") || can("backups") || can("administer") || can("recovery"));
   const selectedView = visibleViews.includes(state.activeView) ? state.activeView : "recognize";
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -347,6 +347,8 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onDownloadBackup={actions.downloadBackup}
               onRestoreBackup={actions.requestRestoreBackup}
               onExportSupportPackage={guarded(actions.downloadSupportPackage)}
+              recovery={state.recovery}
+              recoveryActions={actions.recovery}
             />
           </Tabs.Panel>
         </Tabs>

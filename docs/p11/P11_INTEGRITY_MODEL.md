@@ -1,6 +1,6 @@
 # P11 integrity authority model, checker, and graph rebuild
 
-Status: **P11-A/B/C are complete; the complete note → mention → evidence → graph authority model and the two-command structured-repair catalog are frozen.** Both R01 and R02 are implemented. The two R02 safety stops remain in the architecture record: P11-A1 corrected occurrence history, and P11-C2A corrected dependent evidence-history/shared graph authority without changing normal note/evidence mutations, schema, API, or missing-occurrence coverage. This does not authorize generic repair, operation revert, recovery UI, or P12 backup/restore work.
+Status: **P11-A/B/C/D are complete; the integrity/rebuild/repair authority and the single guarded merge-revert subset are frozen.** Both R01 and R02 are implemented. The two R02 safety stops remain in the architecture record: P11-A1 corrected occurrence history, and P11-C2A corrected dependent evidence-history/shared graph authority without changing normal note/evidence mutations, schema, API, or missing-occurrence coverage. P11-D adds no generic undo, revert-all, recovery UI, or P12 backup/restore work.
 
 ## State-authority map
 
@@ -39,6 +39,26 @@ The classification is verified against schema v28, storage writes, services, tri
 - `INFO`: a factual non-corrupt condition worth reporting. P11-A does not emit ordinary aliases, archived/deleted people, or retired evidence as noise.
 
 Future handling is classification only: `SAFE_REBUILD` regenerates purely derived state; `STRUCTURED_REPAIR` would require a future journaled domain command; `MANUAL_REVIEW` forbids guessing; and `UNRECOVERABLE_FROM_LOCAL_STATE` requires backup/restore or external evidence.
+
+## P11-D guarded operation-revert authority
+
+The operation audit classifies actual journaled mutations by whether preserved local state proves a unique history-preserving inverse:
+
+| Journaled operation family | Classification | Reason |
+| --- | --- | --- |
+| Normalized `identity.merge` with an originally active/unmapped source, complete manifest/journal, no survivor profile/note/biometric mutation, exact current post-state, and no later dependent operation | `SAFE_GUARDED_REVERT` | Raw ownership and evidence were preserved; the only authoritative merge mutation needing reversal is the source lifecycle/canonical interpretation. |
+| Any other normalized merge | `NOT_SAFELY_REVERTIBLE` | Archived-source timestamps, survivor conflict selections/note revisions/biometric state, changed entities, or later dependencies prevent a unique inverse without rewriting or guessing. |
+| `identity.archive`, `identity.restore`, biometric face delete/restore, identity profile/preferences updates, and active note create/update/profile-save where a normal later command remains legal | `COMPENSATING_OPERATION_ONLY` | The opposite intent is another forward journaled domain operation; the original operation is not marked reverted or erased. |
+| Observation/Move Face identity corrections | `COMPENSATING_OPERATION_ONLY` | A later correction may supersede current interpretation, but immutable correction rows are never deleted or inverted. |
+| Typed evidence creation/deactivation where current source authority permits new support | `COMPENSATING_OPERATION_ONLY` | Retired evidence is one-way history; a later evidence revision may compensate but old evidence is never reactivated. |
+| Review completion, observation finalisation, note retirement, tombstoned identity deletion, R01, R02, and graph rebuild | `NOT_SAFELY_REVERTIBLE` | Reversal would erase accepted/finalized history, reactivate retired rows, recreate a proven integrity defect, or restore known projection drift. |
+| Biometric physical purge/purge-expired and any lost local media or authoritative row | `BACKUP_RESTORE_ONLY` | Required content/inverse state no longer exists in live local authority. |
+
+The whitelist contains exactly the first row and uses operation type `identity.merge.revert`. `prepare_revert(operation_id)` requires a clean, untruncated P11-A report and returns an immutable schema-v28 token containing the original operation ID/type/status, fingerprint, affected entities, journal-history fingerprint, lifecycle/graph revisions, source/target state, complete merge/projection fingerprints, and dependency-state fingerprint. Preparation refuses unsupported/already-reverted/non-committed operations, malformed or incomplete history, unsafe merge shapes, changed post-state, ambiguous manifests, and any later operation touching a manifest-affected entity.
+
+`execute_revert(precondition, operation_id, actor, reason)` repeats the complete classification under `BEGIN IMMEDIATE`. It starts a new journal operation, changes only the merge source from `MERGED` to a new `ACTIVE` lifecycle state with no canonical target, deterministically replaces/validates the graph projection, validates foreign keys and byte-stable merge/survivor history, appends `COMMITTED → REVERTED` to the original journal, commits the new revert operation, refreshes the derived index, and runs full P11-A. The source lifecycle trigger and normal projection replacement advance the graph revision under existing rules. Exact committed retry is idempotent; a reused or failed ID cannot acquire new meaning.
+
+Refusal performs zero mutation. Failure after the new `STARTED` entry, source mutation, graph update, immediate validation, or final journal transitions rolls the whole authoritative transaction back; only a separate bounded `STARTED → FAILED` attempt may remain. Original journal identity/details/transitions and all merge manifests/items/conflicts remain immutable; only the legal appended `REVERTED` transition is added after a successful separate revert operation. No evidence, correction, note revision, participant, observation, or historical row is deleted, reactivated, retargeted, or rewritten.
 
 ## Fixed P11 invariant registry
 
@@ -181,11 +201,19 @@ Tests directly corrupt disposable databases to cover missing/extra/wrong-directi
 
 These are architectural boundaries, not P11-A blockers. They constrain later repair/recovery design.
 
-## Remaining P11 sequence
+## P11-E integrity and recovery presentation
+
+P11-E is complete as a bounded application/API/UI layer over the frozen P11-A/B/C/D services. `IntegrityRecoveryApplication` never serializes `IntegrityReport` or `IntegrityFinding` directly. Its versioned DTO caps findings, entity identifiers, evidence facts, operation summaries, and results; removes filesystem/database paths, SQLite/SQL diagnostics, stack traces, note content, embeddings, actors, secrets, and raw journal data; and reports only factual status/timestamps/schema/graph revision/severity/invariant/domain/message plus server-owned action hints.
+
+Action hints do not mirror `future_handling`. Isolated `P11-GRAPH-001` drift can prepare P11-B; exact `P11-IDENTITY-003` terminal groups can request R01 preparation; exact existing note/person `P11-NOTE-002/003` groups can request R02 preparation; and recent normalized merges are merely `PREPARATION_REQUIRED` until P11-D proves one operation safe. Every preparation invokes the existing service. Signed report/action references prevent the client from selecting another finding target, and signed wrappers preserve the exact typed R01/R02/revert precondition. Execution requests contain only token, fresh operation UUID, and bounded reason; unknown fields reject. P11-B retains its independent fresh P11-A execution preflight.
+
+All `/api/integrity/*` routes explicitly require the existing `recovery` capability, which remains administrator-only, and use the authenticated server-side actor. They bypass recognition-model readiness without bypassing session, origin, host, or capability checks. Stale/tampered/refused requests return a typed conflict with `committed: false`; a failed post-commit checker remains `committed: true` with `postcheck_failed_after_commit`. The Debug/System panel is manually invoked and replaces its state only from backend responses. There is no polling, background check, startup mutation, worker, scheduler, optimistic graph/identity patch, repair-all, arbitrary repair ID, whitelist expansion, schema change, or P12 backup/restore behavior.
+
+## Completed P11 sequence
 
 1. **P11-A / P11-A1 / P11-C2A — Read-only integrity semantics:** complete and refrozen after correcting occurrence history, evidence revision history, and shared graph-authority current-cardinality semantics.
 2. **P11-B — Deterministic graph projection rebuild:** complete; explicit preflight-gated, atomic, journaled, revision-aware replacement with no authority rewrite.
 3. **P11-C1 — Structured repair authority audit/catalog/design:** complete and frozen. The only commands admitted are restoring an otherwise-valid archived terminal merge survivor and reconciling diagnosed note occurrence/reference state from immutable revision authority.
 4. **P11-C2 / R01 and R02:** complete as explicit Python/service invocation with typed finding preconditions, in-transaction revalidation, immutable repair journaling, append/retire-only history preservation, exact projection/revision validation, rollback/idempotency rules, and full P11-A post-check. The whitelist remains exactly two.
-5. **P11-D — Revert execution:** future; operation-specific preconditions/inverse data and atomic journaled execution.
-6. **P11-E — Integrity/recovery UI and acceptance:** future; explicit invocation and factual reports, no polling/background scan.
+5. **P11-D — Revert execution:** complete; one operation-specific normalized-merge subset with immutable preconditions, conservative dependency refusal, atomic graph/journal execution, rollback tests, and P11-A post-check.
+6. **P11-E — Integrity/recovery UI and acceptance:** complete; administrator-only explicit checks, bounded factual DTOs, signed preparation tokens, typed refusal/post-check outcomes, manually confirmed execution, and no polling/background scan.

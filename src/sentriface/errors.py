@@ -67,3 +67,22 @@ class StructuredRepairPostcheckError(SentriFaceError):
         )
         self.result = result
         self.report = report
+
+
+class OperationRevertRefused(SentriFaceError):
+    """Raised when a P11-D operation is unsupported, stale, or dependent."""
+
+    def __init__(self, message: str, *, report: object | None = None) -> None:
+        super().__init__(message)
+        self.report = report
+
+
+class OperationRevertPostcheckError(SentriFaceError):
+    """Raised when a committed revert fails the mandatory P11-A post-check."""
+
+    def __init__(self, result: dict, report: object) -> None:
+        super().__init__(
+            "Operation revert committed, but the post-commit integrity check failed"
+        )
+        self.result = result
+        self.report = report

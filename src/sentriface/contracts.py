@@ -6,6 +6,7 @@ from typing import Callable, Protocol
 from sentriface.models import (
     ArchivedCanonicalSurvivorRepairPrecondition,
     NoteReferenceReconciliationPrecondition,
+    OperationRevertPrecondition,
     DetectedFace,
     Embedding,
     EmbeddingRecord,
@@ -535,6 +536,23 @@ class IdentityStore(Protocol):
         source: str | None = None,
     ) -> dict:
         """Execute only P11C-R02 under an immediate journaled transaction."""
+
+    def prepare_operation_revert(
+        self, operation_id: str,
+    ) -> OperationRevertPrecondition:
+        """Create a fresh immutable P11-D precondition for a whitelisted operation."""
+
+    def execute_operation_revert(
+        self,
+        precondition: OperationRevertPrecondition,
+        operation_id: str,
+        *,
+        actor: dict,
+        reason: str,
+        source: str | None = None,
+        failure_injector: Callable[[str], None] | None = None,
+    ) -> dict:
+        """Execute one guarded P11-D revert under an immediate transaction."""
 
     def soft_delete_person(
         self, person_id: str, operation_id: str,

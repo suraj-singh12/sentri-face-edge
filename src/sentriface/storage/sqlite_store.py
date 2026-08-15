@@ -17,11 +17,13 @@ from sentriface.errors import (
     GraphProjectionPostcheckError,
     GraphProjectionRebuildRefused,
     StructuredRepairRefused,
+    OperationRevertRefused,
 )
 from sentriface.models import (
     ArchivedCanonicalSurvivorRepairPrecondition,
     NoteReferenceReconciliationPrecondition,
     NoteReferenceRepairPlan,
+    OperationRevertPrecondition,
     DetectedFace,
     Embedding,
     EmbeddingRecord,
@@ -4322,6 +4324,217 @@ class SQLiteIdentityStore:
                         "entity_type": "person",
                         "entity_id": details["referenced_person_id"],
                     },
+                ],
+                details=details,
+            )
+            _transition_journal_operation(conn, operation_id, "FAILED", details)
+
+    def prepare_operation_revert(
+        self, operation_id: str,
+    ) -> OperationRevertPrecondition:
+        """Prepare the one P11-D whitelist entry without mutating history."""
+        normalized_id = str(operation_id).strip()
+        if not normalized_id:
+            raise ValueError("Operation ID is required")
+        from sentriface.integrity import ReadOnlyIntegrityChecker
+
+        report = ReadOnlyIntegrityChecker(
+            self.db_path, database_key=self.database_key,
+        ).run()
+        with self._connect() as conn:
+            conn.execute("BEGIN")
+            return _p11d_precondition_from_report(conn, report, normalized_id)
+
+    def execute_operation_revert(
+        self,
+        precondition: OperationRevertPrecondition,
+        operation_id: str,
+        *,
+        actor: dict,
+        reason: str,
+        source: str | None = None,
+        failure_injector: Callable[[str], None] | None = None,
+    ) -> dict:
+        """Execute a guarded safe-merge revert; no dynamic inversion is accepted."""
+        normalized_revert_id = str(operation_id).strip()
+        if not normalized_revert_id:
+            raise ValueError("Revert operation ID is required")
+        if not isinstance(actor, dict) or not actor:
+            raise ValueError("Authenticated actor is required")
+        normalized_reason = str(reason).strip()
+        if not normalized_reason:
+            raise ValueError("Revert reason is required")
+        if len(normalized_reason) > 500:
+            raise ValueError("Revert reason must not exceed 500 characters")
+        _validate_p11d_request_shape(precondition)
+
+        with self._connect() as conn:
+            existing = _p11d_existing_result(
+                conn, normalized_revert_id, precondition,
+            )
+            if existing is not None:
+                return existing
+
+        from sentriface.integrity import ReadOnlyIntegrityChecker
+
+        report = ReadOnlyIntegrityChecker(
+            self.db_path, database_key=self.database_key,
+        ).run()
+        failure_details = {
+            "revert_spec_version": precondition.revert_spec_version,
+            "fingerprint_version": precondition.fingerprint_version,
+            "fingerprint": precondition.fingerprint,
+            "reverted_operation_id": precondition.operation_id,
+            "reverted_operation_type": precondition.operation_type,
+            "source_person_id": precondition.source_person_id,
+            "target_person_id": precondition.target_person_id,
+        }
+        try:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                existing = _p11d_existing_result(
+                    conn, normalized_revert_id, precondition,
+                )
+                if existing is not None:
+                    return existing
+                current = _p11d_precondition_from_report(
+                    conn, report, precondition.operation_id,
+                )
+                if current != precondition:
+                    raise OperationRevertRefused(
+                        "Revert refused because the prepared authoritative state is stale",
+                        report=report,
+                    )
+
+                immutable_before = _p11d_immutable_fingerprint(
+                    conn, precondition.operation_id,
+                )
+                target_before = _p11d_person_fingerprint(
+                    conn, precondition.target_person_id,
+                )
+                source_stable_before = _p11d_person_stable_fingerprint(
+                    conn, precondition.source_person_id,
+                )
+                revision_before = _graph_revision_token(conn)
+                _begin_journal_operation(
+                    conn,
+                    _P11D_REVERT_OPERATION_TYPE,
+                    operation_id=normalized_revert_id,
+                    actor=actor,
+                    source=source or "guarded-operation-revert-service",
+                    affected_entities=[
+                        {"entity_type": "operation", "entity_id": precondition.operation_id},
+                        {"entity_type": "person", "entity_id": precondition.source_person_id},
+                        {"entity_type": "person", "entity_id": precondition.target_person_id},
+                    ],
+                    details={
+                        **failure_details,
+                        "reason": normalized_reason,
+                        "affected_entity_count": len(precondition.affected_entities),
+                        "affected_entity_fingerprint": _r01_hash(
+                            precondition.affected_entities
+                        ),
+                        "dependency_state_fingerprint": (
+                            precondition.dependency_state_fingerprint
+                        ),
+                    },
+                )
+                _p11d_checkpoint(failure_injector, "after_journal_started")
+                changed_at = utc_now()
+                cursor = conn.execute(
+                    """
+                    UPDATE persons
+                    SET lifecycle_status = 'ACTIVE', canonical_person_id = NULL,
+                        deleted_at = NULL, lifecycle_changed_at = ?
+                    WHERE person_id = ? AND lifecycle_status = 'MERGED'
+                      AND canonical_person_id = ?
+                      AND lifecycle_changed_at = ?
+                    """,
+                    (
+                        changed_at,
+                        precondition.source_person_id,
+                        precondition.target_person_id,
+                        precondition.expected_source_lifecycle_changed_at,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise OperationRevertRefused(
+                        "Revert refused because the merge source changed"
+                    )
+                _p11d_checkpoint(failure_injector, "during_mutation")
+                _replace_graph_projection(conn)
+                _p11d_checkpoint(failure_injector, "during_graph_update")
+                validation = _validate_p11d_postconditions(
+                    conn,
+                    precondition,
+                    immutable_before=immutable_before,
+                    target_before=target_before,
+                    source_stable_before=source_stable_before,
+                    revision_before=revision_before,
+                )
+                _p11d_checkpoint(failure_injector, "during_validation")
+                _transition_journal_operation(
+                    conn,
+                    precondition.operation_id,
+                    "REVERTED",
+                    {
+                        "reverted_by_operation_id": normalized_revert_id,
+                        "revert_fingerprint": precondition.fingerprint,
+                    },
+                )
+                result = {
+                    **failure_details,
+                    "revert_operation_id": normalized_revert_id,
+                    "source_lifecycle_before": "MERGED",
+                    "source_lifecycle_after": "ACTIVE",
+                    "graph_revision_before": revision_before,
+                    "graph_revision_after": validation["graph_revision_after"],
+                    "changed": True,
+                    "immediate_validation_status": "PASS",
+                    "postcheck_status": "PENDING",
+                }
+                _transition_journal_operation(
+                    conn, normalized_revert_id, "COMMITTED", result,
+                )
+                _p11d_checkpoint(failure_injector, "before_commit")
+                return result
+        except OperationRevertRefused:
+            raise
+        except Exception as exc:
+            self._record_p11d_revert_attempt_failed(
+                normalized_revert_id,
+                actor=actor,
+                source=source,
+                details={
+                    **failure_details,
+                    "transaction_rolled_back": True,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:240],
+                },
+            )
+            raise
+
+    def _record_p11d_revert_attempt_failed(
+        self,
+        operation_id: str,
+        *,
+        actor: dict,
+        source: str | None,
+        details: dict,
+    ) -> None:
+        with self._connect() as conn:
+            if _get_journal_operation(conn, operation_id) is not None:
+                return
+            _begin_journal_operation(
+                conn,
+                _P11D_REVERT_OPERATION_TYPE,
+                operation_id=operation_id,
+                actor=actor,
+                source=source or "guarded-operation-revert-service",
+                affected_entities=[
+                    {"entity_type": "operation", "entity_id": details["reverted_operation_id"]},
+                    {"entity_type": "person", "entity_id": details["source_person_id"]},
+                    {"entity_type": "person", "entity_id": details["target_person_id"]},
                 ],
                 details=details,
             )
@@ -15674,6 +15887,362 @@ def _validate_r02_postconditions(
     )
     if revision_after != expected_revision:
         raise RuntimeError("R02 graph revision did not follow the frozen rule")
+    return {
+        "graph_revision_after": revision_after,
+        "connection_count_after": projection["actual_connection_count"],
+    }
+
+
+_P11D_REVERT_SPEC_VERSION = 1
+_P11D_FINGERPRINT_VERSION = "p11-d-schema28-merge-revert-v1"
+_P11D_REVERT_OPERATION_TYPE = "identity.merge.revert"
+
+
+def _p11d_checkpoint(
+    failure_injector: Callable[[str], None] | None, seam: str,
+) -> None:
+    if failure_injector is not None:
+        failure_injector(seam)
+
+
+def _p11d_person_fingerprint(conn: sqlite3.Connection, person_id: str) -> str:
+    row = conn.execute(
+        "SELECT * FROM persons WHERE person_id=?", (person_id,),
+    ).fetchone()
+    if row is None:
+        raise OperationRevertRefused(f"Affected person is missing: {person_id}")
+    return _r01_hash(dict(row))
+
+
+def _p11d_person_stable_fingerprint(conn: sqlite3.Connection, person_id: str) -> str:
+    row = conn.execute(
+        "SELECT * FROM persons WHERE person_id=?", (person_id,),
+    ).fetchone()
+    if row is None:
+        raise OperationRevertRefused(f"Affected person is missing: {person_id}")
+    value = dict(row)
+    for field in (
+        "lifecycle_status", "canonical_person_id", "deleted_at",
+        "lifecycle_changed_at",
+    ):
+        value.pop(field, None)
+    return _r01_hash(value)
+
+
+def _p11d_merge_state_fingerprint(
+    conn: sqlite3.Connection, merge_operation_id: str,
+) -> str:
+    return _r01_hash({
+        "operation": [dict(row) for row in conn.execute(
+            "SELECT * FROM merge_operations WHERE merge_operation_id=?",
+            (merge_operation_id,),
+        )],
+        "items": [dict(row) for row in conn.execute(
+            """
+            SELECT * FROM merge_affected_items
+            WHERE merge_operation_id=? ORDER BY item_type, item_id
+            """,
+            (merge_operation_id,),
+        )],
+        "conflicts": [dict(row) for row in conn.execute(
+            """
+            SELECT * FROM merge_conflict_resolutions
+            WHERE merge_operation_id=? ORDER BY category, field_name, conflict_id
+            """,
+            (merge_operation_id,),
+        )],
+    })
+
+
+def _p11d_immutable_fingerprint(
+    conn: sqlite3.Connection, merge_operation_id: str,
+) -> str:
+    return _p11d_merge_state_fingerprint(conn, merge_operation_id)
+
+
+def _p11d_affected_entities(
+    operation: dict, manifest: MergeOperation,
+) -> tuple[tuple[str, str], ...]:
+    entities: set[tuple[str, str]] = {
+        ("person", manifest.source_person_id),
+        ("person", manifest.target_person_id),
+        ("operation", manifest.merge_operation_id),
+    }
+    for item in operation.get("affected_entities") or []:
+        if isinstance(item, dict) and str(item.get("entity_id") or "").strip():
+            entities.add((
+                str(item.get("entity_type") or "entity").strip().lower(),
+                str(item["entity_id"]),
+            ))
+    for item in manifest.affected_items:
+        entities.add((item.item_type.lower(), item.item_id))
+    return tuple(sorted(entities))
+
+
+def _p11d_later_dependencies(
+    conn: sqlite3.Connection,
+    operation_id: str,
+    affected_entities: tuple[tuple[str, str], ...],
+) -> tuple[str, ...]:
+    original = conn.execute(
+        "SELECT rowid FROM operation_journal WHERE operation_id=?", (operation_id,),
+    ).fetchone()
+    if original is None:
+        raise OperationRevertRefused("Operation history is incomplete")
+    affected_ids = {entity_id for _, entity_id in affected_entities}
+    dependencies: list[str] = []
+    rows = conn.execute(
+        """
+        SELECT operation_id, operation_type, status, affected_entities
+        FROM operation_journal
+        WHERE rowid>? AND status IN ('STARTED','COMMITTED','REVERTED')
+        ORDER BY rowid
+        """,
+        (original["rowid"],),
+    ).fetchall()
+    for row in rows:
+        if row["operation_type"] == "graph.projection.rebuild":
+            continue
+        try:
+            entities = json.loads(row["affected_entities"] or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise OperationRevertRefused("Later operation history is malformed") from exc
+        later_ids = {
+            str(item.get("entity_id"))
+            for item in entities if isinstance(item, dict) and item.get("entity_id") is not None
+        }
+        if affected_ids & later_ids:
+            dependencies.append(str(row["operation_id"]))
+    return tuple(dependencies)
+
+
+def _p11d_precondition_from_report(
+    conn: sqlite3.Connection,
+    report: object,
+    operation_id: str,
+) -> OperationRevertPrecondition:
+    if getattr(report, "schema_version", None) != SCHEMA_VERSION:
+        raise OperationRevertRefused("Revert requires the current schema")
+    if getattr(report, "findings_truncated", True):
+        raise OperationRevertRefused("Revert requires an untruncated P11-A report", report=report)
+    blocking = tuple(
+        finding for finding in getattr(report, "findings", ())
+        if finding.severity.value in {"CRITICAL", "ERROR"}
+    )
+    if blocking:
+        raise OperationRevertRefused(
+            "Revert requires a clean authoritative P11-A preflight", report=report,
+        )
+    operation = _get_journal_operation(conn, operation_id)
+    if operation is None:
+        raise OperationRevertRefused("Operation history is incomplete")
+    if operation["operation_type"] != "identity.merge":
+        raise OperationRevertRefused(
+            f"Operation type is not in the revert whitelist: {operation['operation_type']}"
+        )
+    if operation["status"] == "REVERTED":
+        raise OperationRevertRefused("Operation has already been reverted")
+    if operation["status"] != "COMMITTED":
+        raise OperationRevertRefused("Only a committed operation can be reverted")
+    statuses = tuple(item["to_status"] for item in operation["status_history"])
+    if statuses != ("STARTED", "COMMITTED"):
+        raise OperationRevertRefused("Operation journal history is incomplete or ambiguous")
+    manifest = _get_merge_operation(conn, operation_id)
+    if manifest is None or manifest.operation_journal_id != operation_id:
+        raise OperationRevertRefused("Merge manifest history is incomplete")
+    if (
+        manifest.previous_source_lifecycle_status != "ACTIVE"
+        or manifest.previous_source_canonical_person_id is not None
+        or manifest.previous_target_lifecycle_status != "ACTIVE"
+        or manifest.previous_target_canonical_person_id is not None
+    ):
+        raise OperationRevertRefused(
+            "Merge previous lifecycle/canonical state is not safely reversible"
+        )
+    if manifest.conflicts:
+        raise OperationRevertRefused(
+            "Merge changed survivor profile or note state and is not safely reversible"
+        )
+    if any(
+        item.item_type in {"CURRENT_STATE", "PROFILE_FIELD"}
+        for item in manifest.affected_items
+    ):
+        raise OperationRevertRefused(
+            "Merge changed survivor current state and is not safely reversible"
+        )
+    person_items = tuple(
+        item for item in manifest.affected_items
+        if item.item_type == "PERSON" and item.item_id == manifest.source_person_id
+    )
+    if len(person_items) != 1 or person_items[0].before_state != {
+        "lifecycle_status": "ACTIVE", "canonical_person_id": None,
+    } or person_items[0].after_state != {
+        "lifecycle_status": "MERGED", "canonical_person_id": manifest.target_person_id,
+    }:
+        raise OperationRevertRefused("Merge inverse manifest is incomplete or ambiguous")
+    source_row = conn.execute(
+        """
+        SELECT lifecycle_status, canonical_person_id, deleted_at, lifecycle_changed_at
+        FROM persons WHERE person_id=?
+        """,
+        (manifest.source_person_id,),
+    ).fetchone()
+    target_row = conn.execute(
+        """
+        SELECT lifecycle_status, canonical_person_id, deleted_at, lifecycle_changed_at
+        FROM persons WHERE person_id=?
+        """,
+        (manifest.target_person_id,),
+    ).fetchone()
+    if (
+        source_row is None
+        or source_row["lifecycle_status"] != "MERGED"
+        or source_row["canonical_person_id"] != manifest.target_person_id
+        or source_row["deleted_at"] is None
+        or not source_row["lifecycle_changed_at"]
+    ):
+        raise OperationRevertRefused("Current merge source state differs from the expected result")
+    if (
+        target_row is None
+        or target_row["lifecycle_status"] != "ACTIVE"
+        or target_row["canonical_person_id"] is not None
+        or target_row["deleted_at"] is not None
+    ):
+        raise OperationRevertRefused("Merge survivor is no longer terminal and active")
+    affected_entities = _p11d_affected_entities(operation, manifest)
+    dependencies = _p11d_later_dependencies(conn, operation_id, affected_entities)
+    dependency_state_fingerprint = _r01_hash({
+        "operation_id": operation_id,
+        "affected_entities": affected_entities,
+        "later_dependency_operation_ids": dependencies,
+    })
+    if dependencies:
+        raise OperationRevertRefused(
+            "Later dependent operations prevent safe revert: " + ", ".join(dependencies)
+        )
+    graph_revision = _graph_revision_token(conn)
+    if getattr(report, "graph_revision", None) != graph_revision:
+        raise OperationRevertRefused("P11-A preflight is stale")
+    journal_history_fingerprint = _r01_hash(operation)
+    merge_state_fingerprint = _p11d_merge_state_fingerprint(conn, operation_id)
+    graph_projection_fingerprint = _r01_table_fingerprint(conn, "graph_connections")
+    target_state_fingerprint = _p11d_person_fingerprint(conn, manifest.target_person_id)
+    relevant_revisions = (
+        ("graph_revision", graph_revision),
+        ("source_lifecycle_changed_at", str(source_row["lifecycle_changed_at"])),
+        ("target_lifecycle_changed_at", str(target_row["lifecycle_changed_at"] or "")),
+        ("operation_completed_at", str(operation["completed_at"] or "")),
+    )
+    payload = {
+        "revert_spec_version": _P11D_REVERT_SPEC_VERSION,
+        "fingerprint_version": _P11D_FINGERPRINT_VERSION,
+        "operation_id": operation_id,
+        "operation_type": operation["operation_type"],
+        "journal_state": operation["status"],
+        "journal_history_fingerprint": journal_history_fingerprint,
+        "affected_entities": affected_entities,
+        "relevant_revisions": relevant_revisions,
+        "graph_revision": graph_revision,
+        "graph_projection_fingerprint": graph_projection_fingerprint,
+        "dependency_operation_ids": dependencies,
+        "dependency_state_fingerprint": dependency_state_fingerprint,
+        "merge_state_fingerprint": merge_state_fingerprint,
+        "source_person_id": manifest.source_person_id,
+        "target_person_id": manifest.target_person_id,
+        "expected_source_lifecycle_status": "MERGED",
+        "expected_source_canonical_person_id": manifest.target_person_id,
+        "expected_source_lifecycle_changed_at": str(source_row["lifecycle_changed_at"]),
+        "expected_target_state_fingerprint": target_state_fingerprint,
+    }
+    return OperationRevertPrecondition(
+        **payload,
+        fingerprint=_r01_hash(payload),
+    )
+
+
+def _validate_p11d_request_shape(precondition: OperationRevertPrecondition) -> None:
+    if not isinstance(precondition, OperationRevertPrecondition):
+        raise OperationRevertRefused("A typed P11-D revert precondition is required")
+    if (
+        precondition.revert_spec_version != _P11D_REVERT_SPEC_VERSION
+        or precondition.fingerprint_version != _P11D_FINGERPRINT_VERSION
+        or precondition.operation_type != "identity.merge"
+        or precondition.journal_state != "COMMITTED"
+        or precondition.dependency_operation_ids
+    ):
+        raise OperationRevertRefused("Unsupported or unsafe revert precondition")
+    payload = asdict(precondition)
+    fingerprint = payload.pop("fingerprint")
+    if _r01_hash(payload) != fingerprint:
+        raise OperationRevertRefused("Revert precondition fingerprint is invalid")
+
+
+def _p11d_existing_result(
+    conn: sqlite3.Connection,
+    operation_id: str,
+    precondition: OperationRevertPrecondition,
+) -> dict | None:
+    operation = _get_journal_operation(conn, operation_id)
+    if operation is None:
+        return None
+    if operation["operation_type"] != _P11D_REVERT_OPERATION_TYPE:
+        raise KeyError(f"Operation ID already exists: {operation_id}")
+    if operation.get("details", {}).get("fingerprint") != precondition.fingerprint:
+        raise ValueError("Revert operation ID belongs to a different request")
+    if operation["status"] != "COMMITTED":
+        raise ValueError(
+            "A failed or incomplete revert operation ID cannot be reused"
+        )
+    history = operation.get("status_history") or []
+    return dict(history[-1]["details"]) if history else {}
+
+
+def _validate_p11d_postconditions(
+    conn: sqlite3.Connection,
+    precondition: OperationRevertPrecondition,
+    *,
+    immutable_before: str,
+    target_before: str,
+    source_stable_before: str,
+    revision_before: str,
+) -> dict:
+    source = conn.execute(
+        """
+        SELECT lifecycle_status, canonical_person_id, deleted_at
+        FROM persons WHERE person_id=?
+        """,
+        (precondition.source_person_id,),
+    ).fetchone()
+    if (
+        source is None
+        or source["lifecycle_status"] != "ACTIVE"
+        or source["canonical_person_id"] is not None
+        or source["deleted_at"] is not None
+    ):
+        raise RuntimeError("P11-D source lifecycle/canonical postcondition failed")
+    if _p11d_person_fingerprint(conn, precondition.target_person_id) != target_before:
+        raise RuntimeError("P11-D changed the merge survivor")
+    if (
+        _p11d_person_stable_fingerprint(conn, precondition.source_person_id)
+        != source_stable_before
+    ):
+        raise RuntimeError("P11-D changed non-lifecycle source state")
+    if _p11d_immutable_fingerprint(conn, precondition.operation_id) != immutable_before:
+        raise RuntimeError("P11-D changed immutable merge history")
+    projection = _validate_graph_projection(conn)
+    if not projection["valid"]:
+        raise RuntimeError(
+            "P11-D graph postcondition failed: " + "; ".join(projection["errors"][:10])
+        )
+    if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise RuntimeError("P11-D foreign-key postcondition failed")
+    journal = _get_journal_operation(conn, precondition.operation_id)
+    if journal is None or journal["status"] != "COMMITTED":
+        raise RuntimeError("P11-D changed the original journal before validation")
+    revision_after = _graph_revision_token(conn)
+    expected_revision = f"g{int(revision_before[1:]) + 2}"
+    if revision_after != expected_revision:
+        raise RuntimeError("P11-D graph revision did not follow existing merge rules")
     return {
         "graph_revision_after": revision_after,
         "connection_count_after": projection["actual_connection_count"],

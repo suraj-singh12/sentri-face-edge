@@ -22,6 +22,7 @@ from sentriface.intelligence_service import IntelligenceReadService
 from sentriface.metrics import MetricsCollector
 from sentriface.merge_service import IdentityMergeService
 from sentriface.structured_repair_service import StructuredRepairService
+from sentriface.revert_service import GuardedOperationRevertService
 from sentriface.models import (
     ArchivedCanonicalSurvivorRepairPrecondition,
     NoteReferenceReconciliationPrecondition,
@@ -111,6 +112,9 @@ class FaceEngine:
             reconcile_index=self._rebuild_index,
         )
         self.structured_repairs = StructuredRepairService(
+            store, refresh_index=self._rebuild_index,
+        )
+        self.operation_reverts = GuardedOperationRevertService(
             store, refresh_index=self._rebuild_index,
         )
         self.corrections = IdentityCorrectionService(self.graph)

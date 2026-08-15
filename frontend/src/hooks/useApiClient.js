@@ -29,6 +29,10 @@ export function useApiClient() {
       error.status = response.status;
       error.code = payload.code;
       error.reason = payload.reason;
+      error.committed = Boolean(payload.committed);
+      error.operationResult = payload.operation_result;
+      error.integrityReport = payload.integrity_report;
+      error.payload = payload;
       if (["authentication_required", "setup_required"].includes(error.code)) {
         window.dispatchEvent(new CustomEvent("sentriface-auth-required"));
       }

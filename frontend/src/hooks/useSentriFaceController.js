@@ -5,6 +5,7 @@ import { usePersistentState } from "./usePersistentState.js";
 import { usePeopleController } from "./usePeopleController.js";
 import { useQueueController } from "./useQueueController.js";
 import { useRecognizeController } from "./useRecognizeController.js";
+import { useRecoveryController } from "./useRecoveryController.js";
 import { useWorldController } from "./useWorldController.js";
 
 export function useSentriFaceController({ capabilities = [] } = {}) {
@@ -38,6 +39,10 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
     loadPeople: appData.loadPeople,
     onGraphMutation: people.actions.invalidatePersonGraph,
   });
+  const recovery = useRecoveryController({
+    enabled: capabilities.includes("recovery"),
+    ...api,
+  });
 
   return {
     state: {
@@ -60,6 +65,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       ...queue.state,
       ...people.state,
       ...world.state,
+      recovery: recovery.state,
     },
     refs: { ...recognize.refs },
     actions: {
@@ -85,6 +91,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       ...queue.actions,
       ...people.actions,
       ...world.actions,
+      recovery: recovery.actions,
       guarded: api.guarded,
     },
   };

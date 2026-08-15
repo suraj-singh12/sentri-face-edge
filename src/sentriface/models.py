@@ -115,6 +115,32 @@ class NoteReferenceReconciliationPrecondition:
 
 
 @dataclass(frozen=True)
+class OperationRevertPrecondition:
+    """Immutable P11-D token for one explicitly whitelisted operation revert."""
+
+    revert_spec_version: int
+    fingerprint_version: str
+    fingerprint: str
+    operation_id: str
+    operation_type: str
+    journal_state: str
+    journal_history_fingerprint: str
+    affected_entities: tuple[tuple[str, str], ...]
+    relevant_revisions: tuple[tuple[str, str], ...]
+    graph_revision: str
+    graph_projection_fingerprint: str
+    dependency_operation_ids: tuple[str, ...]
+    dependency_state_fingerprint: str
+    merge_state_fingerprint: str
+    source_person_id: str
+    target_person_id: str
+    expected_source_lifecycle_status: str
+    expected_source_canonical_person_id: str
+    expected_source_lifecycle_changed_at: str
+    expected_target_state_fingerprint: str
+
+
+@dataclass(frozen=True)
 class EmbeddingRecord:
     embedding_id: str
     person_id: str
