@@ -185,10 +185,26 @@ end;
 
 
 procedure CopyMachineIdClick(Sender: TObject);
+var
+  ResultCode: Integer;
 begin
-  SetClipboardText(ActivationMachineId);
-  ActivationMessageLabel.Caption := 'Machine ID copied.';
-  ActivationMessageLabel.Font.Color := clGreen;
+  if Exec(
+    ExpandConstant('{cmd}'),
+    '/C echo ' + ActivationMachineId + '| clip',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) and (ResultCode = 0) then
+  begin
+    ActivationMessageLabel.Caption := 'Machine ID copied.';
+    ActivationMessageLabel.Font.Color := clGreen;
+  end
+  else
+  begin
+    ActivationMessageLabel.Caption := 'Copy failed. Select the machine ID and press Ctrl+C.';
+    ActivationMessageLabel.Font.Color := clRed;
+  end;
 end;
 
 
