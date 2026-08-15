@@ -2,6 +2,8 @@
 
 Run date: 2026-08-10. These are acceptance diagnostics from `scripts/benchmark_world_v2.py`; they are not a completed freeze artifact.
 
+> **Superseded diagnostic:** The completed authoritative result is `P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json`. This file preserves the earlier incomplete run and its original conclusions for comparison.
+
 ## Method
 
 - Dataset A sparse: 100 people, 10,000 finalized observations, one participant per event.

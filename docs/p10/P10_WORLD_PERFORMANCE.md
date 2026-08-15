@@ -2,7 +2,7 @@
 
 Final run: 2026-08-11.
 
-The historical failed baseline remains `P10_WORLD_BENCHMARK_RESULTS.json`. The authoritative post-optimization matrix is `P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json`; the baseline was not overwritten.
+The historical failed baseline remains `benchmarks/P10_WORLD_BENCHMARK_RESULTS.json`. The authoritative post-optimization matrix is `benchmarks/P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json`; the baseline was not overwritten.
 
 ## Method
 

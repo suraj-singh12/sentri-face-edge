@@ -701,7 +701,7 @@ Created from one exact active saved mention occurrence. The source is that menti
 
 Represents an operator-created authoritative assertion with `MANUAL_ASSERTION` provenance. Its evidence type, schema constraints, directionality handling, projection behavior, and tests are present.
 
-**Needs verification:** the current code clearly proves storage/projection support but does not expose an obvious normalized production-facing service/API command for creating a new manual assertion. Future work must verify or add that command before a UI claims that manual associations are fully operator-editable through the normalized boundary.
+**Production workflow boundary:** the current code proves storage/domain semantics and graph-projection support. No verified normalized production-facing service/API or UI workflow for creating or editing manual assertions is claimed; that workflow must be verified or added before the UI presents manual associations as fully operator-editable.
 
 ### How projection works internally
 
@@ -847,7 +847,7 @@ After A is merged into B, the merge response may contain a new graph revision. R
 - A restricted archived/deleted node can remain selectable for explanation without being navigable.
 - A large node set changes ring layout size but not topology.
 - A frontend rendering bug cannot write durable graph state.
-- When a backend contract is incomplete, especially P10-E, the frontend must not compensate by inventing missing semantics.
+- When a backend contract is incomplete, the frontend must not compensate by inventing missing semantics.
 
 ---
 
@@ -1125,7 +1125,7 @@ Earlier diagnostics showed why the first restructuring was chosen: focused spars
 
 The later dense failure exposed different query-shape problems rather than a need for new architecture. Observation-first focused person membership multiplied the observation universe by merged/corrected candidates; overview adjustment did the same for affected identities; each location-facet page re-entered unrelated complete-World work; and cluster scoped counting materialized recursive effective participation for the full scope. The chosen fixes start from indexed relevant participant identities, retain exact correction-before-canonical predicates, specialize explicit facet reads, and count cluster events from candidate participant rows. Persistent caching, materialized World tables, new indexes, workers, and frontend aggregation were rejected because request-local query changes preserved authority and removed the measured pathologies.
 
-The final artifact `docs/P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json` demonstrates the result. Dataset B dense warm p50 changed from 206.09 seconds to 15.73 seconds for unfiltered overview, 111.06 seconds to 12.92 seconds for date filtering, 128.07 seconds to 11.51 seconds for location filtering, 415.76 seconds to 1.13 seconds for person events, 418.79 seconds to 1.00 second for correction-heavy person events, 209.27 seconds to 0.41 second for person relationships, and 248.93 seconds to 24.18 seconds for cluster members. The complete three-page location-facet walk changed from 674.42 seconds to 53.06 seconds. Corresponding Dataset A/B statement counts are identical, bounded payload sizes do not grow with the database, and focused event/evidence/media reads remain millisecond-scale. The remaining dense time is finite set-based work over one million observations/four million participant rows, not observations multiplied by aliases or returned items.
+The final artifact `docs/p10/benchmarks/P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json` demonstrates the result. Dataset B dense warm p50 changed from 206.09 seconds to 15.73 seconds for unfiltered overview, 111.06 seconds to 12.92 seconds for date filtering, 128.07 seconds to 11.51 seconds for location filtering, 415.76 seconds to 1.13 seconds for person events, 418.79 seconds to 1.00 second for correction-heavy person events, 209.27 seconds to 0.41 second for person relationships, and 248.93 seconds to 24.18 seconds for cluster members. The complete three-page location-facet walk changed from 674.42 seconds to 53.06 seconds. Corresponding Dataset A/B statement counts are identical, bounded payload sizes do not grow with the database, and focused event/evidence/media reads remain millisecond-scale. The remaining dense time is finite set-based work over one million observations/four million participant rows, not observations multiplied by aliases or returned items.
 
 ### Example scenario
 
