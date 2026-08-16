@@ -1,31 +1,45 @@
 # P14 release acceptance
 
-## Current result
+## Current result — Windows x64 host acceptance (2026-08-17)
 
-P14 source implementation and locally available macOS validation are complete. Windows x64 build, clean Windows install lifecycle, and Authenticode verification are **NOT VERIFIED** on the current host and remain release blockers.
+P14 source implementation and unsigned Windows x64 development acceptance are complete on a real Windows 11 x64 host. Standalone, installer, clean install, packaged runtime, unlicensed recovery, licensing refusal cases, model onboarding, firewall enforcement, repair, upgrade, downgrade refusal, uninstall/reinstall, and failed-install rollback passed.
 
-## Required Windows release gate
+Production release acceptance remains **INCOMPLETE** because no Authenticode credential or timestamp configuration was available and this was an untagged `-DevelopmentBuild` from `pre-packaging` commit `6565780da1039fd3d4abe5484799710c9f83cb21`. No externally issued production `SFE2` token was provided.
 
-- [ ] Clean exact `v1.0.0` tagged source.
-- [ ] Windows x64-compatible build host with Python 3.12, Node 22, Nuitka, and Inno Setup 6.
-- [ ] Full backend and frontend tests pass on Windows.
-- [ ] Production frontend is embedded and matches source.
-- [ ] Standalone executable starts without development Python and reports the authoritative version.
-- [ ] SQLCipher, ONNX Runtime, OpenCV, Windows keyring, P10–P13 services, and migrations are present.
-- [ ] Artifact inspection proves no model weights, private license key, PFX, token, database, backup, or temporary authority is present.
-- [ ] Application executable and installer have valid trusted Authenticode signatures and timestamps.
-- [ ] SHA-256, dependency/license inventory, and provenance metadata match the installer.
-- [ ] Clean install succeeds and the exact executable outbound rule verifies.
-- [ ] Unlicensed authentication, license activation, model prerequisites, backup, restore, P11 recovery, and support surfaces work.
-- [ ] Unlicensed ordinary product operations return `license_required`.
-- [ ] Valid test license activates; wrong signature/key/product/machine and malformed/noncanonical/oversized/corrupt registry states refuse without leakage.
-- [ ] Same-version repair succeeds without changing per-user authority.
-- [ ] Upgrade requests P13 graceful shutdown, preserves LocalAppData/HKCU/keyring, and refreshes firewall policy.
-- [ ] Downgrade is refused before application files change.
-- [ ] Uninstall removes binaries/shortcuts/owned firewall policy and preserves all per-user authority.
-- [ ] Reinstall reconnects to preserved state safely.
-- [ ] Installer/firewall failure rolls installation back without modifying per-user authority.
-- [ ] Non-loopback socket attempts fail and OS-policy verification remains active.
-- [ ] P11-A remains clean and P12 backup/restore acceptance remains unchanged after install/upgrade.
+The independently established `prod-2026-01` production trust-root match remains verified and was not reopened. Schema remains v28 and no P10/P11/P12/P13 semantic contract changed.
+
+## Windows release gate results
+
+- [ ] Clean exact `v1.0.0` tagged source. Required for production; this documented run used acceptance mode.
+- [x] Real Windows 11 x64 host: Python 3.12.10, Nuitka 4.1.3, MSVC 14.3, Node 24.17.0, npm 11.13.0, Inno Setup 6.7.3, Windows SDK SignTool, and Git 2.45.2.
+- [x] Windows source gate: 505 backend tests, 106 subtests, and 94 frontend tests passed; 45 skips were environment-classified; production UI build and `git diff --check` passed.
+- [x] Current production frontend is embedded and matches source.
+- [x] Standalone starts without development Python, reports 1.0.0, binds only `127.0.0.1`, refuses a second instance with exit 2, and shuts down gracefully.
+- [x] SQLCipher, ONNX Runtime, OpenCV, Windows keyring, P10–P13 services, licensing, migrations, and runtime lifecycle load from the package.
+- [x] Artifact scan proves no model weights, private license key, PFX, token, database, backup, recovery secret, log, or staging authority is bundled.
+- [ ] Executable and installer Authenticode signatures/timestamps. Both report `NotSigned`; credentials were unavailable.
+- [x] Final SHA-256 `4c403e3387bb178028cf6c7516c203d7a99b8535143776e79e8ce6a6c36cf074`, dependency/license inventory, and development provenance match the 62,076,665-byte installer.
+- [x] Clean install succeeds and ActiveStore has exactly one enabled outbound block for `C:\Program Files\SentriFace Edge\SentriFaceEdge.exe`.
+- [x] Fresh unlicensed bootstrap/authentication, model prerequisites, backup creation/list/restore surface, P11 integrity/recovery, profile/support, and malformed activation refusal work.
+- [x] Unlicensed ordinary person reads return `402 license_required`; status returns neither raw signed token nor raw MachineGuid.
+- [x] Ephemeral-key licensing tests cover valid activation plus tampered signature/payload, wrong key/product/machine, malformed/noncanonical/oversized token, registry corruption, valid-token preservation, admin authorization, and actor spoofing. Production token: `NOT_PROVIDED`.
+- [x] Same-version repair replaces the exact final executable, preserves per-user authority byte-for-byte, and refreshes the firewall rule.
+- [x] Real acceptance upgrade from 0.9.9 to 1.0.0 gracefully stops the old process, preserves LocalAppData/model/backup and Credential Manager state, and refreshes firewall policy.
+- [x] Downgrade installer exits 1 before executable, version metadata, or firewall change.
+- [x] Uninstall removes binaries, metadata, shortcuts and only the owned firewall rule while preserving all per-user authority.
+- [x] Reinstall restores the exact final binary/rule and reconnects to preserved encrypted database, keyring, backup, and active-model state.
+- [x] Forced firewall-helper launch failure exits setup 7 before Program Files/metadata creation and leaves no rule or user-authority mutation.
+- [x] Final ONNX packaged startup passes OS-policy verification and installs the in-process non-loopback socket guard while loopback remains available.
+- [x] Final packaged operator-model upload, two candidate prepares/activations, and explicit rollback commit without path leakage or bundled weights; backup and P11 integrity remain clean.
 
 Unsigned CI artifacts are acceptance diagnostics only and must never be published as production releases.
+
+## Decision
+
+- P14 source implementation: **COMPLETE**.
+- Windows x64 development build and packaged-runtime acceptance: **PASS**.
+- Production trust-root match (`prod-2026-01`): **PASS** (independently established).
+- Authenticode: **NOT VERIFIED**.
+- Production-token test: **NOT PROVIDED**.
+- Production release readiness: **NO**.
+- P14 production release acceptance: **INCOMPLETE** until a clean exact `v1.0.0` build is externally signed/timestamped and the final signatures verify.

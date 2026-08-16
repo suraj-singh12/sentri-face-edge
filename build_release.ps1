@@ -57,8 +57,10 @@ npm --prefix frontend test
 if ($LASTEXITCODE -ne 0) { throw "Frontend tests failed." }
 npm --prefix frontend run build
 if ($LASTEXITCODE -ne 0) { throw "Frontend build failed." }
-git diff --exit-code -- src\sentriface\ui_static
-if ($LASTEXITCODE -ne 0) { throw "Generated frontend assets do not match tagged source." }
+if (-not $DevelopmentBuild) {
+    git diff --exit-code -- src\sentriface\ui_static
+    if ($LASTEXITCODE -ne 0) { throw "Generated frontend assets do not match tagged source." }
+}
 
 python -m nuitka `
     --mode=standalone `

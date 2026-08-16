@@ -1,13 +1,48 @@
+# Python environments and caches
 .venv/
-.venv312/
-.model-cache/
-data/
-models/*.onnx
+.venv*/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+coverage/
+htmlcov/
+
+# JavaScript dependencies and reports
 node_modules/
-.DS_Store
+frontend/coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build and release outputs
 build/
 dist/
-*.egg-info/
+installer_output/
+*.build/
+*.dist/
+*.onefile-build/
+
+# Local application and model authority
+data/
 logs/
+.model-cache/
+models/*.onnx
+packaging/runtime/core/*.dat
+
+# Obsolete local backup locations
+/workflow_backup/
+
+# Editor and OS debris
+.DS_Store
+Thumbs.db
+*.bak
+*.orig
+*.rej
+*.save
+*.tmp
+*~

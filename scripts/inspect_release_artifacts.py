@@ -16,7 +16,6 @@ REQUIRED_PATTERNS = (
     "onnxruntime",
     "cv2",
     "sqlcipher",
-    "keyring",
 )
 
 

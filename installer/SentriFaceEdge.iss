@@ -38,7 +38,7 @@ MinVersion=10.0.17763
 
 [Files]
 Source: "..\build\ui.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\packaging\windows\Install-OfflinePolicy.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "..\packaging\windows\Install-OfflinePolicy.ps1"; Flags: dontcopy
 Source: "..\packaging\windows\Remove-OfflinePolicy.ps1"; DestDir: "{app}\support"; Flags: ignoreversion
 
 [Icons]
@@ -117,30 +117,31 @@ begin
   end;
 end;
 
-procedure InstallOfflinePolicy();
+function InstallOfflinePolicy(): Boolean;
 var
   ResultCode: Integer;
 begin
-  if not Exec(
+  ExtractTemporaryFile('Install-OfflinePolicy.ps1');
+  Result := Exec(
     ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""' +
-      ExpandConstant('{tmp}\Install-OfflinePolicy.ps1') + '"" -ExecutablePath ""' +
-      ExpandConstant('{app}\{#MyExeName}') + '""',
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+      ExpandConstant('{tmp}\Install-OfflinePolicy.ps1') + '" -ExecutablePath "' +
+      ExpandConstant('{app}\{#MyExeName}') + '"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode
-  ) or (ResultCode <> 0) then begin
-    RaiseException('SentriFace offline firewall setup or verification failed.');
-  end;
+  ) and (ResultCode = 0);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   RequestGracefulShutdown();
-  Result := '';
+  if InstallOfflinePolicy() then
+    Result := ''
+  else
+    Result := 'SentriFace offline firewall setup or verification failed.';
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssPostInstall then InstallOfflinePolicy();
   if CurStep = ssDone then SetupCompleted := True;
 end;
 
@@ -149,20 +150,20 @@ var
   ResultCode: Integer;
 begin
   if SetupCompleted then exit;
-  if PreviousInstallation and FileExists(ExpandConstant('{app}\{#MyExeName}')) and
-     FileExists(ExpandConstant('{tmp}\Install-OfflinePolicy.ps1')) then begin
+  if PreviousInstallation and FileExists(ExpandConstant('{app}\{#MyExeName}')) then begin
+    ExtractTemporaryFile('Install-OfflinePolicy.ps1');
     Exec(
       ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-      '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""' +
-        ExpandConstant('{tmp}\Install-OfflinePolicy.ps1') + '"" -ExecutablePath ""' +
-        ExpandConstant('{app}\{#MyExeName}') + '""',
+      '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+        ExpandConstant('{tmp}\Install-OfflinePolicy.ps1') + '" -ExecutablePath "' +
+        ExpandConstant('{app}\{#MyExeName}') + '"',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode
     );
   end else begin
     Exec(
       ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-      '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""' +
-        'Get-NetFirewallRule -Name ''SentriFaceEdge-BlockOutbound'' -ErrorAction SilentlyContinue | Remove-NetFirewallRule""',
+      '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' +
+        'Get-NetFirewallRule -Name ''SentriFaceEdge-BlockOutbound'' -ErrorAction SilentlyContinue | Remove-NetFirewallRule"',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode
     );
   end;

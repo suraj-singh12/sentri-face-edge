@@ -3,7 +3,9 @@ from __future__ import annotations
 import io
 import json
 import tempfile
+import uuid
 import unittest
+from dataclasses import replace
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
@@ -12,6 +14,9 @@ import cv2
 import numpy as np
 
 from sentriface import cli
+from sentriface.config import config_for_hardware
+from sentriface.hardware import assess_hardware
+from sentriface.secure_storage import load_or_create_master_key
 from sentriface.cli import build_dev_engine
 
 
@@ -228,9 +233,21 @@ class CliTest(unittest.TestCase):
             image = root / "face.jpg"
             canvas = np.full((120, 120, 3), 128, dtype=np.uint8)
             cv2.imwrite(str(image), canvas)
-            engine = build_dev_engine(data_dir)
+            config = replace(
+                config_for_hardware(assess_hardware(), data_dir=data_dir),
+                storage_key=load_or_create_master_key(data_dir),
+            )
+            engine = build_dev_engine(data_dir, config)
             engine.initialize()
-            person_id = engine.confirm_new_person(engine.prepare_additions(image)[0], "CLI Person")
+            review, pending = engine.prepare_photo_review(image)
+            self.assertIsNotNone(review)
+            self.assertEqual(len(pending), 1)
+            engine.store.set_photo_review_face_decision(
+                review.review_id, "face-1", "ACCEPT_NEW_PERSON",
+                new_person_name="CLI Person",
+            )
+            finalized = engine.store.complete_photo_review(review.review_id, str(uuid.uuid4()))
+            person_id = finalized["created_person_ids"][0]
             embedding_id = engine.list_person_embeddings(person_id)[0].embedding_id
 
             delete_output = io.StringIO()

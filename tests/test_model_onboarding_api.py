@@ -121,7 +121,7 @@ class ModelOnboardingApiTest(unittest.TestCase):
             thread.start()
             try:
                 _, token = server.auth.signup_initial("owner", "Owner", PASSWORD)
-                model_dir.mkdir(parents=True)
+                model_dir.mkdir(parents=True, exist_ok=True)
                 for name in ("detector.onnx", "recognizer.onnx", "calibration.json", "model-usage.json"):
                     (model_dir / name).write_bytes(name.encode("utf-8"))
                 server.model_ready = True

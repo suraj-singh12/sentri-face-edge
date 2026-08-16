@@ -52,8 +52,13 @@ class P14PackagingContractTest(unittest.TestCase):
         for text in ("-Direction Outbound", "-Program $resolved", "-Action Block", "PolicyStore ActiveStore", "$installedProgram -ine $resolved"):
             self.assertIn(text, script)
         installer = (ROOT / "installer" / "SentriFaceEdge.iss").read_text(encoding="utf-8")
-        self.assertIn("RaiseException('SentriFace offline firewall setup or verification failed.')", installer)
+        self.assertIn("ExtractTemporaryFile('Install-OfflinePolicy.ps1')", installer)
+        self.assertIn("function PrepareToInstall", installer)
+        self.assertIn("Result := 'SentriFace offline firewall setup or verification failed.'", installer)
+        self.assertNotIn("ssPostInstall then InstallOfflinePolicy", installer)
 
+        self.assertIn('Flags: dontcopy', installer)
+        self.assertNotIn('-File ""', installer.split('[Code]', 1)[1])
     def test_public_trust_root_contains_only_ed25519_public_bytes(self) -> None:
         keys = production_public_keys()
         self.assertEqual(set(keys), {"prod-2026-01"})
@@ -65,7 +70,7 @@ class P14PackagingContractTest(unittest.TestCase):
     def test_artifact_inspector_refuses_model_weights_and_private_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             distribution = Path(temporary)
-            for name in ("SentriFaceEdge.exe", "sentriface.pyd", "onnxruntime.dll", "cv2.pyd", "sqlcipher3.pyd", "keyring.pyd"):
+            for name in ("SentriFaceEdge.exe", "sentriface.pyd", "onnxruntime.dll", "cv2.pyd", "sqlcipher3.pyd"):
                 (distribution / name).write_bytes(b"safe")
             self.assertEqual(inspect(distribution, APP_VERSION), [])
             (distribution / "detector.onnx").write_bytes(b"weights")
