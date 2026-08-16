@@ -11,6 +11,7 @@ import os
 import platform
 import secrets
 import shutil
+import signal
 import sys
 import threading
 import time
@@ -25,6 +26,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
+
+from loguru import logger
 
 from sentriface import __version__
 from sentriface.api_serializers import embedding_record_payload
@@ -42,7 +45,11 @@ from sentriface.backup_service import (
     BackupRestoreError,
     BackupService,
 )
-from sentriface.cli import build_dev_engine, build_onnx_engine
+from sentriface.cli import (
+    build_dev_engine,
+    build_onnx_engine,
+    build_onnx_recognition_runtime,
+)
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
 from sentriface.engine import DomainWorkflowUnavailableError, IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import (
@@ -64,9 +71,10 @@ from sentriface.integrity_recovery_service import (
     RecoveryPreparationRefused,
     RecoveryTokenError,
 )
+from sentriface.logging_config import sanitize_log_details
 from sentriface.paths import default_data_dir, default_log_dir
 from sentriface.recovery import RecoveryError, RecoveryService, available_recovery_destinations, recover_master_key
-from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key
+from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key, validate_recovered_master_key
 from sentriface.secure_files import read_protected_bytes, write_protected_bytes
 from sentriface.offline_guard import install_offline_guard, offline_guard_installed, require_local_path
 from sentriface.os_network_policy import (
@@ -75,7 +83,19 @@ from sentriface.os_network_policy import (
     inspect_os_network_policy,
     require_os_network_policy,
 )
-from sentriface.model_setup import MODEL_COMBINATIONS, install_local_model_bundle
+from sentriface.model_activation import (
+    ModelActivationRefused,
+    ModelActivationService,
+    resolve_startup_model_bundle,
+)
+from sentriface.model_bundle import ModelBundleAuthority, _limit_for_kind
+from sentriface.runtime_hardening import (
+    InstanceLock,
+    RuntimeReadinessError,
+    cleanup_managed_temporaries,
+    validate_managed_storage,
+)
+from sentriface.model_setup import MODEL_COMBINATIONS
 from sentriface.models import (
     EmbeddingRecord,
     FaceBox,
@@ -143,8 +163,29 @@ MODEL_SETUP_ALLOWED_ENDPOINTS = {
     "/api/models/status",
     "/api/models/upload",
     "/api/models/install",
+    "/api/models/activation/prepare",
+    "/api/models/activation/execute",
+    "/api/models/rollback/prepare",
+    "/api/models/rollback/execute",
     "/api/support-package",
 }
+MODEL_OPERATION_REQUEST_FIELDS = {
+    "/api/models/activation/prepare": frozenset({"bundle_id"}),
+    "/api/models/activation/execute": frozenset({"token", "operation_id", "reason"}),
+    "/api/models/rollback/prepare": frozenset(),
+    "/api/models/rollback/execute": frozenset({"token", "operation_id", "reason"}),
+}
+MODEL_INSTALL_REQUEST_FIELDS = frozenset({
+    "combination_id",
+    "detector_upload_id",
+    "recognizer_upload_id",
+    "calibration_upload_id",
+    "organization",
+    "licensor",
+    "license_reference",
+    "license_name",
+    "accept_responsibility",
+})
 INTEGRITY_RECOVERY_ENDPOINTS = {
     "/api/integrity/check",
     "/api/integrity/graph-rebuild/prepare",
@@ -185,7 +226,7 @@ def _required_capability(method: str, path: str) -> str | None:
         return "view"
     if path.startswith("/api/users"):
         return "administer"
-    if path in {"/api/models/install", "/api/models/upload"}:
+    if method == "POST" and path.startswith("/api/models/"):
         return "administer"
     if path in INTEGRITY_RECOVERY_ENDPOINTS:
         return "recovery"
@@ -256,12 +297,17 @@ class OperationGate:
         self._active_operations = 0
         self._exclusive_active = False
         self._exclusive_waiters = 0
+        self._shutting_down = False
 
     @contextmanager
     def shared(self):
         with self._condition:
+            if self._shutting_down:
+                raise EngineBusyError("SentriFace is shutting down")
             while self._exclusive_active or self._exclusive_waiters:
                 self._condition.wait()
+                if self._shutting_down:
+                    raise EngineBusyError("SentriFace is shutting down")
             self._active_operations += 1
         try:
             yield
@@ -273,10 +319,14 @@ class OperationGate:
     @contextmanager
     def exclusive(self):
         with self._condition:
+            if self._shutting_down:
+                raise EngineBusyError("SentriFace is shutting down")
             self._exclusive_waiters += 1
             try:
                 while self._exclusive_active or self._active_operations:
                     self._condition.wait()
+                    if self._shutting_down:
+                        raise EngineBusyError("SentriFace is shutting down")
                 self._exclusive_active = True
             finally:
                 self._exclusive_waiters -= 1
@@ -287,6 +337,21 @@ class OperationGate:
                 self._exclusive_active = False
                 self._condition.notify_all()
 
+    def begin_shutdown(self) -> None:
+        with self._condition:
+            self._shutting_down = True
+            self._condition.notify_all()
+
+    def wait_for_idle(self, timeout: float) -> bool:
+        deadline = time.monotonic() + max(0.0, timeout)
+        with self._condition:
+            while self._active_operations or self._exclusive_active:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._condition.wait(remaining)
+            return True
+
 
 class SentriFaceApiServer(ThreadingHTTPServer):
     def __init__(
@@ -296,10 +361,12 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         config: RuntimeConfig,
         hardware_profile: HardwareProfile,
         runtime: str,
-        debug: bool = True,
+        debug: bool = False,
         model_ready: bool = True,
         model_error: str = "",
         os_network_policy: OsNetworkPolicyStatus | None = None,
+        model_bundles: ModelBundleAuthority | None = None,
+        instance_lock: InstanceLock | None = None,
     ) -> None:
         super().__init__(server_address, SentriFaceApiHandler)
         self.engine = engine
@@ -330,6 +397,18 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.queue_cancellation_created: dict[str, float] = {}
         self.active_queue_jobs: set[str] = set()
         self.operation_gate = OperationGate()
+        self.shutting_down = threading.Event()
+        self._closed = False
+        self.instance_lock = instance_lock
+        self.model_bundles = model_bundles or ModelBundleAuthority(
+            config.detector_model.parent
+        )
+        self.model_activation = ModelActivationService(
+            self.model_bundles,
+            engine,
+            build_onnx_recognition_runtime,
+            token_secret=secrets.token_urlsafe(32),
+        )
         self.inference_semaphore = threading.BoundedSemaphore(max(1, config.max_workers))
         self.request_semaphore = threading.BoundedSemaphore(MAX_HTTP_HANDLERS)
         self.backups = BackupService(
@@ -426,15 +505,21 @@ class SentriFaceApiServer(ThreadingHTTPServer):
 
     def model_status(self, user: AuthUser | None) -> dict[str, Any]:
         ready = self.models_available()
-        model_dir = self.config.detector_model.parent
+        active = self.model_activation.active_state()
+        can_configure = bool(user and user.has("administer"))
+        candidates = []
+        if can_configure and not ready:
+            active_id = active.active_bundle_id if active else None
+            candidates = [
+                bundle.dto()
+                for bundle in self.model_bundles.list_bundles(limit=1)
+                if bundle.bundle_id != active_id
+            ]
         return {
             "ready": ready,
             "runtime": self.runtime,
             "error": "" if ready else self.model_error or "Recognition models are required",
-            "can_configure": bool(user and user.has("administer")),
-            "models_dir": str(model_dir) if user and user.has("administer") else None,
-            "detector_target": str(model_dir / "detector.onnx") if user and user.has("administer") else None,
-            "recognizer_target": str(model_dir / "recognizer.onnx") if user and user.has("administer") else None,
+            "can_configure": can_configure,
             "combinations": MODEL_COMBINATIONS,
             "requirements": {
                 "detector": "SCRFD-compatible ONNX detector",
@@ -443,6 +528,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
                 "checksums": "SHA-256 is required for every supplied file",
             },
             "usage": self.model_usage if ready else None,
+            "active_bundle": active.dto() if active else None,
+            "rollback_available": bool(active and active.previous_bundle_id),
+            "candidate_bundles": candidates,
         }
 
     def recovery_readiness(self) -> dict[str, Any]:
@@ -466,17 +554,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             "acknowledged_by": acknowledgement.get("acknowledged_by", ""),
             "acknowledgement_version": RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION,
         }
-    def activate_installed_models(self, model_dir: Path) -> None:
-        config = replace(
-            self.config,
-            detector_model=model_dir / "detector.onnx",
-            recognizer_model=model_dir / "recognizer.onnx",
-        )
-        candidate = build_onnx_engine(config)
-        candidate.initialize()
-        self.engine = candidate
-        self.config = candidate.config
-        declaration = getattr(candidate, "model_usage", None)
+    def sync_model_runtime_state(self) -> None:
+        self.config = self.engine.config
+        declaration = getattr(self.engine, "model_usage", None)
         self.model_usage = declaration if isinstance(declaration, dict) else {}
         self.model_error = ""
         self.model_ready = True
@@ -484,11 +564,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.log_event(
             "models-activated",
             usage_basis=self.model_usage.get("usage_basis", "unknown"),
-            detector=str(self.config.detector_model),
-            recognizer=str(self.config.recognizer_model),
         )
     def process_request(self, request: Any, client_address: Any) -> None:
-        if self.network_policy_violation:
+        if self.network_policy_violation or self.shutting_down.is_set():
             try:
                 request.sendall(
                     b"HTTP/1.1 503 Service Unavailable\r\n"
@@ -561,11 +639,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         with getattr(self, "events_lock", threading.Lock()):
             self.events.append(item)
             self.events = self.events[-200:]
-        if self.debug:
-            print(
-                f"[sentriface-ui] {event} "
-                f"{json.dumps(safe_details, separators=(',', ':'))}"
-            )
+        logger.info(json.dumps(item, separators=(",", ":"), sort_keys=True))
 
     def update_queue_progress(self, job_id: str, **updates: Any) -> None:
         with self.queue_progress_lock:
@@ -738,6 +812,15 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             break
 
     def server_close(self) -> None:
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
+        shutting_down = getattr(self, "shutting_down", None)
+        operation_gate = getattr(self, "operation_gate", None)
+        if shutting_down is not None:
+            shutting_down.set()
+        if operation_gate is not None:
+            operation_gate.begin_shutdown()
         queue_progress_lock = getattr(self, "queue_progress_lock", None)
         queue_cancellations = getattr(self, "queue_cancellations", None)
         if queue_progress_lock is not None and queue_cancellations is not None:
@@ -756,7 +839,34 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             network_policy_stop.set()
         if network_policy_thread is not None and network_policy_thread.is_alive():
             network_policy_thread.join(timeout=2)
-        super().server_close()
+        if operation_gate is not None:
+            operation_gate.wait_for_idle(10)
+        engine = getattr(self, "engine", None)
+        try:
+            if engine is not None:
+                engine.close()
+        finally:
+            try:
+                super().server_close()
+            finally:
+                instance_lock = getattr(self, "instance_lock", None)
+                if instance_lock is not None:
+                    instance_lock.release()
+
+    def graceful_shutdown(self, *, drain_timeout: float = 10) -> bool:
+        """Stop admission, cancel maintenance work, drain active operations, then stop HTTP."""
+        if self.shutting_down.is_set():
+            return self.operation_gate.wait_for_idle(drain_timeout)
+        self.shutting_down.set()
+        self.operation_gate.begin_shutdown()
+        with self.queue_progress_lock:
+            for cancellation in self.queue_cancellations.values():
+                cancellation.set()
+        self.maintenance_stop.set()
+        self.network_policy_stop.set()
+        drained = self.operation_gate.wait_for_idle(drain_timeout)
+        self.shutdown()
+        return drained
 
 
 class SentriFaceApiHandler(SimpleHTTPRequestHandler):
@@ -767,7 +877,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         """Never put session-bearing query strings into operational logs."""
         if self.server.debug:
-            print(f"[sentriface-http] {self.command} {urlparse(self.path).path}")
+            logger.debug("http_request method={} endpoint={}", self.command, urlparse(self.path).path)
     def translate_path(self, path: str) -> str:
         parsed = urlparse(path)
         if parsed.path == "/":
@@ -967,7 +1077,14 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         }
         gate = (
             self.server.operation_gate.exclusive()
-            if parsed.path in {*exclusive_backup_paths, "/api/models/install"}
+            if parsed.path in {
+                *exclusive_backup_paths,
+                "/api/models/install",
+                "/api/models/activation/prepare",
+                "/api/models/activation/execute",
+                "/api/models/rollback/prepare",
+                "/api/models/rollback/execute",
+            }
             else self.server.operation_gate.shared()
         )
         with gate:
@@ -1319,47 +1436,35 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 )
                 return
             if parsed.path == "/api/models/upload":
+                _validate_model_upload_query(parsed.query)
                 kind = _query_value(parsed.query, "kind").strip().casefold()
-                if kind not in {"detector", "recognizer"}:
+                if kind not in {"detector", "recognizer", "calibration"}:
                     raise InputValidationError(
-                        "Model upload kind must be detector or recognizer",
+                        "Model upload kind must be detector, recognizer, or calibration",
                         "invalid_model_kind",
                     )
-                filename = Path(_query_value(parsed.query, "filename")).name
-                if not filename.casefold().endswith(".onnx"):
-                    raise InputValidationError(
-                        "Choose an ONNX model file",
-                        "unsupported_model_file",
+                target = self.server.model_bundles.begin_upload(
+                    kind, _query_value(parsed.query, "filename")
+                )
+                try:
+                    digest, size = self._stream_model_upload(
+                        target.path, maximum_bytes=_limit_for_kind(kind)
                     )
-                model_dir = require_local_path(
-                    self.server.config.detector_model.parent
-                )
-                upload_dir = model_dir / ".uploads"
-                upload_dir.mkdir(parents=True, exist_ok=True)
-                for previous in upload_dir.glob(f"{kind}-*.onnx"):
-                    previous.unlink(missing_ok=True)
-                staged_path = (
-                    upload_dir / f"{kind}-{uuid.uuid4().hex}.onnx"
-                )
-                digest, size = self._stream_model_upload(staged_path)
+                    reference = self.server.model_bundles.complete_upload(
+                        target, sha256=digest, size=size
+                    )
+                except Exception:
+                    self.server.model_bundles.abort_upload(target)
+                    raise
                 self.server.log_event(
                     "model-file-selected",
                     actor=self.auth_user.username,
                     kind=kind,
-                    filename=filename,
+                    filename=reference.filename,
                     size=size,
                     sha256=digest,
                 )
-                self._json(
-                    {
-                        "kind": kind,
-                        "filename": filename,
-                        "path": str(staged_path),
-                        "size": size,
-                        "sha256": digest,
-                    },
-                    status=HTTPStatus.CREATED,
-                )
+                self._json(reference.dto(), status=HTTPStatus.CREATED)
                 return
             if parsed.path == "/api/backups/import":
                 filename = _query_value(parsed.query, "filename")
@@ -1422,6 +1527,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             payload = self._read_json()
+            if parsed.path in MODEL_OPERATION_REQUEST_FIELDS:
+                _validate_model_operation_payload(parsed.path, payload)
             if parsed.path in INTEGRITY_RECOVERY_REQUEST_FIELDS:
                 _validate_integrity_recovery_payload(parsed.path, payload)
             if parsed.path == "/api/integrity/check":
@@ -1701,6 +1808,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"password_reset": True})
                 return
             if parsed.path == "/api/models/install":
+                _validate_model_install_payload(payload)
                 if payload.get("accept_responsibility") is not True:
                     raise InputValidationError(
                         "Accept responsibility for model licensing and biometric use before continuing",
@@ -1715,27 +1823,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 choice = next((item for item in choices if item["id"] == choice_id), None)
                 if choice is None:
                     raise InputValidationError("Choose a supported model combination", "unsupported_model_combination")
-                detector_source = require_local_path(Path(_required(payload, "detector_path")))
-                recognizer_source = require_local_path(Path(_required(payload, "recognizer_path")))
-                calibration_path = str(payload.get("calibration_path") or "").strip()
-                calibration_sha256 = str(payload.get("calibration_sha256") or "").strip()
-                if bool(calibration_path) != bool(calibration_sha256):
-                    raise InputValidationError(
-                        "Provide both the calibration threshold file path and its SHA-256, or leave both empty",
-                        "incomplete_calibration",
-                    )
-                calibration_source = (
-                    require_local_path(Path(calibration_path)) if calibration_path else None
-                )
-                model_dir = require_local_path(self.server.config.detector_model.parent)
-                declaration = install_local_model_bundle(
-                    model_dir,
-                    detector_source=detector_source,
-                    detector_sha256=_required(payload, "detector_sha256"),
-                    recognizer_source=recognizer_source,
-                    recognizer_sha256=_required(payload, "recognizer_sha256"),
-                    calibration_source=calibration_source,
-                    calibration_sha256=calibration_sha256 or None,
+                bundle = self.server.model_bundles.create_bundle(
+                    detector_upload_id=_required(payload, "detector_upload_id"),
+                    recognizer_upload_id=_required(payload, "recognizer_upload_id"),
+                    calibration_upload_id=str(payload.get("calibration_upload_id") or "").strip() or None,
                     calibration_profile=choice_id,
                     usage_basis=choice["usage_basis"],
                     authorized_by=self.auth_user.display_name or self.auth_user.username,
@@ -1744,27 +1835,55 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     license_reference=str(payload.get("license_reference") or ""),
                     license_name=str(payload.get("license_name") or ""),
                 )
-                for source in (detector_source, recognizer_source):
-                    upload_dir = model_dir / ".uploads"
-                    if upload_dir in source.parents:
-                        source.unlink(missing_ok=True)
-                try:
-                    (model_dir / ".uploads").rmdir()
-                except OSError:
-                    pass
-                try:
-                    self.server.activate_installed_models(model_dir)
-                except Exception as exc:
-                    self.server.model_ready = False
-                    self.server.model_error = f"The supplied model bundle could not be activated: {exc}"
-                    raise ModelSetupError(self.server.model_error) from exc
-                self.server.log_event(
-                    "model-bundle-installed",
-                    actor=self.auth_user.username,
-                    combination_id=choice_id,
-                    usage_basis=declaration["usage_basis"],
+                preparation = self.server.model_activation.prepare_model_activation(
+                    bundle.bundle_id
                 )
-                self._json(self.server.model_status(self.auth_user), status=HTTPStatus.CREATED)
+                self.server.log_event(
+                    "model-bundle-prepared",
+                    actor=self.auth_user.username,
+                    bundle_id=bundle.bundle_id,
+                    combination_id=choice_id,
+                    usage_basis=choice["usage_basis"],
+                )
+                self._json(
+                    {
+                        **self.server.model_status(self.auth_user),
+                        "bundle": bundle.dto(),
+                        "preparation": preparation,
+                    },
+                    status=HTTPStatus.CREATED,
+                )
+                return
+            if parsed.path == "/api/models/activation/prepare":
+                preparation = self.server.model_activation.prepare_model_activation(
+                    _required(payload, "bundle_id")
+                )
+                self._json({"preparation": preparation})
+                return
+            if parsed.path == "/api/models/rollback/prepare":
+                self._json({"preparation": self.server.model_activation.prepare_rollback()})
+                return
+            if parsed.path in {
+                "/api/models/activation/execute",
+                "/api/models/rollback/execute",
+            }:
+                result = self.server.model_activation.execute(
+                    _required(payload, "token"),
+                    _required(payload, "operation_id"),
+                    actor=self._operation_actor(),
+                    reason=str(payload.get("reason") or ""),
+                )
+                if result.get("committed"):
+                    self.server.sync_model_runtime_state()
+                self.server.log_event(
+                    "model-runtime-operation",
+                    actor=self.auth_user.username,
+                    operation_id=result["operation_id"],
+                    action=result["action"],
+                    status=result["status"],
+                    bundle_id=result["bundle_id"],
+                )
+                self._json({**self.server.model_status(self.auth_user), "result": result})
                 return
             if parsed.path.startswith("/api/backups/") and parsed.path.endswith("/encrypted-download"):
                 backup_id = parsed.path.removeprefix("/api/backups/").removesuffix("/encrypted-download").strip("/")
@@ -2503,8 +2622,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             "batch_size": config.batch_size,
             "prefer_small_models": config.prefer_small_models,
             "models": {
-                "detector": str(config.detector_model),
-                "recognizer": str(config.recognizer_model),
+                "detector": config.detector_model.name,
+                "recognizer": config.recognizer_model.name,
             },
             "offline_enforcement": {
                 "loopback_only": True,
@@ -2633,7 +2752,12 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         finally:
             temporary.unlink(missing_ok=True)
 
-    def _stream_model_upload(self, destination: Path) -> tuple[str, int]:
+    def _stream_model_upload(
+        self,
+        destination: Path,
+        *,
+        maximum_bytes: int = MODEL_UPLOAD_LIMIT_BYTES,
+    ) -> tuple[str, int]:
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
         except ValueError as exc:
@@ -2643,9 +2767,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             ) from exc
         if content_length <= 0:
             raise InputValidationError("Model upload is empty", "empty_file")
-        if content_length > MODEL_UPLOAD_LIMIT_BYTES:
+        if content_length > maximum_bytes:
             raise InputValidationError(
-                "Model file exceeds the 2 GB limit",
+                "Model file exceeds the server-owned component limit",
                 "file_too_large",
             )
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -2726,6 +2850,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             RecoveryTokenError,
             StructuredRepairRefused,
             BackupRestoreError,
+            ModelActivationRefused,
         ))
         validation_error = isinstance(
             exc,
@@ -2751,6 +2876,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             status = HTTPStatus.UNPROCESSABLE_ENTITY
         if isinstance(exc, ModelSetupError):
             status = HTTPStatus.UNPROCESSABLE_ENTITY
+        if isinstance(exc, ModelActivationRefused):
+            status = HTTPStatus.CONFLICT
         if isinstance(exc, EngineBusyError):
             status = HTTPStatus.SERVICE_UNAVAILABLE
         if isinstance(exc, AuthError):
@@ -2764,6 +2891,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             payload["code"] = exc.code
         if isinstance(exc, ModelSetupError):
             payload["code"] = "model_setup_failed"
+        if isinstance(exc, ModelActivationRefused):
+            payload["code"] = "model_activation_refused"
         if validation_error:
             payload["code"] = "invalid_input"
             payload["reason"] = getattr(exc, "reason", "invalid_request")
@@ -2824,10 +2953,9 @@ def create_server(
     port: int = 8765,
     data_dir: Path | None = None,
     runtime: str = "onnx",
-    detector_model: Path | None = None,
-    recognizer_model: Path | None = None,
-    debug: bool = True,
+    debug: bool = False,
     os_network_policy: OsNetworkPolicyStatus | None = None,
+    instance_lock: InstanceLock | None = None,
 ) -> SentriFaceApiServer:
     install_offline_guard()
     normalized_host = host.strip().casefold()
@@ -2842,47 +2970,98 @@ def create_server(
             raise ValueError("Server may bind only to an IPv4 loopback address")
     if runtime not in {"dev", "onnx"}:
         raise ValueError("Runtime must be dev or onnx")
-    data_dir = require_local_path(data_dir or default_data_dir())
-    profile = assess_hardware()
-    config = config_for_hardware(profile, data_dir=data_dir)
-    config = replace(config, storage_key=load_or_create_master_key(data_dir))
-    protect_existing_managed_data(data_dir, config.storage_key)
-    if detector_model is not None or recognizer_model is not None:
+    data_dir = require_local_path(data_dir or default_data_dir()).expanduser().absolute()
+    owned_lock = instance_lock is None
+    runtime_lock = instance_lock or InstanceLock(data_dir).acquire()
+    try:
+        profile = assess_hardware()
+        config = config_for_hardware(profile, data_dir=data_dir)
         config = replace(
             config,
-            detector_model=detector_model or config.detector_model,
-            recognizer_model=recognizer_model or config.recognizer_model,
+            detector_model=data_dir / "models" / "detector.onnx",
+            recognizer_model=data_dir / "models" / "recognizer.onnx",
         )
-    require_local_path(config.detector_model)
-    require_local_path(config.recognizer_model)
-    model_ready = True
-    model_error = ""
-    if runtime == "dev":
-        engine = build_dev_engine(data_dir, config)
-    else:
-        try:
-            engine = build_onnx_engine(config)
-        except Exception as exc:
-            model_ready = False
-            model_error = str(exc).strip("'") or "Recognition models are missing or invalid"
+        require_local_path(config.detector_model)
+        require_local_path(config.recognizer_model)
+        validate_managed_storage(
+            data_dir,
+            (
+                config.face_dir,
+                config.index_dir,
+                config.backup_dir,
+                default_log_dir(data_dir),
+                data_dir / "models",
+            ),
+        )
+        cleanup_managed_temporaries((data_dir, config.backup_dir, data_dir / "models"))
+        config = replace(config, storage_key=load_or_create_master_key(data_dir))
+        protect_existing_managed_data(data_dir, config.storage_key)
+        authority = ModelBundleAuthority(data_dir / "models")
+        authority.cleanup_stale_uploads()
+        startup_bundle = resolve_startup_model_bundle(authority) if runtime == "onnx" else None
+        if startup_bundle is not None:
+            config = replace(
+                config,
+                detector_model=startup_bundle.directory / "detector.onnx",
+                recognizer_model=startup_bundle.directory / "recognizer.onnx",
+            )
+        model_ready = True
+        model_error = ""
+        if runtime == "dev":
             engine = build_dev_engine(data_dir, config)
-    config = engine.config
-    engine.initialize()
-    server = SentriFaceApiServer(
-        (host, port),
-        engine=engine,
-        config=config,
-        hardware_profile=profile,
-        runtime=runtime,
-        debug=debug,
-        model_ready=model_ready,
-        model_error=model_error,
-        os_network_policy=os_network_policy,
-    )
-    server.log_event("startup", runtime=runtime, data_dir=str(data_dir), address=f"http://{host}:{server.server_port}")
-    if not model_ready:
-        server.log_event("model-setup-required", error=model_error)
-    return server
+        else:
+            try:
+                engine = build_onnx_engine(config)
+            except Exception as exc:
+                model_ready = False
+                model_error = str(exc).strip("'") or "Recognition models are missing or invalid"
+                engine = build_dev_engine(data_dir, config)
+        config = engine.config
+        engine.initialize()
+        server = SentriFaceApiServer(
+            (host, port),
+            engine=engine,
+            config=config,
+            hardware_profile=profile,
+            runtime=runtime,
+            debug=debug,
+            model_ready=model_ready,
+            model_error=model_error,
+            os_network_policy=os_network_policy,
+            model_bundles=authority,
+            instance_lock=runtime_lock,
+        )
+        server.log_event("startup", runtime=runtime, port=server.server_port)
+        if not model_ready:
+            server.log_event("model-setup-required", error=model_error)
+        return server
+    except Exception:
+        if owned_lock:
+            runtime_lock.release()
+        raise
+
+
+def _install_shutdown_signal_handlers(
+    server: SentriFaceApiServer,
+) -> dict[int, Any]:
+    shutdown_started = threading.Event()
+
+    def request_shutdown(signum: int, _frame: object) -> None:
+        if shutdown_started.is_set():
+            return
+        shutdown_started.set()
+        server.log_event("shutdown-requested", signal=signal.Signals(signum).name)
+        threading.Thread(
+            target=server.graceful_shutdown,
+            name="sentriface-shutdown",
+            daemon=True,
+        ).start()
+
+    previous_handlers: dict[int, Any] = {}
+    for handled_signal in (signal.SIGINT, signal.SIGTERM):
+        previous_handlers[handled_signal] = signal.getsignal(handled_signal)
+        signal.signal(handled_signal, request_shutdown)
+    return previous_handlers
 
 
 def main() -> int:
@@ -2890,8 +3069,6 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--data-dir", type=Path, default=default_data_dir())
-    parser.add_argument("--detector-model", type=Path)
-    parser.add_argument("--recognizer-model", type=Path)
     parser.add_argument("--runtime", choices=("dev", "onnx"), default="onnx")
     parser.add_argument(
         "--allow-unpackaged-source-onnx",
@@ -2902,11 +3079,15 @@ def main() -> int:
         ),
     )
     parser.add_argument("--quiet-debug", action="store_true", help="Disable verbose UI debug logs")
+    parser.add_argument("--debug", action="store_true", help="Enable local diagnostic logging")
     parser.add_argument("--recover-kit", type=Path, help="Install a disaster-recovery key before startup")
     args = parser.parse_args()
 
     from sentriface.logging_config import setup_logging
 
+    runtime_lock: InstanceLock | None = None
+    server: SentriFaceApiServer | None = None
+    debug_enabled = bool(args.debug and not args.quiet_debug)
     try:
         os_network_policy = _startup_network_policy(
             args.runtime,
@@ -2918,47 +3099,66 @@ def main() -> int:
                 "application socket guard, but not the packaged App Sandbox boundary."
             )
         require_local_path(args.data_dir)
+        startup_data_dir = args.data_dir.expanduser().absolute()
+        runtime_lock = InstanceLock(startup_data_dir).acquire()
+        validate_managed_storage(
+            startup_data_dir,
+            (
+                startup_data_dir / "faces",
+                startup_data_dir / "index",
+                startup_data_dir / "backups",
+                startup_data_dir / "logs",
+                startup_data_dir / "models",
+            ),
+        )
         if args.recover_kit:
             require_local_path(args.recover_kit)
             from getpass import getpass
             recovered_key = recover_master_key(args.recover_kit, getpass("SentriFace recovery code: "))
+            validate_recovered_master_key(args.data_dir, recovered_key)
             store_master_key(args.data_dir, recovered_key)
         storage_key = load_or_create_master_key(args.data_dir)
         setup_logging(
-            debug=not args.quiet_debug,
+            debug=debug_enabled,
             log_dir=default_log_dir(args.data_dir),
             storage_key=storage_key,
+            require_persistent=True,
         )
         server = create_server(
             host=args.host,
             port=args.port,
             data_dir=args.data_dir,
             runtime=args.runtime,
-            detector_model=args.detector_model,
-            recognizer_model=args.recognizer_model,
-            debug=not args.quiet_debug,
+            debug=debug_enabled,
             os_network_policy=os_network_policy,
+            instance_lock=runtime_lock,
         )
     except ModelSetupError as exc:
+        if runtime_lock is not None and server is None:
+            runtime_lock.release()
         print(f"SentriFace could not start: {exc}")
         print("Install verified models with: sentriface-models")
         return 2
     except (
         SentriFaceError,
         StorageSecurityError,
+        RuntimeReadinessError,
         RecoveryError,
         OsNetworkPolicyError,
         OSError,
         ValueError,
     ) as exc:
+        if runtime_lock is not None and server is None:
+            runtime_lock.release()
         print(f"SentriFace could not start safely: {exc}")
         return 2
     print(f"SentriFace UI running at http://{args.host}:{server.server_port}")
+    previous_handlers = _install_shutdown_signal_handlers(server)
     try:
         server.serve_forever()
-    except KeyboardInterrupt:
-        print("SentriFace UI stopped")
     finally:
+        for handled_signal, previous in previous_handlers.items():
+            signal.signal(handled_signal, previous)
         server.server_close()
     return 0
 
@@ -3087,6 +3287,83 @@ def _validate_integrity_recovery_payload(path: str, payload: dict[str, Any]) -> 
         raise InputValidationError(
             "Integrity recovery requests contain only server-defined fields",
             "unsupported_recovery_fields",
+        )
+
+
+def _validate_model_install_payload(payload: dict[str, Any]) -> None:
+    unknown = sorted(set(payload) - MODEL_INSTALL_REQUEST_FIELDS)
+    if unknown:
+        raise InputValidationError(
+            "Model installation accepts only server-defined bundle fields",
+            "unsupported_model_install_fields",
+        )
+    for field in ("detector_upload_id", "recognizer_upload_id"):
+        value = payload.get(field)
+        if not isinstance(value, str) or not value.strip() or len(value) > 64:
+            raise InputValidationError(
+                "Model installation requires opaque detector and recognizer upload IDs",
+                "invalid_model_upload_reference",
+            )
+    optional_reference = payload.get("calibration_upload_id")
+    if optional_reference is not None and (
+        not isinstance(optional_reference, str) or len(optional_reference.strip()) > 64
+    ):
+        raise InputValidationError(
+            "Calibration upload reference is invalid",
+            "invalid_model_upload_reference",
+        )
+    for field in ("organization", "licensor", "license_reference", "license_name"):
+        value = payload.get(field)
+        if value is not None and (not isinstance(value, str) or len(value.strip()) > 500):
+            raise InputValidationError(
+                "Model declaration fields must be bounded text",
+                "invalid_model_declaration",
+            )
+
+
+def _validate_model_operation_payload(path: str, payload: dict[str, Any]) -> None:
+    allowed = MODEL_OPERATION_REQUEST_FIELDS[path]
+    if set(payload) - allowed:
+        raise InputValidationError(
+            "Model runtime operations accept only server-defined fields",
+            "unsupported_model_operation_fields",
+        )
+    if path.endswith("/prepare") and "bundle_id" in allowed:
+        value = payload.get("bundle_id")
+        if not isinstance(value, str) or len(value.strip()) != 32:
+            raise InputValidationError(
+                "Model preparation requires one opaque bundle ID",
+                "invalid_model_bundle_reference",
+            )
+    if path.endswith("/execute"):
+        token = payload.get("token")
+        operation_id = payload.get("operation_id")
+        reason = payload.get("reason", "")
+        if not isinstance(token, str) or not token or len(token) > 16_000:
+            raise InputValidationError(
+                "Model execution requires the exact bounded preparation token",
+                "invalid_model_preparation_token",
+            )
+        try:
+            uuid.UUID(str(operation_id), version=4)
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise InputValidationError(
+                "Model execution operation ID must be a UUID",
+                "invalid_model_operation_id",
+            ) from exc
+        if not isinstance(reason, str) or len(reason.strip()) > 500:
+            raise InputValidationError(
+                "Model execution reason must be bounded text",
+                "invalid_model_operation_reason",
+            )
+
+
+def _validate_model_upload_query(query: str) -> None:
+    fields = parse_qs(query, keep_blank_values=True)
+    if set(fields) != {"kind", "filename"} or any(len(values) != 1 for values in fields.values()):
+        raise InputValidationError(
+            "Model upload accepts only one kind and one metadata filename",
+            "unsupported_model_upload_fields",
         )
 
 
@@ -4558,26 +4835,8 @@ def _quality(report: QualityReport | None) -> dict[str, Any] | None:
 
 def _sanitize_log_details(details: dict[str, Any]) -> dict[str, Any]:
     """Keep production events useful without retaining image/vector payloads."""
-    return {str(key): _sanitize_log_value(value) for key, value in details.items()}
-
-
-def _sanitize_log_value(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, dict):
-        return {
-            str(key): _sanitize_log_value(nested)
-            for key, nested in value.items()
-        }
-    if isinstance(value, (bytes, bytearray, memoryview)):
-        return f"<binary omitted; {len(value)} bytes>"
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return f"<sequence omitted; {len(value)} items>"
-    if hasattr(value, "shape"):
-        return "<array omitted>"
-    return f"<{type(value).__name__}>"
+    sanitized = sanitize_log_details(details)
+    return sanitized if isinstance(sanitized, dict) else {}
 
 
 def _support_diagnostic_report(server: SentriFaceApiServer) -> dict[str, Any]:

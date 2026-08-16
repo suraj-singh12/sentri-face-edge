@@ -59,6 +59,29 @@ def store_master_key(data_dir: Path, key: bytes) -> None:
     except (ImportError, KeyringError) as exc:
         raise StorageSecurityError(f"Recovered key could not be stored in the OS vault: {exc}") from exc
 
+
+def validate_recovered_master_key(data_dir: Path, key: bytes) -> None:
+    """Prove a recovered key against existing authority before replacing vault state."""
+    if not isinstance(key, bytes) or len(key) != 32:
+        raise StorageSecurityError("Recovered SentriFace storage key is invalid")
+    database = data_dir / "sentriface.db"
+    if database.exists() and database.stat().st_size:
+        _verify_encrypted_database(database, key)
+    from sentriface.secure_files import authenticate_protected_file, is_protected_file
+
+    if not data_dir.exists():
+        return
+    for candidate in data_dir.rglob("*"):
+        if candidate.is_symlink():
+            raise StorageSecurityError("Managed storage contains an unsafe symbolic link")
+        if candidate.is_file() and is_protected_file(candidate):
+            try:
+                authenticate_protected_file(candidate, key)
+            except Exception as exc:
+                raise StorageSecurityError(
+                    "Recovered key is incompatible with existing managed storage"
+                ) from exc
+
 def connect_database(
     path: Path,
     key: bytes | None = None,
@@ -186,6 +209,9 @@ def protect_existing_managed_data(data_dir: Path, key: bytes) -> dict[str, int]:
     migrated = {"databases": 0, "files": 0}
     if not data_dir.exists():
         return migrated
+    for candidate in data_dir.rglob("*"):
+        if candidate.is_symlink():
+            raise StorageSecurityError("Managed storage contains an unsafe symbolic link")
     for database in data_dir.rglob("*.db"):
         if database.is_file() and ensure_encrypted_database(database, key):
             migrated["databases"] += 1

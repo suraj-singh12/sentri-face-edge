@@ -109,8 +109,6 @@ class CliTest(unittest.TestCase):
                 "sentriface",
                 "--runtime",
                 "onnx",
-                "--detector-model",
-                "missing-detector.onnx",
                 "init-db",
             ],
         ), patch("sentriface.cli.require_os_network_policy"):
@@ -118,7 +116,7 @@ class CliTest(unittest.TestCase):
                 code = cli.main()
 
         self.assertEqual(code, 1)
-        self.assertIn("error=Model file not found", output.getvalue())
+        self.assertIn("error=An active server-owned model bundle is required", output.getvalue())
 
     def test_metrics_are_emitted_with_json(self) -> None:
         output = io.StringIO()

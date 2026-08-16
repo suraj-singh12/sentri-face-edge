@@ -78,8 +78,7 @@ class OnnxArcFaceEmbedder:
         self.storage_key = storage_key
         self.runtime = OnnxRuntimeSession(model_path, intra_op_threads)
         logger.debug(
-            "ArcFace embedder initialized: model={} threads={} output_size={}",
-            model_path,
+            "ArcFace embedder initialized: threads={} output_size={}",
             intra_op_threads,
             output_size,
         )
@@ -91,6 +90,75 @@ class OnnxArcFaceEmbedder:
         outputs = self.runtime.run(tensor)
         vector = _flatten(outputs[0])
         return _normalize(vector)
+
+
+def validate_onnx_runtime_pair(
+    detector: OnnxScrfdDetector,
+    embedder: OnnxArcFaceEmbedder,
+    *,
+    expected_embedding_dimension: int,
+) -> dict[str, object]:
+    """Prove the bounded CPU ONNX interfaces used by SentriFace."""
+    detector_session = detector.runtime.session
+    recognizer_session = embedder.runtime.session
+    detector_input = _bounded_shape(detector.runtime.input_shape, "detector")
+    recognizer_input = _bounded_shape(embedder.runtime.input_shape, "recognizer")
+    if not _channel_first_rgb(detector_input) or not _channel_first_rgb(recognizer_input):
+        raise ModelSetupError("Detector and recognizer must use four-dimensional RGB input")
+    detector_outputs = detector_session.get_outputs()
+    detector_output_count = len(detector_outputs)
+    simple_output = any(
+        len(getattr(output, "shape", [])) in {2, 3}
+        and isinstance(getattr(output, "shape", [])[-1], int)
+        and getattr(output, "shape", [])[-1] >= 5
+        for output in detector_outputs
+        if getattr(output, "shape", None)
+    )
+    if detector_output_count not in {6, 9} and not simple_output:
+        raise ModelSetupError("Detector output contract is not SCRFD-compatible")
+    recognizer_outputs = recognizer_session.get_outputs()
+    if len(recognizer_outputs) != 1:
+        raise ModelSetupError("Recognizer must expose exactly one embedding output")
+    output_shape = list(getattr(recognizer_outputs[0], "shape", []))
+    if not output_shape or output_shape[-1] != expected_embedding_dimension:
+        raise ModelSetupError(
+            f"Recognizer must produce {expected_embedding_dimension}-dimensional embeddings"
+        )
+    detector_providers = set(detector_session.get_providers())
+    recognizer_providers = set(recognizer_session.get_providers())
+    if "CPUExecutionProvider" not in detector_providers or "CPUExecutionProvider" not in recognizer_providers:
+        raise ModelSetupError("CPUExecutionProvider is required for offline model runtime")
+    return {
+        "runtime": "onnxruntime-cpu",
+        "provider": "CPUExecutionProvider",
+        "detector_input": detector_input,
+        "detector_outputs": detector_output_count,
+        "recognizer_input": recognizer_input,
+        "embedding_dimension": expected_embedding_dimension,
+        "calibration_valid": True,
+        "usage_valid": True,
+        "compatible": True,
+    }
+
+
+def _bounded_shape(value: object, label: str) -> list[object]:
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        raise ModelSetupError(f"{label.title()} input shape is unsupported")
+    shape: list[object] = []
+    for dimension in value:
+        if dimension is None:
+            shape.append(None)
+        elif isinstance(dimension, int) and not isinstance(dimension, bool) and 0 < dimension <= 8192:
+            shape.append(dimension)
+        elif isinstance(dimension, str) and 0 < len(dimension) <= 50:
+            shape.append("dynamic")
+        else:
+            raise ModelSetupError(f"{label.title()} input shape is unsupported")
+    return shape
+
+
+def _channel_first_rgb(shape: list[object]) -> bool:
+    return shape[1] in {3, "dynamic", None}
     
 """
 Convert OpenCV image into the exact format the detector model expects.

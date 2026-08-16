@@ -150,6 +150,7 @@ class SQLiteIdentityStore:
             self._create_pre_migration_backup(initial_version)
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=FULL")
             current_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
             _require_supported_schema_version(current_version)
             if current_version != initial_version:
@@ -6394,6 +6395,8 @@ class SQLiteIdentityStore:
     def _connect(self):
         conn = connect_database(self.db_path, self.database_key, timeout=30, row_factory=True)
         conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA synchronous=FULL")
         try:
             yield conn
             conn.commit()

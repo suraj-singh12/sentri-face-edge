@@ -12,15 +12,21 @@ from sentriface.auth import AuthError, AuthService
 from sentriface.components.dev_components import HashFaceEmbedder, WholeImageFaceDetector
 from sentriface.components.hnsw_index import HnswFaceIndex
 from sentriface.components.linear_index import LinearFaceIndex
-from sentriface.components.onnx_components import OnnxArcFaceEmbedder, OnnxScrfdDetector
+from sentriface.components.onnx_components import (
+    OnnxArcFaceEmbedder,
+    OnnxScrfdDetector,
+    validate_onnx_runtime_pair,
+)
 from sentriface.backup_service import BackupService
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
 from sentriface.engine import DomainWorkflowUnavailableError, IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import ModelSetupError, SentriFaceError
 from sentriface.model_setup import load_similarity_calibration, require_model_usage_declaration
+from sentriface.model_activation import PreparedRecognitionRuntime, resolve_startup_model_bundle
+from sentriface.model_bundle import ModelBundle, ModelBundleAuthority
 from sentriface.hardware import assess_hardware
 from sentriface.models import PersonMatch
-from sentriface.paths import default_data_dir, default_model_dir
+from sentriface.paths import default_data_dir
 from sentriface.offline_guard import install_offline_guard, require_local_path
 from sentriface.os_network_policy import OsNetworkPolicyError, require_os_network_policy
 from sentriface.storage.sqlite_store import SQLiteIdentityStore
@@ -39,6 +45,33 @@ def build_dev_engine(data_dir: Path, config: RuntimeConfig | None = None) -> Fac
 
 
 def build_onnx_engine(config: RuntimeConfig) -> FaceEngine:
+    runtime = build_onnx_recognition_runtime_from_config(config)
+    engine = FaceEngine(
+        config=runtime.config,
+        detector=runtime.detector,
+        embedder=runtime.embedder,
+        index=_face_index(runtime.config),
+        store=_identity_store(runtime.config),
+    )
+    engine.model_usage = runtime.usage
+    return engine
+
+
+def build_onnx_recognition_runtime(
+    bundle: ModelBundle,
+    base_config: RuntimeConfig,
+) -> PreparedRecognitionRuntime:
+    config = replace(
+        base_config,
+        detector_model=bundle.directory / "detector.onnx",
+        recognizer_model=bundle.directory / "recognizer.onnx",
+    )
+    return build_onnx_recognition_runtime_from_config(config)
+
+
+def build_onnx_recognition_runtime_from_config(
+    config: RuntimeConfig,
+) -> PreparedRecognitionRuntime:
     for model_path in (config.detector_model, config.recognizer_model):
         if not model_path.exists():
             raise ModelSetupError(f"Model file not found: {model_path}")
@@ -46,25 +79,30 @@ def build_onnx_engine(config: RuntimeConfig) -> FaceEngine:
     declaration = require_model_usage_declaration(
         config.detector_model, config.recognizer_model
     )
-    engine = FaceEngine(
-        config=config,
-        detector=OnnxScrfdDetector(
+    detector = OnnxScrfdDetector(
             model_path=config.detector_model,
             max_image_edge=config.max_image_edge,
             input_size=config.detector_input_size,
             intra_op_threads=config.onnx_intra_threads,
             storage_key=config.storage_key,
-        ),
-        embedder=OnnxArcFaceEmbedder(
+        )
+    embedder = OnnxArcFaceEmbedder(
             model_path=config.recognizer_model,
             intra_op_threads=config.onnx_intra_threads,
             storage_key=config.storage_key,
-        ),
-        index=_face_index(config),
-        store=_identity_store(config),
+        )
+    facts = validate_onnx_runtime_pair(
+        detector,
+        embedder,
+        expected_embedding_dimension=config.embedding_dim,
     )
-    engine.model_usage = declaration
-    return engine
+    return PreparedRecognitionRuntime(
+        config=config,
+        detector=detector,
+        embedder=embedder,
+        usage=declaration,
+        facts=facts,
+    )
 
 
 
@@ -188,8 +226,6 @@ def main() -> int:
         default="dev",
         help="Use dev placeholders or real ONNX CPU components.",
     )
-    parser.add_argument("--detector-model", type=Path, default=default_model_dir() / "detector.onnx")
-    parser.add_argument("--recognizer-model", type=Path, default=default_model_dir() / "recognizer.onnx")
     parser.add_argument("--onnx-threads", type=int, help="Override ONNX Runtime intra-op threads")
     parser.add_argument("--max-image-edge", type=int, help="Override image downscale edge before detection")
     parser.add_argument("--high-confidence", type=float, help="Similarity needed for a strong match")
@@ -336,9 +372,25 @@ def main() -> int:
                 require_local_path(value)
         profile = _select_profile(args.profile)
         config = config_for_hardware(profile, data_dir=args.data_dir)
-        config = replace(config, storage_key=load_or_create_master_key(args.data_dir))
+        config = replace(
+            config,
+            storage_key=load_or_create_master_key(args.data_dir),
+            detector_model=args.data_dir / "models" / "detector.onnx",
+            recognizer_model=args.data_dir / "models" / "recognizer.onnx",
+        )
         protect_existing_managed_data(args.data_dir, config.storage_key)
         config = _apply_runtime_overrides(config, args)
+        if args.runtime == "onnx":
+            authority = ModelBundleAuthority(args.data_dir / "models")
+            authority.cleanup_stale_uploads()
+            active_bundle = resolve_startup_model_bundle(authority)
+            if active_bundle is None:
+                raise ModelSetupError("An active server-owned model bundle is required")
+            config = replace(
+                config,
+                detector_model=active_bundle.directory / "detector.onnx",
+                recognizer_model=active_bundle.directory / "recognizer.onnx",
+            )
         if args.command == "benchmark" and args.compare_threads and args.runtime != "onnx":
             return _emit_error(args, "--compare-threads requires --runtime onnx")
         identity_store = _identity_store(config)
@@ -670,8 +722,6 @@ def main() -> int:
 def _apply_runtime_overrides(config: RuntimeConfig, args: argparse.Namespace) -> RuntimeConfig:
     values = {
         **config.__dict__,
-        "detector_model": args.detector_model,
-        "recognizer_model": args.recognizer_model,
         "onnx_intra_threads": args.onnx_threads or config.onnx_intra_threads,
         "max_image_edge": args.max_image_edge or config.max_image_edge,
         "high_confidence": args.high_confidence if args.high_confidence is not None else config.high_confidence,

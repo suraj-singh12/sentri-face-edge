@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert, Box, Button, Card, Center, Checkbox, FileButton, Group,
-  Loader, Paper, SimpleGrid, Stack, Text, TextInput, ThemeIcon, Title,
+  Loader, Modal, Paper, SimpleGrid, Stack, Text, TextInput, ThemeIcon, Title,
 } from "@mantine/core";
 import {
   IconAlertTriangle, IconBriefcase, IconCheck,
@@ -11,11 +11,11 @@ import {
 import { useApiClient } from "../hooks/useApiClient.js";
 
 const EMPTY_FORM = {
-  detectorPath: "",
+  detectorUploadId: "",
   detectorSha256: "",
   detectorName: "",
   detectorSize: 0,
-  recognizerPath: "",
+  recognizerUploadId: "",
   recognizerSha256: "",
   recognizerName: "",
   recognizerSize: 0,
@@ -35,12 +35,15 @@ export function ModelGate({ user, logout, children }) {
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [uploading, setUploading] = useState("");
+  const [preparation, setPreparation] = useState(null);
+  const [candidateBundle, setCandidateBundle] = useState(null);
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
     try {
       const next = await apiGet("/api/models/status", { silent: true });
       setStatus(next);
+      setCandidateBundle((current) => current || next.candidate_bundles?.[0] || null);
       setError("");
     } catch (requestError) {
       setError(requestError?.message || "Model status is unavailable");
@@ -71,7 +74,7 @@ export function ModelGate({ user, logout, children }) {
       && item.recognizer_file?.toLowerCase() === recognizerName
     )) || null;
   }, [form.detectorName, form.recognizerName, researchCombinations]);
-  const bothFilesChosen = Boolean(form.detectorPath && form.recognizerPath);
+  const bothFilesChosen = Boolean(form.detectorUploadId && form.recognizerUploadId);
 
   useEffect(() => {
     if (usageMode !== "research") return;
@@ -86,6 +89,8 @@ export function ModelGate({ user, logout, children }) {
   const selectModel = (kind) => async (file) => {
     if (!file) return;
     setUploading(kind);
+    if (candidateBundle) setForm(EMPTY_FORM);
+    setCandidateBundle(null);
     setError("");
     try {
       const uploaded = await apiUpload(
@@ -95,7 +100,7 @@ export function ModelGate({ user, logout, children }) {
       );
       setForm((current) => ({
         ...current,
-        [`${kind}Path`]: uploaded.path,
+        [`${kind}UploadId`]: uploaded.upload_id,
         [`${kind}Sha256`]: uploaded.sha256,
         [`${kind}Name`]: uploaded.filename,
         [`${kind}Size`]: uploaded.size,
@@ -115,20 +120,57 @@ export function ModelGate({ user, logout, children }) {
     try {
       const next = await apiPost("/api/models/install", {
         combination_id: selected.id,
-        detector_path: form.detectorPath,
-        detector_sha256: form.detectorSha256,
-        recognizer_path: form.recognizerPath,
-        recognizer_sha256: form.recognizerSha256,
+        detector_upload_id: form.detectorUploadId,
+        recognizer_upload_id: form.recognizerUploadId,
         organization: form.organization,
         licensor: form.licensor,
         license_reference: form.licenseReference,
         license_name: form.licenseName,
         accept_responsibility: form.accepted,
       }, { silent: true, timeoutMs: 10 * 60 * 1000 });
+      setPreparation(next.preparation);
+      setCandidateBundle(next.bundle);
+      showToast("Model bundle checked and ready for confirmation");
+    } catch (requestError) {
+      setError(requestError?.message || "The model bundle could not be activated");
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  const prepareCandidate = async () => {
+    if (!candidateBundle?.bundle_id) return;
+    setInstalling(true);
+    setError("");
+    try {
+      const next = await apiPost("/api/models/activation/prepare", {
+        bundle_id: candidateBundle.bundle_id,
+      }, { silent: true, timeoutMs: 10 * 60 * 1000 });
+      setPreparation(next.preparation);
+    } catch (requestError) {
+      setError(requestError?.message || "The model bundle could not be prepared again");
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  const activate = async () => {
+    if (!preparation?.token) return;
+    setInstalling(true);
+    setError("");
+    try {
+      const next = await apiPost("/api/models/activation/execute", {
+        token: preparation.token,
+        operation_id: crypto.randomUUID(),
+        reason: "Administrator confirmed model activation",
+      }, { silent: true, timeoutMs: 10 * 60 * 1000 });
+      setPreparation(null);
+      setCandidateBundle(null);
       setStatus(next);
       showToast("Face recognition is ready");
     } catch (requestError) {
-      setError(requestError?.message || "The model bundle could not be activated");
+      setPreparation(null);
+      setError(requestError?.message || "The prepared model activation was refused");
     } finally {
       setInstalling(false);
     }
@@ -140,14 +182,27 @@ export function ModelGate({ user, logout, children }) {
   if (status?.ready) return children;
 
   const required = Boolean(selected)
-    && form.detectorPath && /^[a-f0-9]{64}$/i.test(form.detectorSha256)
-    && form.recognizerPath && /^[a-f0-9]{64}$/i.test(form.recognizerSha256)
+    && form.detectorUploadId && /^[a-f0-9]{64}$/i.test(form.detectorSha256)
+    && form.recognizerUploadId && /^[a-f0-9]{64}$/i.test(form.recognizerSha256)
     && form.accepted
     && (selected.usage_basis !== "commercial-license" || (form.licensor && form.licenseReference))
     && (selected.usage_basis !== "permissive-license" || form.licenseName);
 
   return (
     <Box mih="100vh" bg="var(--mantine-color-body)" p={{ base: "md", md: "xl" }}>
+      <Modal opened={Boolean(preparation)} onClose={() => !installing && setPreparation(null)} title="Confirm model activation" centered closeOnClickOutside={!installing} closeOnEscape={!installing}>
+        <Stack>
+          <Alert color="blue" icon={<IconShieldCheck size={18} />} title="Compatibility checks passed">
+            SentriFace verified the detector, recognizer, calibration, file hashes, and 512-dimensional recognition contract. Activation changes only the recognition runtime.
+          </Alert>
+          <Text size="sm">Bundle <strong>{preparation?.bundle?.bundle_id}</strong></Text>
+          <Text size="sm" c="dimmed">This exact server-prepared plan expires at {preparation?.expires_at ? new Date(preparation.expires_at).toLocaleString() : "the stated time"}.</Text>
+          <Group justify="flex-end">
+            <Button variant="default" disabled={installing} onClick={() => setPreparation(null)}>Cancel</Button>
+            <Button loading={installing} onClick={activate}>Activate verified bundle</Button>
+          </Group>
+        </Stack>
+      </Modal>
       <Stack maw={920} mx="auto" gap="lg">
         <Group justify="space-between" align="flex-start">
           <Group gap="sm" wrap="nowrap" align="flex-start">
@@ -168,6 +223,21 @@ export function ModelGate({ user, logout, children }) {
         {!status?.can_configure ? (
           <Card withBorder radius="lg" p="xl"><Stack align="center" py="xl"><ThemeIcon size={56} radius="xl" color="orange" variant="light"><IconLock size={28} /></ThemeIcon><Title order={2} size="h3">The owner account is needed</Title><Text c="dimmed" ta="center" maw={620}>Ask the person who set up SentriFace to sign in and choose the two model files.</Text></Stack></Card>
         ) : (
+          candidateBundle && !selected ? (
+            <Card withBorder radius="lg" p="xl" shadow="sm">
+              <Stack>
+                <Alert color="blue" icon={<IconShieldCheck size={18} />} title="A verified candidate bundle is waiting">
+                  SentriFace retained this immutable server-owned bundle. Prepare a fresh compatibility token to continue safely.
+                </Alert>
+                <Text size="sm">Bundle <strong>{candidateBundle.bundle_id}</strong></Text>
+                {error ? <Alert color="red" title="Setup could not be finished">{friendlySetupError(error)}</Alert> : null}
+                <Group justify="space-between">
+                  <Button variant="default" onClick={() => { setCandidateBundle(null); setError(""); }}>Choose different files</Button>
+                  <Button loading={installing} onClick={prepareCandidate}>Review prepared bundle</Button>
+                </Group>
+              </Stack>
+            </Card>
+          ) : (
           <Card withBorder radius="lg" p={{ base: "md", md: "xl" }} shadow="sm">
             <Stack gap="xl">
               <Box>
@@ -178,14 +248,14 @@ export function ModelGate({ user, logout, children }) {
                     icon={IconFlask}
                     title="Personal or research"
                     description="Not for a paid service, a product you sell, or other business use."
-                    onClick={() => { setUsageMode("research"); setSelectedId(""); setError(""); }}
+                    onClick={() => { setUsageMode("research"); setSelectedId(""); if (candidateBundle) setForm(EMPTY_FORM); setCandidateBundle(null); setError(""); }}
                   />
                   <UseChoice
                     selected={usageMode === "commercial"}
                     icon={IconBriefcase}
                     title="Business or paid use"
                     description="You have model files whose licence allows this use."
-                    onClick={() => { setUsageMode("commercial"); setSelectedId(""); setError(""); }}
+                    onClick={() => { setUsageMode("commercial"); setSelectedId(""); if (candidateBundle) setForm(EMPTY_FORM); setCandidateBundle(null); setError(""); }}
                   />
                 </SimpleGrid>
               </Box>
@@ -195,7 +265,7 @@ export function ModelGate({ user, logout, children }) {
                   <Text fw={800} mb="sm">2. Where did your licensed model files come from?</Text>
                   <Stack gap="sm">
                     {(status?.combinations?.commercial || []).map((item) => (
-                      <LicenseChoice key={item.id} item={item} selected={selectedId === item.id} onClick={() => setSelectedId(item.id)} />
+                      <LicenseChoice key={item.id} item={item} selected={selectedId === item.id} onClick={() => { setSelectedId(item.id); if (candidateBundle) setForm(EMPTY_FORM); setCandidateBundle(null); }} />
                     ))}
                   </Stack>
                 </Box>
@@ -242,17 +312,17 @@ export function ModelGate({ user, logout, children }) {
                   {selected ? (
                     <>
                       <SimpleGrid cols={{ base: 1, md: 2 }}>
-                        <TextInput label="Organization or owner (optional)" value={form.organization} onChange={update("organization")} placeholder="Your name or organization" />
-                        {selected.usage_basis === "commercial-license" ? <TextInput required label="Model supplier" value={form.licensor} onChange={update("licensor")} placeholder="Name on your model licence" /> : null}
-                        {selected.usage_basis === "commercial-license" ? <TextInput required label="Licence or invoice number" value={form.licenseReference} onChange={update("licenseReference")} placeholder="Your agreement, invoice, or entitlement ID" /> : null}
-                        {selected.usage_basis === "permissive-license" ? <TextInput required label="Model licence" value={form.licenseName} onChange={update("licenseName")} placeholder="For example, Apache-2.0" /> : null}
+                        <TextInput disabled={Boolean(candidateBundle)} label="Organization or owner (optional)" value={form.organization} onChange={update("organization")} placeholder="Your name or organization" />
+                        {selected.usage_basis === "commercial-license" ? <TextInput disabled={Boolean(candidateBundle)} required label="Model supplier" value={form.licensor} onChange={update("licensor")} placeholder="Name on your model licence" /> : null}
+                        {selected.usage_basis === "commercial-license" ? <TextInput disabled={Boolean(candidateBundle)} required label="Licence or invoice number" value={form.licenseReference} onChange={update("licenseReference")} placeholder="Your agreement, invoice, or entitlement ID" /> : null}
+                        {selected.usage_basis === "permissive-license" ? <TextInput disabled={Boolean(candidateBundle)} required label="Model licence" value={form.licenseName} onChange={update("licenseName")} placeholder="For example, Apache-2.0" /> : null}
                       </SimpleGrid>
                       <Paper withBorder p="md" radius="md" bg="var(--mantine-color-default-hover)">
-                        <Checkbox checked={form.accepted} onChange={update("accepted")} label="I confirm that I am allowed to use these model files and process face data for the purpose selected above." />
+                        <Checkbox disabled={Boolean(candidateBundle)} checked={form.accepted} onChange={update("accepted")} label="I confirm that I am allowed to use these model files and process face data for the purpose selected above." />
                       </Paper>
                       {error ? <Alert color="red" title="Setup could not be finished">{friendlySetupError(error)}</Alert> : null}
                       <Group justify="flex-end">
-                        <Button size="md" leftSection={<IconShieldCheck size={18} />} loading={installing} disabled={!required} onClick={install}>Finish setup</Button>
+                        <Button size="md" leftSection={<IconShieldCheck size={18} />} loading={installing} disabled={!required} onClick={candidateBundle ? prepareCandidate : install}>{candidateBundle ? "Review prepared bundle" : "Prepare setup"}</Button>
                       </Group>
                     </>
                   ) : null}
@@ -260,6 +330,7 @@ export function ModelGate({ user, logout, children }) {
               ) : null}
             </Stack>
           </Card>
+          )
         )}
         <Text size="xs" c="dimmed" ta="center">Your model supplier's licence still applies. SentriFace does not provide rights to third-party model files.</Text>
       </Stack>

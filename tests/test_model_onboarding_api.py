@@ -23,8 +23,6 @@ class ModelOnboardingApiTest(unittest.TestCase):
                 port=0,
                 data_dir=root / "data",
                 runtime="onnx",
-                detector_model=root / "models" / "detector.onnx",
-                recognizer_model=root / "models" / "recognizer.onnx",
                 debug=False,
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -44,9 +42,13 @@ class ModelOnboardingApiTest(unittest.TestCase):
                 self.assertEqual(payload["filename"], "det_500m.onnx")
                 self.assertEqual(payload["size"], len(body))
                 self.assertEqual(payload["sha256"], hashlib.sha256(body).hexdigest())
-                staged = Path(payload["path"])
+                self.assertEqual(len(payload["upload_id"]), 32)
+                self.assertNotIn("path", payload)
+                staged = (
+                    root / "data" / "models" / ".model-authority" / "uploads"
+                    / payload["upload_id"] / "content"
+                )
                 self.assertEqual(staged.read_bytes(), body)
-                self.assertIn(".uploads", staged.parts)
             finally:
                 server.shutdown()
                 server.server_close()
@@ -59,8 +61,6 @@ class ModelOnboardingApiTest(unittest.TestCase):
                 port=0,
                 data_dir=root / "data",
                 runtime="onnx",
-                detector_model=root / "models" / "detector.onnx",
-                recognizer_model=root / "models" / "recognizer.onnx",
                 debug=False,
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -74,6 +74,7 @@ class ModelOnboardingApiTest(unittest.TestCase):
                 self.assertTrue(payload["can_configure"])
                 self.assertEqual(payload["combinations"]["research"][0]["name"], "InsightFace buffalo_s")
                 self.assertTrue(payload["combinations"]["commercial"])
+                self.assertNotIn(str(root), json.dumps(payload))
 
                 status, payload = self._request(server, "GET", "/api/profile", cookie=cookie)
                 self.assertEqual(status, 428)
@@ -85,7 +86,9 @@ class ModelOnboardingApiTest(unittest.TestCase):
                 status, payload = self._request(server, "GET", "/api/models/status", cookie=reader_cookie)
                 self.assertEqual(status, 200)
                 self.assertFalse(payload["can_configure"])
-                self.assertIsNone(payload["models_dir"])
+                self.assertNotIn("models_dir", payload)
+                self.assertNotIn("detector_target", payload)
+                self.assertNotIn("recognizer_target", payload)
                 status, payload = self._request(
                     server,
                     "POST",
@@ -107,13 +110,11 @@ class ModelOnboardingApiTest(unittest.TestCase):
     def test_removed_model_file_returns_active_session_to_setup(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            model_dir = root / "models"
+            model_dir = root / "data" / "models"
             server = create_server(
                 port=0,
                 data_dir=root / "data",
                 runtime="onnx",
-                detector_model=model_dir / "detector.onnx",
-                recognizer_model=model_dir / "recognizer.onnx",
                 debug=False,
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)

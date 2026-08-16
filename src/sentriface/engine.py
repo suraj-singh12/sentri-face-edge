@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 import threading
+from dataclasses import dataclass
 from contextvars import ContextVar
 from math import sqrt
 from pathlib import Path
@@ -88,6 +89,15 @@ class _SynchronizedFaceIndex:
         with self._lock:
             return self._index.search(vector, top_k)
 
+
+@dataclass(frozen=True)
+class RecognitionRuntimeSnapshot:
+    config: RuntimeConfig
+    detector: FaceDetector
+    embedder: FaceEmbedder
+    quality: FaceQualityEvaluator
+    model_usage: dict[str, object]
+
 class FaceEngine:
     def __init__(
         self,
@@ -100,6 +110,7 @@ class FaceEngine:
         self.config = config
         self.detector = detector
         self.embedder = embedder
+        self._recognition_runtime_lock = threading.RLock()
         self.index = _SynchronizedFaceIndex(index)
         self.store = store
         self.graph = GlobalIdentityGraphService(store)
@@ -134,6 +145,43 @@ class FaceEngine:
                 config.data_dir / "restored-media",
             ),
         )
+
+    def replace_recognition_runtime(
+        self,
+        *,
+        config: RuntimeConfig,
+        detector: FaceDetector,
+        embedder: FaceEmbedder,
+        model_usage: dict[str, object],
+    ) -> RecognitionRuntimeSnapshot:
+        """Swap recognition-only components while all domain services remain stable."""
+        with self._recognition_runtime_lock:
+            snapshot = RecognitionRuntimeSnapshot(
+                config=self.config,
+                detector=self.detector,
+                embedder=self.embedder,
+                quality=self.quality,
+                model_usage=dict(getattr(self, "model_usage", {})),
+            )
+            self.config = config
+            self.detector = detector
+            self.embedder = embedder
+            self.quality = FaceQualityEvaluator(config)
+            self.model_usage = dict(model_usage)
+            return snapshot
+
+    def restore_recognition_runtime(self, snapshot: RecognitionRuntimeSnapshot) -> None:
+        with self._recognition_runtime_lock:
+            self.config = snapshot.config
+            self.detector = snapshot.detector
+            self.embedder = snapshot.embedder
+            self.quality = snapshot.quality
+            self.model_usage = dict(snapshot.model_usage)
+
+    def close(self) -> None:
+        close = getattr(self.store, "close", None)
+        if callable(close):
+            close()
 
     @property
     def metrics(self) -> MetricsCollector:
