@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class P14PackagingContractTest(unittest.TestCase):
     def test_one_release_version_authority_drives_python_build_and_installer(self) -> None:
         self.assertEqual(__version__, APP_VERSION)
+        self.assertEqual(APP_VERSION, "2.0.0")
         self.assertRegex(APP_VERSION, r"^\d+\.\d+\.\d+$")
         build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
         installer = (ROOT / "installer" / "SentriFaceEdge.iss").read_text(encoding="utf-8")
@@ -24,6 +25,12 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertIn('/DMyAppVersion=$Version', build)
         self.assertIn("#error MyAppVersion must be supplied", installer)
         self.assertNotIn('#define MyAppVersion "', installer)
+
+    def test_release_tag_guard_fails_cleanly_without_git_describe(self) -> None:
+        build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
+        self.assertIn("git tag --points-at HEAD", build)
+        self.assertIn("$ExpectedTag -notin $TagsAtHead", build)
+        self.assertNotIn("git describe", build)
 
     def test_installer_preserves_per_user_authority_and_has_no_activation_helper(self) -> None:
         installer = (ROOT / "installer" / "SentriFaceEdge.iss").read_text(encoding="utf-8")

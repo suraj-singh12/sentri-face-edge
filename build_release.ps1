@@ -24,9 +24,10 @@ $VersionQuad = "$Version.0"
 
 if (-not $DevelopmentBuild) {
     if (git status --porcelain) { throw "Release builds require a clean working tree." }
-    $Tag = (git describe --tags --exact-match 2>$null)
-    if ($LASTEXITCODE -ne 0 -or $Tag -ne "v$Version") {
-        throw "Release builds require the exact tag v$Version."
+    $ExpectedTag = "v$Version"
+    $TagsAtHead = @(git tag --points-at HEAD)
+    if ($LASTEXITCODE -ne 0 -or $ExpectedTag -notin $TagsAtHead) {
+        throw "Release builds require the exact tag $ExpectedTag."
     }
 }
 
