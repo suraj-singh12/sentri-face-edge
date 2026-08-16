@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
@@ -560,7 +561,7 @@ test("FR-01 World rendering suppresses stale g6 Evidence under g7 and preserves 
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { MantineProvider } = await import("@mantine/core");
   const server = await createServer({
-    root: new URL("../", import.meta.url).pathname,
+    root: fileURLToPath(new URL("../", import.meta.url)),
     appType: "custom",
     logLevel: "silent",
     server: { middlewareMode: true },

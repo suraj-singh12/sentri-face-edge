@@ -107,7 +107,12 @@ class ModelBundleAuthorityTest(unittest.TestCase):
             outside = root / "outside"
             outside.mkdir()
             authority.root.parent.mkdir(parents=True, exist_ok=True)
-            authority.root.symlink_to(outside, target_is_directory=True)
+            try:
+                authority.root.symlink_to(outside, target_is_directory=True)
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 1314:
+                    self.skipTest("environment: Windows symbolic-link privilege is unavailable")
+                raise
             with self.assertRaisesRegex(ModelSetupError, "symbolic"):
                 authority.begin_upload("detector", "detector.onnx")
 
@@ -121,7 +126,12 @@ class ModelBundleAuthorityTest(unittest.TestCase):
             content.unlink()
             outside = root / "outside.onnx"
             outside.write_bytes(b"detector")
-            content.symlink_to(outside)
+            try:
+                content.symlink_to(outside)
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 1314:
+                    self.skipTest("environment: Windows symbolic-link privilege is unavailable")
+                raise
             with self.assertRaisesRegex(ModelSetupError, "regular|escaped"):
                 authority.create_bundle(
                     detector_upload_id=detector.upload_id,

@@ -1,13 +1,12 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })]
     [string]$ExecutablePath
 )
 
 $ErrorActionPreference = "Stop"
 $ruleName = "SentriFaceEdge-BlockOutbound"
-$resolved = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $ExecutablePath).Path)
+$resolved = [IO.Path]::GetFullPath($ExecutablePath)
 $filename = [IO.Path]::GetFileName($resolved)
 if ($filename -in @("python.exe", "pythonw.exe", "py.exe")) {
     throw "Refusing to block a shared Python interpreter. Supply the packaged SentriFace executable."

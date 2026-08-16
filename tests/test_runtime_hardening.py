@@ -53,7 +53,12 @@ class RuntimeHardeningTest(unittest.TestCase):
             outside = Path(temporary) / "outside"
             outside.mkdir()
             models = root / "models"
-            models.symlink_to(outside, target_is_directory=True)
+            try:
+                models.symlink_to(outside, target_is_directory=True)
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 1314:
+                    self.skipTest("environment: Windows symbolic-link privilege is unavailable")
+                raise
             with self.assertRaisesRegex(RuntimeReadinessError, "symbolic"):
                 validate_managed_storage(root, (models,), minimum_free_bytes=0)
 
