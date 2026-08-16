@@ -25,4 +25,20 @@ if ($PSCmdlet.ShouldProcess($resolved, "Install outbound-deny firewall rule")) {
         -Action Block `
         -Profile Any `
         -Enabled True | Out-Null
+
+    $rule = Get-NetFirewallRule -Name $ruleName -PolicyStore ActiveStore -ErrorAction Stop
+    $application = $rule | Get-NetFirewallApplicationFilter
+    $installedProgram = [IO.Path]::GetFullPath(
+        [Environment]::ExpandEnvironmentVariables($application.Program)
+    )
+    if (
+        [string]$rule.Enabled -ne "True" -or
+        [string]$rule.Direction -ne "Outbound" -or
+        [string]$rule.Action -ne "Block" -or
+        $installedProgram -ine $resolved
+    ) {
+        Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue |
+            Remove-NetFirewallRule
+        throw "The SentriFace outbound firewall rule could not be verified."
+    }
 }

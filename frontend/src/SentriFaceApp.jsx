@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActionIcon, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Menu, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, UnstyledButton, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconChevronDown, IconDatabaseExport, IconKey, IconLogout, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
@@ -8,6 +8,7 @@ import { ModelGate } from "./components/ModelGate.jsx";
 import { RecoveryGate } from "./components/RecoveryGate.jsx";
 import { VIEWS } from "./constants.js";
 import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
+import { useLicenseController } from "./hooks/useLicenseController.js";
 import { profileLine, tabLabel } from "./utils.js";
 import { DebugView } from "./views/DebugView.jsx";
 import { PeopleView } from "./views/PeopleView.jsx";
@@ -52,6 +53,7 @@ export default function SentriFaceApp() {
 }
 
 function SentriFaceShell({ user, logout, changePassword }) {
+  const license = useLicenseController();
   const { state, refs, actions } = useSentriFaceController({ capabilities: user?.capabilities || [] });
   const { guarded } = actions;
   const { setColorScheme } = useMantineColorScheme();
@@ -59,12 +61,18 @@ function SentriFaceShell({ user, logout, changePassword }) {
   const nextColorScheme = computedColorScheme === "dark" ? "light" : "dark";
   const capabilities = new Set(user?.capabilities || []);
   const can = (capability) => capabilities.has(capability);
-  const visibleViews = VIEWS.filter((view) => view !== "queue" || can("add")).filter((view) => view !== "debug" || can("technical") || can("backups") || can("administer") || can("recovery"));
-  const selectedView = visibleViews.includes(state.activeView) ? state.activeView : "recognize";
+  const licenseRestricted = Boolean(license.status?.enforced && !license.status?.licensed);
+  const visibleViews = (licenseRestricted ? ["debug"] : VIEWS)
+    .filter((view) => view !== "queue" || can("add"))
+    .filter((view) => view !== "debug" || licenseRestricted || can("technical") || can("backups") || can("administer") || can("recovery") || can("license_administer"));
+  const selectedView = visibleViews.includes(state.activeView) ? state.activeView : visibleViews[0];
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  useEffect(() => {
+    if (licenseRestricted && state.activeView !== "debug") actions.setActiveView("debug");
+  }, [actions, licenseRestricted, state.activeView]);
   const submitPassword = guarded(async () => {
     await changePassword(currentPassword, newPassword);
     setPasswordOpen(false);
@@ -152,6 +160,11 @@ function SentriFaceShell({ user, logout, changePassword }) {
           {state.connectionError ? (
             <ShellNotice color="red" title="SentriFace is not responding">
               Make sure SentriFace is still running, then click Refresh.
+            </ShellNotice>
+          ) : null}
+          {licenseRestricted ? (
+            <ShellNotice color="orange" title="Activation required">
+              Product operations are disabled. License activation, backups, restore, integrity recovery, model prerequisites, and support remain available.
             </ShellNotice>
           ) : null}
           {state.profile && !state.profile.recovery_readiness?.ready ? (
@@ -349,6 +362,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onExportSupportPackage={guarded(actions.downloadSupportPackage)}
               recovery={state.recovery}
               recoveryActions={actions.recovery}
+              license={license}
             />
           </Tabs.Panel>
         </Tabs>

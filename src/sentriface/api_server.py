@@ -72,6 +72,8 @@ from sentriface.integrity_recovery_service import (
     RecoveryTokenError,
 )
 from sentriface.logging_config import sanitize_log_details
+from sentriface.licensing import LicenseAuthority
+from sentriface.licensing.authority import packaged_windows_license_enforced
 from sentriface.paths import default_data_dir, default_log_dir
 from sentriface.recovery import RecoveryError, RecoveryService, available_recovery_destinations, recover_master_key
 from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key, validate_recovered_master_key
@@ -92,6 +94,7 @@ from sentriface.model_bundle import ModelBundleAuthority, _limit_for_kind
 from sentriface.runtime_hardening import (
     InstanceLock,
     RuntimeReadinessError,
+    WindowsShutdownSignal,
     cleanup_managed_temporaries,
     validate_managed_storage,
 )
@@ -218,12 +221,40 @@ PUBLIC_AUTH_ENDPOINTS = {
     ("POST", "/api/auth/login"),
 }
 
+LICENSE_ENDPOINTS = {
+    "/api/license/status",
+    "/api/license/activate",
+}
+
+
+def _license_exempt_endpoint(method: str, path: str) -> bool:
+    """The explicit recovery shell that remains available without a license."""
+    if (method, path) in PUBLIC_AUTH_ENDPOINTS or path.startswith("/api/auth/"):
+        return True
+    if path in LICENSE_ENDPOINTS or path == "/api/health":
+        return True
+    if path.startswith("/api/models/"):
+        return True
+    if path in INTEGRITY_RECOVERY_ENDPOINTS or path.startswith("/api/integrity/"):
+        return True
+    if path.startswith("/api/backups") or path == "/api/backup-db":
+        return True
+    if path.startswith("/api/recovery"):
+        return True
+    if path in {"/api/profile", "/api/events", "/api/support-package"}:
+        return True
+    return False
+
 
 def _required_capability(method: str, path: str) -> str | None:
     if (method, path) in PUBLIC_AUTH_ENDPOINTS:
         return None
     if path in {"/api/auth/logout", "/api/auth/change-password"}:
         return "view"
+    if path == "/api/license/status":
+        return "view"
+    if path == "/api/license/activate":
+        return "license_administer"
     if path.startswith("/api/users"):
         return "administer"
     if method == "POST" and path.startswith("/api/models/"):
@@ -367,6 +398,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         os_network_policy: OsNetworkPolicyStatus | None = None,
         model_bundles: ModelBundleAuthority | None = None,
         instance_lock: InstanceLock | None = None,
+        license_authority: LicenseAuthority | None = None,
     ) -> None:
         super().__init__(server_address, SentriFaceApiHandler)
         self.engine = engine
@@ -400,6 +432,9 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         self.shutting_down = threading.Event()
         self._closed = False
         self.instance_lock = instance_lock
+        self.license = license_authority or LicenseAuthority(
+            enforced=packaged_windows_license_enforced(),
+        )
         self.model_bundles = model_bundles or ModelBundleAuthority(
             config.detector_model.parent
         )
@@ -1000,6 +1035,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if (
             self.server.runtime == "dev"
             or path in MODEL_SETUP_ALLOWED_ENDPOINTS
+            or path in LICENSE_ENDPOINTS
             or path in INTEGRITY_RECOVERY_ENDPOINTS
             or path == "/api/backup-db"
             or path.startswith("/api/backups")
@@ -1014,6 +1050,22 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 "code": "models_required",
             },
             status=HTTPStatus.PRECONDITION_REQUIRED,
+        )
+        return True
+
+    def _reject_license_policy(self, method: str, path: str) -> bool:
+        if _license_exempt_endpoint(method, path):
+            return False
+        result = self.server.license.status()
+        if not self.server.license.enforced or result.licensed:
+            return False
+        self._json(
+            {
+                "error": "Activate SentriFace Edge to use this product operation",
+                "code": "license_required",
+                "license_status": result.status.value,
+            },
+            status=HTTPStatus.PAYMENT_REQUIRED,
         )
         return True
     def _set_auth_cookie(self, token: str) -> None:
@@ -1042,6 +1094,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._reject_invalid_origin()
                 or self._reject_invalid_session()
                 or self._reject_user_authorization("GET", parsed.path)
+                or self._reject_license_policy("GET", parsed.path)
                 or self._reject_model_readiness(parsed.path)
             ):
                 return
@@ -1060,6 +1113,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             return
         parsed = urlparse(self.path)
         if self._reject_user_authorization("POST", parsed.path):
+            return
+        if self._reject_license_policy("POST", parsed.path):
             return
         if self._reject_model_readiness(parsed.path):
             return
@@ -1107,6 +1162,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if self._reject_user_authorization("DELETE", parsed.path):
             return
+        if self._reject_license_policy("DELETE", parsed.path):
+            return
         if self._reject_model_readiness(parsed.path):
             return
         with self.server.operation_gate.shared():
@@ -1122,6 +1179,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/auth/status":
                 self._json(auth_status_payload(self.server.auth, self.auth_user))
+                return
+            if parsed.path == "/api/license/status":
+                self._json(self.server.license.status().as_dict(enforced=self.server.license.enforced))
                 return
             if parsed.path == "/api/models/status":
                 self._json(self.server.model_status(self.auth_user))
@@ -1527,6 +1587,33 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             payload = self._read_json()
+            if parsed.path == "/api/license/activate":
+                if set(payload) != {"token"}:
+                    raise InputValidationError(
+                        "License activation accepts only the signed token",
+                        "invalid_license_activation_payload",
+                    )
+                token = payload.get("token")
+                if not isinstance(token, str):
+                    raise InputValidationError("License token must be text", "invalid_license_token")
+                result = self.server.license.activate(token)
+                response = result.as_dict(enforced=self.server.license.enforced)
+                if result.licensed:
+                    self.server.log_event(
+                        "license-activated",
+                        username=self.auth_user.username if self.auth_user else "unknown",
+                        license_id=result.license_id,
+                        edition=result.edition,
+                    )
+                    self._json(response)
+                else:
+                    self.server.log_event(
+                        "license-activation-refused",
+                        username=self.auth_user.username if self.auth_user else "unknown",
+                        code=result.code,
+                    )
+                    self._json({**response, "error": result.message}, status=HTTPStatus.UNPROCESSABLE_ENTITY)
+                return
             if parsed.path in MODEL_OPERATION_REQUEST_FIELDS:
                 _validate_model_operation_payload(parsed.path, payload)
             if parsed.path in INTEGRITY_RECOVERY_REQUEST_FIELDS:
@@ -3066,6 +3153,7 @@ def _install_shutdown_signal_handlers(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="SentriFace Edge local UI")
+    parser.add_argument("--version", action="version", version=f"SentriFace Edge {__version__}")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--data-dir", type=Path, default=default_data_dir())
@@ -3081,7 +3169,15 @@ def main() -> int:
     parser.add_argument("--quiet-debug", action="store_true", help="Disable verbose UI debug logs")
     parser.add_argument("--debug", action="store_true", help="Enable local diagnostic logging")
     parser.add_argument("--recover-kit", type=Path, help="Install a disaster-recovery key before startup")
+    parser.add_argument(
+        "--request-shutdown",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
+
+    if args.request_shutdown:
+        return 0 if WindowsShutdownSignal.request(args.data_dir) else 3
 
     from sentriface.logging_config import setup_logging
 
@@ -3154,9 +3250,19 @@ def main() -> int:
         return 2
     print(f"SentriFace UI running at http://{args.host}:{server.server_port}")
     previous_handlers = _install_shutdown_signal_handlers(server)
+    installer_signal = WindowsShutdownSignal(args.data_dir).create()
+    installer_waiter = None
+    if os.name == "nt":
+        installer_waiter = threading.Thread(
+            target=lambda: installer_signal.wait() and server.graceful_shutdown(),
+            name="sentriface-installer-shutdown",
+            daemon=True,
+        )
+        installer_waiter.start()
     try:
         server.serve_forever()
     finally:
+        installer_signal.close()
         for handled_signal, previous in previous_handlers.items():
             signal.signal(handled_signal, previous)
         server.server_close()

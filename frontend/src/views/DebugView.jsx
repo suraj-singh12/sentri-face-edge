@@ -32,6 +32,7 @@ import {
   IconDownload,
   IconHelpCircle,
   IconInfoCircle,
+  IconKey,
   IconPlayerPause,
   IconRefresh,
   IconRestore,
@@ -44,6 +45,7 @@ import {
 import { AccountsPanel } from "./AccountsPanel.jsx";
 import { AboutSupportPanel } from "./AboutSupportPanel.jsx";
 import { MachineProfilePanel } from "./MachineProfilePanel.jsx";
+import { LicensePanel } from "./LicensePanel.jsx";
 import { RecoveryPanel } from "./RecoveryPanel.jsx";
 
 export function DebugView({
@@ -64,9 +66,11 @@ export function DebugView({
   onExportSupportPackage,
   recovery,
   recoveryActions,
+  license,
 }) {
   const capabilitySet = useMemo(() => new Set(capabilities), [capabilities]);
   const navItems = useMemo(() => [
+    { key: "license", label: "License & activation", icon: IconKey },
     capabilitySet.has("backups") ? { key: "database", label: "Backups & restore", icon: IconDatabase } : null,
     capabilitySet.has("administer") ? { key: "accounts", label: "User accounts", icon: IconUsers } : null,
     capabilitySet.has("recovery") ? { key: "integrity", label: "Integrity & recovery", icon: IconShieldCheck } : null,
@@ -150,7 +154,9 @@ export function DebugView({
       <Box className="debug-shell">
         <DebugSidebar section={section} onSection={setSection} summary={summary} onRefresh={refreshEvents} navItems={navItems} showSummary={capabilitySet.has("technical") && section === "events"} />
         <Box className="debug-main">
-          {section === "about" ? (
+          {section === "license" ? (
+            <LicensePanel license={license} canActivate={capabilitySet.has("license_administer")} />
+          ) : section === "about" ? (
             <AboutSupportPanel profile={profile} events={events} onExportSupportPackage={onExportSupportPackage} />
           ) : section === "events" ? (
             <EventsLogPanel

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import shutil
 import tempfile
 import time
@@ -76,6 +77,52 @@ class InstanceLock:
 
     def __exit__(self, *_: object) -> None:
         self.release()
+
+
+class WindowsShutdownSignal:
+    """Per-user packaging signal that delegates to the normal graceful shutdown."""
+
+    def __init__(self, data_dir: Path) -> None:
+        normalized = str(data_dir.expanduser().absolute()).casefold().encode("utf-8")
+        suffix = hashlib.sha256(normalized).hexdigest()[:20]
+        self.name = f"Local\\SentriFaceEdge-Shutdown-{suffix}"
+        self._handle = None
+
+    def create(self) -> "WindowsShutdownSignal":
+        if os.name != "nt":
+            return self
+        import ctypes
+        handle = ctypes.windll.kernel32.CreateEventW(None, True, False, self.name)
+        if not handle:
+            raise RuntimeReadinessError("The installer shutdown signal could not be created")
+        self._handle = handle
+        return self
+
+    def wait(self) -> bool:
+        if os.name != "nt" or self._handle is None:
+            return False
+        import ctypes
+        return ctypes.windll.kernel32.WaitForSingleObject(self._handle, 0xFFFFFFFF) == 0
+
+    def close(self) -> None:
+        handle, self._handle = self._handle, None
+        if os.name == "nt" and handle is not None:
+            import ctypes
+            ctypes.windll.kernel32.CloseHandle(handle)
+
+    @classmethod
+    def request(cls, data_dir: Path) -> bool:
+        if os.name != "nt":
+            return False
+        import ctypes
+        signal = cls(data_dir)
+        handle = ctypes.windll.kernel32.OpenEventW(0x0002, False, signal.name)
+        if not handle:
+            return False
+        try:
+            return bool(ctypes.windll.kernel32.SetEvent(handle))
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
 
 
 def validate_managed_storage(

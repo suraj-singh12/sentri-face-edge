@@ -31,6 +31,7 @@ test = [
 ]
 release = [
   "build>=1.2,<2",
+  "Nuitka>=2.7,<3",
 ]
 
 [project.scripts]

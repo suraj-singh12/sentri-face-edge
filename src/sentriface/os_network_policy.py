@@ -195,6 +195,11 @@ def _inspect_linux_systemd() -> OsNetworkPolicyStatus:
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     try:
+        creation_flags = (
+            getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            if sys.platform == "win32"
+            else 0
+        )
         return subprocess.run(
             command,
             check=False,
@@ -202,6 +207,7 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
             text=True,
             timeout=10,
             env={**os.environ, "LC_ALL": "C"},
+            creationflags=creation_flags,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return subprocess.CompletedProcess(command, 127, "", str(exc))

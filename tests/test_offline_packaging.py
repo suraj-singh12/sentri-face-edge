@@ -33,6 +33,8 @@ class OfflinePackagingTest(unittest.TestCase):
         self.assertIn("-Program $resolved", script)
         self.assertIn("-Action Block", script)
         self.assertIn("Refusing to block a shared Python interpreter", script)
+        self.assertIn("PolicyStore ActiveStore", script)
+        self.assertIn("$installedProgram -ine $resolved", script)
 
 
 if __name__ == "__main__":

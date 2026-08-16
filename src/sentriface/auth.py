@@ -36,7 +36,7 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
     "technician": frozenset({"view", "recognize", "backups", "technical"}),
     "administrator": frozenset({
         "view", "recognize", "add", "destroy", "backups", "backup_delete",
-        "technical", "administer", "database_restore", "recovery",
+        "technical", "administer", "database_restore", "recovery", "license_administer",
     }),
 }
 ROLE_DESCRIPTIONS = {
@@ -44,7 +44,7 @@ ROLE_DESCRIPTIONS = {
     "operator": "Viewer access plus enrollment and queue/review changes.",
     "custodian": "Operator access plus archive, delete, restore, and backup deletion.",
     "technician": "View access plus logs, machine diagnostics, and backup creation/export.",
-    "administrator": "All capabilities, including accounts, recovery configuration, and database restore.",
+    "administrator": "All capabilities, including accounts, licensing, recovery configuration, and database restore.",
 }
 
 

@@ -2,7 +2,7 @@
 
 Implement in order. Each phase must preserve offline operation, use additive migrations where possible, keep important writes transactional and journaled, and add upgrade/failure tests before moving on.
 
-Status after P13: P0 through P13 are complete; P10, P11, and P12 remain frozen. P11-A establishes the integrity authority/invariant model and explicit read-only checker; P11-A1 and P11-C2A retain the two R02 safety-stop corrections for occurrence and evidence history. P11-B provides deterministic graph rebuild. P11-C remains exactly two explicit typed commands: R01 archived-terminal restoration and R02 append/retire-only note-reference reconciliation. P11-D remains one explicit guarded normalized-merge revert subset. P11-E adds only the administrator-gated, token-bound Integrity & Recovery API/UI over those services. P12 hardens format-v3 portable backup closure and guarded staged restore without changing the P11 whitelist, schema, or dependencies. P13 hardens unpackaged operational model authority, activation, runtime lifecycle, logging, and managed storage without changing schema or domain authority.
+Status after P14 implementation: P0 through P14 source implementation are complete; P10 through P13 remain frozen. P11-A establishes the integrity authority/invariant model and explicit read-only checker; P11-A1 and P11-C2A retain the two R02 safety-stop corrections for occurrence and evidence history. P11-B provides deterministic graph rebuild. P11-C remains exactly two explicit typed commands: R01 archived-terminal restoration and R02 append/retire-only note-reference reconciliation. P11-D remains one explicit guarded normalized-merge revert subset. P11-E adds only the administrator-gated, token-bound Integrity & Recovery API/UI over those services. P12 hardens format-v3 portable backup closure and guarded staged restore without changing the P11 whitelist, schema, or dependencies. P13 hardens unpackaged operational model authority, activation, runtime lifecycle, logging, and managed storage without changing schema or domain authority. P14 signed Windows x64 and clean-VM release acceptance remains pending.
 
 ## P0 Database migration/version foundation — Complete
 
@@ -116,9 +116,11 @@ P13-D adds a cross-process instance lock, startup readiness, SIGINT/SIGTERM admi
 
 Exit: schema remains v28; recognition remains proposal-only; P10/P11/P12 semantics, backup authority, media registry, graph, repairs, and domain history are unchanged. No telemetry, cloud/model download, licensing, activation-key gating, installer, signing, updater, packaging, release automation, worker, scheduler, or polling behavior was added.
 
-## P14 Windows packaging/licensing — Future
+## P14 Windows packaging/licensing — Implementation complete; release acceptance pending
 
-Complete Windows packaging, executable-bound offline policy, local licensing/activation rules, upgrades, data-path permissions, backup/recovery UX, and signed release verification. Exit: packaged Windows operation remains offline and passes migration, recovery, security, and licensing acceptance tests.
+P14-A adds strict canonical SFE2/Ed25519 offline license authority, public-key selection, MachineGuid fingerprint v2, and bounded per-user HKCU persistence outside domain authority. P14-B adds administrator-only authenticated activation and a backend-enforced unlicensed recovery shell that preserves model prerequisites, backup/restore, P11 recovery, and support. P14-C/D add one release-version authority, Nuitka standalone Windows x64 construction, immutable Program Files installation, the existing LocalAppData authority, exact verified outbound firewall policy, graceful upgrade shutdown, downgrade refusal, and data-preserving uninstall. P14-E adds external Authenticode hooks, signature verification, checksums, dependency/license inventory, provenance, artifact inspection, and active CI packaging gates. No model weights or private license key are included.
+
+Exit status: local source/backend/frontend/build checks are complete. The phase is not release-accepted until a signed Windows artifact passes the clean-VM matrix in `docs/p14/P14_RELEASE_ACCEPTANCE.md`.
 
 ## Cross-phase gates
 
