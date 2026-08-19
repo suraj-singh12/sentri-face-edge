@@ -3151,6 +3151,24 @@ def _install_shutdown_signal_handlers(
     return previous_handlers
 
 
+def _show_packaged_startup_error(message: str) -> None:
+    """Make fail-closed startup errors visible for a windowed Windows build."""
+    if os.name != "nt" or not getattr(sys, "frozen", False):
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            message,
+            "SentriFace Edge could not start",
+            0x10,
+        )
+    except Exception:
+        # The console error remains the fallback for diagnostic launches.
+        pass
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="SentriFace Edge local UI")
     parser.add_argument("--version", action="version", version=f"SentriFace Edge {__version__}")
@@ -3232,7 +3250,9 @@ def main() -> int:
     except ModelSetupError as exc:
         if runtime_lock is not None and server is None:
             runtime_lock.release()
-        print(f"SentriFace could not start: {exc}")
+        message = f"SentriFace could not start: {exc}"
+        print(message)
+        _show_packaged_startup_error(message)
         print("Install verified models with: sentriface-models")
         return 2
     except (
@@ -3246,7 +3266,9 @@ def main() -> int:
     ) as exc:
         if runtime_lock is not None and server is None:
             runtime_lock.release()
-        print(f"SentriFace could not start safely: {exc}")
+        message = f"SentriFace could not start safely: {exc}"
+        print(message)
+        _show_packaged_startup_error(message)
         return 2
     print(f"SentriFace UI running at http://{args.host}:{server.server_port}")
     previous_handlers = _install_shutdown_signal_handlers(server)
