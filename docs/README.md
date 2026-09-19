@@ -1,21 +1,22 @@
 # SentriFace Edge documentation map
 
-This directory separates the current architecture from frozen phase records, historical artifacts, and examples. For the current project position, read the four core documents in the order below.
+This directory separates the current architecture from frozen phase records, historical artifacts, and examples. New contributors and agents should start with the handoff guide, then read the four core documents.
 
 ## Current status
 
-- P10 is complete and frozen.
-- P11-A read-only integrity checking is complete.
-- P11-B deterministic graph projection rebuild is complete.
-- P11-C structured repair is complete and refrozen with exactly R01 and R02.
-- P11-D guarded operation revert has not started and is the next design/audit phase.
+- P0 through P14 source implementation is complete.
+- P10 through P13 are complete and frozen, including all of P11-A through P11-E.
+- P14 unsigned Windows 11 x64 acceptance passed.
+- Production P14 acceptance remains pending a clean exact `v2.0.0` rebuild,
+  final verification, and trusted timestamped Authenticode signatures.
 
 ## Start here
 
-1. [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) — latest concise implementation checkpoint.
-2. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — phase order, completion state, exit gates, and next work.
-3. [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) — current normative entities, authority, lifecycle, evidence, graph, and World contracts.
-4. [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) — detailed reasoning, examples, rejected alternatives, and preserved design evolution.
+1. [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) — quick takeover guide, repository map, commands, and release boundary.
+2. [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) — latest concise implementation checkpoint.
+3. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — phase order, completion state, exit gates, and next work.
+4. [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) — current normative entities, authority, lifecycle, evidence, graph, and World contracts.
+5. [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) — detailed reasoning, examples, rejected alternatives, and preserved design evolution.
 
 These documents are complementary rather than successive revisions. `ARCHITECTURE_STATE.md` answers what is implemented now; `IMPLEMENTATION_PLAN.md` answers where that sits in the sequence; `DOMAIN_MODEL.md` defines the current rules; and `ARCHITECTURE_EXPLANATION.md` explains why those rules exist.
 
@@ -26,6 +27,7 @@ In the phase-history chain below, arrows mean **newer represented implementation
 ```mermaid
 flowchart TD
     INDEX["docs/README.md<br/>Documentation index"]
+    HANDOFF["AGENT_HANDOFF.md<br/>Fast takeover path"]
 
     STATE["ARCHITECTURE_STATE.md<br/>Latest checkpoint"]
     PLAN["IMPLEMENTATION_PLAN.md<br/>Phase sequence and next work"]
@@ -34,6 +36,8 @@ flowchart TD
 
     P11I["P11_INTEGRITY_MODEL.md<br/>P11-A/A1/C2A/B/C"]
     P11R["P11_STRUCTURED_REPAIR_DESIGN.md<br/>Frozen R01/R02 catalog"]
+    P12["P12 design + acceptance<br/>Backup/restore"]
+    P14["P14 design + acceptance<br/>Packaging/licensing"]
 
     P10A["P10_WORLD_ACCEPTANCE.md<br/>Frozen backend gate"]
     P10P["P10_WORLD_PERFORMANCE.md<br/>Final performance acceptance"]
@@ -41,12 +45,15 @@ flowchart TD
     P10OLD["Earlier P10 benchmarks<br/>Superseded diagnostics"]
     HIST["Historical engineering assessment<br/>Obsolete architecture snapshot"]
 
-    INDEX -->|"start"| STATE
+    INDEX -->|"start"| HANDOFF
+    HANDOFF --> STATE
     STATE -->|"phase position"| PLAN
     PLAN -->|"normative rules"| DOMAIN
     DOMAIN -->|"reasoning and history"| EXPLAIN
 
-    STATE -->|"newer to older phase state"| P11I
+    STATE -->|"release boundary"| P14
+    P14 -->|"older frozen phase"| P12
+    P12 --> P11I
     P11I --> P11R
     P11R --> P10A
     P10A --> P10P
@@ -61,12 +68,17 @@ The historical engineering assessment was written later in wall-clock time than 
 
 | Category | Document | Contains |
 | --- | --- | --- |
+| Handoff | [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) | Fast takeover path, current checkpoint, code map, invariant summary, development commands, and release/support cautions. |
 | Current core | [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) | Concise stable implementation checkpoint, current authority sources, read behavior, frozen World state, and deferred work. |
 | Current core | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) | Ordered P0–P14 roadmap, completed phases, phase exit criteria, cross-phase gates, and next work. |
 | Current core | [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) | Normative identity, observation, note, evidence, canonical, graph, Person Graph, and World domain rules. |
 | Current core | [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) | Long-form architectural memory, design rationale, examples, rejected alternatives, performance decisions, safety stops, and future boundaries. |
-| P11 | [`p11/P11_INTEGRITY_MODEL.md`](p11/P11_INTEGRITY_MODEL.md) | State-authority map, fixed invariant registry, read-only checker, note/evidence refreeze, deterministic rebuild, repair summary, and remaining P11 sequence. |
+| P11 | [`p11/P11_INTEGRITY_MODEL.md`](p11/P11_INTEGRITY_MODEL.md) | State-authority map, fixed invariant registry, read-only checker, note/evidence refreeze, deterministic rebuild, and completed P11 sequence. |
 | P11 | [`p11/P11_STRUCTURED_REPAIR_DESIGN.md`](p11/P11_STRUCTURED_REPAIR_DESIGN.md) | Exact R01/R02 whitelist, finding-bound preconditions, execution/refusal rules, safety-stop history, tests, and P11-D boundary. |
+| P12 | [`p12/P12_BACKUP_RESTORE_DESIGN.md`](p12/P12_BACKUP_RESTORE_DESIGN.md) | Format-v3 authority closure, registry-owned media, staged restore, failure recovery, and API boundary. |
+| P12 | [`p12/P12_BACKUP_RESTORE_ACCEPTANCE.md`](p12/P12_BACKUP_RESTORE_ACCEPTANCE.md) | Frozen backup/restore verification matrix and acceptance result. |
+| P14 | [`p14/P14_PACKAGING_LICENSING_DESIGN.md`](p14/P14_PACKAGING_LICENSING_DESIGN.md) | Offline license authority, Windows package layout, installer lifecycle, release versioning, and signing boundary. |
+| P14 | [`p14/P14_RELEASE_ACCEPTANCE.md`](p14/P14_RELEASE_ACCEPTANCE.md) | Passed unsigned Windows acceptance and the remaining production release gates. |
 | P10 | [`p10/P10_WORLD_ACCEPTANCE.md`](p10/P10_WORLD_ACCEPTANCE.md) | Frozen P10-E World backend PASS/FAIL gates, defect-resolution record, and acceptance decision. |
 | P10 | [`p10/P10_WORLD_PERFORMANCE.md`](p10/P10_WORLD_PERFORMANCE.md) | Final performance method, before/after results, scale conclusions, and passing performance decision. |
 | P10 benchmark | [`p10/benchmarks/P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json`](p10/benchmarks/P10_WORLD_BENCHMARK_RESULTS_POST_OPT.json) | Authoritative machine-readable post-optimization benchmark matrix. |
@@ -78,8 +90,9 @@ The historical engineering assessment was written later in wall-clock time than 
 
 ## Authority and maintenance rules
 
-- Use the four current core documents for present architecture and project status.
-- Use P11 documents for frozen integrity, rebuild, and structured-repair detail.
+- Start with the handoff guide, then use the four current core documents for present architecture and project status.
+- Use P11 documents for frozen integrity, rebuild, repair, revert, and recovery detail.
+- Use P12 and P14 documents for backup/restore and Windows release acceptance detail.
 - Use P10 documents for the frozen World acceptance and performance record.
 - Historical and superseded artifacts are evidence of prior evaluation, not current architecture authority.
 - Preserve safety-stop explanations, failed benchmark baselines, and historical decisions rather than rewriting them as if the final state had always existed.

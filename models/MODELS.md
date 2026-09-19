@@ -21,11 +21,14 @@ supported combinations in two columns:
   a compatible pair whose model licenses explicitly permit commercial use.
 
 Compatibility means only that SentriFace can execute the detector/recognizer
-interfaces. It is not an endorsement or a grant of model rights. Every selection
-requires absolute local paths and SHA-256 values for `detector.onnx` and
-`recognizer.onnx`. A custom `calibration.json` and its SHA-256 are optional;
-SentriFace writes hash-bound built-in thresholds when they are omitted. Commercial
-declarations additionally
+interfaces. It is not an endorsement or a grant of model rights. In the browser,
+the administrator selects local files; the server receives them through opaque,
+expiring, single-use upload IDs, chooses their storage paths, and verifies their
+content before creating an immutable candidate bundle. The command-line setup
+flow instead requires absolute local source paths and SHA-256 values for
+`detector.onnx` and `recognizer.onnx`. A custom `calibration.json` and its SHA-256
+are optional; SentriFace writes hash-bound built-in thresholds when they are
+omitted. Commercial declarations additionally
 require the model licensor and entitlement reference; permissive declarations
 require the model license name.
 

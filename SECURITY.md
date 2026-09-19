@@ -7,6 +7,7 @@ through a reverse proxy, port-forwarding rule, or non-loopback bind.
 Security controls include:
 
 - IPv4 loopback-only binding, Host-header validation, a process-wide outbound socket guard, and rejection of UNC or mapped-network filesystem paths at runtime entry points;
+- fail-closed production ONNX startup unless an active OS policy blocks non-loopback outbound traffic for the exact packaged application boundary;
 - rejection of state-changing requests from non-local browser origins;
 - a per-launch browser secret on every API/media request, strict matching of the actual SentriFace origin, and HttpOnly SameSite account sessions;
 - Argon2id password hashing, persistent login lockout, backend-enforced roles, session revocation, and authentication audit records;
@@ -43,3 +44,7 @@ Report suspected vulnerabilities privately to the repository maintainers.
 Include the SentriFace version, operating system, reproduction steps, and
 whether any real biometric data was involved. Do not attach real face images,
 database files, or backup archives to a public issue.
+
+The scripts documented in `tools/dangerous_scripts.md` are destructive local
+support utilities, not normal uninstall steps. Removing the OS-vault storage
+credential can make encrypted SentriFace data permanently inaccessible.

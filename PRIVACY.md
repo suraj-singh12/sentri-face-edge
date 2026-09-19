@@ -26,7 +26,7 @@ written to an SSD or filesystem snapshot.
 
 Local account passwords are never stored or logged in plaintext. Account records and
 authentication audit entries reside inside the encrypted SQLCipher database. Browser
-authentication uses an HttpOnly cookie; SentriFace does not persist the session secret inbrowser JavaScript storage.
+authentication uses an HttpOnly cookie; SentriFace does not persist the session secret in browser JavaScript storage.
 
 This protects copied or stolen application files. It does not protect against
 malware or a person already operating as the same unlocked OS user, because that

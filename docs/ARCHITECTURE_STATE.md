@@ -191,3 +191,12 @@ The final mandatory matrix completed on 2026-08-11 in `docs/p10/benchmarks/P10_W
 ## Known deferred work
 
 - P14 update delivery remains out of scope. Real-host unsigned Windows x64 acceptance passes; a clean tagged build with trusted timestamped Authenticode signatures is still required before release publication. No production token was provided during acceptance.
+
+## Current operational notes
+
+- A frozen/windowed Windows build displays fail-closed model, storage, license,
+  runtime, and network-policy startup failures in a native error dialog in
+  addition to the diagnostic console message. Startup safety behavior is unchanged.
+- Destructive Windows test/support cleanup utilities are documented in
+  `tools/dangerous_scripts.md`. They are outside normal uninstall, which remains
+  data-preserving; the full wipe removes local authority and is irreversible.

@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.1.0 - Unreleased
+## 2.0.0 - Unreleased
+
+- Completed P0-P14 source implementation through schema v28, including the
+  global evidence-derived identity graph, World, integrity/recovery,
+  authority-aware backup/restore, runtime hardening, offline licensing, and
+  Windows x64 packaging.
+- Passed unsigned Windows 11 x64 package acceptance. Production release remains
+  pending a clean exact-tag rebuild and trusted timestamped Authenticode signing.
+- Added a native packaged-Windows startup error dialog while retaining
+  fail-closed startup and console diagnostics.
+- Added documented Windows test-credential and complete-machine cleanup tools.
 
 - Added an offline ONNX face-recognition runtime and React localhost UI.
 - Added reviewed enrollment, recognition follow-ups, people lifecycle, queue

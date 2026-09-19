@@ -61,4 +61,6 @@ The exact final counts are recorded in the P12 completion report for the impleme
 - Schema changed: no.
 - Dependencies changed: no.
 - Frontend changed: yes, only the required response-contract compatibility adjustment and its focused test.
-- P13/P14: not started.
+- At the time of the P12 freeze, P13/P14 had not started. They are now complete
+  in source; this line records the acceptance-time boundary rather than current
+  project status. See `../ARCHITECTURE_STATE.md`.

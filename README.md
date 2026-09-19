@@ -13,6 +13,8 @@ The project goal is simple: keep the face system modular and controllable withou
 
 Release and trust documentation: [Privacy](PRIVACY.md), [Security](SECURITY.md),
 [Third-party notices](THIRD_PARTY_NOTICES.md), and [Changelog](CHANGELOG.md).
+New maintainers and coding agents should begin with the
+[documentation map](docs/README.md) and [agent handoff](docs/AGENT_HANDOFF.md).
 
 ## Core Shape
 
@@ -186,7 +188,7 @@ DETECTOR="$PWD/models/detector.onnx"
 RECOGNIZER="$PWD/models/recognizer.onnx"
 
 sentriface-models \
-  --models-dir "$PWD/models" \
+  --models-dir "$PWD/data/models" \
   --detector-source "$DETECTOR" \
   --detector-sha256 "$(shasum -a 256 "$DETECTOR" | awk '{print $1}')" \
   --recognizer-source "$RECOGNIZER" \
@@ -196,14 +198,13 @@ sentriface-models \
   --accept-model-responsibility
 ```
 
-Then launch SentriFace directly against those files:
+The setup command adopts those files into the server-owned bundle authority
+under the selected data directory. Then launch SentriFace from that authority:
 
 ```bash
 sentriface-ui \
   --runtime onnx \
   --allow-unpackaged-source-onnx \
-  --detector-model "$PWD/models/detector.onnx" \
-  --recognizer-model "$PWD/models/recognizer.onnx" \
   --data-dir "$PWD/data"
 ```
 Open `http://127.0.0.1:8765` and sign in. If the one-time activation
@@ -236,7 +237,7 @@ For an explicit project-local development database, run
 `python -m sentriface.api_server --runtime dev --data-dir data`. A normal
 installed launch uses a stable per-user application directory instead of
 whichever directory the terminal happens to be in. Override it with `--data-dir` or
-`SENTRIFACE_DATA_DIR`; override model storage with `SENTRIFACE_MODEL_DIR`.
+`SENTRIFACE_DATA_DIR`. Runtime model authority is stored below that data directory.
 
 Then open `http://127.0.0.1:8765`. The server rejects non-loopback binds and
 foreign Host headers. ONNX is the default; use `--runtime dev` only for explicit
@@ -247,9 +248,12 @@ research-only declarations produce a persistent UI warning. When ONNX files are
 missing, invalid, replaced, or deleted, the server remains available only for
 signed-in model setup and fails closed for recognition/data operations. After
 login, administrators choose a supported Research-only or Commercial
-combination, provide absolute local paths and SHA-256 values for the detector
-and recognizer, optionally provide a custom calibration file, and activate the
-verified bundle without any network access. The UI
+combination, select the detector and recognizer with the browser file controls,
+optionally select a custom calibration file, and activate the verified
+server-owned bundle without any network access. Upload references are opaque,
+expiring, and single-use; the server chooses storage paths and verifies content.
+The `sentriface-models` CLI remains the path-and-SHA-256 workflow for local
+operator-supplied files. The UI
 prints debug events to the terminal and keeps the latest events visible in the
 Debug tab.
 
@@ -393,10 +397,12 @@ python -m pip install -r requirements-runtime.txt
 
 python -m sentriface.cli --username USERNAME \
   --runtime onnx \
-  --detector-model models/detector.onnx \
-  --recognizer-model models/recognizer.onnx \
+  --data-dir data \
   recognize path/to/image.jpg
 ```
+
+The selected data directory must already contain an active server-owned model
+bundle installed by the UI or `sentriface-models --models-dir data/models`.
 
 The ONNX path is CPU-only by default and uses the selected hardware profile to
 limit ONNX Runtime threads.
@@ -575,8 +581,15 @@ backup.
 ## Run Checks
 
 ```bash
-python -m unittest discover -s tests
+python -m pytest -q
+npm --prefix frontend test
+npm --prefix frontend run build
 ```
+
+Windows test-machine cleanup and full-removal utilities live under `tools/`.
+They can destroy encryption credentials and all recoverable SentriFace data;
+read [`tools/dangerous_scripts.md`](tools/dangerous_scripts.md) before using
+them. Normal uninstall intentionally preserves user data and credentials.
 
 ## License
 

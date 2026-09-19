@@ -9,8 +9,10 @@ screen. They contain placeholders only and do not grant model rights.
 - `calibration-thresholds.example.json`: an optional threshold file that SentriFace can validate and install after its recognizer hash is replaced.
 
 The three declaration examples are documentation, not import files. Enter their
-values into the matching UI fields. Model paths must be absolute paths on the
-machine running SentriFace. Replace every value enclosed in angle brackets.
+values into the matching UI fields and replace every value enclosed in angle
+brackets. The browser UI uses file controls and server-owned opaque uploads; it
+does not accept filesystem paths. The `sentriface-models` CLI uses absolute local
+source paths plus SHA-256 values on the machine running SentriFace.
 
 Generate SHA-256 values locally:
 
