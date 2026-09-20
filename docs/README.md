@@ -1,6 +1,6 @@
 # SentriFace Edge documentation map
 
-This directory separates the current architecture from frozen phase records, historical artifacts, and examples. New contributors and agents should start with the handoff guide, then read the four core documents.
+This directory separates the product overview and current architecture from frozen phase records, historical artifacts, and examples. New contributors and agents should start with the complete project guide, then use the handoff guide and four core documents for implementation work.
 
 ## Current status
 
@@ -12,11 +12,12 @@ This directory separates the current architecture from frozen phase records, his
 
 ## Start here
 
-1. [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) — quick takeover guide, repository map, commands, and release boundary.
-2. [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) — latest concise implementation checkpoint.
-3. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — phase order, completion state, exit gates, and next work.
-4. [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) — current normative entities, authority, lifecycle, evidence, graph, and World contracts.
-5. [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) — detailed reasoning, examples, rejected alternatives, and preserved design evolution.
+1. [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) — complete product mental model: purpose, problems solved, user features, developer architecture, domain concepts, and safe-change rules.
+2. [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) — quick takeover guide, repository map, commands, and release boundary.
+3. [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) — latest concise implementation checkpoint.
+4. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — phase order, completion state, exit gates, and next work.
+5. [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) — current normative entities, authority, lifecycle, evidence, graph, and World contracts.
+6. [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) — detailed reasoning, examples, rejected alternatives, and preserved design evolution.
 
 These documents are complementary rather than successive revisions. `ARCHITECTURE_STATE.md` answers what is implemented now; `IMPLEMENTATION_PLAN.md` answers where that sits in the sequence; `DOMAIN_MODEL.md` defines the current rules; and `ARCHITECTURE_EXPLANATION.md` explains why those rules exist.
 
@@ -27,6 +28,7 @@ In the phase-history chain below, arrows mean **newer represented implementation
 ```mermaid
 flowchart TD
     INDEX["docs/README.md<br/>Documentation index"]
+    OVERVIEW["PROJECT_OVERVIEW.md<br/>Complete product mental model"]
     HANDOFF["AGENT_HANDOFF.md<br/>Fast takeover path"]
 
     STATE["ARCHITECTURE_STATE.md<br/>Latest checkpoint"]
@@ -45,7 +47,8 @@ flowchart TD
     P10OLD["Earlier P10 benchmarks<br/>Superseded diagnostics"]
     HIST["Historical engineering assessment<br/>Obsolete architecture snapshot"]
 
-    INDEX -->|"start"| HANDOFF
+    INDEX -->|"start"| OVERVIEW
+    OVERVIEW -->|"implementation takeover"| HANDOFF
     HANDOFF --> STATE
     STATE -->|"phase position"| PLAN
     PLAN -->|"normative rules"| DOMAIN
@@ -68,6 +71,7 @@ The historical engineering assessment was written later in wall-clock time than 
 
 | Category | Document | Contains |
 | --- | --- | --- |
+| Overview | [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) | Complete narrative introduction covering the product purpose, user workflows, architecture, domain concepts, security, reliability, repository map, development model, and AI-safe change rules. |
 | Handoff | [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) | Fast takeover path, current checkpoint, code map, invariant summary, development commands, and release/support cautions. |
 | Current core | [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) | Concise stable implementation checkpoint, current authority sources, read behavior, frozen World state, and deferred work. |
 | Current core | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) | Ordered P0–P14 roadmap, completed phases, phase exit criteria, cross-phase gates, and next work. |
@@ -90,7 +94,7 @@ The historical engineering assessment was written later in wall-clock time than 
 
 ## Authority and maintenance rules
 
-- Start with the handoff guide, then use the four current core documents for present architecture and project status.
+- Start with the project overview for the complete mental model, then use the handoff guide and four current core documents for present architecture and project status.
 - Use P11 documents for frozen integrity, rebuild, repair, revert, and recovery detail.
 - Use P12 and P14 documents for backup/restore and Windows release acceptance detail.
 - Use P10 documents for the frozen World acceptance and performance record.

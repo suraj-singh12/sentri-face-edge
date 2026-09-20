@@ -14,6 +14,7 @@ The project goal is simple: keep the face system modular and controllable withou
 Release and trust documentation: [Privacy](PRIVACY.md), [Security](SECURITY.md),
 [Third-party notices](THIRD_PARTY_NOTICES.md), and [Changelog](CHANGELOG.md).
 New maintainers and coding agents should begin with the
+[complete project guide](docs/PROJECT_OVERVIEW.md), then use the
 [documentation map](docs/README.md) and [agent handoff](docs/AGENT_HANDOFF.md).
 
 ## Core Shape
