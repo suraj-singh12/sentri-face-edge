@@ -129,67 +129,45 @@ high   -> 3 workers, batch size 4, larger preprocessing batches
 For i3-class systems, the goal is not to max out the CPU. The goal is to keep
 the UI responsive while recognition happens in the background.
 
-For a source-development run:
+## macOS source development
 
-```bash
-python -m pip install -e ".[test]"
-sentriface-ui --runtime dev
-```
+See the concise [development-mode guide](docs/DEVELOPMENT_MODE.md) for the
+complete macOS source workflow and the current Windows status.
 
-For the simplest macOS source run from this checkout:
+Install Python 3.11 or 3.12. The repository launcher creates a local
+`.venv312`, installs or updates the development dependencies only when
+`pyproject.toml` changes, and uses the already-built React assets. Node.js is
+needed only to test or rebuild the frontend.
 
 ```bash
 ./run.sh
 ```
 
-The launcher creates/uses `.venv312`, installs missing dependencies, preserves
-the project-local `data/` directory, and starts the real ONNX runtime. On the
-first run, sign in, choose the matching model combination, and use the two
-**Browse for ONNX file** buttons. SentriFace calculates SHA-256 and creates the
-hash-bound calibration file automatically before recording the selected usage
-basis.
+This is the default synthetic development mode (`./run.sh dev`): it needs no
+ONNX weights and exercises the UI, accounts, encrypted storage, backups,
+recovery, and domain workflows with synthetic face results. Open
+`http://127.0.0.1:8765`, create the first local administrator, and stop it with
+`Control-C`.
 
-### Run the `pre-packaging` branch on macOS
+The source-development authority is exactly
+`~/Library/Application Support/SentriFace-Dev`. It owns its own SQLCipher
+database, Keychain identity, logs, backups, media, and model bundle. The
+installed product continues to use
+`~/Library/Application Support/SentriFace`; the launcher rejects that path as a
+source-development override.
 
-The source checkout supports Python 3.11 or 3.12. Install Git and a matching
-Python from python.org first; Node.js is needed only to rebuild the frontend.
-The commands below create an isolated environment and use a separate
-development data directory:
+### Real ONNX source development
 
-```bash
-git clone git@github.com:suraj-singh12/sentri-face-edge.git
-cd sentri-face-edge
-git switch pre-packaging
-
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e ".[test]"
-
-sentriface-ui \
-  --runtime dev \
-  --data-dir "$HOME/Library/Application Support/SentriFace-Dev"
-```
-
-Open `http://127.0.0.1:8765`, create the first local administrator account, and
-complete or explicitly defer disaster-recovery setup. macOS may ask for
-permission to use Keychain; SentriFace uses it to protect the installation
-master key. Stop the server with `Control-C`.
-
-`--runtime dev` is deliberately synthetic: it exercises the UI, accounts,
-roles, encrypted storage, backups, restore, and other workflows, but its face
-results are not real recognition results and require no model weights.
-
-To run the real ONNX engine with the existing repository-local
-`models/detector.onnx` and `models/recognizer.onnx`, activate the files once if
-`models/model-usage.json` or `models/calibration.json` is missing:
+Use the normal model-authority workflow; it never accepts loose model paths or
+downloads weights. On first use, either start `./run.sh onnx`, sign in, and use
+Model Setup to select local files, or install operator-supplied models with
+their SHA-256 declarations:
 
 ```bash
-DETECTOR="$PWD/models/detector.onnx"
-RECOGNIZER="$PWD/models/recognizer.onnx"
+DETECTOR="$PWD/models/det_500m.onnx"
+RECOGNIZER="$PWD/models/w600k_r50.onnx"
 
-sentriface-models \
-  --models-dir "$PWD/data/models" \
+./run.sh models \
   --detector-source "$DETECTOR" \
   --detector-sha256 "$(shasum -a 256 "$DETECTOR" | awk '{print $1}')" \
   --recognizer-source "$RECOGNIZER" \
@@ -197,27 +175,21 @@ sentriface-models \
   --usage-basis noncommercial-research \
   --authorized-by "$USER" \
   --accept-model-responsibility
+
+./run.sh onnx
 ```
 
-The setup command adopts those files into the server-owned bundle authority
-under the selected data directory. Then launch SentriFace from that authority:
+`models` copies and verifies the supplied files into the separate development
+model authority and records a hash-bound usage declaration and calibration.
+Subsequent ONNX launches require only `./run.sh onnx`. This macOS Git-checkout
+mode retains the loopback listener and in-process outbound socket guard, but it
+cannot provide the packaged App Sandbox boundary; packaged ONNX mode remains
+fail-closed on its OS-policy requirement.
 
-```bash
-sentriface-ui \
-  --runtime onnx \
-  --allow-unpackaged-source-onnx \
-  --data-dir "$PWD/data"
-```
-Open `http://127.0.0.1:8765` and sign in. If the one-time activation
-completed successfully, SentriFace loads the real repository-local models
-immediately. If Model Setup appears, verify the two filenames and rerun the
-activation command; calibration is optional.
-This explicit source-only mode keeps the IPv4 loopback listener and application
-outbound-socket guard, but a source-run Python interpreter does not provide the
-production macOS App Sandbox boundary. The flag works only on macOS from a Git
-checkout and is rejected by packaged builds. Production ONNX startup remains
-fail-closed unless the dedicated application carries
-`packaging/macos/SentriFace.entitlements`.
+To intentionally start over, run `./run.sh reset` and type the confirmation.
+It removes only `~/Library/Application Support/SentriFace-Dev`, never product
+data. Set `SENTRIFACE_DEV_DATA_DIR` for another development location; it is
+still refused if it resolves to the product data directory.
 
 To run the available automated checks:
 

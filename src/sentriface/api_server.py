@@ -71,7 +71,7 @@ from sentriface.integrity_recovery_service import (
     RecoveryPreparationRefused,
     RecoveryTokenError,
 )
-from sentriface.logging_config import sanitize_log_details
+from sentriface.logging_config import redact_log_text, sanitize_log_details
 from sentriface.licensing import LicenseAuthority
 from sentriface.licensing.authority import packaged_windows_license_enforced
 from sentriface.paths import default_data_dir, default_log_dir
@@ -528,12 +528,17 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             return False
         try:
             for path in self._model_files():
-                stat = path.stat()
+                try:
+                    stat = path.stat()
+                except OSError as exc:
+                    raise OSError(
+                        f"Model setup file is missing or unreadable: {path.name}"
+                    ) from exc
                 if self.model_fingerprints.get(str(path.resolve())) != (stat.st_size, stat.st_mtime_ns):
                     raise OSError(f"Model setup file changed or was replaced: {path.name}")
         except OSError as exc:
             self.model_ready = False
-            self.model_error = str(exc)
+            self.model_error = redact_log_text(str(exc))
             self.log_event("model-setup-required", error=self.model_error)
             return False
         return True
@@ -3101,7 +3106,7 @@ def create_server(
                 engine = build_onnx_engine(config)
             except Exception as exc:
                 model_ready = False
-                model_error = str(exc).strip("'") or "Recognition models are missing or invalid"
+                model_error = redact_log_text(str(exc).strip("'")) or "Recognition models are missing or invalid"
                 engine = build_dev_engine(data_dir, config)
         config = engine.config
         engine.initialize()

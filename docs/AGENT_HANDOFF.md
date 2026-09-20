@@ -69,16 +69,18 @@ must not be edited by hand.
 
 ## Local development
 
-Use Python 3.11 or 3.12. For a fast synthetic development run:
+Use Python 3.11 or 3.12. On macOS, use the source launcher for a fast,
+product-isolated synthetic development run:
 
 ```bash
-python -m pip install -e ".[test]"
-sentriface-ui --runtime dev --data-dir data
+./run.sh
 ```
 
 Open `http://127.0.0.1:8765`. The development runtime exercises application
-workflows but produces synthetic face results. Real ONNX source setup and model
-licensing steps are documented in the root `README.md` and `models/MODELS.md`.
+workflows but produces synthetic face results. It uses
+`~/Library/Application Support/SentriFace-Dev`, never the installed-product
+authority. Real ONNX source setup and model licensing steps are documented in
+the root `README.md` and `models/MODELS.md`.
 
 The normal verification gate is:
 

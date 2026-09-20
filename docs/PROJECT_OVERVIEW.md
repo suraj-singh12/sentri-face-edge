@@ -797,12 +797,17 @@ SentriFace supports two conceptually different runtimes.
 - `--runtime onnx` uses locally activated production models and enforces the
   applicable offline security boundary.
 
-Typical source setup:
+On macOS, the typical product-isolated source setup is:
 
 ```bash
-python -m pip install -e ".[test]"
-sentriface-ui --runtime dev
+./run.sh       # synthetic development runtime
+./run.sh onnx  # activated local ONNX bundle
 ```
+
+The launcher keeps source state under
+`~/Library/Application Support/SentriFace-Dev`; it does not use the installed
+product's `~/Library/Application Support/SentriFace` authority. See the root
+README for model onboarding and reset instructions.
 
 Primary verification commands:
 

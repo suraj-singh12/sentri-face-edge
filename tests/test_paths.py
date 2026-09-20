@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sentriface.paths import default_data_dir, default_model_dir
+from sentriface.paths import default_data_dir, default_model_dir, source_development_data_dir
 
 
 class ApplicationPathsTest(unittest.TestCase):
@@ -41,6 +41,17 @@ class ApplicationPathsTest(unittest.TestCase):
                 default_data_dir(),
                 Path("/Users/tester/Library/Application Support/SentriFace"),
             )
+
+    def test_macos_source_development_path_is_not_product_data(self) -> None:
+        with (
+            patch("sentriface.paths.sys.platform", "darwin"),
+            patch("sentriface.paths.Path.home", return_value=Path("/Users/tester")),
+        ):
+            self.assertEqual(
+                source_development_data_dir(),
+                Path("/Users/tester/Library/Application Support/SentriFace-Dev"),
+            )
+            self.assertNotEqual(source_development_data_dir(), default_data_dir())
 
 
 if __name__ == "__main__":

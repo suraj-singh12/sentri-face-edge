@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 APP_DIR_NAME = "SentriFace"
+DEVELOPMENT_APP_DIR_NAME = "SentriFace-Dev"
 
 
 def default_data_dir() -> Path:
@@ -28,6 +29,17 @@ def default_model_dir() -> Path:
     if override:
         return Path(override).expanduser()
     return default_data_dir() / "models"
+
+
+def source_development_data_dir() -> Path:
+    """Return the deliberate source-development authority, never product state."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+        return base / DEVELOPMENT_APP_DIR_NAME
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / DEVELOPMENT_APP_DIR_NAME
+    base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    return base / "sentriface-dev"
 
 
 def default_log_dir(data_dir: Path | None = None) -> Path:
