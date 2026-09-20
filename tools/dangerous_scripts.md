@@ -1,37 +1,46 @@
-# Destructive Windows support tools
+# Destructive Windows support tool
 
-These utilities are for disposable Windows test machines. Deleting a SentriFace
-storage credential can make its encrypted database, media, logs, and backups
-permanently unreadable. Create and verify any required exported backup before
-using them. Normal application uninstall is data-preserving and does not require
-these tools.
+SentriFace has one supported complete-machine sanitization path:
 
-## `cleanup_sentriface_test_creds.ps1`
+```powershell
+python tools\wipe_clean_this_machine_installation_and_data.py
+```
 
-Removes only test-scoped Credential Manager entries matching
-`<test-identifier>@SentriFace Edge storage`. It explicitly preserves the
-production credential named `SentriFace Edge storage` and skips unrecognized
-entries. Use it after test runs and before testing a clean installed instance.
+That command is inventory-only. It reports exact current installation paths,
+registry state, firewall state, and Credential Manager entries without printing
+credential values or changing the machine.
 
-## `cleanup_sentriface_all_creds.ps1`
+On a disposable release-test machine, deliberate removal is:
 
-Removes every Credential Manager entry whose listing contains `SentriFace`,
-including the production storage credential. Despite the script's historical
-banner wording, this is an all-credential cleanup. Run it only on a disposable
-machine after confirming that no encrypted data must remain accessible.
+```powershell
+python tools\wipe_clean_this_machine_installation_and_data.py --execute
+```
 
-## `wipe_clean_this_machine_installation_and_data.py`
+Execution requires administrator rights and the exact interactive phrase
+`WIPE SENTRIFACE`. It requests graceful shutdown, uses the registered
+uninstaller when available, and removes only resources whose ownership is
+provable from fixed SentriFace identifiers:
 
-Performs the supported full machine wipe for the current Windows user. It
-requires administrator rights and the exact confirmation phrase
-`WIPE SENTRIFACE`. It requests graceful shutdown, runs the installed uninstaller
-when present, removes the production storage credential and license registry
-state, deletes known application/data/model/backup/recovery/log locations,
-removes shortcuts and development entry points, and removes the SentriFace-owned
-firewall rule. It rejects non-Windows execution and does not accept arbitrary
-paths as deletion targets.
+- the exact Program Files installation and shortcuts;
+- the exact LocalAppData application authority and exact legacy ProgramData
+  preview directory;
+- the stable Inno Setup registration;
+- `HKCU\Software\SentriFaceEdge`;
+- the exact verified outbound firewall rule;
+- storage and disaster-recovery credentials whose account hash exactly matches
+  the normal `%LOCALAPPDATA%\SentriFace` installation;
+- exact SentriFace development entry points and installation metadata.
 
-For complete cleanup, prefer the Python wipe utility by itself because it
-already removes the production credential. The PowerShell scripts are narrower
-credential-only helpers; running an additional all-credential cleanup is
-normally redundant.
+The utility re-inventories after deletion and exits non-zero if any resource it
+promised to remove remains.
+
+Credential Manager entries for custom data roots, historical tests, or legacy
+naming cannot be proven to belong to the default installation from their name
+alone. They are reported as `AMBIGUOUS` and are never deleted automatically.
+Likewise, a firewall rule with the product name but an unexpected executable or
+properties is preserved for manual review. Do not use wildcard credential or
+registry deletion as a substitute.
+
+Removing the exact storage credential makes the matching encrypted database,
+media, logs, and backups permanently unreadable. Normal application uninstall
+is intentionally data-preserving and does not run this sanitizer.

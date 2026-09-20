@@ -15,6 +15,7 @@ from sentriface.backup_service import BackupService
 from sentriface.offline_guard import OfflineViolationError, install_offline_guard, require_local_path
 from sentriface.recovery import RECOVERY_KIT_NAME, RecoveryError, RecoveryService, recover_master_key
 from sentriface.secure_files import ProtectedFileError, read_protected_bytes, write_protected_bytes
+from sentriface import secure_storage
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 from sentriface.storage.sqlite_store import SCHEMA_VERSION, SQLiteIdentityStore
 
@@ -76,6 +77,7 @@ class V1SecurityTest(unittest.TestCase):
             first.close()
             worker.join(timeout=2)
             self.assertTrue(opened.is_set())
+            self.assertEqual(secure_storage._DATABASE_LOCKS, {})
 
     def test_recovery_code_unlocks_external_kit_and_automatic_backup(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

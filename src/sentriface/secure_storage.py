@@ -13,7 +13,15 @@ from typing import Any
 
 KEYRING_SERVICE = "SentriFace Edge storage"
 SQLITE_HEADER = b"SQLite format 3\x00"
-_DATABASE_LOCKS: dict[str, threading.RLock] = {}
+class _DatabaseLockEntry:
+    """Reference-count one serialized SQLCipher path without retaining dead paths."""
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.users = 0
+
+
+_DATABASE_LOCKS: dict[str, _DatabaseLockEntry] = {}
 _DATABASE_LOCKS_GUARD = threading.Lock()
 
 
@@ -94,8 +102,7 @@ def connect_database(
         if row_factory:
             connection.row_factory = sqlite3.Row
         return connection
-    database_lock = _database_lock(path)
-    database_lock.acquire()
+    database_lock_key, database_lock_entry = _acquire_database_lock(path)
     connection = None
     try:
         driver = _sqlcipher_driver()
@@ -103,29 +110,46 @@ def connect_database(
         _apply_key(connection, key)
         if row_factory:
             connection.row_factory = driver.Row
-        return _SerializedConnection(connection, database_lock)
+        return _SerializedConnection(connection, database_lock_key, database_lock_entry)
     except Exception:
         if connection is not None:
             try:
                 connection.close()
             except Exception:
                 pass
-        database_lock.release()
+        _release_database_lock(database_lock_key, database_lock_entry)
         raise
 
 
-def _database_lock(path: Path) -> threading.RLock:
+def _acquire_database_lock(path: Path) -> tuple[str, _DatabaseLockEntry]:
     resolved = str(path.resolve())
     with _DATABASE_LOCKS_GUARD:
-        return _DATABASE_LOCKS.setdefault(resolved, threading.RLock())
+        entry = _DATABASE_LOCKS.setdefault(resolved, _DatabaseLockEntry())
+        entry.users += 1
+    entry.lock.acquire()
+    return resolved, entry
+
+
+def _release_database_lock(resolved: str, entry: _DatabaseLockEntry) -> None:
+    entry.lock.release()
+    with _DATABASE_LOCKS_GUARD:
+        entry.users -= 1
+        if entry.users == 0 and _DATABASE_LOCKS.get(resolved) is entry:
+            del _DATABASE_LOCKS[resolved]
 
 
 class _SerializedConnection:
     """Hold one per-database lock for the complete SQLCipher connection lifetime."""
 
-    def __init__(self, connection: Any, lock: threading.RLock) -> None:
+    def __init__(
+        self,
+        connection: Any,
+        lock_key: str,
+        lock_entry: _DatabaseLockEntry,
+    ) -> None:
         object.__setattr__(self, "_connection", connection)
-        object.__setattr__(self, "_lock", lock)
+        object.__setattr__(self, "_lock_key", lock_key)
+        object.__setattr__(self, "_lock_entry", lock_entry)
         object.__setattr__(self, "_closed", False)
 
     def __getattr__(self, name: str) -> Any:
@@ -152,7 +176,7 @@ class _SerializedConnection:
             self._connection.close()
         finally:
             object.__setattr__(self, "_closed", True)
-            self._lock.release()
+            _release_database_lock(self._lock_key, self._lock_entry)
 
 
 def ensure_encrypted_database(path: Path, key: bytes) -> bool:

@@ -1,6 +1,57 @@
 # P14 release acceptance
 
-## Current result — Windows x64 host acceptance (2026-08-17)
+## Current result — hardened native-AMD64 2.0.0 candidate (2026-09-20)
+
+The hardening candidate on `release-windows-x64-hardening` passed the complete
+source/build/runtime gate. The 62,831,686-byte
+`SentriFaceEdge-2.0.0-x64-unsigned-rc.exe` has SHA-256
+`11a8236161b32222e059fef07544e49396105ac7ee7753f75adcee8a7f41fc84`.
+It is an unsigned, untagged release-candidate artifact and is not production
+accepted.
+
+- 517 backend tests, 106 subtests, and 94 frontend tests passed; 45 skips were
+  environment-classified. The exact frontend lock audited with zero known
+  vulnerabilities.
+- The release environment matched `requirements-release.lock`, dependency
+  consistency passed, and the bundle-derived dependency/license inventory was
+  emitted separately from build tools.
+- Inno Setup 7.1 generated a native x64 setup executable. The final inspector
+  parsed the installer plus every packaged `.exe`, `.dll`, and `.pyd`: the
+  installer and all 52 runtime-native files were AMD64 (`0x8664`), with no
+  I386 or ARM64 binary accepted.
+- The packaged runtime created and cleaned an exact test-owned Windows vault
+  credential and isolated data root; exercised encrypted SQLCipher storage,
+  protected-file round trip, OpenCV, ONNX Runtime CPU execution, loopback HTTP
+  and compiled frontend authorization, clean shutdown, and instance-lock
+  release; and opened the externally supplied detector and recognizer ONNX
+  sessions successfully.
+- Read-only before/after machine inventory was identical for the existing
+  13-file, 177,569,343-byte LocalAppData authority and its latest-write time.
+  The one existing owned storage credential and HKCU product registry remained;
+  no installer registration, firewall rule, or self-test temporary directory
+  was left behind.
+- The isolated default bootstrap path previously completed from the exact lock.
+  A later validation retry hit transient package-host read timeouts, so the
+  final AMD64 artifact was produced with `-UseExistingEnvironment` after that
+  environment passed the same exact-lock and dependency-consistency gates. Both
+  paths always reinstall the current repository source before testing/building.
+
+This machine contains real SentriFace data and an existing production storage
+credential. Therefore the destructive sanitizer, installer execution, repair,
+upgrade, downgrade, uninstall, and reinstall were not run against it. Historical
+lifecycle evidence below remains valid for the earlier artifact, but it does not
+substitute for a disposable clean-VM lifecycle run of this final candidate.
+
+Current production blockers are: a clean exact `v2.0.0` source tag; production
+Authenticode signing and trusted timestamp verification for both executable and
+installer; a disposable-VM clean install/repair/upgrade/downgrade/uninstall/
+reinstall/rollback matrix for the final signed artifact; full packaged model
+onboarding/activation/rollback rather than ONNX session-only acceptance; manual
+resolution of dependency records whose upstream metadata lacks a concise license
+identifier; confirmation of an appropriate Inno Setup license for commercial
+distribution if applicable; and a production `SFE2` token if production-token
+acceptance is required.
+## Historical result — Windows x64 host acceptance (2026-08-17)
 
 P14 source implementation and unsigned Windows x64 development acceptance are complete on a real Windows 11 x64 host. Standalone, installer, clean install, packaged runtime, unlicensed recovery, licensing refusal cases, model onboarding, firewall enforcement, repair, upgrade, downgrade refusal, uninstall/reinstall, and failed-install rollback passed.
 

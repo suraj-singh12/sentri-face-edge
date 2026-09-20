@@ -3192,10 +3192,47 @@ def main() -> int:
         action="store_true",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--release-self-test",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--self-test-report",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--self-test-detector",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--self-test-recognizer",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
 
     if args.request_shutdown:
         return 0 if WindowsShutdownSignal.request(args.data_dir) else 3
+    if args.release_self_test:
+        if args.self_test_report is None:
+            parser.error("--self-test-report is required with --release-self-test")
+        from sentriface.release_self_test import run_release_self_test
+
+        try:
+            run_release_self_test(
+                args.data_dir,
+                args.self_test_report,
+                detector_model=args.self_test_detector,
+                recognizer_model=args.self_test_recognizer,
+            )
+        except Exception as exc:
+            print(f"SentriFace packaged runtime self-test failed: {exc}")
+            return 4
+        print("SentriFace packaged runtime self-test passed")
+        return 0
 
     from sentriface.logging_config import setup_logging
 

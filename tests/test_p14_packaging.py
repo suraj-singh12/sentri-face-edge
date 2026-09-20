@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,10 +9,19 @@ from sentriface import __version__
 from sentriface._version import APP_VERSION
 from sentriface.licensing.public_keys import production_public_keys
 from sentriface.runtime_hardening import WindowsShutdownSignal
-from scripts.inspect_release_artifacts import inspect
+from scripts.inspect_release_artifacts import inspect, inspect_distribution
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _write_pe(path: Path, machine: int = 0x8664) -> None:
+    payload = bytearray(70)
+    payload[:2] = b"MZ"
+    struct.pack_into("<I", payload, 0x3C, 64)
+    payload[64:68] = b"PE\x00\x00"
+    struct.pack_into("<H", payload, 68, machine)
+    path.write_bytes(payload)
 
 
 class P14PackagingContractTest(unittest.TestCase):
@@ -46,6 +56,24 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertIn("procedure deinitializesetup", folded)
         self.assertIn("previousinstallation", folded)
 
+    def test_one_command_build_uses_locked_isolated_evidence_pipeline(self) -> None:
+        build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
+        self.assertIn("requirements-release.lock", build)
+        self.assertIn("frontend\\package-lock.json", build)
+        self.assertIn("npm --prefix frontend ci", build)
+        self.assertIn("scripts\\verify_release_lock.py", build)
+        self.assertIn("scripts\\inspect_release_artifacts.py", build)
+        self.assertIn("scripts\\windows_packaged_smoke.py", build)
+        self.assertIn("scripts\\write_dependency_inventory.py", build)
+        self.assertIn("dist\\windows-x64\\$Version", build)
+        self.assertIn("$ProductionRelease", build)
+        self.assertIn("$ExpectedTag -notin $TagsAtHead", build)
+        self.assertNotIn("installer_output", build)
+        self.assertIn("Inno Setup 7 or later", build)
+        self.assertIn("Install current SentriFace source", build)
+        self.assertIn("-p no:cacheprovider", build)
+        self.assertIn("--installer", build)
+
     def test_build_excludes_models_and_requires_native_runtime_components(self) -> None:
         build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
         self.assertIn("--mode=standalone", build)
@@ -54,18 +82,58 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertNotIn("packaging\\runtime\\core", build)
         self.assertNotIn("--include-data-file", build)
 
+    def test_installer_is_native_amd64_and_excludes_arm64_hosts(self) -> None:
+        installer_source = (ROOT / "installer" / "SentriFaceEdge.iss").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("SetupArchitecture=x64", installer_source)
+        self.assertIn("ArchitecturesAllowed=x64os", installer_source)
+        self.assertIn("ArchitecturesInstallIn64BitMode=x64os", installer_source)
+        self.assertNotIn("x64compatible", installer_source)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            distribution = root / "distribution"
+            distribution.mkdir()
+            for name in (
+                "SentriFaceEdge.exe",
+                "sentriface.pyd",
+                "onnxruntime.dll",
+                "cv2.pyd",
+                "sqlcipher3.pyd",
+            ):
+                _write_pe(distribution / name)
+            setup = root / "setup.exe"
+            _write_pe(setup)
+            report = inspect_distribution(
+                distribution,
+                APP_VERSION,
+                installer=setup,
+            )
+            self.assertEqual(report["status"], "PASS")
+            self.assertEqual(report["installer"]["architecture"], "AMD64")
+            _write_pe(setup, 0x014C)
+            report = inspect_distribution(
+                distribution,
+                APP_VERSION,
+                installer=setup,
+            )
+            self.assertTrue(
+                any("installer architecture I386" in error for error in report["errors"])
+            )
+
     def test_firewall_install_is_exact_and_self_verifying(self) -> None:
         script = (ROOT / "packaging" / "windows" / "Install-OfflinePolicy.ps1").read_text(encoding="utf-8")
-        for text in ("-Direction Outbound", "-Program $resolved", "-Action Block", "PolicyStore ActiveStore", "$installedProgram -ine $resolved"):
+        for text in ('Direction = "Outbound"', 'Program = $resolved', 'Action = "Block"', "PolicyStore ActiveStore", "$installedProgram -ine $resolved"):
             self.assertIn(text, script)
         installer = (ROOT / "installer" / "SentriFaceEdge.iss").read_text(encoding="utf-8")
         self.assertIn("ExtractTemporaryFile('Install-OfflinePolicy.ps1')", installer)
         self.assertIn("function PrepareToInstall", installer)
-        self.assertIn("Result := 'SentriFace offline firewall setup or verification failed.'", installer)
+        self.assertIn("SentriFace offline firewall setup or verification failed. Diagnostic log:", installer)
         self.assertNotIn("ssPostInstall then InstallOfflinePolicy", installer)
 
         self.assertIn('Flags: dontcopy', installer)
         self.assertNotIn('-File ""', installer.split('[Code]', 1)[1])
+
     def test_public_trust_root_contains_only_ed25519_public_bytes(self) -> None:
         keys = production_public_keys()
         self.assertEqual(set(keys), {"prod-2026-01"})
@@ -78,8 +146,11 @@ class P14PackagingContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             distribution = Path(temporary)
             for name in ("SentriFaceEdge.exe", "sentriface.pyd", "onnxruntime.dll", "cv2.pyd", "sqlcipher3.pyd"):
-                (distribution / name).write_bytes(b"safe")
+                _write_pe(distribution / name)
             self.assertEqual(inspect(distribution, APP_VERSION), [])
+            _write_pe(distribution / "unexpected-x86.dll", 0x014C)
+            self.assertTrue(any("unexpected Windows PE architecture I386" in item for item in inspect(distribution, APP_VERSION)))
+            (distribution / "unexpected-x86.dll").unlink()
             (distribution / "detector.onnx").write_bytes(b"weights")
             self.assertTrue(any("forbidden release content" in item for item in inspect(distribution, APP_VERSION)))
             (distribution / "detector.onnx").unlink()

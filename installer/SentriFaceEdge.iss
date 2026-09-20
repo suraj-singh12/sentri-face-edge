@@ -20,8 +20,9 @@ DefaultGroupName=SentriFace Edge
 SetupIconFile=..\packaging\windows\SentriFace.ico
 UninstallDisplayIcon={app}\{#MyExeName}
 PrivilegesRequired=admin
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+SetupArchitecture=x64
+ArchitecturesAllowed=x64os
+ArchitecturesInstallIn64BitMode=x64os
 OutputDir=..\installer_output
 OutputBaseFilename=SentriFaceEdge-{#MyAppVersion}-x64
 Compression=lzma2
@@ -55,6 +56,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile
 var
   PreviousInstallation: Boolean;
   SetupCompleted: Boolean;
+  OfflinePolicyLog: String;
 
 function NextVersionPart(var Version: String): Integer;
 var
@@ -122,11 +124,13 @@ var
   ResultCode: Integer;
 begin
   ExtractTemporaryFile('Install-OfflinePolicy.ps1');
+  OfflinePolicyLog := ExpandConstant('{tmp}\SentriFaceEdge-OfflinePolicy.log');
   Result := Exec(
     ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
     '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
       ExpandConstant('{tmp}\Install-OfflinePolicy.ps1') + '" -ExecutablePath "' +
-      ExpandConstant('{app}\{#MyExeName}') + '"',
+      ExpandConstant('{app}\{#MyExeName}') + '" -DiagnosticLogPath "' +
+      OfflinePolicyLog + '"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode
   ) and (ResultCode = 0);
 end;
@@ -137,7 +141,8 @@ begin
   if InstallOfflinePolicy() then
     Result := ''
   else
-    Result := 'SentriFace offline firewall setup or verification failed.';
+    Result := 'SentriFace offline firewall setup or verification failed. Diagnostic log: ' +
+      OfflinePolicyLog;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

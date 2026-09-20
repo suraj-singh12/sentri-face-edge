@@ -29,9 +29,9 @@ class OfflinePackagingTest(unittest.TestCase):
         script = (
             ROOT / "packaging" / "windows" / "Install-OfflinePolicy.ps1"
         ).read_text(encoding="utf-8")
-        self.assertIn("-Direction Outbound", script)
-        self.assertIn("-Program $resolved", script)
-        self.assertIn("-Action Block", script)
+        self.assertIn('Direction = "Outbound"', script)
+        self.assertIn("Program = $resolved", script)
+        self.assertIn('Action = "Block"', script)
         self.assertIn("Refusing to block a shared Python interpreter", script)
         self.assertIn("PolicyStore ActiveStore", script)
         self.assertIn("$installedProgram -ine $resolved", script)
