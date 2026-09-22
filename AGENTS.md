@@ -53,3 +53,19 @@ npm --prefix frontend run build
 Migration work must test fresh databases, every supported upgrade path, rollback on failure, repeat startup/idempotence, foreign keys, backup-before-migration, and preservation of archived/tombstoned/merged history. Graph work must test evidence independence, canonical resolution, event participant deduplication, no self-links, atomic multi-face finalisation, rebuild equivalence, and offline operation.
 
 Do not edit generated `src/sentriface/ui_static/` assets by hand; rebuild them from `frontend/` only when a UI phase requires it.
+
+## Windows release boundary
+
+For the current 2.0.0 release state, read `docs/AGENT_HANDOFF.md` and
+`docs/p14/P14_RELEASE_ACCEPTANCE.md` before changing release tooling or claiming
+acceptance. The unsigned pre-tag installer is an engineering candidate. Historical
+installer lifecycle results belong to an earlier artifact and do not verify the
+current one. A canonical release requires the exact `rc-v<version>` or
+`release-v<version>` tag, verified executable and installer signatures, and the
+current artifact's lifecycle and model acceptance on a disposable Windows host.
+
+Windows source development uses `run.ps1` and `%LOCALAPPDATA%\SentriFace-Dev`.
+Preserve its separation from `%LOCALAPPDATA%\SentriFace` and the exact-scope
+development credential reset. Treat `tools/wipe_clean_this_machine_installation_and_data.py`
+as destructive. Never execute it on a machine with required product data; use
+a disposable fixture for release acceptance.

@@ -945,9 +945,12 @@ intelligence reads, Person Graph, World v2 UI, integrity/recovery, portable
 backup/restore, runtime hardening, local model authority, and offline Windows
 licensing/packaging are present.
 
-P10 through P13 are complete and frozen. P14 passed unsigned Windows 11 x64
-acceptance. Production release acceptance still requires a clean build from the
-exact intended release tag and trusted, timestamped Authenticode signatures.
+P10 through P13 are complete and frozen. Historical P14 unsigned Windows 11 x64
+installer lifecycle acceptance passed for an earlier artifact. The current 2.0.0
+unsigned pre-tag candidate passed source, build, inspection, and packaged runtime
+checks, but its installer and packaged model lifecycle have not run on a disposable
+Windows host. Production release acceptance also requires verified signatures
+and a clean build from exact `rc-v2.0.0` or `release-v2.0.0` tagged source.
 The detailed live status belongs in [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md)
 and [`p14/P14_RELEASE_ACCEPTANCE.md`](p14/P14_RELEASE_ACCEPTANCE.md); this section
 should remain a summary rather than a second release ledger.

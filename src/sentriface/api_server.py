@@ -3185,8 +3185,9 @@ def main() -> int:
         "--allow-unpackaged-source-onnx",
         action="store_true",
         help=(
-            "Allow real ONNX inference from a macOS Git checkout without the "
-            "packaged App Sandbox boundary; unavailable in packaged builds"
+            "Allow real ONNX inference from a Windows or macOS Git checkout "
+            "with the application socket guard but without the packaged OS-policy "
+            "boundary; unavailable in packaged builds"
         ),
     )
     parser.add_argument("--quiet-debug", action="store_true", help="Disable verbose UI debug logs")
@@ -3247,12 +3248,12 @@ def main() -> int:
     try:
         os_network_policy = _startup_network_policy(
             args.runtime,
-            allow_unpacked_macos_source=args.allow_unpackaged_source_onnx,
+            allow_unpacked_source=args.allow_unpackaged_source_onnx,
         )
         if args.allow_unpackaged_source_onnx and os_network_policy is None:
             print(
-                "WARNING: macOS source ONNX mode uses the loopback listener and "
-                "application socket guard, but not the packaged App Sandbox boundary."
+                "WARNING: source ONNX mode uses the loopback listener and "
+                "application socket guard, but not the packaged OS-policy boundary."
             )
         require_local_path(args.data_dir)
         startup_data_dir = args.data_dir.expanduser().absolute()
@@ -3337,20 +3338,20 @@ def main() -> int:
 def _startup_network_policy(
     runtime: str,
     *,
-    allow_unpacked_macos_source: bool = False,
+    allow_unpacked_source: bool = False,
     source_root: Path | None = None,
 ) -> OsNetworkPolicyStatus | None:
     if runtime != "onnx":
-        if allow_unpacked_macos_source:
+        if allow_unpacked_source:
             raise ValueError(
                 "--allow-unpackaged-source-onnx requires --runtime onnx"
             )
         return None
-    if not allow_unpacked_macos_source:
+    if not allow_unpacked_source:
         return require_os_network_policy()
-    if sys.platform != "darwin":
+    if sys.platform not in {"darwin", "win32"}:
         raise ValueError(
-            "--allow-unpackaged-source-onnx is available only on macOS"
+            "--allow-unpackaged-source-onnx is available only on Windows and macOS"
         )
     checkout = source_root or Path(__file__).resolve().parents[2]
     if getattr(sys, "frozen", False) or not (checkout / ".git").exists():

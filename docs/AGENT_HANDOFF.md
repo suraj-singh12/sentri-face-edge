@@ -1,7 +1,7 @@
 # SentriFace Edge agent handoff
 
 This is the shortest safe path for an engineer or coding agent taking over the
-`pre-packaging` branch. It is an orientation guide, not a replacement for the
+current 2.0.0 release work. It is an orientation guide, not a replacement for the
 normative rules in the repository-root `AGENTS.md`.
 
 ## Current checkpoint
@@ -10,10 +10,20 @@ normative rules in the repository-root `AGENTS.md`.
 - Database schema: v28 (`SQLiteIdentityStore`).
 - P0 through P14 source implementation is complete.
 - P10 through P13 are frozen.
-- Unsigned Windows 11 x64 packaging acceptance passed.
-- Production release acceptance is still incomplete: rebuild from a clean exact
-  `v2.0.0` tag, re-run the release gates, then Authenticode-sign and timestamp
-  the executable and installer.
+- Windows source mode and the unsigned pre-tag Windows 11 AMD64 build gates pass.
+  The current engineering installer and evidence are under
+  `dist/windows-x64/2.0.0/`; see `docs/p14/P14_RELEASE_ACCEPTANCE.md` for its
+  checksum and exact acceptance boundary.
+- A controlled non-exportable signing identity exists, but installing its public
+  certificate into CurrentUser Root and TrustedPublisher was not authorized.
+  Production release acceptance therefore still requires explicit trust-store
+  approval, a verified signed candidate, the disposable-machine installer/model
+  lifecycle, and a final clean build from exact tag `rc-v2.0.0` or
+  `release-v2.0.0`.
+- The current artifact has not passed installed model onboarding, activation,
+  restart persistence, rollback, or recognition with representative face images.
+  Source-mode model lifecycle and packaged external ONNX sessions passed; the
+  earlier installer lifecycle in the P14 record applies to a different artifact.
 - The runtime is offline and loopback-only. Do not weaken the application socket
   guard, OS network-policy checks, or localhost request validation.
 
@@ -82,6 +92,17 @@ workflows but produces synthetic face results. It uses
 authority. Real ONNX source setup and model licensing steps are documented in
 the root `README.md` and `models/MODELS.md`.
 
+On Windows, use the equivalent PowerShell launcher:
+
+```powershell
+.\run.ps1
+```
+
+It uses `%LOCALAPPDATA%\SentriFace-Dev` and a repository-local `.venv312`; it
+refuses the installed-product authority. See `docs/DEVELOPMENT_MODE.md` for real
+ONNX setup, the execution-policy fallback, and the confirmed development-only
+reset.
+
 The normal verification gate is:
 
 ```bash
@@ -97,7 +118,8 @@ in `AGENTS.md`, the phase acceptance documents, and `packaging/README.md`.
 ## Release and support boundary
 
 - `src/sentriface/_version.py::APP_VERSION` is the release version authority.
-- Production release mode requires a clean tree at exact tag `v<version>`.
+- Production release mode requires a clean tree at exact tag `rc-v<version>` or
+  `release-v<version>`.
 - Model weights and private signing/license keys must never enter release artifacts.
 - Windows uninstall intentionally preserves per-user data, models, backups,
   recovery material, logs, license state, and the OS-vault key.

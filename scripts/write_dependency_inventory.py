@@ -38,15 +38,18 @@ def _compiled_top_level_modules(build_dir: Path, distribution: Path) -> set[str]
 
 def _package_record(distribution: importlib.metadata.Distribution) -> dict[str, str]:
     metadata = distribution.metadata
-    license_expression = (
-        metadata.get("License-Expression")
-        or metadata.get("License")
-        or "UNKNOWN"
-    )
+    license_expression = metadata.get("License-Expression") or metadata.get("License")
+    if not str(license_expression or "").strip():
+        classifiers = {
+            str(value).rsplit(" :: ", 1)[-1].strip()
+            for value in metadata.get_all("Classifier", [])
+            if str(value).startswith("License :: ")
+        }
+        license_expression = " OR ".join(sorted(classifiers)) or "UNKNOWN"
     return {
         "name": metadata.get("Name") or "UNKNOWN",
         "version": distribution.version,
-        "license": license_expression[:500],
+        "license": str(license_expression)[:500],
     }
 
 

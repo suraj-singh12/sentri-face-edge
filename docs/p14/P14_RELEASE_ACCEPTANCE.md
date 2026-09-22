@@ -1,56 +1,88 @@
 # P14 release acceptance
 
-## Current result — hardened native-AMD64 2.0.0 candidate (2026-09-20)
+## Current result — Windows source mode and pre-tag RC hardening (2026-09-21)
 
-The hardening candidate on `release-windows-x64-hardening` passed the complete
-source/build/runtime gate. The 62,831,686-byte
-`SentriFaceEdge-2.0.0-x64-unsigned-rc.exe` has SHA-256
-`11a8236161b32222e059fef07544e49396105ac7ee7753f75adcee8a7f41fc84`.
-It is an unsigned, untagged release-candidate artifact and is not production
-accepted.
+The `release-v2.0.0-hardening` worktree now has an isolated Windows source
+launcher, a narrowly scoped development reset, a controlled self-signing path,
+and a repeatable locked AMD64 build. The final 62,976,029-byte engineering
+candidate is
+`SentriFaceEdge-2.0.0-x64-unsigned-pretag-rc.exe`, with SHA-256
+`ef388d7ed3aa8dc55beaaa75505c870e56a976cb6e0c71eb8e24de831c812ab8`.
+It is deliberately labeled unsigned and pre-tag; it is not the canonical
+`rc-v2.0.0` artifact and is not production accepted.
 
-- 517 backend tests, 106 subtests, and 94 frontend tests passed; 45 skips were
-  environment-classified. The exact frontend lock audited with zero known
-  vulnerabilities.
+- The Windows launcher uses a repository-local Python 3.11/3.12 environment and
+  `%LOCALAPPDATA%\SentriFace-Dev`. It refuses the production data root and
+  overlapping paths. Its reset removes only the default development root and
+  the two exact hash-derived development vault identities after deliberate
+  confirmation; it refuses custom paths and reparse points.
+- Fresh synthetic startup, compiled-frontend authorization, loopback-only HTTP,
+  second-instance refusal, graceful shutdown, immediate restart, and complete
+  development reset passed. The post-reset machine inventory contained no
+  development credential, data root, process, or test directory.
+- Real local detector and recognizer ONNX files were onboarded in source mode.
+  Both sessions selected `CPUExecutionProvider`; prepare, activate, restart
+  persistence, explicit rollback, and post-rollback restart persistence passed.
+  The source-only ONNX escape hatch remains restricted to Windows/macOS Git
+  checkouts and is refused by frozen/packaged runtimes.
+- The final isolated build reran 529 backend tests, 106 subtests, and 94 frontend
+  tests: all passed, with 45 environment-classified backend skips. The exact
+  frontend lock audited with zero known vulnerabilities and the production Vite
+  build completed; its large-chunk message remains an optimization advisory.
 - The release environment matched `requirements-release.lock`, dependency
   consistency passed, and the bundle-derived dependency/license inventory was
-  emitted separately from build tools.
-- Inno Setup 7.1 generated a native x64 setup executable. The final inspector
-  parsed the installer plus every packaged `.exe`, `.dll`, and `.pyd`: the
-  installer and all 52 runtime-native files were AMD64 (`0x8664`), with no
-  I386 or ARM64 binary accepted.
-- The packaged runtime created and cleaned an exact test-owned Windows vault
-  credential and isolated data root; exercised encrypted SQLCipher storage,
-  protected-file round trip, OpenCV, ONNX Runtime CPU execution, loopback HTTP
-  and compiled frontend authorization, clean shutdown, and instance-lock
-  release; and opened the externally supplied detector and recognizer ONNX
-  sessions successfully.
-- Read-only before/after machine inventory was identical for the existing
-  13-file, 177,569,343-byte LocalAppData authority and its latest-write time.
-  The one existing owned storage credential and HKCU product registry remained;
-  no installer registration, firewall rule, or self-test temporary directory
-  was left behind.
-- The isolated default bootstrap path previously completed from the exact lock.
-  A later validation retry hit transient package-host read timeouts, so the
-  final AMD64 artifact was produced with `-UseExistingEnvironment` after that
-  environment passed the same exact-lock and dependency-consistency gates. Both
-  paths always reinstall the current repository source before testing/building.
+  emitted separately from build tools. A second complete locked build also
+  passed, demonstrating repeatable gates and cleanup; timestamps make the two
+  installer byte streams intentionally non-identical. Missing direct license
+  fields are resolved from standard package classifiers, leaving no bundled or
+  build-tool record with an `UNKNOWN` license value.
+- Inno Setup 7.1 produced a native AMD64 installer. The artifact inspector parsed
+  the installer and every packaged `.exe`, `.dll`, and `.pyd`; every inspected
+  native binary was AMD64, no I386 or ARM64 binary was accepted, and the release
+  closure contained 61 files with no model weights or private keys.
+- The packaged runtime self-test passed Windows vault create/retrieve/cleanup,
+  SQLCipher encryption, protected-file round trip, OpenCV, ONNX Runtime CPU
+  execution, both external model sessions, compiled loopback UI authorization,
+  graceful shutdown, and instance-lock release. Full model onboarding is marked
+  `PENDING_NOT_EXERCISED` in that packaged report because the installer itself
+  was not run; the complete equivalent lifecycle passed in the isolated source
+  profile as recorded above.
+- Read-only final machine inventory matched the pre-existing production shape:
+  the real `%LOCALAPPDATA%\SentriFace` authority, its HKCU state, and its exact
+  production storage credential remain. No Program Files installation, uninstall
+  registration, shortcut, outbound firewall rule, development authority, build
+  directory, or SentriFace process was left behind.
+- A 3072-bit, SHA-256, non-exportable CurrentUser signing identity was created at
+  exact subject `CN=SentriFace Edge Controlled Code Signing`, thumbprint
+  `49D19D04D111C54E64E56177BF4990A35ECB800E`, valid from
+  2026-09-20T18:33:07Z through 2031-09-20T18:43:06Z. Reuse validation passed and
+  no PFX or private key was exported. The certificate is not present in the
+  CurrentUser Root or TrustedPublisher stores: that persistent trust change was
+  not authorized, so the final candidate remains unsigned.
 
-This machine contains real SentriFace data and an existing production storage
-credential. Therefore the destructive sanitizer, installer execution, repair,
-upgrade, downgrade, uninstall, and reinstall were not run against it. Historical
+This host contains real SentriFace data and has no Windows Sandbox or disposable
+VM fixture available to this session. The destructive sanitizer and current-
+artifact installer execution, repair, upgrade, downgrade, uninstall, reinstall,
+and failed-install rollback were therefore not run on this host. Historical
 lifecycle evidence below remains valid for the earlier artifact, but it does not
-substitute for a disposable clean-VM lifecycle run of this final candidate.
+substitute for a disposable-machine lifecycle run of this final candidate.
 
-Current production blockers are: a clean exact `v2.0.0` source tag; production
-Authenticode signing and trusted timestamp verification for both executable and
-installer; a disposable-VM clean install/repair/upgrade/downgrade/uninstall/
-reinstall/rollback matrix for the final signed artifact; full packaged model
-onboarding/activation/rollback rather than ONNX session-only acceptance; manual
-resolution of dependency records whose upstream metadata lacks a concise license
-identifier; confirmation of an appropriate Inno Setup license for commercial
-distribution if applicable; and a production `SFE2` token if production-token
-acceptance is required.
+Current RC blockers are: install and verify the controlled certificate in the
+CurrentUser Root and TrustedPublisher stores with explicit operator approval,
+then build and verify the signed pre-tag candidate; execute the final signed
+artifact's full installer lifecycle and packaged model onboarding/activation/
+rollback on a disposable Windows 11 AMD64 fixture. The installed Inno Setup
+compiler identifies itself as non-commercial-use-only, so the release owner
+must confirm the applicable distribution terms; this is a legal/operational
+follow-up, not a technical build failure. A production `SFE2` token is
+additionally required only if production-token acceptance is part of the
+release gate. Human review, commit, exact `rc-v2.0.0` tagging, and the tagged
+rebuild remain the deliberately separate finalization step.
+
+Current decision: source development and unsigned build hardening **PASS**;
+canonical RC readiness **NO** until the signing/trust and disposable-machine
+lifecycle blockers above are closed.
+
 ## Historical result — Windows x64 host acceptance (2026-08-17)
 
 P14 source implementation and unsigned Windows x64 development acceptance are complete on a real Windows 11 x64 host. Standalone, installer, clean install, packaged runtime, unlicensed recovery, licensing refusal cases, model onboarding, firewall enforcement, repair, upgrade, downgrade refusal, uninstall/reinstall, and failed-install rollback passed.
@@ -59,9 +91,12 @@ Production release acceptance remains **INCOMPLETE** because no Authenticode cre
 
 The independently established `prod-2026-01` production trust-root match remains verified and was not reopened. Schema remains v28 and no P10/P11/P12/P13 semantic contract changed.
 
-## Windows release gate results
+## Historical Windows release gate results (2026-08-17 artifact only)
 
-- [ ] Clean exact `v2.0.0` tagged source. Required for production; this documented run used acceptance mode.
+The checked items below describe the earlier diagnostic installer. They are not
+acceptance evidence for the current 2.0.0 pre-tag candidate.
+
+- [ ] Clean exact `rc-v2.0.0` or `release-v2.0.0` tagged source. Required for production; this documented run used acceptance mode.
 - [x] Real Windows 11 x64 host: Python 3.12.10, Nuitka 4.1.3, MSVC 14.3, Node 24.17.0, npm 11.13.0, Inno Setup 6.7.3, Windows SDK SignTool, and Git 2.45.2.
 - [x] Windows source gate: 505 backend tests, 106 subtests, and 94 frontend tests passed; 45 skips were environment-classified; production UI build and `git diff --check` passed.
 - [x] Current production frontend is embedded and matches source.
@@ -93,4 +128,4 @@ Unsigned CI artifacts are acceptance diagnostics only and must never be publishe
 - Authenticode: **NOT VERIFIED**.
 - Production-token test: **NOT PROVIDED**.
 - Production release readiness: **NO**.
-- P14 production release acceptance: **INCOMPLETE** until a clean exact `v2.0.0` build is rebuilt, the final runtime/lifecycle gates are re-verified, and the executable and installer are externally signed/timestamped with verified final signatures.
+- P14 production release acceptance: **INCOMPLETE** until a clean exact `rc-v2.0.0` or `release-v2.0.0` build is produced, the current artifact's installer/model lifecycle gates are verified on a disposable Windows host, and executable and installer signatures are verified.

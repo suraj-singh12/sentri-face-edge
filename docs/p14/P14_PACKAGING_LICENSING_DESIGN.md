@@ -83,6 +83,15 @@ models add real ONNX session acceptance; absence is recorded as pending rather
 than passed.
 ## Version, signing, and release boundary
 
-`src/sentriface/_version.py::APP_VERSION` is the single release version. The build reads it and passes it to Python metadata, Nuitka resources, Inno Setup, artifact names, checksum, and provenance output. Release mode requires a clean tree at exact tag `v<version>`.
+`src/sentriface/_version.py::APP_VERSION` is the single release version. The build reads it and passes it to Python metadata, Nuitka resources, Inno Setup, artifact names, checksum, and provenance output. Release mode requires a clean tree at exact tag `rc-v<version>` or `release-v<version>`.
 
-Signing uses external Windows certificate-store inputs: SignTool path, certificate thumbprint, and timestamp URL. The build signs/verifies the application, builds the installer, signs/verifies the installer, then emits SHA-256, dependency/license inventory, and provenance metadata. Timestamp network access exists only in release infrastructure; the installed runtime stays offline.
+Signing uses exact external Windows certificate-store inputs: SignTool path,
+certificate thumbprint, expected subject, and optional timestamp URL. The
+controlled-machine workflow creates one reusable non-exportable RSA Code Signing
+identity and keeps trust installation separate and explicit. The build validates
+the exact private-key identity, signs/verifies the application, builds the
+installer, signs/verifies the installer, and then emits SHA-256,
+dependency/license inventory, and provenance metadata. No PFX or private key is
+written to source or artifacts. Self-signing does not imply public SmartScreen
+trust. Timestamp network access, when configured, exists only in release
+infrastructure; the installed runtime stays offline.

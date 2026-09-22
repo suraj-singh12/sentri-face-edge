@@ -12,14 +12,14 @@ from sentriface.os_network_policy import OsNetworkPolicyStatus
 class MacosSourceRuntimeTest(unittest.TestCase):
     def test_override_requires_onnx_runtime(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires --runtime onnx"):
-            _startup_network_policy("dev", allow_unpacked_macos_source=True)
+            _startup_network_policy("dev", allow_unpacked_source=True)
 
     def test_override_is_macos_only(self) -> None:
         with (
             patch("sentriface.api_server.sys.platform", "linux"),
-            self.assertRaisesRegex(ValueError, "only on macOS"),
+            self.assertRaisesRegex(ValueError, "only on Windows and macOS"),
         ):
-            _startup_network_policy("onnx", allow_unpacked_macos_source=True)
+            _startup_network_policy("onnx", allow_unpacked_source=True)
 
     def test_override_requires_git_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -29,7 +29,7 @@ class MacosSourceRuntimeTest(unittest.TestCase):
             ):
                 _startup_network_policy(
                     "onnx",
-                    allow_unpacked_macos_source=True,
+                    allow_unpacked_source=True,
                     source_root=Path(directory),
                 )
 
@@ -44,7 +44,7 @@ class MacosSourceRuntimeTest(unittest.TestCase):
             ):
                 resolved = _startup_network_policy(
                     "onnx",
-                    allow_unpacked_macos_source=True,
+                    allow_unpacked_source=True,
                     source_root=checkout,
                 )
             self.assertIsNone(resolved)
@@ -60,7 +60,7 @@ class MacosSourceRuntimeTest(unittest.TestCase):
             ):
                 _startup_network_policy(
                     "onnx",
-                    allow_unpacked_macos_source=True,
+                    allow_unpacked_source=True,
                     source_root=checkout,
                 )
     def test_existing_macos_sandbox_remains_monitored(self) -> None:
@@ -74,10 +74,26 @@ class MacosSourceRuntimeTest(unittest.TestCase):
             ):
                 resolved = _startup_network_policy(
                     "onnx",
-                    allow_unpacked_macos_source=True,
+                    allow_unpacked_source=True,
                     source_root=checkout,
                 )
             self.assertIs(resolved, status)
+
+    def test_windows_git_checkout_can_explicitly_use_application_guard_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkout = Path(directory)
+            (checkout / ".git").mkdir()
+            status = OsNetworkPolicyStatus(False, "windows-firewall", "not installed")
+            with (
+                patch("sentriface.api_server.sys.platform", "win32"),
+                patch("sentriface.api_server.inspect_os_network_policy", return_value=status),
+            ):
+                resolved = _startup_network_policy(
+                    "onnx",
+                    allow_unpacked_source=True,
+                    source_root=checkout,
+                )
+            self.assertIsNone(resolved)
 
 
 if __name__ == "__main__":

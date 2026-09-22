@@ -17,6 +17,11 @@ New maintainers and coding agents should begin with the
 [complete project guide](docs/PROJECT_OVERVIEW.md), then use the
 [documentation map](docs/README.md) and [agent handoff](docs/AGENT_HANDOFF.md).
 
+The current 2.0.0 Windows installer is an unsigned pre-tag engineering
+candidate. Source, build, inspection, and packaged runtime checks passed;
+signed release and current-artifact installer/model lifecycle acceptance remain
+open. See [P14 release acceptance](docs/p14/P14_RELEASE_ACCEPTANCE.md).
+
 ## Core Shape
 
 ```text
@@ -205,6 +210,27 @@ npm --prefix frontend run build
 HNSW acceleration is optional: `pip install -e ".[index]"` when a native
 wheel is available. SentriFace otherwise uses the synchronized linear index with
 the same recognition behavior; the Profile view reports the active backend.
+
+## Windows source development
+
+On Windows 11 AMD64 with 64-bit Python 3.11 or 3.12, the equivalent isolated
+source workflow is:
+
+```powershell
+.\run.ps1          # synthetic mode
+.\run.ps1 models   # plus the local model/checksum/declaration arguments
+.\run.ps1 onnx     # real local ONNX CPU mode
+.\run.ps1 reset    # confirmed development-only reset
+```
+
+It uses `%LOCALAPPDATA%\SentriFace-Dev`, including distinct path-derived
+Credential Manager identities, and refuses any path overlap with installed
+authority at `%LOCALAPPDATA%\SentriFace`. Normal source launches reuse compiled
+frontend assets and do not require Node. Source ONNX mode keeps the loopback and
+socket guards but explicitly lacks the packaged exact-executable firewall
+boundary. Exact model onboarding examples, the execution-policy fallback,
+frontend commands, and reset safeguards are in
+[`docs/DEVELOPMENT_MODE.md`](docs/DEVELOPMENT_MODE.md).
 
 For an explicit project-local development database, run
 `python -m sentriface.api_server --runtime dev --data-dir data`. A normal

@@ -3,6 +3,7 @@ from __future__ import annotations
 import struct
 import tempfile
 import unittest
+from email.message import Message
 from pathlib import Path
 
 from sentriface import __version__
@@ -10,6 +11,7 @@ from sentriface._version import APP_VERSION
 from sentriface.licensing.public_keys import production_public_keys
 from sentriface.runtime_hardening import WindowsShutdownSignal
 from scripts.inspect_release_artifacts import inspect, inspect_distribution
+from scripts.write_dependency_inventory import _package_record
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +26,20 @@ def _write_pe(path: Path, machine: int = 0x8664) -> None:
     path.write_bytes(payload)
 
 
+class _DistributionFixture:
+    def __init__(self, metadata: Message, version: str = "1.0") -> None:
+        self.metadata = metadata
+        self.version = version
+
+
 class P14PackagingContractTest(unittest.TestCase):
+    def test_dependency_inventory_uses_license_classifier_when_fields_are_absent(self) -> None:
+        metadata = Message()
+        metadata["Name"] = "example-package"
+        metadata["Classifier"] = "License :: OSI Approved :: MIT License"
+        record = _package_record(_DistributionFixture(metadata))  # type: ignore[arg-type]
+        self.assertEqual(record["license"], "MIT License")
+
     def test_one_release_version_authority_drives_python_build_and_installer(self) -> None:
         self.assertEqual(__version__, APP_VERSION)
         self.assertEqual(APP_VERSION, "2.0.0")
@@ -39,7 +54,9 @@ class P14PackagingContractTest(unittest.TestCase):
     def test_release_tag_guard_fails_cleanly_without_git_describe(self) -> None:
         build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
         self.assertIn("git tag --points-at HEAD", build)
-        self.assertIn("$ExpectedTag -notin $TagsAtHead", build)
+        self.assertIn('"rc-v$Version", "release-v$Version"', build)
+        self.assertIn("$AcceptedTagsAtHead.Count -ne 1", build)
+        self.assertNotIn('$ExpectedTag = "v$Version"', build)
         self.assertNotIn("git describe", build)
 
     def test_installer_preserves_per_user_authority_and_has_no_activation_helper(self) -> None:
@@ -67,12 +84,34 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertIn("scripts\\write_dependency_inventory.py", build)
         self.assertIn("dist\\windows-x64\\$Version", build)
         self.assertIn("$ProductionRelease", build)
-        self.assertIn("$ExpectedTag -notin $TagsAtHead", build)
+        self.assertIn("$AcceptedTagsAtHead.Count -ne 1", build)
         self.assertNotIn("installer_output", build)
         self.assertIn("Inno Setup 7 or later", build)
         self.assertIn("Install current SentriFace source", build)
         self.assertIn("-p no:cacheprovider", build)
         self.assertIn("--installer", build)
+
+    def test_controlled_machine_signing_uses_exact_nonexportable_identity(self) -> None:
+        build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
+        create = (
+            ROOT / "packaging" / "windows" / "New-SentriFaceCodeSigningCertificate.ps1"
+        ).read_text(encoding="utf-8")
+        trust = (
+            ROOT / "packaging" / "windows" / "Trust-SentriFaceCodeSigningCertificate.ps1"
+        ).read_text(encoding="utf-8")
+        self.assertIn("CertificateSubject", build)
+        self.assertIn("CertificateThumbprint", build)
+        self.assertIn("Get-AuthenticodeSignature", build)
+        self.assertIn('"-signed-pretag-rc"', build)
+        self.assertIn("KeyAlgorithm RSA", create)
+        self.assertIn("HashAlgorithm SHA256", create)
+        self.assertIn("KeyExportPolicy NonExportable", create)
+        self.assertIn("AllowPlaintextExport", create)
+        self.assertIn("private key must be non-exportable", build)
+        self.assertNotIn("Export-PfxCertificate", create)
+        self.assertIn("Cert:\\CurrentUser\\Root", trust)
+        self.assertIn("Cert:\\CurrentUser\\TrustedPublisher", trust)
+        self.assertIn("ExpectedSubject", trust)
 
     def test_build_excludes_models_and_requires_native_runtime_components(self) -> None:
         build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")

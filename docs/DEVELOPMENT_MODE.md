@@ -99,15 +99,114 @@ refused; stop the first process with `Control-C` before launching again.
 
 # Windows
 
-Windows source-development launcher support is planned and not yet implemented.
-Do not infer macOS commands or data paths for Windows.
+Use this workflow from a Windows 11 AMD64 checkout. Install 64-bit AMD64 Python
+3.11 or 3.12 first. The launcher creates and maintains repository-local
+`.venv312`; it neither installs Python nor modifies global Python packages. The
+normal source launch uses the already-built frontend and does not require Node.
 
-## Planned workflow placeholder
+## Synthetic development
 
-- Launcher command: not yet implemented.
-- Synthetic mode: not yet implemented.
-- ONNX mode: not yet implemented.
-- Development-data location: not yet implemented.
-- Reset command: not yet implemented.
-- Frontend development: not yet documented for a Windows source launcher.
-- Troubleshooting: not yet documented for a Windows source launcher.
+Start the no-model runtime from PowerShell:
+
+```powershell
+.\run.ps1
+```
+
+The explicit equivalent is `.\run.ps1 dev`. Open
+`http://127.0.0.1:8765`, create the first local administrator when needed, and
+stop the server with `Control-C`. Synthetic mode supports accounts, UI and
+navigation, Queue/People/Person Graph/World workflow structure, notes, backups,
+recovery, and normal domain behavior without ONNX weights. Recognition results
+are deliberately synthetic.
+
+If local PowerShell policy blocks repository scripts, use the process-scoped
+fallback; it does not change machine or user execution policy:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1
+```
+
+## Real ONNX development
+
+Onboard the operator-supplied local pair with exact SHA-256 declarations. This
+copies the files into development model authority and preserves P13 immutable
+candidate, usage declaration, calibration, activation, and rollback semantics:
+
+```powershell
+$detector = (Resolve-Path .\models\det_500m.onnx).Path
+$recognizer = (Resolve-Path .\models\w600k_r50.onnx).Path
+$calibration = (Resolve-Path .\models\calibration-w600k_r50.json).Path
+
+.\run.ps1 models `
+  --detector-source $detector `
+  --detector-sha256 (Get-FileHash $detector -Algorithm SHA256).Hash `
+  --recognizer-source $recognizer `
+  --recognizer-sha256 (Get-FileHash $recognizer -Algorithm SHA256).Hash `
+  --calibration-source $calibration `
+  --calibration-sha256 (Get-FileHash $calibration -Algorithm SHA256).Hash `
+  --usage-basis noncommercial-research `
+  --authorized-by $env:USERNAME `
+  --accept-model-responsibility
+```
+
+Use only a usage basis and calibration appropriate to the supplied models. Then
+start real CPU inference:
+
+```powershell
+.\run.ps1 onnx
+```
+
+Source ONNX mode retains loopback binding and the in-process outbound socket
+guard. It explicitly warns that a Git checkout does not have the packaged
+exact-executable Windows Firewall boundary; packaged ONNX mode remains
+fail-closed on that OS policy.
+
+## Data isolation and reset
+
+Windows source data lives exactly at:
+
+```text
+%LOCALAPPDATA%\SentriFace-Dev
+```
+
+It has a separate SQLCipher database, path-derived Credential Manager identity,
+logs, backups, protected media, model authority, uploads, receipts, and lock.
+Installed-product authority remains `%LOCALAPPDATA%\SentriFace`. The launcher
+refuses a development override that equals, contains, or is contained by the
+product path.
+
+To remove only the default development authority:
+
+```powershell
+.\run.ps1 reset
+```
+
+The command displays the exact target and requires `RESET-DEV`. It refuses
+custom roots and reparse points, removes only the exact hashed development
+storage/recovery vault identities, verifies their deletion, and then removes
+the development files. `--yes` is reserved for controlled automation.
+
+## Frontend development
+
+Node is needed only for frontend dependency, test, and build work:
+
+```powershell
+npm --prefix frontend ci
+npm --prefix frontend test
+npm --prefix frontend run build
+```
+
+## Troubleshooting
+
+- An incomplete `.venv312` is refused. Remove only that repository-local
+  directory, then launch again.
+- Install a supported 64-bit AMD64 Python if no Python 3.11/3.12 candidate is
+  found; the launcher will not install Python automatically.
+- `Another SentriFace process already owns this data store` means the first
+  source process is still running or did not finish shutting down. Stop it and
+  retry; do not delete the lock while a process is live.
+- A model checksum, declaration, calibration, or compatibility failure is a P13
+  refusal. Correct the local inputs and onboard them again; do not copy loose
+  files around model authority.
+- A production-path refusal is intentional. Do not work around it with an
+  environment alias, junction, or nested directory.

@@ -8,6 +8,11 @@ param(
     [string]$RecognizerTestModel = $env:SENTRIFACE_RELEASE_TEST_RECOGNIZER,
     [string]$SignToolPath = $env:SENTRIFACE_SIGNTOOL,
     [string]$CertificateThumbprint = $env:SENTRIFACE_SIGNING_THUMBPRINT,
+    [string]$CertificateSubject = $env:SENTRIFACE_SIGNING_SUBJECT,
+    [ValidateSet("CurrentUser", "LocalMachine")]
+    [string]$CertificateStoreLocation = $(
+        if ($env:SENTRIFACE_SIGNING_STORE) { $env:SENTRIFACE_SIGNING_STORE } else { "CurrentUser" }
+    ),
     [string]$TimestampUrl = $env:SENTRIFACE_TIMESTAMP_URL,
     [string]$InnoCompiler = $env:SENTRIFACE_ISCC
 )
@@ -20,9 +25,11 @@ if ($DevelopmentBuild -and $ProductionRelease) {
     throw "-DevelopmentBuild and -ProductionRelease cannot be combined."
 }
 $CandidateBuild = -not $ProductionRelease
-$SigningAvailable = [bool](
-    $SignToolPath -and $CertificateThumbprint -and $TimestampUrl
-)
+$AnySigningInput = [bool]($SignToolPath -or $CertificateThumbprint -or $CertificateSubject)
+$SigningAvailable = [bool]($SignToolPath -and $CertificateThumbprint -and $CertificateSubject)
+if ($AnySigningInput -and -not $SigningAvailable) {
+    throw "Signing requires SignTool, an exact certificate thumbprint, and the expected signer subject."
+}
 
 function Remove-ControlledDirectory([string]$Path) {
     $resolvedRoot = [IO.Path]::GetFullPath($Root).TrimEnd(
@@ -61,13 +68,74 @@ function Invoke-Sign([string]$Path) {
         }
         return
     }
-    & $SignToolPath sign /sha1 $CertificateThumbprint /fd SHA256 /tr $TimestampUrl /td SHA256 $Path
+    $signArguments = @("sign", "/s", "My", "/sha1", $CertificateThumbprint, "/fd", "SHA256")
+    if ($CertificateStoreLocation -eq "LocalMachine") {
+        $signArguments += "/sm"
+    }
+    if ($TimestampUrl) {
+        $signArguments += @("/tr", $TimestampUrl, "/td", "SHA256")
+    }
+    $signArguments += $Path
+    & $SignToolPath @signArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Authenticode signing failed for $(Split-Path -Leaf $Path)."
     }
     & $SignToolPath verify /pa /all $Path
     if ($LASTEXITCODE -ne 0) {
         throw "Authenticode verification failed for $(Split-Path -Leaf $Path)."
+    }
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if (
+        $signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+        -not $signature.SignerCertificate -or
+        $signature.SignerCertificate.Thumbprint -ne $CertificateThumbprint -or
+        $signature.SignerCertificate.Subject -ne $CertificateSubject
+    ) {
+        throw "Authenticode signer or trust verification failed for $(Split-Path -Leaf $Path)."
+    }
+}
+
+function Assert-SigningCertificate {
+    if (-not $SigningAvailable) {
+        return
+    }
+    $normalizedThumbprint = $CertificateThumbprint.Replace(" ", "").ToUpperInvariant()
+    if ($normalizedThumbprint -notmatch '^[0-9A-F]{40,64}$') {
+        throw "The configured signing certificate thumbprint is invalid."
+    }
+    $script:CertificateThumbprint = $normalizedThumbprint
+    $certificatePath = "Cert:\$CertificateStoreLocation\My\$normalizedThumbprint"
+    $certificate = Get-Item -LiteralPath $certificatePath -ErrorAction Stop
+    $codeSigningOid = "1.3.6.1.5.5.7.3.3"
+    $hasCodeSigningEku = @($certificate.EnhancedKeyUsageList) |
+        Where-Object { [string]$_.ObjectId -eq $codeSigningOid }
+    if (
+        -not $certificate.HasPrivateKey -or
+        $certificate.Subject -ne $CertificateSubject -or
+        -not $hasCodeSigningEku -or
+        $certificate.NotBefore -gt (Get-Date) -or
+        $certificate.NotAfter -le (Get-Date)
+    ) {
+        throw "The configured signing identity does not satisfy the exact subject, private-key, Code Signing EKU, and validity requirements."
+    }
+    if (-not ($certificate.PublicKey.Oid.Value -in @("1.2.840.113549.1.1.1", "1.2.840.113549.1.1.11"))) {
+        throw "The configured signing certificate must use RSA."
+    }
+    $rsa = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey(
+        $certificate
+    )
+    try {
+        if (-not ($rsa -is [Security.Cryptography.RSACng]) -or $rsa.KeySize -lt 2048) {
+            throw "The configured signing identity must use an RSA CNG key of at least 2048 bits."
+        }
+        if (
+            ($rsa.Key.ExportPolicy -band [Security.Cryptography.CngExportPolicies]::AllowExport) -ne 0 -or
+            ($rsa.Key.ExportPolicy -band [Security.Cryptography.CngExportPolicies]::AllowPlaintextExport) -ne 0
+        ) {
+            throw "The configured signing identity private key must be non-exportable."
+        }
+    } finally {
+        if ($rsa) { $rsa.Dispose() }
     }
 }
 
@@ -85,7 +153,7 @@ if ($VersionSource -notmatch 'APP_VERSION\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"') {
 }
 $Version = $Matches[1]
 $VersionQuad = "$Version.0"
-$ExpectedTag = "v$Version"
+$ExpectedTags = @("rc-v$Version", "release-v$Version")
 $Branch = (git branch --show-current).Trim()
 if ($LASTEXITCODE -ne 0) {
     throw "Git branch inspection failed."
@@ -96,11 +164,12 @@ if ($ProductionRelease) {
         throw "Production release builds require a clean working tree."
     }
     $TagsAtHead = @(git tag --points-at HEAD)
-    if ($LASTEXITCODE -ne 0 -or $ExpectedTag -notin $TagsAtHead) {
-        throw "Production release builds require the exact tag $ExpectedTag."
+    $AcceptedTagsAtHead = @($TagsAtHead | Where-Object { $_ -in $ExpectedTags })
+    if ($LASTEXITCODE -ne 0 -or $AcceptedTagsAtHead.Count -ne 1) {
+        throw "Production release builds require exactly one accepted tag: $($ExpectedTags -join ' or ')."
     }
     if (-not $SigningAvailable) {
-        throw "Production release builds require SignTool, certificate thumbprint, and timestamp URL."
+        throw "Production release builds require SignTool, certificate thumbprint, and expected signer subject."
     }
 } elseif ($Branch -notlike "release-*") {
     Write-Warning "Candidate builds are intended for a release-* branch; current branch is '$Branch'."
@@ -130,6 +199,7 @@ if ($LASTEXITCODE -ne 0 -or $InnoVersion.Major -lt 7) {
 if ($SigningAvailable -and -not (Test-Path -LiteralPath $SignToolPath -PathType Leaf)) {
     throw "Configured SignTool was not found."
 }
+Assert-SigningCertificate
 if ([bool]$DetectorTestModel -ne [bool]$RecognizerTestModel) {
     throw "Both detector and recognizer release-test models must be supplied together."
 }
@@ -251,9 +321,9 @@ try {
     $ArtifactSuffix = if ($ProductionRelease) {
         ""
     } elseif ($SigningAvailable) {
-        "-rc"
+        "-signed-pretag-rc"
     } else {
-        "-unsigned-rc"
+        "-unsigned-pretag-rc"
     }
     $ArtifactBase = "SentriFaceEdge-$Version-x64$ArtifactSuffix"
     Invoke-Checked "Build Inno Setup installer" {
@@ -302,7 +372,7 @@ try {
     Write-Host ""
     Write-Host "Validated Windows x64 installer: $Installer"
     if ($CandidateBuild) {
-        Write-Host "Acceptance class: development/release candidate (not production accepted)"
+        Write-Host "Acceptance class: pre-tag RC-ready candidate (not the canonical rc-v$Version artifact)"
     } else {
         Write-Host "Acceptance class: exact-tag Authenticode-signed production artifact"
     }

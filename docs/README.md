@@ -6,9 +6,12 @@ This directory separates the product overview and current architecture from froz
 
 - P0 through P14 source implementation is complete.
 - P10 through P13 are complete and frozen, including all of P11-A through P11-E.
-- P14 unsigned Windows 11 x64 acceptance passed.
-- Production P14 acceptance remains pending a clean exact `v2.0.0` rebuild,
-  final verification, and trusted timestamped Authenticode signatures.
+- Historical P14 unsigned Windows 11 x64 installer lifecycle acceptance passed
+  for an earlier artifact. The current 2.0.0 unsigned pre-tag candidate passed
+  source, build, inspection, and packaged runtime checks.
+- Production P14 acceptance remains pending verified signatures, the current
+  artifact's disposable-Windows installer and packaged model lifecycle, and a
+  clean exact `rc-v2.0.0` or `release-v2.0.0` rebuild.
 
 ## Start here
 

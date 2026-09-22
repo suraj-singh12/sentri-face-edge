@@ -6,11 +6,21 @@
   global evidence-derived identity graph, World, integrity/recovery,
   authority-aware backup/restore, runtime hardening, offline licensing, and
   Windows x64 packaging.
-- Passed unsigned Windows 11 x64 package acceptance. Production release remains
-  pending a clean exact-tag rebuild and trusted timestamped Authenticode signing.
+- Historical unsigned Windows 11 x64 installer lifecycle acceptance passed for
+  an earlier artifact. The current 2.0.0 unsigned pre-tag candidate passed source,
+  build, inspection, and packaged runtime checks. Production release remains
+  pending verified signatures, current-artifact installer/model lifecycle
+  acceptance on a disposable Windows host, and a clean exact-tag rebuild.
 - Added a native packaged-Windows startup error dialog while retaining
   fail-closed startup and console diagnostics.
 - Added documented Windows test-credential and complete-machine cleanup tools.
+- Added a repository-local Windows source launcher with isolated development
+  data and credentials, synthetic and real-ONNX modes, and a fail-closed reset.
+- Added controlled non-exportable Windows code-signing identity creation,
+  explicit trust-store onboarding, exact certificate validation, and distinct
+  signed/unsigned pre-tag artifact naming.
+- Improved release dependency evidence by falling back to standard package
+  license classifiers when direct license fields are absent.
 
 - Added an offline ONNX face-recognition runtime and React localhost UI.
 - Added reviewed enrollment, recognition follow-ups, people lifecycle, queue
