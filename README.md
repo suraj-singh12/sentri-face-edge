@@ -192,9 +192,12 @@ cannot provide the packaged App Sandbox boundary; packaged ONNX mode remains
 fail-closed on its OS-policy requirement.
 
 To intentionally start over, run `./run.sh reset` and type the confirmation.
-It removes only `~/Library/Application Support/SentriFace-Dev`, never product
-data. Set `SENTRIFACE_DEV_DATA_DIR` for another development location; it is
-still refused if it resolves to the product data directory.
+It removes only `~/Library/Application Support/SentriFace-Dev`, including
+read-only onboarded model bundles and its development Keychain identities,
+never installed-product data. It leaves `.venv312`, source files, and external
+ONNX files intact. Set `SENTRIFACE_DEV_DATA_DIR` for another development
+location; launches may use it, but reset refuses custom locations. See the
+[development-mode guide](docs/DEVELOPMENT_MODE.md) for reset recovery behavior.
 
 To run the available automated checks:
 

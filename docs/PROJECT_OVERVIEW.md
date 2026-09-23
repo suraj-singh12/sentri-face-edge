@@ -236,7 +236,8 @@ People is the identity-management workspace. It supports:
 
 - browsing active and archived people;
 - creating an identified person before any face is available;
-- editing profile fields such as name, rank, country, importance, and tags;
+- editing profile fields such as name, rank, country, the visible Tag selector,
+  and free-form tags; the Tag selector retains the internal `importance` field;
 - maintaining revisioned notes and explicit `@Person` references;
 - viewing enrolled photos and choosing a representative photo;
 - adding, moving, deleting, restoring, and eventually purging face enrollments;
@@ -250,6 +251,9 @@ People is the identity-management workspace. It supports:
 People do not cease to exist merely because they have no face enrollment. A
 person can own notes, participate in finalized observations, and remain in
 history while having a `NO_FACE` biometric state.
+
+Person creation uses a local country list. Operators can browse it immediately;
+typing three or more characters narrows the choices without an online lookup.
 
 ### Person Graph
 

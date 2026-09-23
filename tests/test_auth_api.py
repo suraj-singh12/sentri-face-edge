@@ -5,6 +5,7 @@ import json
 import tempfile
 import threading
 import unittest
+from uuid import uuid4
 from pathlib import Path
 
 from sentriface.api_server import create_server
@@ -15,6 +16,28 @@ PASSWORD = "correct horse battery staple"
 
 
 class AuthenticationApiTest(unittest.TestCase):
+    def test_person_profile_defaults_to_effective_view_for_every_entry_point(self) -> None:
+        with self._running_server() as server:
+            server.auth.signup_initial("owner", "Owner", PASSWORD)
+            cookie = self._login_cookie(server, "owner", PASSWORD)
+            status, created, _ = self._request(server, "POST", "/api/person-create", {
+                "name": "Profile Entry", "rank": "Visitor", "country": "India",
+                "importance": "Regular", "added_by": "Owner",
+                "seen_date": "2026-09-23", "seen_time": "10:00",
+                "place_seen": "Office", "individual_count": 0,
+                "event_occasion": "Visit", "operation_id": str(uuid4()),
+            }, cookie=cookie)
+            self.assertEqual(status, 200, created)
+            person_id = created["person"]["person_id"]
+            # People and recognition use the same URL; a fresh direct request
+            # exercises the reload path without relying on frontend state.
+            for suffix in ("", "&view=effective", "&view=raw"):
+                status, profile, _ = self._request(server, "GET", f"/api/person?person_id={person_id}{suffix}", cookie=cookie)
+                self.assertEqual(status, 200, profile)
+                self.assertEqual(profile["person"]["person_id"], person_id)
+            status, _, _ = self._request(server, "GET", f"/api/person?person_id={person_id}&view=invalid", cookie=cookie)
+            self.assertEqual(status, 400)
+
     def test_first_run_signup_cookie_status_and_logout(self) -> None:
         with self._running_server() as server:
             status, payload, _ = self._request(server, "GET", "/api/profile")

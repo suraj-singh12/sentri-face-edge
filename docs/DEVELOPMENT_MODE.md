@@ -22,6 +22,9 @@ The explicit equivalent is:
 Use synthetic mode for UI, account, workflow, backup, recovery, and domain
 development. Face results are deliberately synthetic, and no ONNX model files
 are needed. Open `http://127.0.0.1:8765` and stop the server with `Control-C`.
+The zero-argument command starts the same mode as `./run.sh dev` without an
+argument-parsing warning. Use `./run.sh dev --port PORT` if the default port is
+already occupied.
 
 ## Real ONNX development
 
@@ -81,7 +84,20 @@ remove only the default development authority, run:
 It displays the target path and requires the exact confirmation `RESET-DEV`.
 If `SENTRIFACE_DEV_DATA_DIR` is set to a custom development location, normal
 launches use it, but `reset` refuses it so that it cannot remove an unverified
-path.
+path. Reset removes the complete default development authority, including
+read-only model bundles created during onboarding and the exact development
+storage and recovery Keychain identities. It restores owner permissions as
+needed, never follows symlinks, refuses paths owned by another user or mounted
+inside the authority, and does not use `sudo`. The installed-product directory
+and its Keychain identities are outside the reset scope.
+
+If file removal fails, the database key remains in Keychain so the existing
+encrypted database is still readable. If Keychain cleanup fails after file
+removal, rerun `./run.sh reset` to finish credential cleanup. A successful
+reset followed by `./run.sh` starts with no prior development accounts,
+database, media, or model authority. The repository source, `.venv312`, and
+external ONNX source files are not part of development data and remain in place.
+Use the existing `--yes` option only in a controlled disposable test setup.
 
 Normal source launches use the existing compiled frontend and do not require
 Node.js. When editing frontend source, use:

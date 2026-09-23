@@ -427,6 +427,14 @@ export function useQueueController({
     showToast("Fill new person details");
   };
 
+  const queueSelectExisting = () => {
+    // A picker selection changes the proposed identity, but does not commit it.
+    // Discard any new-person draft and require a fresh explicit Accept action.
+    setQueueAccepted(false);
+    setQueueFollowup(null);
+    setQueueFollowupDone(false);
+  };
+
   const queueDiscard = async () => {
     if (!queueSelectedGroup) return;
     const faceIds = selectedQueueFaceIds();
@@ -736,6 +744,7 @@ export function useQueueController({
       clearQueueFaces,
       queueAcceptExisting,
       queueNewPerson,
+      queueSelectExisting,
       queueDiscard,
       discardQueueGroup,
       queueSkipGroup,

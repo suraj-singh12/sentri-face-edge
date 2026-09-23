@@ -246,6 +246,11 @@ export function useRecognizeController({
     setRecognitionGallery(payload);
   };
 
+  const recognitionSelectExisting = () => {
+    setRecognitionFollowup(null);
+    setRecognitionFollowupDone(false);
+  };
+
   const recognitionGalleryBack = () => {
     setRecognitionGallery(null);
   };
@@ -302,6 +307,7 @@ export function useRecognizeController({
       recognizeLoadedImage,
       recognitionAccept,
       recognitionNew,
+      recognitionSelectExisting,
       recognitionClear,
       startExistingPersonEnrollment,
       cancelExistingPersonEnrollment,

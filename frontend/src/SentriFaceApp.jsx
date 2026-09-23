@@ -217,6 +217,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onSelectFace={actions.selectRecognitionFace}
               onAccept={guarded(actions.recognitionAccept)}
               onNew={guarded(actions.recognitionNew)}
+              onSelectExisting={actions.recognitionSelectExisting}
               onSkip={guarded(actions.skipRecognitionFace)}
               onComplete={guarded(actions.completeRecognitionReview)}
               onClear={actions.recognitionClear}
@@ -259,6 +260,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onClearFaces={actions.clearQueueFaces}
               onAcceptExisting={guarded(actions.queueAcceptExisting)}
               onNewPerson={guarded(actions.queueNewPerson)}
+              onSelectExisting={actions.queueSelectExisting}
               onDiscard={guarded(actions.queueDiscard)}
               onDiscardGroup={guarded(actions.discardQueueGroup)}
               onSkip={guarded(actions.queueSkipGroup)}

@@ -34,7 +34,8 @@ import {
 } from "@tabler/icons-react";
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
-import { GalleryPanel, LoadImagePanel, Metrics, Surface } from "../components/Shared.jsx";
+import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
+import { GalleryPanel, LoadImagePanel, Surface } from "../components/Shared.jsx";
 import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor } from "../utils.js";
 
 const FACE_COLORS = ["#35d6d0", "#bd83ff", "#f5a623", "#59a7ff", "#f472b6", "#a3e635"];
@@ -56,6 +57,7 @@ export function RecognizeView({
   onSelectFace,
   onAccept,
   onNew,
+  onSelectExisting,
   onSkip,
   onComplete,
   onClear,
@@ -85,6 +87,7 @@ export function RecognizeView({
   const [sort, setSort] = useState("index");
   const [qualityOverride, setQualityOverride] = useState(null);
   const [targetConflict, setTargetConflict] = useState(null);
+  const [followupRef, scrollToFollowup] = useIntentionalFormScroll(recognitionFollowup?.identityOperationId);
   const sortedFaces = useMemo(() => [...faces].sort((left, right) => {
     if (sort === "quality") return (right.quality?.score || 0) - (left.quality?.score || 0) || left.index - right.index;
     if (sort === "confidence") return (right.box?.confidence || 0) - (left.box?.confidence || 0) || left.index - right.index;
@@ -122,6 +125,7 @@ export function RecognizeView({
         setQualityOverride({ action: "target", face, selectedPerson: targetPerson });
         return;
       }
+      scrollToFollowup();
       continueTargetEnrollment(face);
       return;
     }
@@ -129,6 +133,7 @@ export function RecognizeView({
       setQualityOverride({ action, face, selectedPerson: manualMatches[faceIndex] || null });
       return;
     }
+    scrollToFollowup();
     if (action === "accept") onAccept(faceIndex, false, manualMatches[faceIndex] || null);
     else onNew(faceIndex);
   };
@@ -137,6 +142,7 @@ export function RecognizeView({
     if (!qualityOverride) return;
     const { action, face, selectedPerson } = qualityOverride;
     setQualityOverride(null);
+    scrollToFollowup();
     if (action === "target") continueTargetEnrollment(face, true);
     else if (action === "accept") onAccept(face.index, true, selectedPerson || null);
     else onNew(face.index, true);
@@ -156,6 +162,7 @@ export function RecognizeView({
   };
 
   const choosePerson = (person) => {
+    onSelectExisting();
     setManualMatches((current) => ({
       ...current,
       [peoplePickerFace]: {
@@ -335,6 +342,7 @@ export function RecognizeView({
           </Group>}
           {recognition && !targetPerson ? (
             <Button
+              className="recognize-complete-button"
               leftSection={<IconCheck size={20} />}
               onClick={onComplete}
               disabled={!faces.length || recognitionAcceptedFaces.length !== faces.length}
@@ -399,15 +407,18 @@ export function RecognizeView({
             <Button color="orange" onClick={() => {
               const pending = targetConflict;
               setTargetConflict(null);
-              if (pending?.face) onAccept(pending.face.index, pending.forceBadQuality, {
-                ...targetPerson,
-                conflict_acknowledged: true,
-              });
+              if (pending?.face) {
+                scrollToFollowup();
+                onAccept(pending.face.index, pending.forceBadQuality, {
+                  ...targetPerson,
+                  conflict_acknowledged: true,
+                });
+              }
             }}>Add to {targetPerson?.name}</Button>
           </Group>
         </Stack>
       </Modal>
-      {recognitionFollowup && (
+      {recognitionFollowup && <Box ref={followupRef}>
         <RecognitionFollowupForm
           people={people}
           values={recognitionFollowup}
@@ -416,8 +427,8 @@ export function RecognizeView({
           onSubmit={onFollowupSubmit}
           onClear={onFollowupClear}
         />
-      )}
-      {recognition?.metrics && <Metrics metrics={recognition.metrics} />}
+      </Box>}
+      {/* Developer metrics are retained for later diagnostics, but hidden from the operator UI. */}
     </>
   );
 }

@@ -2,6 +2,12 @@
 
 ## 2.0.0 - Unreleased
 
+- Fixed person profile reads from People and recognition, review person-selection
+  state, intentional form scrolling, country search, action and Settings layout,
+  and operator-facing Tag terminology; hid developer recognition metrics.
+- Fixed macOS source launcher argument parsing and exact-scope development reset
+  of read-only model bundles and development Keychain identities.
+
 - Completed P0-P14 source implementation through schema v28, including the
   global evidence-derived identity graph, World, integrity/recovery,
   authority-aware backup/restore, runtime hardening, offline licensing, and

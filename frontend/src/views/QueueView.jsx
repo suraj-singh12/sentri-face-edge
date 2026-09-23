@@ -50,6 +50,7 @@ import {
 } from "@tabler/icons-react";
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
+import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
 import { EmptyCard } from "../components/Shared.jsx";
 import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor, recognitionText } from "../utils.js";
 
@@ -80,6 +81,7 @@ export function QueueView({
   onClearFaces,
   onAcceptExisting,
   onNewPerson,
+  onSelectExisting,
   onDiscard,
   onDiscardGroup,
   onSkip,
@@ -134,6 +136,7 @@ export function QueueView({
               onClearFaces={onClearFaces}
               onAcceptExisting={onAcceptExisting}
               onNewPerson={onNewPerson}
+              onSelectExisting={onSelectExisting}
               onDiscard={onDiscard}
               onDiscardGroup={() => setGroupPendingDiscard(queueSelectedGroup)}
               onSkip={onSkip}
@@ -672,6 +675,7 @@ function QueueGroupReview({
   onClearFaces,
   onAcceptExisting,
   onNewPerson,
+  onSelectExisting,
   onDiscard,
   onDiscardGroup,
   onSkip,
@@ -684,7 +688,7 @@ function QueueGroupReview({
   onLoadPeopleCandidates,
   onBack,
 }) {
-  const followupRef = useRef(null);
+  const [followupRef, scrollToFollowup] = useIntentionalFormScroll(followup?.identityOperationId);
   const galleryEndRef = useRef(null);
   const [mode, setMode] = useState("summary");
   const [focused, setFocused] = useState(false);
@@ -719,11 +723,6 @@ function QueueGroupReview({
     setManualPerson(null);
   }, [group.group_id]);
 
-  useEffect(() => {
-    if (!followup) return;
-    followupRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [followup]);
-
   const openCompare = async () => {
     if (best?.person_id && gallery?.person?.person_id !== best.person_id) await onGallery(best.person_id);
     setMode("compare");
@@ -743,6 +742,7 @@ function QueueGroupReview({
   };
 
   const choosePerson = (person) => {
+    onSelectExisting();
     setManualPerson({
       ...person,
       classification: "manual",
@@ -843,10 +843,10 @@ function QueueGroupReview({
       )}
 
       <Group grow className="queue-review-actionbar">
-        <Button leftSection={<IconCheck size={18} />} onClick={() => onAcceptExisting(best)} disabled={!best || !selectedCount || accepted}>
+        <Button leftSection={<IconCheck size={18} />} onClick={() => { scrollToFollowup(); onAcceptExisting(best); }} disabled={!best || !selectedCount || accepted}>
           {best ? `Accept ${selectedCount} as ${best.name}` : "Choose a person to accept"}
         </Button>
-        <Button variant="light" leftSection={<IconUserPlus size={18} />} onClick={onNewPerson} disabled={!selectedCount || accepted}>Create new person</Button>
+        <Button variant="light" leftSection={<IconUserPlus size={18} />} onClick={() => { scrollToFollowup(); onNewPerson(); }} disabled={!selectedCount || accepted}>Create new person</Button>
         <Button variant="light" color="red" leftSection={<IconTrash size={18} />} onClick={onDiscard} disabled={!selectedCount || accepted}>Discard selected</Button>
         <Button variant="default" color="orange" leftSection={<IconX size={18} />} onClick={onRejectSuggestedMatch} disabled={!automaticKnown || Boolean(manualPerson) || accepted}>Reject suggested match</Button>
         <Button variant="subtle" color="gray" rightSection={<IconChevronRight size={17} />} onClick={onSkip} disabled={accepted}>Skip for now</Button>
@@ -866,6 +866,7 @@ function QueueGroupReview({
           setMode("summary");
           setFocused(false);
           onGalleryBack();
+          scrollToFollowup();
           onNewPerson();
         }}
         onSelect={choosePerson}

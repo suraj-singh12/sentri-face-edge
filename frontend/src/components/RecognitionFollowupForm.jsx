@@ -10,6 +10,7 @@ import {
 } from "@tabler/icons-react";
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
+import { CountrySelect } from "./CountrySelect.jsx";
 import { mediaUrl } from "../utils.js";
 
 export function RecognitionFollowupForm({ values, people = [], confirmed, onChange, onSubmit, onClear, embedded = false, showAddedBy = false }) {
@@ -30,8 +31,8 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           {isNew && <TextInput required label="Rank" value={values.rank} onChange={(event) => onChange("rank", event.target.value)} />}
           {isNew && <TextInput required label="Name" value={values.name} onChange={(event) => onChange("name", event.target.value)} />}
-          {isNew && <TextInput required label="Country" value={values.country} onChange={(event) => onChange("country", event.target.value)} />}
-          {isNew && <Select required label="Importance" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />}
+          {isNew && <CountrySelect value={values.country} onChange={(value) => onChange("country", value)} />}
+          {isNew && <Select required label="Tag" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />}
           <TextInput required label="Date" type="date" leftSection={<IconCalendar size={18} />} value={values.date} onChange={(event) => onChange("date", event.target.value)} />
           <TextInput required label="Time" type="time" leftSection={<IconCalendar size={18} />} value={values.time} onChange={(event) => onChange("time", event.target.value)} />
           <TextInput required label="Place Seen" leftSection={<IconMapPin size={18} />} placeholder="e.g., Office, Gate A, Reception, Building C" value={values.placeSeen} onChange={(event) => onChange("placeSeen", event.target.value)} />

@@ -26,6 +26,13 @@ normative rules in the repository-root `AGENTS.md`.
   earlier installer lifecycle in the P14 record applies to a different artifact.
 - The runtime is offline and loopback-only. Do not weaken the application socket
   guard, OS network-policy checks, or localhost request validation.
+- Post-P14 source stabilization fixes the shared person-profile read contract,
+  review selection state, form scroll, country search, operator terminology,
+  Settings layout, and macOS development reset. The source backend/frontend
+  suites and frontend build pass. Live UI verification covered country search
+  and narrow Settings/Activity Log layout; browser approval timed out before
+  the remaining live recognition/profile and Review Photos transitions could
+  be completed. Do not treat those manual flows as release acceptance.
 
 ## Read in this order
 

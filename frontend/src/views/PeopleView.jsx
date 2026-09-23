@@ -64,6 +64,7 @@ import {
 } from "@tabler/icons-react";
 
 import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
+import { CountrySelect } from "../components/CountrySelect.jsx";
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { PersonGraphView } from "./PersonGraphView.jsx";
 import {
@@ -1662,7 +1663,7 @@ function PeopleProfileOverview({ profile, selectedPath, imageRecords, latestSigh
           <ProfileInfoRows rows={[
             ["Rank", profile.rank || "-"],
             ["Country", profile.country || "-"],
-            ["Importance", profile.importance || "-"],
+            ["Tag", profile.importance || "-"],
             ["Created", compactChangeDate(profile.createdAt)],
             ["Added by", profile.addedBy || "-"],
           ]} />
@@ -1910,7 +1911,7 @@ function PeopleProfileChanges({ activity, currentProfile }) {
           <CurrentInfoRow icon={IconUser} label="Name" value={currentProfile.name || "-"} />
           <CurrentInfoRow icon={IconShield} label="Rank" value={currentProfile.rank || "-"} />
           <CurrentInfoRow icon={IconGlobe} label="Country" value={currentProfile.country || "-"} />
-          <CurrentInfoRow icon={IconFlag} label="Importance" value={currentProfile.importance || "-"} pill={importanceColor(currentProfile.importance)} />
+          <CurrentInfoRow icon={IconFlag} label="Tag" value={currentProfile.importance || "-"} pill={importanceColor(currentProfile.importance)} />
           <Divider />
           <CurrentInfoRow icon={IconRefresh} label="Last Activity" value={activeHistory?.createdAt || "-"} subvalue={`By ${activeHistory?.editor || "System"}`} />
         </Stack>
@@ -2090,8 +2091,8 @@ function PlaceholderPersonFields({ values, onChange, people }) {
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
         <TextInput required autoFocus label="Rank" value={values.rank} onChange={(event) => update("rank", event.currentTarget.value)} />
         <TextInput required label="Name" value={values.name} onChange={(event) => update("name", event.currentTarget.value)} />
-        <TextInput required label="Country" value={values.country} onChange={(event) => update("country", event.currentTarget.value)} />
-        <Select required label="Importance" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => update("importance", value)} />
+        <CountrySelect value={values.country} onChange={(value) => update("country", value)} />
+        <Select required label="Tag" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => update("importance", value)} />
         <TextInput required label="Date" type="date" leftSection={<IconCalendar size={18} />} value={values.date} onChange={(event) => update("date", event.currentTarget.value)} />
         <TextInput required label="Time" type="time" leftSection={<IconCalendar size={18} />} value={values.time} onChange={(event) => update("time", event.currentTarget.value)} />
         <TextInput required label="Place Seen" leftSection={<IconMapPin size={18} />} placeholder="e.g., Office, Gate A, Reception, Building C" value={values.placeSeen} onChange={(event) => update("placeSeen", event.currentTarget.value)} />
@@ -2346,8 +2347,8 @@ function PeopleEditableFields({ values, onChange }) {
     <SimpleGrid cols={{ base: 1, sm: 2 }}>
       <TextInput required label="Rank" value={values.rank} onChange={(event) => onChange("rank", event.target.value)} />
       <TextInput required label="Name" value={values.name} onChange={(event) => onChange("name", event.target.value)} />
-      <TextInput required label="Country" value={values.country} onChange={(event) => onChange("country", event.target.value)} />
-      <Select required label="Importance" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />
+      <CountrySelect value={values.country} onChange={(value) => onChange("country", value)} />
+      <Select required label="Tag" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />
       <Box style={{ gridColumn: "1 / -1" }}>
         <TagsInput
           label="Tags"

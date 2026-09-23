@@ -8,6 +8,7 @@ PROJECT_DIR="${0:A:h}"
 VENV_DIR="$PROJECT_DIR/.venv312"
 PYTHON="$VENV_DIR/bin/python"
 DEV_DATA_DIR="${SENTRIFACE_DEV_DATA_DIR:-$HOME/Library/Application Support/SentriFace-Dev}"
+DEFAULT_DEV_DATA_DIR="$HOME/Library/Application Support/SentriFace-Dev"
 PRODUCTION_DATA_DIR="$HOME/Library/Application Support/SentriFace"
 MODE="${1:-dev}"
 
@@ -36,7 +37,7 @@ case "$MODE" in
     exit 0
     ;;
   dev|onnx|models|reset)
-    shift || true
+    if (( $# > 0 )); then shift; fi
     ;;
   *)
     print -u2 "Unknown source-development mode: $MODE"
@@ -46,7 +47,7 @@ case "$MODE" in
 esac
 
 if [[ "$MODE" == "reset" ]]; then
-  if [[ "$DEV_DATA_DIR:A" != "$HOME/Library/Application Support/SentriFace-Dev:A" ]]; then
+  if [[ "$DEV_DATA_DIR:A" != "$DEFAULT_DEV_DATA_DIR:A" ]]; then
     print -u2 "For safety, reset is available only for the default SentriFace-Dev data directory."
     print -u2 "Remove a custom SENTRIFACE_DEV_DATA_DIR only after independently verifying its path."
     exit 2
@@ -57,9 +58,11 @@ if [[ "$MODE" == "reset" ]]; then
     read -r confirmation
     [[ "$confirmation" == "RESET-DEV" ]] || { print "Development reset cancelled."; exit 0; }
   fi
-  if [[ -e "$DEV_DATA_DIR" ]]; then
-    rm -rf -- "$DEV_DATA_DIR"
+  RESET_PYTHON="$PYTHON"
+  if [[ ! -x "$RESET_PYTHON" ]]; then
+    RESET_PYTHON="$(command -v python3.12 || command -v python3.11 || command -v python3)"
   fi
+  "$RESET_PYTHON" "$PROJECT_DIR/scripts/reset_macos_dev_authority.py" "$DEV_DATA_DIR"
   print "Removed SentriFace source-development data: $DEV_DATA_DIR"
   exit 0
 fi

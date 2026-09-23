@@ -1226,7 +1226,12 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/person":
                 person_id = _query_value(parsed.query, "person_id")
                 include_archived = _query_bool(parsed.query, "include_archived")
-                raw_view = include_archived or _query_value(parsed.query, "view") == "raw"
+                # The normal profile is the effective canonical identity. Raw is
+                # an explicit history/archived inspection mode.
+                view = parse_qs(parsed.query).get("view", ["effective"])[0]
+                if view not in {"effective", "raw"}:
+                    raise KeyError(f"Unknown person view: {view}")
+                raw_view = include_archived or view == "raw"
                 person = (
                     self.server.engine.get_person(person_id, include_archived=True)
                     if raw_view else self.server.engine.get_effective_person(person_id)

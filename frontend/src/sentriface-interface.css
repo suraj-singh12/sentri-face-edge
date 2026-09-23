@@ -2527,6 +2527,7 @@ button {
 }
 
 .debug-workspace {
+  container-type: inline-size;
   height: calc(100dvh - 152px);
   min-height: 0;
   overflow: hidden;
@@ -2539,7 +2540,7 @@ button {
 
 .debug-shell {
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: 252px minmax(0, 1fr);
   gap: 20px;
   height: 100%;
   min-height: 0;
@@ -2548,7 +2549,8 @@ button {
 .debug-sidebar {
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  min-width: 0;
+  overflow-y: auto;
   padding-right: 12px;
   border-right: 1px solid var(--sentriface-card-border);
 }
@@ -2565,6 +2567,7 @@ button {
 
 .debug-side-card {
   padding: 14px !important;
+  flex-shrink: 0;
 }
 
 .debug-summary-card {
@@ -3657,6 +3660,25 @@ button {
 
 .recognize-action {
   height: 58px;
+}
+
+.recognize-complete-button {
+  height: 58px;
+  min-height: 58px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+@container (max-width: 760px) {
+  .debug-shell { grid-template-columns: minmax(0, 1fr); }
+  .debug-sidebar {
+    height: auto;
+    padding-right: 0;
+    padding-bottom: 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--sentriface-card-border);
+  }
+  .debug-summary-card { margin-top: 0; }
 }
 
 .recognize-action .mantine-Button-inner {
