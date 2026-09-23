@@ -11,7 +11,10 @@ export function useIntentionalFormScroll(formId) {
   useEffect(() => {
     if (!formId || !pendingRef.current) return;
     pendingRef.current = false;
-    elementRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const frame = requestAnimationFrame(() => {
+      elementRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [formId]);
 
   return [elementRef, requestScroll];

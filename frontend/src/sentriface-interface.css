@@ -1323,9 +1323,7 @@ button {
 }
 
 .recognize-grid--multi {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
+  flex: 0 0 auto;
 }
 
 .recognize-grid > .mantine-Grid-inner {
@@ -1633,8 +1631,15 @@ button {
 }
 
 .recognize-workspace > .mantine-Stack-root {
-  height: min(760px, calc(100dvh - 180px));
-  min-height: 0;
+  height: auto;
+}
+
+.followup-scroll-target {
+  scroll-margin-top: 88px;
+}
+
+.recognize-followup-anchor {
+  min-height: calc(100dvh - 88px);
 }
 
 .surface-title-block {
@@ -3923,7 +3928,7 @@ button {
 }
 
 .followup-card .mantine-Input-input {
-  min-height: 46px;
+  min-height: 44px;
 }
 
 .followup-help {
@@ -3977,6 +3982,22 @@ button {
   display: inline;
 }
 
+@media (max-width: 62em) {
+  .recognize-grid,
+  .recognize-grid > .mantine-Grid-inner,
+  .recognize-grid .mantine-Grid-col {
+    height: auto;
+  }
+
+  .action-slot {
+    flex-basis: auto;
+  }
+
+  .recognition-results-shell {
+    max-height: 540px;
+  }
+}
+
 @media (max-width: 48em) {
   .shell-notice {
     align-items: start;
@@ -3994,16 +4015,6 @@ button {
     min-width: auto;
   }
 
-  .recognize-grid {
-    height: auto;
-    min-height: 0;
-  }
-
-  .recognize-grid > .mantine-Grid-inner,
-  .recognize-grid .mantine-Grid-col {
-    height: auto;
-  }
-
   .image-frame {
     min-height: 240px;
     height: 280px;
@@ -4016,10 +4027,6 @@ button {
 
   .face-quality-scroll {
     grid-auto-columns: minmax(220px, 82%);
-  }
-
-  .recognition-results-shell {
-    max-height: 540px;
   }
 
   .recognition-face-details {

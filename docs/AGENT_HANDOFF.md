@@ -28,11 +28,13 @@ normative rules in the repository-root `AGENTS.md`.
   guard, OS network-policy checks, or localhost request validation.
 - Post-P14 source stabilization fixes the shared person-profile read contract,
   review selection state, form scroll, country search, operator terminology,
-  Settings layout, and macOS development reset. The source backend/frontend
-  suites and frontend build pass. Live UI verification covered country search
-  and narrow Settings/Activity Log layout; browser approval timed out before
-  the remaining live recognition/profile and Review Photos transitions could
-  be completed. Do not treat those manual flows as release acceptance.
+  Settings layout, and macOS development reset. A subsequent recognition UI
+  correction lets the result panels keep their height above the action buttons,
+  compacts the new-person form, and scrolls that form below the fixed header.
+  The source backend suite (532 passed, 47 skipped, 106 subtests), frontend suite
+  (99 passed), and frontend build pass. The recognition and Review Photos
+  transitions still need live UI verification. Do not treat those manual flows
+  as release acceptance.
 
 ## Read in this order
 

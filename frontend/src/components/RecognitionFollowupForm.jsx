@@ -26,9 +26,9 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
   )).slice(0, 6);
   const form = (
     <form onSubmit={onSubmit}>
-      <Stack gap="md">
+      <Stack gap="xs">
         <Text fw={800}>{isNew ? "Add New Person Details" : "Add Event Details (for accepted person)"}</Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" verticalSpacing="xs">
           {isNew && <TextInput required label="Rank" value={values.rank} onChange={(event) => onChange("rank", event.target.value)} />}
           {isNew && <TextInput required label="Name" value={values.name} onChange={(event) => onChange("name", event.target.value)} />}
           {isNew && <CountrySelect value={values.country} onChange={(value) => onChange("country", value)} />}
@@ -42,7 +42,7 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
         </SimpleGrid>
         <Textarea
           autosize
-          minRows={3}
+          minRows={2}
           label={isNew ? "Person notes" : "Notes for this sighting / photo"}
           description={isNew ? "Saved on the new person’s profile" : "Saved with this individual sighting"}
           value={values.notes || ""}
@@ -77,7 +77,7 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
             ))}
           </Stack>
         )}
-        <Paper withBorder radius="md" p="sm" className="followup-help">
+        <Paper withBorder radius="md" p="xs" className="followup-help">
           <Group gap="sm">
             <ThemeIcon variant="light" color="blue" size="sm"><IconInfoCircle size={16} /></ThemeIcon>
             <Text size="sm" c="dimmed">This information helps you keep a context of when and where this person was seen.</Text>
@@ -90,7 +90,7 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
       </Stack>
     </form>
   );
-  return embedded ? form : <Card withBorder radius="md" mt="md" className="followup-card">{form}</Card>;
+  return embedded ? form : <Card withBorder radius="md" mt="md" p="sm" className="followup-card">{form}</Card>;
 }
 
 function activeMentionQuery(notes) {

@@ -835,7 +835,7 @@ function QueueGroupReview({
       )}
 
       {followup && (
-        <Card withBorder radius="md" ref={followupRef} className="queue-followup-card">
+        <Card withBorder radius="md" ref={followupRef} className="queue-followup-card followup-scroll-target">
           <Text fw={700}>{followup.name || "New person"}</Text>
           <Text size="xs" c="dimmed" mb="sm">{followup.faceIds.length} photo{followup.faceIds.length === 1 ? "" : "s"}</Text>
           <RecognitionFollowupForm people={people} values={followup} confirmed={followupDone} onChange={onFollowupChange} onSubmit={onFollowupSubmit} onClear={onFollowupClear} embedded showAddedBy />

@@ -418,7 +418,7 @@ export function RecognizeView({
           </Group>
         </Stack>
       </Modal>
-      {recognitionFollowup && <Box ref={followupRef}>
+      {recognitionFollowup && <Box ref={followupRef} className="followup-scroll-target recognize-followup-anchor">
         <RecognitionFollowupForm
           people={people}
           values={recognitionFollowup}
