@@ -11,6 +11,7 @@ import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
 import { useLicenseController } from "./hooks/useLicenseController.js";
 import { profileLine, tabLabel } from "./utils.js";
 import { DebugView } from "./views/DebugView.jsx";
+import { EventsView } from "./views/EventsView.jsx";
 import { PeopleView } from "./views/PeopleView.jsx";
 import { QueueView } from "./views/QueueView.jsx";
 import { RecognizeView } from "./views/RecognizeView.jsx";
@@ -211,7 +212,13 @@ function SentriFaceShell({ user, logout, changePassword }) {
               recognitionAcceptedFaces={state.recognitionAcceptedFaces}
               recognitionFollowup={state.recognitionFollowup}
               recognitionFollowupDone={state.recognitionFollowupDone}
+              proofOnlyDuplicateCandidates={state.recognitionProofOnlyDuplicateCandidates}
               targetPerson={state.recognitionTargetPerson}
+              qualityOnly={state.recognitionQualityOnly}
+              onQualityOnlyChange={actions.setRecognitionQualityOnly}
+              eventDraft={state.recognitionEventDraft}
+              onEventChange={actions.updateRecognitionEvent}
+              onEventConfirm={actions.confirmRecognitionEvent}
               onRecognizeFile={guarded(actions.recognizeLoadedImage)}
               onLoadAnother={() => refs.recognizeFileRef.current?.click()}
               onSelectFace={actions.selectRecognitionFace}
@@ -227,6 +234,8 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onLoadPeopleCandidates={guarded(actions.loadRecognitionPeopleCandidates)}
               onFollowupChange={actions.updateRecognitionFollowup}
               onFollowupSubmit={guarded(actions.confirmRecognitionFollowup)}
+              onUseProofOnlyDuplicate={actions.useProofOnlyDuplicatePerson}
+              onCreateAfterProofOnlyCheck={guarded(actions.createAfterProofOnlyDuplicateCheck)}
               onFollowupClear={actions.clearRecognitionFollowupForm}
               onCancelTarget={actions.cancelExistingPersonEnrollment}
             />
@@ -244,9 +253,16 @@ function SentriFaceShell({ user, logout, changePassword }) {
               queueAccepted={state.queueAccepted}
               queueFollowup={state.queueFollowup}
               queueFollowupDone={state.queueFollowupDone}
+              proofOnlyDuplicateCandidates={state.queueProofOnlyDuplicateCandidates}
               queueGallery={state.queueGallery}
               queueGalleryImage={state.queueGalleryImage}
               queueReviewStats={state.queueReviewStats}
+              qualityOnly={state.queueQualityOnly}
+              onQualityOnlyChange={actions.setQueueQualityOnly}
+              eventDetails={state.queueEvent}
+              eventDraft={state.queueEventDraft}
+              onEventChange={actions.updateQueueEvent}
+              onEventConfirm={actions.confirmQueueEvent}
               onFiles={guarded((files) => actions.scanQueueFiles(Array.from(files || [])))}
               onFolder={guarded((files) => actions.scanQueueFiles(Array.from(files || [])))}
               onDrop={guarded(actions.queueDrop)}
@@ -270,6 +286,8 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onLoadPeopleCandidates={guarded(actions.loadQueuePeopleCandidates)}
               onFollowupChange={actions.updateQueueFollowup}
               onFollowupSubmit={guarded(actions.confirmQueueFollowup)}
+              onUseProofOnlyDuplicate={actions.useQueueProofOnlyDuplicatePerson}
+              onCreateAfterProofOnlyCheck={guarded(actions.createQueueAfterProofOnlyDuplicateCheck)}
               onFollowupClear={actions.clearQueueFollowupForm}
               onGallery={guarded(actions.openQueueGallery)}
               onGalleryImage={actions.setQueueGalleryImage}
@@ -300,6 +318,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onBack={actions.peopleBack}
               onSave={actions.savePeopleProfile}
               onSaveNotes={guarded(actions.savePersonNotes)}
+              onQueryEncounters={actions.queryEncounters}
               onAddPhoto={beginPhotoEnrollment}
               onFavorite={guarded(actions.setPeopleFavorite)}
               onSetRepresentative={guarded(actions.setRepresentativePhoto)}
@@ -342,6 +361,17 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onEvidenceCollection={guarded(actions.selectWorldEvidenceCollection)}
               onNextEvidencePage={guarded(actions.nextWorldEvidencePage)}
               onValidateMediaOrigin={actions.validateWorldMediaOrigin}
+            />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="encounters">
+            <EventsView
+              page={state.encounters}
+              detail={state.encounterDetail}
+              people={state.people}
+              onQuery={guarded(actions.loadEncounters)}
+              onOpen={guarded(actions.loadEncounterDetail)}
+              onClose={actions.closeEncounterDetail}
             />
           </Tabs.Panel>
 

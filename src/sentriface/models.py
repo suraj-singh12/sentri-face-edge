@@ -150,6 +150,7 @@ class EmbeddingRecord:
     crop_path: str | None = None
     created_at: str = field(default_factory=utc_now)
     canonical_person_id: str | None = None
+    recognition_state: str = "GOOD"
 
 
 @dataclass(frozen=True)
@@ -882,6 +883,7 @@ class InitSession:
     source_path: str
     status: str
     created_at: str = field(default_factory=utc_now)
+    quality_only: bool = True
 
 
 @dataclass(frozen=True)

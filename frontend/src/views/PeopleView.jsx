@@ -67,6 +67,7 @@ import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
 import { CountrySelect } from "../components/CountrySelect.jsx";
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { PersonGraphView } from "./PersonGraphView.jsx";
+import { eventDateTime } from "./EventsView.jsx";
 import {
   currentDateTimeParts,
   detailsForEmbedding,
@@ -97,6 +98,7 @@ export function PeopleView({
   onBack,
   onSave,
   onSaveNotes,
+  onQueryEncounters,
   onAddPhoto,
   onFavorite,
   onSetRepresentative,
@@ -201,6 +203,7 @@ export function PeopleView({
           canDestroy={canDestroy}
           onSave={onSave}
           onSaveNotes={onSaveNotes}
+          onQueryEncounters={onQueryEncounters}
           onAddPhoto={onAddPhoto}
           onCreateIdentifiedPerson={onCreateIdentifiedPerson}
           onOpenGraph={onOpenGraph}
@@ -991,6 +994,7 @@ function PeopleGalleryView({
   onBack,
   onSave,
   onSaveNotes,
+  onQueryEncounters,
   onAddPhoto,
   onCreateIdentifiedPerson,
   onOpenGraph,
@@ -1006,6 +1010,9 @@ function PeopleGalleryView({
   const imageRecords = profileImageRecords(payload);
   const tabContentRef = useRef(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [personEvents, setPersonEvents] = useState({ events: [], next_cursor: null });
+  const [personEventFilters, setPersonEventFilters] = useState({ search: "", date_from: "", date_to: "", location: "", context: "", person_status: "" });
+  const [personEventPageCursors, setPersonEventPageCursors] = useState([""]);
   const [editOpen, setEditOpen] = useState(false);
   const [notesEditOpen, setNotesEditOpen] = useState(false);
   const [managementDialog, setManagementDialog] = useState(null);
@@ -1059,6 +1066,8 @@ function PeopleGalleryView({
 
   useEffect(() => {
     setActiveTab("overview");
+    setPersonEvents({ events: [], next_cursor: null });
+    setPersonEventPageCursors([""]);
     setEditOpen(false);
     setNotesEditOpen(false);
     setNotePlaceholderOpen(false);
@@ -1067,6 +1076,15 @@ function PeopleGalleryView({
     setProfileDeleteConfirmation("");
     setSelectedNoteMentionIds(profileNote.mentioned_person_ids || []);
   }, [payload.person.person_id]);
+
+  useEffect(() => {
+    if (activeTab !== "events" || !onQueryEncounters) return;
+    let active = true;
+    onQueryEncounters({ person_id: payload.person.person_id, ...personEventFilters, cursor: personEventPageCursors.at(-1) })
+      .then((page) => { if (active) setPersonEvents(page); })
+      .catch(() => { if (active) setPersonEvents({ events: [], next_cursor: null }); });
+    return () => { active = false; };
+  }, [activeTab, onQueryEncounters, payload.person.person_id, JSON.stringify(personEventFilters), JSON.stringify(personEventPageCursors)]);
 
   useEffect(() => {
     setNotesDraft(profileNote.content);
@@ -1323,6 +1341,7 @@ function PeopleGalleryView({
           <Tabs.Tab value="overview">Overview</Tabs.Tab>
           <Tabs.Tab value="photos">Photos ({imageRecords.length})</Tabs.Tab>
           <Tabs.Tab value="sightings">Sightings ({latestSightings.length})</Tabs.Tab>
+          <Tabs.Tab value="events">Events</Tabs.Tab>
           <Tabs.Tab value="associations">Associations ({relationships.length})</Tabs.Tab>
           <Tabs.Tab value="changes">Activity ({activity.length})</Tabs.Tab>
         </Tabs.List>
@@ -1359,6 +1378,30 @@ function PeopleGalleryView({
         </Tabs.Panel>
         <Tabs.Panel value="sightings">
           <PeopleProfileSightings details={latestSightings} imageRecords={imageRecords} onSighting={selectSightingPhoto} />
+        </Tabs.Panel>
+        <Tabs.Panel value="events">
+          <Stack mt="md">
+            <Text size="sm" c="dimmed">Occurrences where this Person was present, mentioned in an Event Note, or both.</Text>
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
+              <TextInput label="Event or location" value={personEventFilters.search} onChange={(event) => setPersonEventFilters((current) => ({ ...current, search: event.currentTarget.value }))} />
+              <TextInput type="date" label="From date" value={personEventFilters.date_from} onChange={(event) => setPersonEventFilters((current) => ({ ...current, date_from: event.currentTarget.value }))} />
+              <TextInput type="date" label="To date" value={personEventFilters.date_to} onChange={(event) => setPersonEventFilters((current) => ({ ...current, date_to: event.currentTarget.value }))} />
+              <TextInput label="Location" value={personEventFilters.location} onChange={(event) => setPersonEventFilters((current) => ({ ...current, location: event.currentTarget.value }))} />
+              <Select clearable label="Context" data={[{ value: "ordinary", label: "Ordinary / small" }, { value: "public", label: "Public / group" }, { value: "unknown", label: "Unknown" }]} value={personEventFilters.context || null} onChange={(value) => setPersonEventFilters((current) => ({ ...current, context: value || "" }))} />
+              <Select clearable label="Status" data={[{ value: "PRESENT", label: "Present" }, { value: "MENTIONED", label: "Mentioned" }, { value: "BOTH", label: "Present + Mentioned" }]} value={personEventFilters.person_status || null} onChange={(value) => setPersonEventFilters((current) => ({ ...current, person_status: value || "" }))} />
+            </SimpleGrid>
+            {(personEvents.events || []).map((event) => (
+              <Card key={event.observation_id} withBorder>
+                <Group justify="space-between"><Text fw={800}>{event.occasion || "Unnamed Event"}</Text><Badge>{event.person_status === "BOTH" ? "Present + Mentioned" : event.person_status === "PRESENT" ? "Present" : "Mentioned"}</Badge></Group>
+                <Text size="sm">{eventDateTime(event)} · {event.location || "Location unknown"} · {event.context}</Text>
+                {!!event.sighting_notes?.length && <Text size="sm">Sighting note: {event.sighting_notes.join(" · ")}</Text>}
+                {event.person_status !== "PRESENT" && event.event_notes && <Text size="sm">Event Note: {event.event_notes}</Text>}
+                {!!event.person_media?.length && <Group mt="xs">{event.person_media.map((path) => <Image key={path} src={mediaUrl(path)} alt="Person observed in this Event" w={80} h={80} fit="cover" />)}</Group>}
+              </Card>
+            ))}
+            {!personEvents.events?.length && <Text c="dimmed">No matching Events.</Text>}
+            <Group><Button variant="default" disabled={personEventPageCursors.length < 2} onClick={() => setPersonEventPageCursors((current) => current.slice(0, -1))}>Previous</Button><Button variant="default" disabled={!personEvents.next_cursor} onClick={() => setPersonEventPageCursors((current) => [...current, personEvents.next_cursor])}>Next</Button></Group>
+          </Stack>
         </Tabs.Panel>
         <Tabs.Panel value="associations">
           <PeopleProfileAssociations
@@ -1760,6 +1803,7 @@ function PeopleProfilePhotos({
             ["Location", photoDetail.place_seen || "-"],
             ["Quality", selectedRecord?.qualityScore == null ? "-" : `${Math.round(selectedRecord.qualityScore * 100)}%`],
             ["Embedding", selectedRecord?.embeddingId ? "Indexed" : "-"],
+            ["Face origin", selectedRecord?.faceOrigins?.map((origin) => origin.face_origin.replaceAll("_", " ")).join(", ") || "Unknown"],
             ["Rank", profile.rank || "-"],
           ]} />
           {photoDetail.notes && <Text size="sm" mt="md" style={{ whiteSpace: "pre-wrap" }}><Text span fw={700}>Notes: </Text>{photoDetail.notes}</Text>}
@@ -2233,6 +2277,7 @@ function profileImageRecords(payload) {
       path: record.source_image || record.crop_path,
       thumbPath: record.crop_path || record.source_image,
       qualityScore: record.quality_score,
+      faceOrigins: record.face_origins || [],
       createdAt: record.created_at,
     }))
     .filter((record) => record.path);

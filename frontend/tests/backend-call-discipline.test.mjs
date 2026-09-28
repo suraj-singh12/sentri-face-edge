@@ -33,7 +33,8 @@ test("full refresh remains explicit, sequential, and bounded by active view", as
   const appData = await read("../src/hooks/useAppData.js");
   const refresh = appData.slice(appData.indexOf("const refreshAll"), appData.indexOf("const reloadAppData"));
   assert.doesNotMatch(refresh, /Promise\.all/);
-  assert.match(refresh, /activeView === "people"[\s\S]*await loadPeople[\s\S]*await loadDeletedFaces/);
+  assert.match(refresh, /\["people", "recognize", "queue", "encounters"\]\.includes\(activeView\)[\s\S]*await loadPeople/);
+  assert.match(refresh, /activeView === "people"[\s\S]*await loadDeletedFaces/);
   assert.match(refresh, /loadedViews\.current\.has\("people"\)/);
   assert.doesNotMatch(appData, /setInterval/);
 });

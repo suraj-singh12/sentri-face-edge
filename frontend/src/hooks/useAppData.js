@@ -15,6 +15,8 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const [peopleReadModel, setPeopleReadModel] = useState({ statistics: {}, sort_orders: {} });
   const [deletedFaces, setDeletedFaces] = useState([]);
   const [events, setEvents] = useState([]);
+  const [encounters, setEncounters] = useState({ events: [], next_cursor: null });
+  const [encounterDetail, setEncounterDetail] = useState(null);
   const [backups, setBackups] = useState([]);
   const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [backupCreating, setBackupCreating] = useState(false);
@@ -46,6 +48,20 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     setEvents(payload.events || []);
     return payload;
   }, [apiGet, canTechnical]);
+  const queryEncounters = useCallback(async (filters = {}) => {
+    const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value != null && value !== ""));
+    return apiGet(`/api/encounters?${query.toString()}`, { dedupe: false });
+  }, [apiGet]);
+  const loadEncounters = useCallback(async (filters = {}) => {
+    const page = await queryEncounters(filters);
+    setEncounters(page);
+    return page;
+  }, [queryEncounters]);
+  const loadEncounterDetail = useCallback(async (observationId) => {
+    const detail = await apiGet(`/api/encounter?observation_id=${encodeURIComponent(observationId)}`, { dedupe: false });
+    setEncounterDetail(detail);
+    return detail;
+  }, [apiGet]);
   const loadDeletedFaces = useCallback(async (options = {}) => {
     if (!canDestroy) { setDeletedFaces([]); return { deleted_faces: [] }; }
     const payload = await apiGet("/api/deleted-faces", options);
@@ -65,10 +81,17 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
         await loadProfile(options);
         profileLoaded.current = true;
       }
-      if (activeView === "people" && (options.force || !loadedViews.current.has("people"))) {
+      if (["people", "recognize", "queue", "encounters"].includes(activeView) && (options.force || !loadedViews.current.has("people"))) {
         await loadPeople(options);
-        await loadDeletedFaces(options);
         loadedViews.current.add("people");
+      }
+      if (activeView === "people" && (options.force || !loadedViews.current.has("deleted-faces"))) {
+        await loadDeletedFaces(options);
+        loadedViews.current.add("deleted-faces");
+      }
+      if (activeView === "encounters" && (options.force || !loadedViews.current.has("encounters"))) {
+        await loadEncounters();
+        loadedViews.current.add("encounters");
       }
       if (activeView === "debug" && (options.force || !loadedViews.current.has("debug"))) {
         await loadEvents(options);
@@ -79,7 +102,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
       setConnectionError(error?.message || "SentriFace server is unavailable");
       throw error;
     }
-  }, [activeView, loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups]);
+  }, [activeView, loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups, loadEncounters]);
 
   const reloadAppData = useCallback(async () => {
     if (refreshing) return;
@@ -337,6 +360,8 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     peopleReadModel,
     deletedFaces,
     events,
+    encounters,
+    encounterDetail,
     backups,
     backupModalOpen,
     backupCreating,
@@ -345,6 +370,10 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     restoreBackupSelection,
     loadPeople,
     loadEvents,
+    queryEncounters,
+    loadEncounters,
+    loadEncounterDetail,
+    closeEncounterDetail: () => setEncounterDetail(null),
     loadDeletedFaces,
     loadBackups,
     refreshAll,

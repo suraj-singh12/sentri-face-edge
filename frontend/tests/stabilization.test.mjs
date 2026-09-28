@@ -27,8 +27,67 @@ test("every person profile entry uses the effective API default", () => {
   const queue = read("../src/hooks/useQueueController.js");
   for (const caller of [people, recognize, queue]) {
     assert.match(caller, /\/api\/person\?person_id=/);
+    assert.match(caller, /&view=/);
   }
   assert.match(read("../../src/sentriface/api_server.py"), /get\("view", \["effective"\]\)/);
+});
+
+test("sighting mention suggestions load People outside the People tab and submit selected IDs", () => {
+  const appData = read("../src/hooks/useAppData.js");
+  const form = read("../src/components/RecognitionFollowupForm.jsx");
+  for (const controller of ["useRecognizeController.js", "useQueueController.js"]) {
+    assert.match(read(`../src/hooks/${controller}`), /mentioned_person_ids:/);
+  }
+  assert.match(appData, /\["people", "recognize", "queue", "encounters"\]\.includes\(activeView\)/);
+  assert.match(form, /mentionQuery\.length < 3/);
+  assert.match(form, /person\.person_id/);
+  assert.match(form, /onChange\("mentionedPersonIds"/);
+});
+
+test("review followups submit shared Encounter metadata", () => {
+  const recognize = read("../src/hooks/useRecognizeController.js");
+  const queue = read("../src/hooks/useQueueController.js");
+  assert.match(recognize, /encounterMetadata:/);
+  assert.match(recognize, /encounterLocked: Boolean/);
+  for (const controller of [recognize, queue]) {
+    assert.match(controller, /event_context:/);
+    assert.match(controller, /event_notes:/);
+    assert.match(controller, /end_time:/);
+    assert.match(controller, /time_precision:/);
+  }
+});
+
+test("Event popup confirms before person resolution and keeps person fields", () => {
+  const eventForm = read("../src/components/EncounterDetailsModal.jsx");
+  const personForm = read("../src/components/RecognitionFollowupForm.jsx");
+  const recognize = read("../src/views/RecognizeView.jsx");
+  const queue = read("../src/views/QueueView.jsx");
+  assert.match(eventForm, /Confirm Event/);
+  assert.match(eventForm, /eventMentionedPersonIds/);
+  assert.match(eventForm, /query\.length < 3/);
+  assert.match(recognize, /!recognition\?\.encounterMetadata/);
+  assert.match(queue, /eventDetails\?\.groupId !== queueSelectedGroup\.group_id/);
+  assert.match(read("../src/hooks/useQueueController.js"), /setQueueEvent\(null\);\s*setQueueEventDraft\(null\);/);
+  for (const field of ["Rank", "Name", "Tag", "Added by", "Sighting Notes", "With how many individuals"]) {
+    assert.ok(personForm.includes(field), field);
+  }
+  assert.match(personForm, /Inherited Encounter/);
+  assert.doesNotMatch(personForm, /<TextInput[^>]*label="Date"/);
+  assert.doesNotMatch(personForm, /<Textarea label="Event notes"/);
+});
+
+test("quality search policy and poor-face decisions are independent", () => {
+  const recognize = read("../src/hooks/useRecognizeController.js");
+  const queue = read("../src/hooks/useQueueController.js");
+  const recognizeView = read("../src/views/RecognizeView.jsx");
+  const personForm = read("../src/components/RecognitionFollowupForm.jsx");
+  for (const controller of [recognize, queue]) assert.match(controller, /quality_only:/);
+  assert.match(recognize, /embedding_state:/);
+  assert.match(queue, /quality_choices:/);
+  assert.match(recognizeView, /No, keep as proof only/);
+  assert.match(recognizeView, /Yes, accept low-quality face/);
+  assert.match(personForm, /POOR_ACCEPTED/);
+  assert.match(personForm, /PROOF_ONLY/);
 });
 
 test("new-person draft is discarded before selecting an existing person", () => {

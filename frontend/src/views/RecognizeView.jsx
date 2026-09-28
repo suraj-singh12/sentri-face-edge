@@ -15,6 +15,7 @@ import {
   Select,
   SimpleGrid,
   Stack,
+  Switch,
   Text,
   TextInput,
   ThemeIcon,
@@ -34,9 +35,11 @@ import {
 } from "@tabler/icons-react";
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
+import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
 import { GalleryPanel, LoadImagePanel, Surface } from "../components/Shared.jsx";
 import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor } from "../utils.js";
+import { browsePeopleCandidates, PROFILE_BROWSE_MODES } from "../utils/profileBrowse.js";
 
 const FACE_COLORS = ["#35d6d0", "#bd83ff", "#f5a623", "#59a7ff", "#f472b6", "#a3e635"];
 
@@ -51,7 +54,13 @@ export function RecognizeView({
   recognitionAcceptedFaces,
   recognitionFollowup,
   recognitionFollowupDone,
+  proofOnlyDuplicateCandidates = [],
   targetPerson,
+  qualityOnly = true,
+  onQualityOnlyChange,
+  eventDraft,
+  onEventChange,
+  onEventConfirm,
   onRecognizeFile,
   onLoadAnother,
   onSelectFace,
@@ -67,6 +76,8 @@ export function RecognizeView({
   onLoadPeopleCandidates,
   onFollowupChange,
   onFollowupSubmit,
+  onUseProofOnlyDuplicate,
+  onCreateAfterProofOnlyCheck,
   onFollowupClear,
   onCancelTarget,
 }) {
@@ -76,6 +87,7 @@ export function RecognizeView({
   const [peoplePickerFace, setPeoplePickerFace] = useState(null);
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleQuery, setPeopleQuery] = useState("");
+  const [peoplePickerMode, setPeoplePickerMode] = useState("biometric");
   const [peopleCandidates, setPeopleCandidates] = useState({});
   const selectedManualMatch = manualMatches[selectedFace?.index] || null;
   const selectedMatch = selectedManualMatch || selectedFace?.matches?.[0] || null;
@@ -138,19 +150,20 @@ export function RecognizeView({
     else onNew(faceIndex);
   };
 
-  const confirmQualityOverride = () => {
+  const confirmQualityOverride = (acceptForRecognition = true) => {
     if (!qualityOverride) return;
     const { action, face, selectedPerson } = qualityOverride;
     setQualityOverride(null);
     scrollToFollowup();
-    if (action === "target") continueTargetEnrollment(face, true);
-    else if (action === "accept") onAccept(face.index, true, selectedPerson || null);
-    else onNew(face.index, true);
+    if (action === "target") continueTargetEnrollment(face, acceptForRecognition);
+    else if (action === "accept") onAccept(face.index, acceptForRecognition, selectedPerson || null);
+    else onNew(face.index, acceptForRecognition);
   };
 
   const openPeoplePicker = async (faceIndex) => {
     setPeoplePickerFace(faceIndex);
     setPeopleQuery("");
+    setPeoplePickerMode("biometric");
     if (peopleCandidates[faceIndex]) return;
     setPeopleLoading(true);
     try {
@@ -192,6 +205,7 @@ export function RecognizeView({
 
   return (
     <>
+      <EncounterDetailsModal opened={Boolean(recognition?.faces?.length && !recognition?.encounterMetadata && !targetPerson)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} />
       <input ref={recognizeFileRef} className="hidden-file" type="file" accept="image/*" onChange={onRecognizeFile} />
       {targetPerson && (
         <Alert color="blue" title={`Adding a photograph to ${targetPerson.name}`} icon={<IconUserCheck size={18} />} mb="md">
@@ -200,6 +214,8 @@ export function RecognizeView({
       )}
       <Paper withBorder radius="md" p="md" className="recognize-workspace">
         <Stack gap="md">
+          <Switch checked={qualityOnly} onChange={(event) => onQualityOnlyChange?.(event.currentTarget.checked)} label="Prefer quality photos for recognition" />
+          {!qualityOnly && <Alert color="orange">Low-quality face samples may reduce recognition accuracy and may produce poorer or less reliable matches. Re-run recognition to apply this choice.</Alert>}
           <Grid align="stretch" className="recognize-grid recognize-grid--multi">
             <Grid.Col span={{ base: 12, md: 7 }}>
               <Surface
@@ -374,16 +390,17 @@ export function RecognizeView({
             </Group>
           </Paper>
           <Group justify="flex-end">
-            <Button variant="default" onClick={() => setQualityOverride(null)}>Cancel</Button>
-            <Button color="orange" onClick={confirmQualityOverride}>
-              {qualityOverride?.action === "accept" ? "Accept Anyway" : "Create Person Anyway"}
-            </Button>
+            <Button variant="default" onClick={() => confirmQualityOverride(false)}>No, keep as proof only</Button>
+            <Button color="orange" onClick={() => confirmQualityOverride(true)}>Yes, accept low-quality face</Button>
           </Group>
         </Stack>
       </Modal>
       <RecognitionPeoplePicker
         opened={Boolean(peoplePickerFace)}
         people={peopleCandidates[peoplePickerFace] || []}
+        allPeople={people}
+        mode={peoplePickerMode}
+        onMode={setPeoplePickerMode}
         loading={peopleLoading}
         query={peopleQuery}
         onQuery={setPeopleQuery}
@@ -391,6 +408,15 @@ export function RecognizeView({
         onNewPerson={chooseNewPerson}
         onSelect={choosePerson}
       />
+      <Modal opened={proofOnlyDuplicateCandidates.length > 0} onClose={() => {}} title="Possible existing profile" centered>
+        <Stack gap="md">
+          <Text size="sm">A proof-only face may match an existing Person. It was not used in normal recognition.</Text>
+          {proofOnlyDuplicateCandidates.map((candidate) => (
+            <Button key={candidate.person_id} variant="light" onClick={() => onUseProofOnlyDuplicate(candidate)}>Use existing {candidate.name}</Button>
+          ))}
+          <Button variant="default" onClick={onCreateAfterProofOnlyCheck}>Create new Person anyway</Button>
+        </Stack>
+      </Modal>
       <Modal
         opened={Boolean(targetConflict)}
         onClose={() => setTargetConflict(null)}
@@ -426,6 +452,7 @@ export function RecognizeView({
           onChange={onFollowupChange}
           onSubmit={onFollowupSubmit}
           onClear={onFollowupClear}
+          addFaceOnly={Boolean(targetPerson)}
         />
       </Box>}
       {/* Developer metrics are retained for later diagnostics, but hidden from the operator UI. */}
@@ -595,23 +622,26 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, ca
   );
 }
 
-function RecognitionPeoplePicker({ opened, people, loading, query, onQuery, onClose, onNewPerson, onSelect }) {
+function RecognitionPeoplePicker({ opened, people, allPeople, mode, onMode, loading, query, onQuery, onClose, onNewPerson, onSelect }) {
   const normalizedQuery = query.trim().toLowerCase();
-  const visiblePeople = (people || []).filter((person) => (
+  const visiblePeople = browsePeopleCandidates(people, allPeople, mode).filter((person) => (
     !normalizedQuery
     || person.name?.toLowerCase().includes(normalizedQuery)
     || person.person_id?.toLowerCase().includes(normalizedQuery)
   ));
   return (
     <Modal opened={opened} onClose={onClose} title="Browse People" size="xl" centered>
-      <Text size="sm" c="dimmed" mb="md">People are ordered from the closest visual match to the least similar.</Text>
+      <Text size="sm" c="dimmed" mb="md">{mode === "biometric" ? "People are ordered from the closest visual match to the least similar." : "Active people without an enrolled face, ordered by name."}</Text>
+      <Group align="end" mb="md">
       <TextInput
         value={query}
         onChange={(event) => onQuery(event.currentTarget.value)}
         leftSection={<IconSearch size={16} />}
         placeholder="Search people by name or ID"
-        mb="md"
+        style={{ flex: 1 }}
       />
+      <Select data={PROFILE_BROWSE_MODES} value={mode} onChange={(value) => onMode(value || "biometric")} aria-label="Profile type" w={250} />
+      </Group>
       <ScrollArea.Autosize mah="60dvh" type="auto" offsetScrollbars>
         <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} className="queue-people-picker-grid">
           <Card component="button" withBorder radius="md" className="queue-person-picker-card queue-person-picker-new" onClick={onNewPerson}>
@@ -636,7 +666,7 @@ function RecognitionPeoplePicker({ opened, people, loading, query, onQuery, onCl
                 <Group justify="space-between" wrap="nowrap" gap={6}>
                   <Text fw={800} truncate>{person.name}</Text>
                   <Badge size="xs" variant="light" color={person.match ? candidateDisplay.color : "gray"}>
-                    {person.match ? candidateDisplay.badge : "No references"}
+                    {mode === "no_face" ? "No face enrolled" : person.match ? candidateDisplay.badge : "No references"}
                   </Badge>
                 </Group>
                 <Text size="xs" c="dimmed">{person.embedding_count || 0} reference photo{Number(person.embedding_count || 0) === 1 ? "" : "s"}</Text>

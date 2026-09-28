@@ -302,6 +302,7 @@ def _required_capability(method: str, path: str) -> str | None:
         "/api/person-association", "/api/person-association-placeholder",
         "/api/person-association-remove",
         "/api/recognition-person-candidates",
+        "/api/proof-only-duplicate-check",
         "/api/recognition-accept-existing", "/api/recognition-new",
         "/api/placeholder-enroll",
         "/api/recognition-followup", "/api/queue-add", "/api/queue-cancel",
@@ -1212,6 +1213,23 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/persons":
                 self._json(_people_collection_payload(self.server.engine))
                 return
+            if parsed.path == "/api/encounters":
+                query = parse_qs(parsed.query)
+                allowed = {
+                    "limit", "cursor", "search", "date_from", "date_to", "location",
+                    "context", "participant_id", "mentioned_person_id", "person_id", "person_status",
+                }
+                if set(query) - allowed:
+                    raise ValueError("Unknown Encounter filter")
+                self._json(self.server.engine.query_encounters(**{
+                    key: values[0] for key, values in query.items() if values
+                }))
+                return
+            if parsed.path == "/api/encounter":
+                self._json(self.server.engine.get_encounter_read(
+                    _query_value(parsed.query, "observation_id")
+                ))
+                return
             if parsed.path == "/api/deleted-faces":
                 self.server.purge_expired_deleted_faces()
                 self._json(
@@ -1242,6 +1260,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     person_id,
                     include_archived=include_archived,
                     raw=raw_view,
+                )
+                face_origins = self.server.engine.face_origins_for_embeddings(
+                    [record.embedding_id for record in embeddings]
                 )
                 details = self.server.engine.list_recognition_details_for_person(
                     person_id,
@@ -1295,7 +1316,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         },
                         "requested_person_id": person_id,
                         "view": "raw" if raw_view else "effective",
-                        "embeddings": [_embedding(record) for record in embeddings],
+                        "embeddings": [
+                            {**_embedding(record), "face_origins": face_origins[record.embedding_id]}
+                            for record in embeddings
+                        ],
                         "details": [
                             _recognition_detail(
                                 detail,
@@ -2112,8 +2136,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/recognize":
                 image_path = require_local_path(Path(_required(payload, "path")))
+                quality_only = _recognition_quality_only(payload)
                 self.server.engine.reset_metrics()
-                review, pending_faces = self.server.engine.prepare_photo_review(image_path)
+                review, pending_faces = self.server.engine.prepare_photo_review(
+                    image_path, quality_only=quality_only,
+                )
                 self.server.log_event("recognize", path=str(image_path), faces=len(pending_faces))
                 self._json(
                     {
@@ -2131,6 +2158,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/recognize-batch":
                 source = require_local_path(Path(_required(payload, "path")))
+                quality_only = _recognition_quality_only(payload)
                 images = _image_paths(source)
                 if not images:
                     raise KeyError(f"No supported images found: {source}")
@@ -2140,7 +2168,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         "image": str(image_path),
                         "faces": [
                             _recognition(self.server.engine, result, index)
-                            for index, result in enumerate(self.server.engine.recognize(image_path), 1)
+                            for index, result in enumerate(
+                                self.server.engine.recognize(image_path, quality_only=quality_only), 1
+                            )
                         ],
                     }
                     for image_path in images
@@ -2150,10 +2180,12 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/recognition-person-candidates":
                 image_path = require_local_path(Path(_required(payload, "path")))
+                quality_only = _recognition_quality_only(payload)
                 candidates = self.server.engine.ranked_people_for_recognition_face(
                     image_path,
                     int(_required(payload, "face_index")),
                     expected_box=_face_box(payload),
+                    quality_only=quality_only,
                 )
                 self._json({
                     "candidates": [
@@ -2167,6 +2199,18 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         for rank, candidate in enumerate(candidates, 1)
                     ]
                 })
+                return
+            if parsed.path == "/api/proof-only-duplicate-check":
+                if payload.get("review_id"):
+                    candidates = self.server.engine.proof_only_duplicate_candidates_for_review_face(
+                        _required(payload, "review_id"), _required(payload, "face_id"),
+                    )
+                else:
+                    candidates = self.server.engine.proof_only_duplicate_candidates_for_init_faces(
+                        _required(payload, "session_id"), _required(payload, "group_id"),
+                        _queue_face_ids(self.server.engine, payload),
+                    )
+                self._json({"candidates": candidates, "basis": "PROOF_ONLY_DUPLICATE_CHECK"})
                 return
             if parsed.path == "/api/person-update":
                 tags = payload.get("tags", [])
@@ -2415,6 +2459,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/queue-scan":
                 source = require_local_path(Path(_required(payload, "path")))
+                quality_only = _recognition_quality_only(payload)
                 job_id = str(payload.get("job_id") or uuid.uuid4())
                 total_files = _safe_count(
                     payload.get("total_files", 0),
@@ -2448,6 +2493,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                             bool(payload.get("force_bad_quality", False)),
                             progress_callback=lambda update: self.server.update_queue_progress(job_id, **update),
                             cancel_check=cancellation.is_set,
+                            quality_only=quality_only,
                         )
                     except QueueCancellationError as exc:
                         self.server.update_queue_progress(
@@ -2543,6 +2589,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     notes=str(payload.get("notes") or ""),
                     mentioned_person_ids=[str(item) for item in mentioned_person_ids],
                     recognition_detail=_review_detail_payload(payload),
+                    quality_choices=_queue_quality_choices(payload),
                     actor=self._operation_actor(),
                 )
                 try:
@@ -2580,6 +2627,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     notes=str(payload.get("notes") or ""),
                     mentioned_person_ids=[str(item) for item in payload.get("mentioned_person_ids", [])],
                     recognition_detail=_review_detail_payload(payload),
+                    quality_choices=_queue_quality_choices(payload),
                     actor=self._operation_actor(),
                 )
                 try:
@@ -3386,6 +3434,13 @@ def _decode_backup_passphrase(value: str) -> str:
             "invalid_backup_passphrase",
         ) from exc
 
+def _recognition_quality_only(payload: dict[str, Any]) -> bool:
+    value = payload.get("quality_only", True)
+    if not isinstance(value, bool):
+        raise InputValidationError("quality_only must be a boolean", "invalid_quality_policy")
+    return value
+
+
 def _required(payload: dict[str, Any], key: str) -> str:
     value = payload.get(key)
     if value is None or str(value).strip() == "":
@@ -3399,10 +3454,20 @@ def _review_detail_payload(payload: dict[str, Any]) -> dict[str, Any]:
         for key in (
             "name", "decision", "date", "time", "rank", "country",
             "importance", "place_seen", "individual_count",
-            "event_occasion", "added_by",
+            "event_occasion", "event_context", "event_notes", "event_mentioned_person_ids", "end_time", "time_precision", "added_by", "proof_only_duplicate_override",
         )
         if payload.get(key) is not None
     }
+
+
+def _queue_quality_choices(payload: dict[str, Any]) -> dict[str, str]:
+    choices = payload.get("quality_choices") or {}
+    if not isinstance(choices, dict) or len(choices) > 1000:
+        raise InputValidationError("quality_choices must be a face map", "invalid_quality_choices")
+    result = {str(key): str(value) for key, value in choices.items()}
+    if any(value not in {"POOR_ACCEPTED", "PROOF_ONLY"} for value in result.values()):
+        raise InputValidationError("Invalid poor-face choice", "invalid_quality_choices")
+    return result
 
 
 def _safe_count(value: Any, field: str, allow_zero: bool = False) -> int:
@@ -4623,6 +4688,7 @@ def _observation_record(observation: Observation) -> dict[str, Any]:
         "status": observation.status,
         "observed_at": observation.observed_at,
         "location": observation.location,
+        "context": observation.context,
         "source": observation.source,
     }
 
@@ -4819,6 +4885,8 @@ def _init_group(
     group: InitGroup,
     matches_by_face_id: dict[str, list[PersonMatch]] | None = None,
 ) -> dict[str, Any]:
+    session = engine.store.get_init_session(group.session_id)
+    quality_only = session.quality_only if session else True
     exclusions_by_face_id = engine.excluded_person_ids_for_init_faces(
         group.session_id,
         [face.init_face_id for face in group.faces],
@@ -4830,6 +4898,7 @@ def _init_group(
         ) if matches_by_face_id is not None else engine.matches_for_vector(
             face.vector,
             excluded_person_ids=exclusions_by_face_id.get(face.init_face_id, set()),
+            quality_only=quality_only,
         )
         for face in group.faces
     ]

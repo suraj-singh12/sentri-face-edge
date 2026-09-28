@@ -2,6 +2,10 @@
 
 ## 2.0.0 - Unreleased
 
+- Added deliberate `NO_FACE` selection to both review browsers, reused durable Encounter/standalone face-origin history, accepted-poor recognition fallback, a separate proof-only pre-creation duplicate check, and read-only Global/Person Events. Event Note selected IDs remain Encounter→Person references and do not create Person relationship evidence.
+
+- Established the first Encounter foundation on existing observations: Event details and selected-ID Event Note provenance are shared across participants; Event and Person/Sighting forms are separate. Queue new-person fields persist, both review paths support selected-ID Sighting Notes, and Add Face remains independent of Encounters. Schema v29 records GOOD, POOR_ACCEPTED, or PROOF_ONLY on existing embeddings and preserves Queue search policy; proof-only faces remain historical but never match. Large uploads retain one reduced managed historical media object, with transient detector preparation.
+
 - Fixed person profile reads from People and recognition, review person-selection
   state, intentional form scrolling, country search, action and Settings layout,
   and operator-facing Tag terminology; hid developer recognition metrics.

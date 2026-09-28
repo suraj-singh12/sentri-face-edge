@@ -20,13 +20,22 @@ export function useQueueController({
   const [queueSessions, setQueueSessions] = useState([]);
   const [queueGroups, setQueueGroups] = useState([]);
   const [queueSessionId, setQueueSessionId] = usePersistentState("sentriface.queue.sessionId", "");
+  const [qualityOnly, setQualityOnly] = usePersistentState("sentriface.queue.qualityOnly", true);
+  const [queueEvent, setQueueEvent] = usePersistentState("sentriface.queue.event", null);
+  const [queueEventDraft, setQueueEventDraft] = usePersistentState("sentriface.queue.eventDraft", null);
   const [queueProgress, setQueueProgress] = useState(null);
   const [queueSelectedGroup, setQueueSelectedGroup] = useState(null);
+  useEffect(() => {
+    if (!queueSelectedGroup || queueEvent?.groupId === queueSelectedGroup.group_id || queueEventDraft) return;
+    const { date } = currentDateTimeParts();
+    setQueueEventDraft({ date, time: "", endTime: "", timePrecision: "unknown", placeSeen: "", eventOccasion: "", eventContext: "unknown", eventNotes: "", eventMentionedPersonIds: [] });
+  }, [queueSelectedGroup, queueEvent, queueEventDraft, setQueueEventDraft]);
   const [queueSelectedGroupId, setQueueSelectedGroupId] = usePersistentState("sentriface.queue.selectedGroupId", "");
   const [queueSelectedFaces, setQueueSelectedFaces] = usePersistentState("sentriface.queue.selectedFaces", []);
   const [queueAccepted, setQueueAccepted] = usePersistentState("sentriface.queue.accepted", false);
   const [queueFollowup, setQueueFollowup] = usePersistentState("sentriface.queue.followup", null);
   const [queueFollowupDone, setQueueFollowupDone] = usePersistentState("sentriface.queue.followupDone", false);
+  const [proofOnlyDuplicateCandidates, setProofOnlyDuplicateCandidates] = useState([]);
   const [queueGallery, setQueueGallery] = useState(null);
   const [queueGalleryImage, setQueueGalleryImage] = useState(null);
   const [queueReviewStats, setQueueReviewStats] = useState(emptyQueueReviewStats);
@@ -138,6 +147,7 @@ export function useQueueController({
         total_files: options.totalFiles || 0,
         uploaded_files: options.uploadedFiles || options.totalFiles || 0,
         force_bad_quality: options.includeLowQuality !== false,
+        quality_only: options.qualityOnly !== false,
       }, { signal: options.signal });
       if (canceledQueueJobs.current.has(jobId)) return;
       const scanRejectedFiles = Number(payload.rejected_files || 0);
@@ -237,6 +247,7 @@ export function useQueueController({
         totalFiles: upload.uploadedFiles,
         uploadedFiles: upload.uploadedFiles,
         signal: abortController.signal,
+        qualityOnly,
       });
     } catch (error) {
       if (abortController.signal.aborted || error?.name === "AbortError") return;
@@ -361,6 +372,11 @@ export function useQueueController({
   };
 
   const openQueueGroup = (group) => {
+    if (queueEvent?.groupId !== group.group_id) {
+      const { date } = currentDateTimeParts();
+      setQueueEvent(null);
+      setQueueEventDraft({ date, time: "", endTime: "", timePrecision: "unknown", placeSeen: "", eventOccasion: "", eventContext: "unknown", eventNotes: "", eventMentionedPersonIds: [] });
+    }
     setQueueSelectedGroup(group);
     setQueueSelectedGroupId(group.group_id);
     resetQueueDecision();
@@ -433,6 +449,7 @@ export function useQueueController({
     setQueueAccepted(false);
     setQueueFollowup(null);
     setQueueFollowupDone(false);
+    setProofOnlyDuplicateCandidates([]);
   };
 
   const queueDiscard = async () => {
@@ -484,29 +501,59 @@ export function useQueueController({
     setQueueFollowup((current) => current ? { ...current, [field]: value } : current);
   };
 
+  const updateQueueEvent = (field, value) => setQueueEventDraft((current) => current ? { ...current, [field]: value } : current);
+  const confirmQueueEvent = (event) => {
+    event.preventDefault();
+    if (!queueEventDraft || !queueSelectedGroup) return;
+    setQueueEvent({
+      ...queueEventDraft,
+      groupId: queueSelectedGroup.group_id,
+      time: queueEventDraft.timePrecision === "unknown" ? "" : queueEventDraft.time,
+      endTime: queueEventDraft.timePrecision === "exact" ? queueEventDraft.endTime : "",
+    });
+    setQueueEventDraft(null);
+  };
+
   const clearQueueFollowupForm = () => {
     const { date, time } = currentDateTimeParts();
     setQueueFollowup((current) => current ? {
       ...current,
-      date,
-      time,
+      date: queueEvent?.date || date,
+      time: queueEvent?.time ?? time,
+      timePrecision: queueEvent?.timePrecision || "exact",
+      endTime: queueEvent?.endTime || "",
+      eventContext: queueEvent?.eventContext || "unknown",
+      eventNotes: queueEvent?.eventNotes || "",
+      eventMentionedPersonIds: queueEvent?.eventMentionedPersonIds || [],
       rank: "",
-      placeSeen: "",
+      placeSeen: queueEvent?.placeSeen || "",
       individualCount: "",
-      eventOccasion: "",
+      eventOccasion: queueEvent?.eventOccasion || "",
       country: "",
       importance: current.action === "new" ? NEW_PERSON_IMPORTANCE_OPTIONS[1] : "",
       addedBy: "",
       notes: "",
       mentionedPersonIds: [],
+      poorFaceChoices: Object.fromEntries((current.poorFaces || []).map((face) => [face.id, "PROOF_ONLY"])),
       name: current.action === "new" ? "" : current.name,
     } : current);
     setQueueFollowupDone(false);
   };
 
-  const confirmQueueFollowup = async (event) => {
+  const confirmQueueFollowup = async (event, createAnyway = false) => {
     event.preventDefault();
     if (!queueFollowup?.faceIds?.length || !queueSelectedGroup) return;
+    if (queueFollowup.action === "new" && !createAnyway) {
+      const duplicateCheck = await apiPost("/api/proof-only-duplicate-check", {
+        session_id: queueSelectedGroup.session_id,
+        group_id: queueSelectedGroup.group_id,
+        face_ids: queueFollowup.faceIds,
+      });
+      if (duplicateCheck.candidates?.length) {
+        setProofOnlyDuplicateCandidates(duplicateCheck.candidates);
+        return;
+      }
+    }
     const confirmedSessionId = queueSelectedGroup.session_id;
     const payload = queueFollowup.action === "new"
       ? await apiPost("/api/queue-confirm-new", {
@@ -520,6 +567,11 @@ export function useQueueController({
         decision: queueFollowup.decision,
         date: queueFollowup.date,
         time: queueFollowup.time,
+        time_precision: queueFollowup.timePrecision,
+        end_time: queueFollowup.endTime,
+        event_context: queueFollowup.eventContext,
+        event_notes: queueFollowup.eventNotes,
+        event_mentioned_person_ids: queueFollowup.eventMentionedPersonIds || [],
         rank: queueFollowup.rank,
         country: queueFollowup.country,
         importance: queueFollowup.importance,
@@ -527,6 +579,8 @@ export function useQueueController({
         individual_count: Number(queueFollowup.individualCount),
         event_occasion: queueFollowup.eventOccasion,
         added_by: queueFollowup.addedBy,
+        quality_choices: queueFollowup.poorFaceChoices || {},
+        proof_only_duplicate_override: createAnyway,
       })
       : await apiPost("/api/queue-confirm-existing", {
         session_id: queueSelectedGroup.session_id,
@@ -540,6 +594,11 @@ export function useQueueController({
         decision: queueFollowup.decision,
         date: queueFollowup.date,
         time: queueFollowup.time,
+        time_precision: queueFollowup.timePrecision,
+        end_time: queueFollowup.endTime,
+        event_context: queueFollowup.eventContext,
+        event_notes: queueFollowup.eventNotes,
+        event_mentioned_person_ids: queueFollowup.eventMentionedPersonIds || [],
         rank: queueFollowup.rank,
         country: queueFollowup.country,
         importance: queueFollowup.importance,
@@ -547,6 +606,7 @@ export function useQueueController({
         individual_count: Number(queueFollowup.individualCount),
         event_occasion: queueFollowup.eventOccasion,
         added_by: queueFollowup.addedBy,
+        quality_choices: queueFollowup.poorFaceChoices || {},
       });
     onGraphMutation?.(payload);
     const entries = payload.accepted || [];
@@ -558,6 +618,7 @@ export function useQueueController({
         : session));
     }
     setQueueFollowupDone(true);
+    setProofOnlyDuplicateCandidates([]);
     setQueueSelectedFaces([]);
     setQueueAccepted(false);
     setQueueGallery(null);
@@ -582,7 +643,22 @@ export function useQueueController({
       setQueueFollowupDone(false);
       setQueueSelectedGroup(null);
       setQueueSelectedGroupId("");
+      setQueueEvent(null);
+      setQueueEventDraft(null);
     }, 1000);
+  };
+
+  const useProofOnlyDuplicatePerson = (candidate) => {
+    setProofOnlyDuplicateCandidates([]);
+    setQueueFollowup((current) => current ? {
+      ...current, action: "existing", decision: "existing",
+      personId: candidate.person_id, name: candidate.name,
+    } : current);
+  };
+
+  const createAfterProofOnlyDuplicateCheck = () => {
+    setProofOnlyDuplicateCandidates([]);
+    return confirmQueueFollowup({ preventDefault() {} }, true);
   };
 
   const queueSkipGroup = async () => {
@@ -642,7 +718,7 @@ export function useQueueController({
 
   const openQueueGallery = async (personId) => {
     if (!personId) return;
-    const payload = await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}`, { dedupe: false });
+    const payload = await apiGet(`/api/person?person_id=${encodeURIComponent(personId)}&view=effective`, { dedupe: false });
     requirePersonContract(payload.person);
     setQueueGallery(payload);
   };
@@ -672,13 +748,21 @@ export function useQueueController({
 
   function openQueueFollowup({ name, personId, decision, action, faceIds }) {
     const { date, time } = currentDateTimeParts();
+    const poorFaces = (queueSelectedGroup?.faces || [])
+      .filter((face) => faceIds.includes(face.init_face_id) && face.quality?.status === "bad")
+      .map((face) => ({ id: face.init_face_id, image: face.source_image || face.crop_path }));
     setQueueFollowup({
-      date,
-      time,
+      date: queueEvent?.date || date,
+      time: queueEvent?.time ?? time,
+      timePrecision: queueEvent?.timePrecision || "exact",
+      endTime: queueEvent?.endTime || "",
+      eventContext: queueEvent?.eventContext || "unknown",
+      eventNotes: queueEvent?.eventNotes || "",
+      eventMentionedPersonIds: queueEvent?.eventMentionedPersonIds || [],
       rank: "",
-      placeSeen: "",
+      placeSeen: queueEvent?.placeSeen || "",
       individualCount: "",
-      eventOccasion: "",
+      eventOccasion: queueEvent?.eventOccasion || "",
       country: "",
       importance: action === "new" ? NEW_PERSON_IMPORTANCE_OPTIONS[1] : "",
       addedBy: "",
@@ -689,6 +773,8 @@ export function useQueueController({
       decision,
       action,
       faceIds,
+      poorFaces,
+      poorFaceChoices: Object.fromEntries(poorFaces.map((face) => [face.id, "PROOF_ONLY"])),
       identityOperationId: crypto.randomUUID(),
     });
     setQueueFollowupDone(false);
@@ -726,12 +812,19 @@ export function useQueueController({
       queueAccepted,
       queueFollowup,
       queueFollowupDone,
+      queueProofOnlyDuplicateCandidates: proofOnlyDuplicateCandidates,
       queueGallery,
       queueGalleryImage,
       queueReviewStats,
+      queueQualityOnly: qualityOnly,
+      queueEvent,
+      queueEventDraft,
     },
     actions: {
       scanQueueFiles,
+      setQueueQualityOnly: setQualityOnly,
+      updateQueueEvent,
+      confirmQueueEvent,
       queueDrop,
       cancelQueueProcessing,
       loadQueueGroups,
@@ -753,6 +846,8 @@ export function useQueueController({
       loadQueuePeopleCandidates,
       updateQueueFollowup,
       confirmQueueFollowup,
+      useQueueProofOnlyDuplicatePerson: useProofOnlyDuplicatePerson,
+      createQueueAfterProofOnlyDuplicateCheck: createAfterProofOnlyDuplicateCheck,
       clearQueueFollowupForm,
       openQueueGallery,
       setQueueGalleryImage: selectQueueGalleryImage,

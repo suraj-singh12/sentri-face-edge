@@ -13,7 +13,8 @@ import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { CountrySelect } from "./CountrySelect.jsx";
 import { mediaUrl } from "../utils.js";
 
-export function RecognitionFollowupForm({ values, people = [], confirmed, onChange, onSubmit, onClear, embedded = false, showAddedBy = false }) {
+export function RecognitionFollowupForm({ values, people = [], confirmed, onChange, onSubmit, onClear, embedded = false, showAddedBy = false, addFaceOnly = false }) {
+  if (addFaceOnly) return <Card withBorder radius="md" mt="md" p="sm"><form onSubmit={onSubmit}><Stack gap="sm"><Text fw={800}>Add Face to {values.name}</Text><Text size="sm" c="dimmed">This adds a reference face to the existing Person. It creates no Encounter or sighting.</Text><Button type="submit" disabled={confirmed}>Confirm Add Face</Button></Stack></form></Card>;
   const isNew = values.action === "new";
   const needsAddedBy = isNew || showAddedBy;
   const mentionQuery = activeMentionQuery(values.notes);
@@ -27,24 +28,21 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
   const form = (
     <form onSubmit={onSubmit}>
       <Stack gap="xs">
-        <Text fw={800}>{isNew ? "Add New Person Details" : "Add Event Details (for accepted person)"}</Text>
+        <Text fw={800}>{isNew ? "Add New Person Details" : "Existing Person Sighting"}</Text>
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" verticalSpacing="xs">
           {isNew && <TextInput required label="Rank" value={values.rank} onChange={(event) => onChange("rank", event.target.value)} />}
           {isNew && <TextInput required label="Name" value={values.name} onChange={(event) => onChange("name", event.target.value)} />}
           {isNew && <CountrySelect value={values.country} onChange={(value) => onChange("country", value)} />}
           {isNew && <Select required label="Tag" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />}
-          <TextInput required label="Date" type="date" leftSection={<IconCalendar size={18} />} value={values.date} onChange={(event) => onChange("date", event.target.value)} />
-          <TextInput required label="Time" type="time" leftSection={<IconCalendar size={18} />} value={values.time} onChange={(event) => onChange("time", event.target.value)} />
-          <TextInput required label="Place Seen" leftSection={<IconMapPin size={18} />} placeholder="e.g., Office, Gate A, Reception, Building C" value={values.placeSeen} onChange={(event) => onChange("placeSeen", event.target.value)} />
           <NumberInput required min={0} step={1} label="With how many individuals" leftSection={<IconUsers size={18} />} placeholder="Select count" value={values.individualCount} onChange={(value) => onChange("individualCount", value)} />
-          <TextInput required label="Event/Occasion" leftSection={<IconCalendar size={18} />} placeholder="e.g., Meeting, Visit, Delivery, Staff Interaction, Security Check" value={values.eventOccasion} onChange={(event) => onChange("eventOccasion", event.target.value)} />
           {needsAddedBy && <TextInput required label="Added by" placeholder="Your Name" value={values.addedBy} onChange={(event) => onChange("addedBy", event.target.value)} />}
         </SimpleGrid>
+        <Paper withBorder p="xs"><Text size="sm" fw={700}>Inherited Encounter</Text><Text size="sm">{values.eventOccasion || "Unknown occasion"} · {values.date || "Unknown date"} · {values.timePrecision === "unknown" ? "Unknown time" : `${values.time || ""}${values.endTime ? `–${values.endTime}` : ""}${values.timePrecision === "approximate" ? " (approximate)" : ""}`} · {values.placeSeen || "Unknown location"} · {values.eventContext || "unknown"}</Text></Paper>
         <Textarea
           autosize
           minRows={2}
-          label={isNew ? "Person notes" : "Notes for this sighting / photo"}
-          description={isNew ? "Saved on the new person’s profile" : "Saved with this individual sighting"}
+          label="Sighting Notes"
+          description="Saved with this person in this Encounter"
           value={values.notes || ""}
           onChange={(event) => onChange("notes", event.currentTarget.value)}
         />
@@ -77,6 +75,18 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
             ))}
           </Stack>
         )}
+        {(values.poorFaces || []).map((face, index) => (
+          <Paper key={face.id} withBorder p="xs">
+            <Text size="sm" fw={700}>Face {index + 1} has low quality</Text>
+            <Text size="xs" c="orange">Low-quality face samples may reduce recognition accuracy. Its media and face remain historical proof regardless of this choice.</Text>
+            <Select
+              label="Accept this low-quality face for recognition use?"
+              data={[{ value: "PROOF_ONLY", label: "No — proof only" }, { value: "POOR_ACCEPTED", label: "Yes — accept for recognition" }]}
+              value={values.poorFaceChoices?.[face.id] || "PROOF_ONLY"}
+              onChange={(value) => onChange("poorFaceChoices", { ...(values.poorFaceChoices || {}), [face.id]: value })}
+            />
+          </Paper>
+        ))}
         <Paper withBorder radius="md" p="xs" className="followup-help">
           <Group gap="sm">
             <ThemeIcon variant="light" color="blue" size="sm"><IconInfoCircle size={16} /></ThemeIcon>
@@ -93,11 +103,11 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
   return embedded ? form : <Card withBorder radius="md" mt="md" p="sm" className="followup-card">{form}</Card>;
 }
 
-function activeMentionQuery(notes) {
+export function activeMentionQuery(notes) {
   const match = String(notes || "").match(/(?:^|\s)@([^@,\n]*)$/);
   return match ? match[1].trim() : "";
 }
 
-function replaceMentionQuery(notes, name) {
+export function replaceMentionQuery(notes, name) {
   return String(notes || "").replace(/(^|\s)@([^@,\n]*)$/, (_, prefix) => `${prefix}@${name}, `);
 }

@@ -1,6 +1,6 @@
 # SentriFace Edge documentation map
 
-This directory separates the product overview and current architecture from frozen phase records, historical artifacts, and examples. New contributors and agents should start with the complete project guide, then use the handoff guide and four core documents for implementation work.
+This directory separates the product overview and current architecture from frozen phase records, historical artifacts, and examples. `IMPLEMENTATION_PLAN.md` is the canonical current-work tracker.
 
 ## Current status
 
@@ -12,15 +12,21 @@ This directory separates the product overview and current architecture from froz
 - Production P14 acceptance remains pending verified signatures, the current
   artifact's disposable-Windows installer and packaged model lifecycle, and a
   clean exact `rc-v2.0.0` or `release-v2.0.0` rebuild.
+- The 2026-09-27 stabilization and pre-Batch-2 integration extend finalized observations with shared Encounter metadata, add embedding eligibility to schema v29, preserve no-face selection and face-origin provenance, and expose bounded read-only Events. The reduced managed upload is historical media. See `IMPLEMENTATION_PLAN.md` for verification and remaining risks.
 
 ## Start here
 
-1. [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) — complete product mental model: purpose, problems solved, user features, developer architecture, domain concepts, and safe-change rules.
-2. [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) — quick takeover guide, repository map, commands, and release boundary.
-3. [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) — latest concise implementation checkpoint.
-4. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — phase order, completion state, exit gates, and next work.
-5. [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) — current normative entities, authority, lifecycle, evidence, graph, and World contracts.
-6. [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) — detailed reasoning, examples, rejected alternatives, and preserved design evolution.
+1. Repository-root `AGENTS.md` — product and safety rules.
+2. [`README.md`](README.md) — this map.
+3. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — canonical tracker, current batch and next work.
+4. [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) — complete product mental model.
+5. [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) — implemented checkpoint.
+6. [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) — current normative entities and authority.
+7. [`FEATURES_BY_TAB.md`](FEATURES_BY_TAB.md) — current user-facing tabs, permissions and boundaries.
+8. [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) — detailed rationale.
+9. [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) — operational takeover and release boundary.
+
+Human entry path: this map → `PROJECT_OVERVIEW.md` → `FEATURES_BY_TAB.md` → `DOMAIN_MODEL.md` → `ARCHITECTURE_EXPLANATION.md`. Both paths converge on the same authority.
 
 These documents are complementary rather than successive revisions. `ARCHITECTURE_STATE.md` answers what is implemented now; `IMPLEMENTATION_PLAN.md` answers where that sits in the sequence; `DOMAIN_MODEL.md` defines the current rules; and `ARCHITECTURE_EXPLANATION.md` explains why those rules exist.
 
@@ -37,6 +43,7 @@ flowchart TD
     STATE["ARCHITECTURE_STATE.md<br/>Latest checkpoint"]
     PLAN["IMPLEMENTATION_PLAN.md<br/>Phase sequence and next work"]
     DOMAIN["DOMAIN_MODEL.md<br/>Current normative model"]
+    FEATURES["FEATURES_BY_TAB.md<br/>Current UI and roles"]
     EXPLAIN["ARCHITECTURE_EXPLANATION.md<br/>Rationale and evolution"]
 
     P11I["P11_INTEGRITY_MODEL.md<br/>P11-A/A1/C2A/B/C"]
@@ -50,12 +57,13 @@ flowchart TD
     P10OLD["Earlier P10 benchmarks<br/>Superseded diagnostics"]
     HIST["Historical engineering assessment<br/>Obsolete architecture snapshot"]
 
-    INDEX -->|"start"| OVERVIEW
-    OVERVIEW -->|"implementation takeover"| HANDOFF
-    HANDOFF --> STATE
-    STATE -->|"phase position"| PLAN
-    PLAN -->|"normative rules"| DOMAIN
-    DOMAIN -->|"reasoning and history"| EXPLAIN
+    INDEX -->|"current work"| PLAN
+    PLAN -->|"product model"| OVERVIEW
+    OVERVIEW -->|"implemented checkpoint"| STATE
+    STATE -->|"normative rules"| DOMAIN
+    DOMAIN -->|"user-facing implementation"| FEATURES
+    FEATURES -->|"reasoning and history"| EXPLAIN
+    EXPLAIN -->|"operational takeover"| HANDOFF
 
     STATE -->|"release boundary"| P14
     P14 -->|"older frozen phase"| P12
@@ -80,6 +88,7 @@ The historical engineering assessment was written later in wall-clock time than 
 | Current core | [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) | Concise stable implementation checkpoint, current authority sources, read behavior, frozen World state, and deferred work. |
 | Current core | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) | Ordered P0–P14 roadmap, completed phases, phase exit criteria, cross-phase gates, and next work. |
 | Current core | [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) | Normative identity, observation, note, evidence, canonical, graph, Person Graph, and World domain rules. |
+| Current core | [`FEATURES_BY_TAB.md`](FEATURES_BY_TAB.md) | Complete current tab and Person Profile sub-tab inventory, permissions, workflows, boundaries, and terminology. |
 | Current core | [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) | Long-form architectural memory, design rationale, examples, rejected alternatives, performance decisions, safety stops, and future boundaries. |
 | P11 | [`p11/P11_INTEGRITY_MODEL.md`](p11/P11_INTEGRITY_MODEL.md) | State-authority map, fixed invariant registry, read-only checker, note/evidence refreeze, deterministic rebuild, and completed P11 sequence. |
 | P11 | [`p11/P11_STRUCTURED_REPAIR_DESIGN.md`](p11/P11_STRUCTURED_REPAIR_DESIGN.md) | Exact R01/R02 whitelist, finding-bound preconditions, execution/refusal rules, safety-stop history, tests, and P11-D boundary. |
@@ -98,7 +107,8 @@ The historical engineering assessment was written later in wall-clock time than 
 
 ## Authority and maintenance rules
 
-- Start with the project overview for the complete mental model, then use the handoff guide and four current core documents for present architecture and project status.
+- Follow the reading order above. Keep `IMPLEMENTATION_PLAN.md` as the single current-work tracker.
+- Update every affected canonical document in each implementation batch; revise obsolete current-state statements rather than layering contradictory patch notes.
 - Use P11 documents for frozen integrity, rebuild, repair, revert, and recovery detail.
 - Use P12 and P14 documents for backup/restore and Windows release acceptance detail.
 - Use P10 documents for the frozen World acceptance and performance record.

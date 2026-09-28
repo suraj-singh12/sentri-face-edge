@@ -66,6 +66,10 @@ class AuthenticationApiTest(unittest.TestCase):
     def test_backend_enforces_each_role_boundary(self) -> None:
         with self._running_server() as server:
             admin, _ = server.auth.signup_initial("owner", "Owner", PASSWORD)
+            self.assertEqual(self._request(server, "GET", "/api/encounters")[0], 401)
+            administrator_cookie = self._login_cookie(server, "owner", PASSWORD)
+            self.assertEqual(self._request(server, "GET", "/api/encounters", cookie=administrator_cookie)[0], 200)
+            self.assertNotEqual(self._request(server, "POST", "/api/encounters", {}, cookie=administrator_cookie)[0], 200)
             users = {}
             for role in ("viewer", "operator", "custodian", "technician"):
                 users[role] = server.auth.create_user(admin, role, role.title(), f"{role} password long enough", [role])
@@ -75,19 +79,24 @@ class AuthenticationApiTest(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertNotIn("db_path", profile)
             self.assertEqual(self._request(server, "GET", "/api/events", cookie=viewer_cookie)[0], 403)
+            self.assertEqual(self._request(server, "GET", "/api/encounters", cookie=viewer_cookie)[0], 200)
+            self.assertNotEqual(self._request(server, "POST", "/api/encounters", {}, cookie=viewer_cookie)[0], 200)
             self.assertEqual(self._request(server, "POST", "/api/person-archive", {"person_id": "missing"}, cookie=viewer_cookie)[0], 403)
             self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": "missing"}, cookie=viewer_cookie)[0], 403)
 
             operator_cookie = self._login_cookie(server, "operator", "operator password long enough")
+            self.assertEqual(self._request(server, "GET", "/api/encounters", cookie=operator_cookie)[0], 200)
             self.assertEqual(self._request(server, "POST", "/api/queue-cancel", {"job_id": "role-test"}, cookie=operator_cookie)[0], 200)
             self.assertEqual(self._request(server, "POST", "/api/person-archive", {"person_id": "missing"}, cookie=operator_cookie)[0], 403)
             self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": "missing"}, cookie=operator_cookie)[0], 403)
 
             custodian_cookie = self._login_cookie(server, "custodian", "custodian password long enough")
+            self.assertEqual(self._request(server, "GET", "/api/encounters", cookie=custodian_cookie)[0], 200)
             self.assertNotEqual(self._request(server, "POST", "/api/person-archive", {"person_id": "missing"}, cookie=custodian_cookie)[0], 403)
             self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": "missing"}, cookie=custodian_cookie)[0], 403)
 
             technician_cookie = self._login_cookie(server, "technician", "technician password long enough")
+            self.assertEqual(self._request(server, "GET", "/api/encounters", cookie=technician_cookie)[0], 200)
             self.assertEqual(self._request(server, "GET", "/api/events", cookie=technician_cookie)[0], 200)
             status, created, _ = self._request(server, "POST", "/api/backups", {}, cookie=technician_cookie)
             self.assertEqual(status, 200)

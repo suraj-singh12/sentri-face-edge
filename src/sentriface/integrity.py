@@ -93,7 +93,7 @@ def _invariant(
 
 # This is the fixed P11-A registry. IDs are part of the diagnostic contract.
 INTEGRITY_INVARIANTS: tuple[IntegrityInvariant, ...] = (
-    _invariant("P11-SCHEMA-001", "SCHEMA", IntegritySeverity.CRITICAL, "SQLite schema and migration registry", "The database is structurally readable at schema v28 and required P11 tables/columns exist.", "schema version and missing object names", FutureIntegrityHandling.UNRECOVERABLE_FROM_LOCAL_STATE),
+    _invariant("P11-SCHEMA-001", "SCHEMA", IntegritySeverity.CRITICAL, "SQLite schema and migration registry", "The database is structurally readable at the current supported schema and required P11 tables/columns exist.", "schema version and missing object names", FutureIntegrityHandling.UNRECOVERABLE_FROM_LOCAL_STATE),
     _invariant("P11-SCHEMA-002", "SCHEMA", IntegritySeverity.CRITICAL, "All authoritative tables", "SQLite integrity_check succeeds.", "SQLite diagnostic text", FutureIntegrityHandling.UNRECOVERABLE_FROM_LOCAL_STATE),
     _invariant("P11-SCHEMA-003", "SCHEMA", IntegritySeverity.ERROR, "Declared foreign keys", "Authoritative records have no foreign-key violations; projection FK drift is reported separately.", "table, rowid, parent and FK index", FutureIntegrityHandling.MANUAL_REVIEW),
     _invariant("P11-IDENTITY-001", "IDENTITY", IntegritySeverity.CRITICAL, "persons", "Lifecycle, identity, biometric, timestamp and canonical-field combinations are legal.", "person ID and conflicting fields", FutureIntegrityHandling.STRUCTURED_REPAIR),

@@ -36,6 +36,7 @@ from sentriface.api_server import (
     _init_group,
     _recognition,
     _save_upload,
+    _save_upload_bytes,
     _save_upload_batch,
     _save_upload_chunk,
 )
@@ -578,6 +579,25 @@ class ApiSerializationTest(unittest.TestCase):
             self.assertTrue(saved.exists())
             self.assertEqual(saved.suffix, ".jpg")
             self.assertLessEqual(saved.stat().st_size, UPLOAD_RESIZE_LIMIT_BYTES)
+
+    def test_dslr_sized_jpeg_is_bounded_before_recognition(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp) / "data"
+            rng = np.random.default_rng(20260927)
+            image = rng.integers(0, 256, (4000, 6000, 3), dtype=np.uint8)
+            ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            self.assertTrue(ok)
+            source = encoded.tobytes()
+            self.assertGreater(len(source), 15_000_000)
+            saved = _save_upload_bytes(data_dir, "dslr.jpg", source)
+            stored = cv2.imdecode(np.frombuffer(saved.read_bytes(), dtype=np.uint8), cv2.IMREAD_COLOR)
+            self.assertLessEqual(saved.stat().st_size, UPLOAD_RESIZE_LIMIT_BYTES)
+            self.assertLessEqual(max(stored.shape[:2]), 1600)
+            from sentriface.components.onnx_components import _scrfd_letterbox
+            detector_image, scale, padding = _scrfd_letterbox(stored, (640, 640))
+            self.assertEqual(detector_image.shape, (640, 640, 3))
+            self.assertLess(scale, 1.0)
+            self.assertGreaterEqual(min(padding), 0)
 
     def test_upload_save_rejects_unsupported_type(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

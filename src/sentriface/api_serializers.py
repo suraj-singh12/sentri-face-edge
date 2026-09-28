@@ -13,6 +13,7 @@ def embedding_record_payload(record: EmbeddingRecord) -> dict[str, Any]:
         "raw_person_id": record.person_id,
         "canonical_person_id": record.canonical_person_id or record.person_id,
         "quality_score": record.quality_score,
+        "recognition_state": record.recognition_state,
         "source_image": record.source_image,
         "crop_path": record.crop_path,
         "created_at": record.created_at,

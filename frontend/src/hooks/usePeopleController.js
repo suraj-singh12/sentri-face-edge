@@ -44,7 +44,7 @@ export function usePeopleController({
 
   const loadPerson = async (personId, archived = false) => {
     const payload = await apiGet(
-      `/api/person?person_id=${encodeURIComponent(personId)}${archived ? "&include_archived=1" : ""}`,
+      `/api/person?person_id=${encodeURIComponent(personId)}&view=${archived ? "raw" : "effective"}${archived ? "&include_archived=1" : ""}`,
       { dedupe: false },
     );
     requirePersonContract(payload.person);

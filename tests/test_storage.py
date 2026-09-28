@@ -17,6 +17,36 @@ from sentriface.storage.sqlite_store import (
 
 
 class StorageMigrationTest(unittest.TestCase):
+    def test_v28_embedding_and_queue_policy_migrate_without_history_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            import struct
+            db_path = Path(temp) / "sentriface.db"
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                for migration in _schema_migrations():
+                    if migration.to_version > 28:
+                        break
+                    migration.apply(conn)
+                conn.execute(
+                    "INSERT INTO persons(person_id,name,metadata,created_at,lifecycle_status,identity_status,biometric_status,lifecycle_changed_at) "
+                    "VALUES ('legacy','Legacy','{}','2026-01-01','ACTIVE','IDENTIFIED','ENROLLED','2026-01-01')"
+                )
+                conn.execute(
+                    "INSERT INTO embeddings(embedding_id,person_id,vector,quality_score,created_at) VALUES (?,?,?,?,?)",
+                    ("legacy-face", "legacy", struct.pack("2f", 1.0, 0.0), 0.8, "2026-01-01"),
+                )
+                conn.execute(
+                    "INSERT INTO init_sessions(session_id,source_path,status,created_at) VALUES ('old-session','/managed','pending','2026-01-01')"
+                )
+            store = SQLiteIdentityStore(db_path, embedding_dim=2)
+            store.initialize()
+            store.initialize()
+            self.assertEqual(store.list_embeddings_for_person("legacy")[0].recognition_state, "GOOD")
+            self.assertTrue(store.get_init_session("old-session").quality_only)
+            with sqlite3.connect(db_path) as conn:
+                self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+                self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
+
     def test_migration_registry_is_contiguous_through_current_schema(self) -> None:
         migrations = _schema_migrations()
 
@@ -47,6 +77,15 @@ class StorageMigrationTest(unittest.TestCase):
                     ) VALUES (
                         'existing', 'Existing Person', '{}',
                         '2026-08-01T00:00:00+00:00', 'enrolled'
+                    );
+                    CREATE TABLE embeddings (
+                        embedding_id TEXT PRIMARY KEY, person_id TEXT NOT NULL, vector BLOB NOT NULL,
+                        quality_score REAL NOT NULL, source_image TEXT, crop_path TEXT,
+                        created_at TEXT NOT NULL, deleted_at TEXT, purge_after TEXT
+                    );
+                    CREATE TABLE init_sessions (
+                        session_id TEXT PRIMARY KEY, source_path TEXT NOT NULL,
+                        status TEXT NOT NULL, created_at TEXT NOT NULL
                     );
                     PRAGMA user_version = 13;
                     """
@@ -99,6 +138,15 @@ class StorageMigrationTest(unittest.TestCase):
                     );
                     INSERT INTO persons(person_id, name, metadata, created_at)
                     VALUES ('existing', 'Existing Person', '{}', '2026-08-01T00:00:00+00:00');
+                    CREATE TABLE embeddings (
+                        embedding_id TEXT PRIMARY KEY, person_id TEXT NOT NULL, vector BLOB NOT NULL,
+                        quality_score REAL NOT NULL, source_image TEXT, crop_path TEXT,
+                        created_at TEXT NOT NULL, deleted_at TEXT, purge_after TEXT
+                    );
+                    CREATE TABLE init_sessions (
+                        session_id TEXT PRIMARY KEY, source_path TEXT NOT NULL,
+                        status TEXT NOT NULL, created_at TEXT NOT NULL
+                    );
                     PRAGMA user_version = 12;
                     """
                 )

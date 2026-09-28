@@ -7,7 +7,7 @@ normative rules in the repository-root `AGENTS.md`.
 ## Current checkpoint
 
 - Application version: `2.0.0` (`src/sentriface/_version.py`).
-- Database schema: v28 (`SQLiteIdentityStore`).
+- Database schema: v29 (`SQLiteIdentityStore`); v28 remains the frozen P11/P14 release baseline.
 - P0 through P14 source implementation is complete.
 - P10 through P13 are frozen.
 - Windows source mode and the unsigned pre-tag Windows 11 AMD64 build gates pass.
@@ -35,15 +35,20 @@ normative rules in the repository-root `AGENTS.md`.
   (99 passed), and frontend build pass. The recognition and Review Photos
   transitions still need live UI verification. Do not treat those manual flows
   as release acceptance.
+- The 2026-09-27 Encounter batch places shared Event metadata and selected Event Note IDs on finalized observations, separates Event and Person forms, repairs Queue metadata/mentions, and uses the existing sighting note subject. Event Note IDs are Encounter→Person references, never Person relationship evidence. Pre-Batch-2 integration adds explicit NO_FACE Browse, durable face-origin reads, accepted-poor recognition fallback, a proof-only pre-creation duplicate check, and bounded read-only Global/Person Events. Schema v29 carries embedding eligibility and Queue search preference. Historical >~1 MB upload media is reduced before persistence; CPU detector preparation is transient. Current feature/role inventory is `docs/FEATURES_BY_TAB.md`; exact status and risks are in `docs/IMPLEMENTATION_PLAN.md`.
 
 ## Read in this order
 
 1. `AGENTS.md` — non-negotiable product, authority, transaction, and test rules.
-2. `docs/ARCHITECTURE_STATE.md` — what is implemented now and what remains.
-3. `docs/IMPLEMENTATION_PLAN.md` — phase sequence and completed exit gates.
-4. `docs/DOMAIN_MODEL.md` — normative identity, evidence, lifecycle, and graph rules.
-5. `docs/ARCHITECTURE_EXPLANATION.md` — rationale and rejected alternatives.
-6. The relevant frozen phase record under `docs/p10`, `docs/p11`, `docs/p12`, or
+2. `docs/README.md` — documentation map.
+3. `docs/IMPLEMENTATION_PLAN.md` — canonical current batch tracker and phase order.
+4. `docs/PROJECT_OVERVIEW.md` — product mental model.
+5. `docs/ARCHITECTURE_STATE.md` — current implementation checkpoint.
+6. `docs/DOMAIN_MODEL.md` — normative authority and terminology.
+7. `docs/FEATURES_BY_TAB.md` — current screens, roles and boundaries.
+8. `docs/ARCHITECTURE_EXPLANATION.md` — detailed design reasoning.
+9. This handoff — operational and release boundary.
+10. The relevant frozen phase record under `docs/p10`, `docs/p11`, `docs/p12`, or
    `docs/p14` before changing that area.
 
 Historical files and pre-optimization benchmark artifacts are evidence, not

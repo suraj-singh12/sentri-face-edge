@@ -50,9 +50,11 @@ import {
 } from "@tabler/icons-react";
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
+import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
 import { EmptyCard } from "../components/Shared.jsx";
 import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor, recognitionText } from "../utils.js";
+import { browsePeopleCandidates, PROFILE_BROWSE_MODES } from "../utils/profileBrowse.js";
 
 export function QueueView({
   people = [],
@@ -65,9 +67,16 @@ export function QueueView({
   queueAccepted,
   queueFollowup,
   queueFollowupDone,
+  proofOnlyDuplicateCandidates = [],
   queueGallery,
   queueGalleryImage,
   queueReviewStats,
+  qualityOnly = true,
+  onQualityOnlyChange,
+  eventDetails,
+  eventDraft,
+  onEventChange,
+  onEventConfirm,
   onFiles,
   onFolder,
   onDrop,
@@ -91,6 +100,8 @@ export function QueueView({
   onLoadPeopleCandidates,
   onFollowupChange,
   onFollowupSubmit,
+  onUseProofOnlyDuplicate,
+  onCreateAfterProofOnlyCheck,
   onFollowupClear,
   onGallery,
   onGalleryImage,
@@ -101,6 +112,16 @@ export function QueueView({
   const [groupPendingDiscard, setGroupPendingDiscard] = useState(null);
   return (
     <>
+      <EncounterDetailsModal opened={Boolean(queueSelectedGroup && eventDetails?.groupId !== queueSelectedGroup.group_id)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} />
+      <Modal opened={proofOnlyDuplicateCandidates.length > 0} onClose={() => {}} title="Possible existing profile" centered>
+        <Stack gap="md">
+          <Text size="sm">A proof-only face may match an existing Person. It was not used in normal recognition.</Text>
+          {proofOnlyDuplicateCandidates.map((candidate) => (
+            <Button key={candidate.person_id} variant="light" onClick={() => onUseProofOnlyDuplicate(candidate)}>Use existing {candidate.name}</Button>
+          ))}
+          <Button variant="default" onClick={onCreateAfterProofOnlyCheck}>Create new Person anyway</Button>
+        </Stack>
+      </Modal>
       <Paper withBorder radius="md" p="md" className="queue-workspace" data-followup-open={Boolean(queueFollowup)}>
         <Grid gutter="lg" className="queue-shell-grid">
         {!queueSelectedGroup && (
@@ -115,6 +136,8 @@ export function QueueView({
               onRefresh={onRefresh}
               onSelectSession={onSelectSession}
               onDiscardSession={() => setDiscardSessionOpen(true)}
+              qualityOnly={qualityOnly}
+              onQualityOnlyChange={onQualityOnlyChange}
             />
           </Grid.Col>
         )}
@@ -217,7 +240,7 @@ export function QueueView({
   );
 }
 
-function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder, onDrop, onRefresh, onSelectSession, onDiscardSession }) {
+function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder, onDrop, onRefresh, onSelectSession, onDiscardSession, qualityOnly, onQualityOnlyChange }) {
   const [uploadInputVersion, setUploadInputVersion] = useState(0);
   const chooseFiles = (handler) => (selection) => {
     const files = Array.from(selection || []);
@@ -242,6 +265,8 @@ function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder,
         onDragOver={(event) => event.preventDefault()}
       >
         <Stack gap="sm">
+          <Switch checked={qualityOnly} onChange={(event) => onQualityOnlyChange?.(event.currentTarget.checked)} label="Prefer quality photos for recognition" />
+          {!qualityOnly && <Text size="xs" c="orange">Low-quality face samples may reduce recognition accuracy and may produce poorer or less reliable matches.</Text>}
           <Box>
             <Text fw={800} size="lg">Add Photos</Text>
             <Text size="xs" c="dimmed" mt={2}>Every detected face becomes a review item.</Text>
@@ -699,6 +724,7 @@ function QueueGroupReview({
   const [peoplePickerOpen, setPeoplePickerOpen] = useState(false);
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleQuery, setPeopleQuery] = useState("");
+  const [peoplePickerMode, setPeoplePickerMode] = useState("biometric");
   const [peopleCandidates, setPeopleCandidates] = useState([]);
   const [peopleCandidatesGroupId, setPeopleCandidatesGroupId] = useState("");
   const [manualPerson, setManualPerson] = useState(null);
@@ -730,6 +756,7 @@ function QueueGroupReview({
 
   const openPeoplePicker = async () => {
     setPeoplePickerOpen(true);
+    setPeoplePickerMode("biometric");
     if (peopleCandidatesGroupId === group.group_id) return;
     setPeopleLoading(true);
     try {
@@ -855,6 +882,9 @@ function QueueGroupReview({
       <PeoplePicker
         opened={peoplePickerOpen}
         people={peopleCandidates}
+        allPeople={people}
+        mode={peoplePickerMode}
+        onMode={setPeoplePickerMode}
         loading={peopleLoading}
         query={peopleQuery}
         onQuery={setPeopleQuery}
@@ -955,9 +985,9 @@ function QueueSuggestedMatch({ best, weakMatch, manual, onBrowse, onCompare }) {
   );
 }
 
-function PeoplePicker({ opened, people, loading, query, onQuery, onClose, onNewPerson, onSelect }) {
+function PeoplePicker({ opened, people, allPeople, mode, onMode, loading, query, onQuery, onClose, onNewPerson, onSelect }) {
   const normalizedQuery = query.trim().toLowerCase();
-  const visiblePeople = (people || []).filter((person) => (
+  const visiblePeople = browsePeopleCandidates(people, allPeople, mode).filter((person) => (
     !normalizedQuery
     || person.name?.toLowerCase().includes(normalizedQuery)
     || person.person_id?.toLowerCase().includes(normalizedQuery)
@@ -965,13 +995,16 @@ function PeoplePicker({ opened, people, loading, query, onQuery, onClose, onNewP
   return (
     <Modal opened={opened} onClose={onClose} title="Browse People" size="xl" centered>
       <Text size="sm" c="dimmed" mb="md">Choose who the selected incoming photos belong to.</Text>
+      <Group align="end" mb="md">
       <TextInput
         value={query}
         onChange={(event) => onQuery(event.currentTarget.value)}
         leftSection={<IconSearch size={16} />}
         placeholder="Search people by name or ID"
-        mb="md"
+        style={{ flex: 1 }}
       />
+      <Select data={PROFILE_BROWSE_MODES} value={mode} onChange={(value) => onMode(value || "biometric")} aria-label="Profile type" w={250} />
+      </Group>
       <ScrollArea.Autosize mah="60dvh" type="auto" offsetScrollbars>
         <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} className="queue-people-picker-grid">
           <Card component="button" withBorder radius="md" className="queue-person-picker-card queue-person-picker-new" onClick={onNewPerson}>
@@ -996,7 +1029,7 @@ function PeoplePicker({ opened, people, loading, query, onQuery, onClose, onNewP
                 <Group justify="space-between" wrap="nowrap" gap={6}>
                   <Text fw={800} truncate>{person.name}</Text>
                   <Badge size="xs" variant="light" color={person.match ? candidateDisplay.color : "gray"}>
-                    {person.match ? candidateDisplay.badge : "No references"}
+                    {mode === "no_face" ? "No face enrolled" : person.match ? candidateDisplay.badge : "No references"}
                   </Badge>
                 </Group>
                 <Text size="xs" c="dimmed">{person.embedding_count || 0} reference photo{Number(person.embedding_count || 0) === 1 ? "" : "s"}</Text>

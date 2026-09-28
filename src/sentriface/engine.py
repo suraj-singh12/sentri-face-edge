@@ -206,7 +206,7 @@ class FaceEngine:
         self.store.initialize()
         self._rebuild_index()
 
-    def recognize(self, image_path: Path) -> list[RecognitionResult]:
+    def recognize(self, image_path: Path, *, quality_only: bool = True) -> list[RecognitionResult]:
         results: list[RecognitionResult] = []
         with self.metrics.timer("total_recognize_ms"):
             with self.metrics.timer("image_load_ms"):
@@ -220,7 +220,7 @@ class FaceEngine:
                 with self.metrics.timer("embed_ms"):
                     vector = self.embedder.encode(image_path, face)
                 with self.metrics.timer("search_ms"):
-                    matches = self._search_unique_people(vector)
+                    matches = self._search_unique_people(vector, quality_only=quality_only)
                 self.metrics.increment("faces_recognized")
                 self.metrics.increment(f"quality_{quality.status.value}")
                 results.append(
@@ -244,6 +244,7 @@ class FaceEngine:
         allow_bad_quality: bool,
         face_index: int | None = None,
         expected_box: FaceBox | None = None,
+        quality_only: bool = True,
     ) -> "PreparedAdditions":
         additions: list[PendingAddition] = []
         rejected: list[RejectedFace] = []
@@ -281,7 +282,7 @@ class FaceEngine:
             with self.metrics.timer("embed_ms"):
                 vector = self.embedder.encode(image_path, face)
             with self.metrics.timer("search_ms"):
-                matches = self._search_unique_people(vector)
+                matches = self._search_unique_people(vector, quality_only=quality_only)
             self.metrics.increment("faces_accepted")
             pending_id = str(uuid.uuid4())
             with self.metrics.timer("crop_save_ms"):
@@ -340,9 +341,13 @@ class FaceEngine:
                 self.store.save_pending_addition(pending)
         return prepared
 
-    def prepare_photo_review(self, image_path: Path) -> tuple[PhotoReview | None, list[PendingAddition]]:
+    def prepare_photo_review(
+        self, image_path: Path, *, quality_only: bool = True,
+    ) -> tuple[PhotoReview | None, list[PendingAddition]]:
         """Stage all detected faces without creating authoritative identity state."""
-        prepared = self.prepare_additions_with_rejections(image_path, allow_bad_quality=True)
+        prepared = self._process_additions(
+            image_path, allow_bad_quality=True, quality_only=quality_only,
+        )
         if not prepared.accepted:
             return None, []
         for pending in prepared.accepted:
@@ -420,6 +425,29 @@ class FaceEngine:
                 person_id,
                 include_archived=include_archived,
             )
+
+    def face_origins_for_embeddings(self, embedding_ids: list[str]) -> dict[str, list[dict]]:
+        return self.store.face_origins_for_embeddings(embedding_ids)
+
+    def proof_only_duplicate_candidates_for_review_face(self, review_id: str, face_id: str) -> list[dict]:
+        review = self.store.get_photo_review(review_id)
+        if review is None or review.status != "IN_PROGRESS":
+            raise KeyError(f"Unknown active review: {review_id}")
+        face = next((item for item in review.faces if item.face_id == face_id), None)
+        if face is None or face.staged_face_type != "PENDING_ADDITION":
+            raise KeyError(f"Unknown recognition review face: {face_id}")
+        pending = self.store.get_pending_addition(face.staged_face_id)
+        if pending is None:
+            raise KeyError(f"Unknown staged face: {face.staged_face_id}")
+        return self.store.proof_only_duplicate_candidates([pending.vector], self.config.medium_confidence)
+
+    def proof_only_duplicate_candidates_for_init_faces(
+        self, session_id: str, group_id: str, face_ids: list[str],
+    ) -> list[dict]:
+        faces = self._selected_init_faces(session_id, group_id, face_ids)
+        return self.store.proof_only_duplicate_candidates(
+            [face.vector for face in faces], self.config.medium_confidence,
+        )
 
     def rename_person(
         self, person_id: str, name: str, operation_id: str,
@@ -612,6 +640,12 @@ class FaceEngine:
     def get_observation(self, observation_id: str) -> Observation | None:
         return self.store.get_observation(observation_id)
 
+    def query_encounters(self, **filters) -> dict:
+        return self.store.query_encounters(**filters)
+
+    def get_encounter_read(self, observation_id: str) -> dict:
+        return self.store.get_encounter_read(observation_id)
+
     def update_observation(
         self, observation_id: str, operation_id: str, **values,
     ) -> Observation:
@@ -685,7 +719,11 @@ class FaceEngine:
         self, review_id: str, operation_id: str, **values,
     ) -> dict:
         _require_mutation_context(operation_id, values.get("actor"))
-        result = self.graph.complete_photo_review(review_id, operation_id, **values)
+        result = self.graph.complete_photo_review(
+            review_id, operation_id,
+            proof_only_duplicate_threshold=self.config.medium_confidence,
+            **values,
+        )
         self._rebuild_index()
         return result
 
@@ -1078,12 +1116,14 @@ class FaceEngine:
         allow_bad_quality: bool = False,
         progress_callback: Callable[[dict], None] | None = None,
         cancel_check: Callable[[], bool] | None = None,
+        quality_only: bool = True,
     ) -> "QueueSessionResult":
         return self._create_init_session(
             source_path,
             allow_bad_quality,
             progress_callback=progress_callback,
             cancel_check=cancel_check,
+            quality_only=quality_only,
         )
 
     def _create_init_session(
@@ -1092,6 +1132,7 @@ class FaceEngine:
         allow_bad_quality: bool = False,
         progress_callback: Callable[[dict], None] | None = None,
         cancel_check: Callable[[], bool] | None = None,
+        quality_only: bool = True,
     ) -> "QueueSessionResult":
         def report(**payload) -> None:
             if progress_callback:
@@ -1099,7 +1140,7 @@ class FaceEngine:
 
         with self.metrics.timer("total_init_scan_ms"):
             with self.metrics.timer("db_create_init_session_ms"):
-                session = self.store.create_init_session(str(source_path))
+                session = self.store.create_init_session(str(source_path), quality_only=quality_only)
 
             def cancellation_checkpoint(phase: str) -> None:
                 if cancel_check is not None and cancel_check():
@@ -1209,7 +1250,9 @@ class FaceEngine:
                 with self.metrics.timer("search_ms"):
                     for face in init_faces:
                         cancellation_checkpoint("matching_face")
-                        matches_by_face_id[face.init_face_id] = self._search_unique_people(face.vector)
+                        matches_by_face_id[face.init_face_id] = self._search_unique_people(
+                            face.vector, quality_only=quality_only,
+                        )
                 cancellation_checkpoint("before_clustering")
                 report(
                     phase="clustering",
@@ -1335,13 +1378,15 @@ class FaceEngine:
         notes: str = "",
         mentioned_person_ids: list[str] | None = None,
         recognition_detail: dict | None = None,
+        quality_choices: dict[str, str] | None = None,
         actor: dict | None = None,
     ) -> tuple[str, list[dict]]:
         _require_mutation_context(operation_id, actor)
         result = self._complete_queue_face_review(
             session_id, group_id, init_face_ids, operation_id,
             name=name, notes=notes, mentioned_person_ids=mentioned_person_ids,
-            recognition_detail=recognition_detail, actor=actor,
+            recognition_detail=recognition_detail, quality_choices=quality_choices,
+            actor=actor,
         )
         return str(result["created_person_ids"][0]), list(result["accepted"])
 
@@ -1355,6 +1400,7 @@ class FaceEngine:
         notes: str = "",
         mentioned_person_ids: list[str] | None = None,
         recognition_detail: dict | None = None,
+        quality_choices: dict[str, str] | None = None,
         actor: dict | None = None,
     ) -> list[dict]:
         _require_mutation_context(operation_id, actor)
@@ -1362,7 +1408,8 @@ class FaceEngine:
             session_id, group_id, init_face_ids, operation_id,
             person_id=person_id, notes=notes,
             mentioned_person_ids=mentioned_person_ids,
-            recognition_detail=recognition_detail, actor=actor,
+            recognition_detail=recognition_detail, quality_choices=quality_choices,
+            actor=actor,
         )
         return list(result["accepted"])
 
@@ -1378,6 +1425,7 @@ class FaceEngine:
         notes: str = "",
         mentioned_person_ids: list[str] | None = None,
         recognition_detail: dict | None = None,
+        quality_choices: dict[str, str] | None = None,
         actor: dict | None = None,
     ) -> dict:
         existing = self.store.get_operation(operation_id)
@@ -1412,16 +1460,25 @@ class FaceEngine:
                         person_id=person_id,
                         new_person_key="queue-group-person" if not person_id else None,
                         new_person_name=name,
+                        new_person_metadata=(
+                            {
+                                key: (recognition_detail or {}).get(key, "")
+                                for key in ("rank", "country", "importance", "added_by")
+                            }
+                            if not person_id else None
+                        ),
                         notes=notes,
                         mentioned_person_ids=mentioned_person_ids,
                         recognition_detail={
                             **(recognition_detail or {}),
+                            "embedding_state": (quality_choices or {}).get(face.init_face_id, "PROOF_ONLY"),
                             "image_id": Path(face.source_image).name,
                             "image_path": face.source_image,
                         },
                     )
             result = self.graph.complete_photo_review(
                 review_id, operation_id, source="queue", actor=actor,
+                proof_only_duplicate_threshold=self.config.medium_confidence,
             )
         result["accepted"] = [
             {
@@ -1589,6 +1646,8 @@ class FaceEngine:
                 self.store.mark_init_group_status(session_id, group_id, "pending")
 
     def _matches_for_init_faces(self, faces: list[InitFace]) -> dict[str, list[PersonMatch]]:
+        session = self.store.get_init_session(faces[0].session_id) if faces else None
+        quality_only = session.quality_only if session else True
         exclusions = self.excluded_person_ids_for_init_faces(
             faces[0].session_id,
             [face.init_face_id for face in faces],
@@ -1597,13 +1656,18 @@ class FaceEngine:
             face.init_face_id: self.matches_for_vector(
                 face.vector,
                 excluded_person_ids=exclusions.get(face.init_face_id, set()),
+                quality_only=quality_only,
             )
             for face in faces
         }
 
     def _rebuild_index(self) -> None:
         with self.metrics.timer("db_list_embeddings_ms"):
-            embeddings = self.store.list_embeddings()
+            embeddings = [
+                record for record in self.store.list_embeddings()
+                if record.recognition_state != "PROOF_ONLY"
+            ]
+        self._searchable_embedding_count = len(embeddings)
         try:
             with self.metrics.timer("index_rebuild_ms"):
                 self.index.rebuild(embeddings)
@@ -1619,6 +1683,11 @@ class FaceEngine:
 
     def _publish_merge_index(self, embeddings) -> None:
         """Publish the transaction's canonical ownership before its DB commit."""
+        embeddings = [
+            record for record in embeddings
+            if record.recognition_state != "PROOF_ONLY"
+        ]
+        self._searchable_embedding_count = len(embeddings)
         with self.metrics.timer("index_rebuild_ms"):
             self.index.rebuild(embeddings)
         self.index_degraded_reason = None
@@ -1630,9 +1699,14 @@ class FaceEngine:
             "actual": self.index.backend_name,
             "degraded_reason": self.index_degraded_reason,
         }
-    def matches_for_vector(self, vector, excluded_person_ids: set[str] | None = None) -> list[PersonMatch]:
+    def matches_for_vector(
+        self, vector, excluded_person_ids: set[str] | None = None,
+        *, quality_only: bool = True,
+    ) -> list[PersonMatch]:
         with self.metrics.timer("search_ms"):
-            return self._search_unique_people(vector, excluded_person_ids=excluded_person_ids)
+            return self._search_unique_people(
+                vector, excluded_person_ids=excluded_person_ids, quality_only=quality_only,
+            )
 
     def matches_for_init_group(self, group: InitGroup) -> list[PersonMatch]:
         representative = group_representative_embedding(group)
@@ -1643,7 +1717,11 @@ class FaceEngine:
             [face.init_face_id for face in group.faces],
         )
         excluded_person_ids = set().union(*exclusions.values()) if exclusions else set()
-        return self.matches_for_vector(representative, excluded_person_ids=excluded_person_ids)
+        session = self.store.get_init_session(group.session_id)
+        return self.matches_for_vector(
+            representative, excluded_person_ids=excluded_person_ids,
+            quality_only=session.quality_only if session else True,
+        )
 
     def ranked_people_for_init_group(self, group: InitGroup) -> list[RankedPersonCandidate]:
         """Rank every active person for an explicit human-review browse action.
@@ -1657,13 +1735,18 @@ class FaceEngine:
             [face.init_face_id for face in group.faces],
         )
         excluded_person_ids = set().union(*exclusions.values()) if exclusions else set()
-        return self._rank_people_for_vector(representative, excluded_person_ids)
+        session = self.store.get_init_session(group.session_id)
+        return self._rank_people_for_vector(
+            representative, excluded_person_ids,
+            quality_only=session.quality_only if session else True,
+        )
 
     def ranked_people_for_recognition_face(
         self,
         image_path: Path,
         face_index: int,
         expected_box: FaceBox | None = None,
+        *, quality_only: bool = True,
     ) -> list[RankedPersonCandidate]:
         """Rank active people for one explicitly browsed recognition face."""
         with self.metrics.timer("detect_browse_face_ms"):
@@ -1677,20 +1760,30 @@ class FaceEngine:
                 raise KeyError(f"Face {face_index} is no longer available in this image")
         with self.metrics.timer("embed_browse_face_ms"):
             vector = self.embedder.encode(image_path, selected_face)
-        return self._rank_people_for_vector(vector)
+        return self._rank_people_for_vector(vector, quality_only=quality_only)
 
     def _rank_people_for_vector(
         self,
         representative,
         excluded_person_ids: set[str] | None = None,
+        *,
+        quality_only: bool = True,
     ) -> list[RankedPersonCandidate]:
         excluded_person_ids = excluded_person_ids or set()
         with self.metrics.timer("db_list_people_candidates_ms"):
             people = self.store.list_persons()
             embeddings = self.store.list_embeddings()
+        good_reference_people = {
+            record.canonical_person_id or record.person_id
+            for record in embeddings if record.recognition_state == "GOOD"
+        }
         embeddings_by_person: dict[str, list] = {}
         for record in embeddings:
+            if record.recognition_state == "PROOF_ONLY":
+                continue
             effective_person_id = record.canonical_person_id or record.person_id
+            if quality_only and record.recognition_state != "GOOD" and effective_person_id in good_reference_people:
+                continue
             if effective_person_id not in excluded_person_ids:
                 embeddings_by_person.setdefault(effective_person_id, []).append(record)
 
@@ -1749,17 +1842,35 @@ class FaceEngine:
             representative = group_representative_embedding(group)
             if not representative:
                 continue
-            match = self._match_group_to_person(representative, person_id)
+            session = self.store.get_init_session(session_id)
+            match = self._match_group_to_person(
+                representative, person_id,
+                quality_only=session.quality_only if session else True,
+            )
             if match is not None and match.score >= self.config.medium_confidence:
                 changed.append(group)
         return changed
 
-    def _search_unique_people(self, vector, excluded_person_ids: set[str] | None = None) -> list[PersonMatch]:
+    def _search_unique_people(
+        self, vector, excluded_person_ids: set[str] | None = None,
+        *, quality_only: bool = True,
+    ) -> list[PersonMatch]:
         excluded_person_ids = excluded_person_ids or set()
-        raw_matches = self.index.search(vector, max(self.config.top_k * 8, self.config.top_k))
-        current_owners = self.store.current_embedding_person_ids(
-            [match.embedding_id for match in raw_matches],
-        )
+        search_count = max(self.config.top_k * 8, self.config.top_k)
+        max_count = max(search_count, getattr(self, "_searchable_embedding_count", search_count))
+        while True:
+            raw_matches = self.index.search(vector, min(search_count, max_count))
+            current_owners = self.store.current_embedding_person_ids(
+                [match.embedding_id for match in raw_matches], quality_only=quality_only,
+            )
+            eligible_people = {
+                current_owners[match.embedding_id] for match in raw_matches
+                if match.embedding_id in current_owners
+                and current_owners[match.embedding_id] not in excluded_person_ids
+            }
+            if len(eligible_people) >= self.config.top_k or search_count >= max_count:
+                break
+            search_count = min(max_count, search_count * 2)
         grouped: dict[str, list[Match]] = {}
         for match in raw_matches:
             current_person_id = current_owners.get(match.embedding_id)
@@ -1782,14 +1893,20 @@ class FaceEngine:
         person_matches.sort(key=lambda match: match.score, reverse=True)
         return person_matches[: self.config.top_k]
 
-    def _match_group_to_person(self, vector, person_id: str) -> PersonMatch | None:
+    def _match_group_to_person(
+        self, vector, person_id: str, *, quality_only: bool = True,
+    ) -> PersonMatch | None:
+        person_embeddings = self.store.list_embeddings_for_person(person_id)
+        has_good_reference = any(record.recognition_state == "GOOD" for record in person_embeddings)
         matches = [
             Match(
                 person_id=record.person_id,
                 score=_cosine(vector, record.vector),
                 embedding_id=record.embedding_id,
             )
-            for record in self.store.list_embeddings_for_person(person_id)
+            for record in person_embeddings
+            if record.recognition_state != "PROOF_ONLY"
+            and (not quality_only or record.recognition_state == "GOOD" or not has_good_reference)
         ]
         if not matches:
             return None

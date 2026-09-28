@@ -11,13 +11,16 @@ subjects:
 
 - [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) defines exact identity, evidence, and graph semantics.
 - [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) records the current implementation state.
-- [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) records the ordered delivery phases.
+- [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) is the canonical tracker for ordered phases and current stabilization work.
 - [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) preserves detailed design rationale and edge cases.
+- [`FEATURES_BY_TAB.md`](FEATURES_BY_TAB.md) inventories every current tab, role, workflow and authority boundary.
 - [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) is the short operational handoff for active development.
 
 This guide supplies the layer above them: what the product is, why it exists,
 what a user can do with it, how the code realizes those capabilities, and which
 ideas must remain stable as the software evolves.
+
+The current Encounter foundation extends finalized observations instead of adding an event subsystem. Shared occurrence metadata belongs to one observation, with accepted people as participants and managed media as references. Review asks Event details once before Person/Sighting decisions. Global Events and Person Profile Events now read that history without owning it. Event Note selected people are structured Encounter references, separate from participants and Person relationship evidence. Embedding eligibility, face origin and Person biometric status are independent. See `FEATURES_BY_TAB.md` for the current UI and `IMPLEMENTATION_PLAN.md` for verification and remaining risks.
 
 ---
 

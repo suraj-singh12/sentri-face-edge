@@ -170,6 +170,15 @@ class PersonNotesTest(unittest.TestCase):
                     editor_name TEXT NOT NULL, created_at TEXT NOT NULL
                 );
                 INSERT INTO persons VALUES ('legacy', 'Legacy Person', '{"rank":"Staff"}', '2025-01-01', NULL, 'enrolled');
+                CREATE TABLE embeddings (
+                    embedding_id TEXT PRIMARY KEY, person_id TEXT NOT NULL, vector BLOB NOT NULL,
+                    quality_score REAL NOT NULL, source_image TEXT, crop_path TEXT,
+                    created_at TEXT NOT NULL, deleted_at TEXT, purge_after TEXT
+                );
+                CREATE TABLE init_sessions (
+                    session_id TEXT PRIMARY KEY, source_path TEXT NOT NULL,
+                    status TEXT NOT NULL, created_at TEXT NOT NULL
+                );
                 PRAGMA user_version = 14;
             """)
         store = SQLiteIdentityStore(path, embedding_dim=3)

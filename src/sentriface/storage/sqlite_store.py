@@ -89,7 +89,8 @@ from sentriface.models import (
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
+EMBEDDING_RECOGNITION_STATES = frozenset({"GOOD", "POOR_ACCEPTED", "PROOF_ONLY"})
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
 PERSON_IDENTITY_STATUSES = frozenset({"IDENTIFIED", "UNIDENTIFIED"})
@@ -447,7 +448,7 @@ class SQLiteIdentityStore:
             rows = conn.execute(
                 """
                 SELECT e.embedding_id, e.person_id, e.vector, e.quality_score,
-                       e.source_image, e.crop_path, e.created_at
+                       e.source_image, e.crop_path, e.created_at, e.recognition_state
                 FROM embeddings e
                 WHERE e.deleted_at IS NULL
                 ORDER BY e.created_at ASC
@@ -472,6 +473,45 @@ class SQLiteIdentityStore:
                     return []
             return result
 
+    def face_origins_for_embeddings(self, embedding_ids: list[str]) -> dict[str, list[dict]]:
+        """Read immutable review provenance without guessing the origin of legacy faces."""
+        ids = sorted(set(embedding_ids))
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        with self._connect() as conn:
+            origins: dict[str, list[dict]] = {embedding_id: [] for embedding_id in ids}
+            for row in conn.execute(
+                f"SELECT embedding_id, observation_id, review_id, created_operation_id "
+                f"FROM observation_face_assignments WHERE embedding_id IN ({placeholders}) "
+                "ORDER BY created_at, assignment_id", ids,
+            ):
+                origins[str(row["embedding_id"])].append({
+                    "face_origin": "ENCOUNTER",
+                    "observation_id": str(row["observation_id"]),
+                    "review_id": str(row["review_id"]),
+                    "operation_id": str(row["created_operation_id"]),
+                })
+            for row in conn.execute(
+                f"SELECT embedding_id, review_id, operation_id "
+                f"FROM biometric_enrollment_history WHERE embedding_id IN ({placeholders}) "
+                "ORDER BY created_at, enrollment_id", ids,
+            ):
+                origins[str(row["embedding_id"])].append({
+                    "face_origin": "STANDALONE_ENROLLMENT",
+                    "observation_id": None,
+                    "review_id": str(row["review_id"]),
+                    "operation_id": str(row["operation_id"]),
+                })
+            return {
+                embedding_id: records or [{"face_origin": "UNKNOWN_LEGACY"}]
+                for embedding_id, records in origins.items()
+            }
+
+    def proof_only_duplicate_candidates(self, vectors: list[Embedding], threshold: float) -> list[dict]:
+        with self._connect() as conn:
+            return _proof_only_duplicate_matches(conn, vectors, threshold)
+
     def list_raw_embeddings_for_person(
         self, person_id: str, include_deleted: bool = False,
     ) -> list[EmbeddingRecord]:
@@ -483,7 +523,7 @@ class SQLiteIdentityStore:
             rows = conn.execute(
                 f"""
                 SELECT embedding_id, person_id, vector, quality_score,
-                       source_image, crop_path, created_at
+                       source_image, crop_path, created_at, recognition_state
                 FROM embeddings
                 {"" if include_deleted else "WHERE deleted_at IS NULL"}
                 ORDER BY created_at ASC
@@ -1899,6 +1939,7 @@ class SQLiteIdentityStore:
         *,
         actor: dict | None = None,
         source: str | None = None,
+        proof_only_duplicate_threshold: float = 0.5,
     ) -> dict:
         """Commit a complete review and all authoritative consequences atomically."""
         with self._connect() as conn:
@@ -1943,7 +1984,7 @@ class SQLiteIdentityStore:
             created_note_keys: set[tuple[str, str, tuple[str, ...]]] = set()
             staged_media_paths: set[str] = set()
             media_by_face: dict[str, str] = {}
-            detail_inputs: list[tuple[str, str, str, dict, str]] = []
+            detail_inputs: list[tuple[str, str, str, dict, str, list[str], str]] = []
             for row in face_rows:
                 decision = str(row["decision"])
                 if decision in {"EXCLUDE", "SKIP"}:
@@ -1957,6 +1998,15 @@ class SQLiteIdentityStore:
                     key = str(row["new_person_key"] or row["face_id"])
                     person_id = created_by_key.get(key)
                     if person_id is None:
+                        duplicate_detail = json.loads(row["recognition_detail"] or "{}")
+                        if duplicate_detail.get("proof_only_duplicate_override") is not True and _proof_only_duplicate_matches(
+                            conn, [_unpack_embedding(staged["vector"])],
+                            proof_only_duplicate_threshold,
+                        ):
+                            raise ValueError(
+                                "Proof-only duplicate check requires an explicit existing-person "
+                                "choice or create-new override"
+                            )
                         name = str(row["new_person_name"] or "").strip()
                         metadata = json.loads(row["new_person_metadata"] or "{}")
                         if not _has_meaningful_identity_context(name, metadata, str(row["notes"] or "")):
@@ -1972,8 +2022,10 @@ class SQLiteIdentityStore:
                         created_by_key[key] = person_id
                         created_person_ids.append(person_id)
                 assigned_by_face[str(row["face_id"])] = person_id
+                detail_payload = json.loads(row["recognition_detail"] or "{}")
+                recognition_state = _review_face_recognition_state(staged, detail_payload)
                 duplicate = conn.execute(
-                    "SELECT embedding_id FROM embeddings WHERE person_id = ? AND vector = ? AND deleted_at IS NULL",
+                    "SELECT embedding_id, recognition_state FROM embeddings WHERE person_id = ? AND vector = ? AND deleted_at IS NULL",
                     (person_id, staged["vector"]),
                 ).fetchone()
                 if duplicate is None:
@@ -1982,50 +2034,73 @@ class SQLiteIdentityStore:
                         """
                         INSERT INTO embeddings(
                             embedding_id, person_id, vector, quality_score,
-                            source_image, crop_path, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                            source_image, crop_path, created_at, recognition_state
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             embedding_id, person_id, staged["vector"], staged["quality_score"],
                             staged["source_image"], staged["crop_path"], utc_now(),
+                            recognition_state,
                         ),
                     )
                     embedding_ids.append(embedding_id)
                 else:
                     embedding_id = str(duplicate["embedding_id"])
+                    if recognition_state == "POOR_ACCEPTED" and duplicate["recognition_state"] == "PROOF_ONLY":
+                        conn.execute(
+                            "UPDATE embeddings SET recognition_state = 'POOR_ACCEPTED' WHERE embedding_id = ?",
+                            (embedding_id,),
+                        )
                 _mark_person_enrolled(conn, person_id)
                 embedding_by_face[str(row["face_id"])] = embedding_id
                 content = str(row["notes"] or "").strip()
                 mention_ids = json.loads(row["mentioned_person_ids"] or "[]")
                 note_key = (person_id, content, tuple(sorted(mention_ids)))
-                if (content or mention_ids) and note_key not in created_note_keys:
+                if detail_payload:
+                    detail_inputs.append((
+                        str(row["face_id"]), person_id, embedding_id,
+                        detail_payload, content, mention_ids, decision,
+                    ))
+                elif (content or mention_ids) and note_key not in created_note_keys:
                     note_ids.append(_create_review_person_note(
                         conn, person_id, content, mention_ids, operation_id, actor,
                         _optional_text(source) or str(review["source"]),
                     ))
                     created_note_keys.add(note_key)
-                detail_payload = json.loads(row["recognition_detail"] or "{}")
-                if detail_payload:
-                    detail_inputs.append((
-                        str(row["face_id"]), person_id, embedding_id,
-                        detail_payload, content,
-                    ))
             if not assigned_by_face:
                 raise ValueError("A completed review requires at least one accepted person")
             canonical_participants: dict[str, str] = {}
             for face_id in sorted(assigned_by_face):
                 raw_id = assigned_by_face[face_id]
                 canonical_participants.setdefault(_resolve_canonical_person_id(conn, raw_id), raw_id)
+            observed_at, location, encounter_context = _review_encounter_metadata(
+                [detail for _, _, _, detail, _, _, _ in detail_inputs]
+            )
+            event_mentions = encounter_context.get("event_mentioned_person_ids") or []
+            for mentioned_id in event_mentions:
+                if conn.execute(
+                    "SELECT 1 FROM persons WHERE person_id = ?", (mentioned_id,),
+                ).fetchone() is None:
+                    raise ValueError(f"Unknown Event Note mentioned person: {mentioned_id}")
+            encounter_context["added_by"] = (
+                (actor or {}).get("display_name")
+                or (actor or {}).get("username")
+                or encounter_context["added_by"]
+            )
             observation_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:review:{review_id}"))
             now = utc_now()
             conn.execute(
                 """
                 INSERT INTO observations(
-                    observation_id, status, source, created_operation_id,
-                    created_at, updated_at
-                ) VALUES (?, 'DRAFT', ?, ?, ?, ?)
+                    observation_id, status, observed_at, location, context,
+                    source, created_operation_id, created_at, updated_at
+                ) VALUES (?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (observation_id, str(review["source"]), operation_id, now, now),
+                (
+                    observation_id, observed_at, location,
+                    json.dumps(encounter_context, separators=(",", ":")),
+                    str(review["source"]), operation_id, now, now,
+                ),
             )
             _attach_observation_media(
                 conn, observation_id, review["media_id"], review["media_path"],
@@ -2071,7 +2146,7 @@ class SQLiteIdentityStore:
             )
             participant_ids = sorted(canonical_participants)
             detail_ids: list[str] = []
-            for face_id, person_id, embedding_id, detail, detail_notes in detail_inputs:
+            for face_id, person_id, embedding_id, detail, detail_notes, mention_ids, decision in detail_inputs:
                 detail_id = str(uuid.uuid4())
                 person_name = str(conn.execute(
                     "SELECT name FROM persons WHERE person_id = ?", (person_id,),
@@ -2091,11 +2166,11 @@ class SQLiteIdentityStore:
                         str(detail.get("image_path") or review["media_path"] or ""),
                         str(detail.get("name") or person_name),
                         str(detail.get("decision") or "accepted"),
-                        str(detail.get("date") or detail.get("seen_date") or ""),
-                        str(detail.get("time") or detail.get("seen_time") or ""),
-                        str(detail.get("place_seen") or ""),
+                        str(observed_at or "").split("T", 1)[0],
+                        str(encounter_context.get("start_time") or ""),
+                        str(location or ""),
                         int(detail.get("individual_count") or len(participant_ids)),
-                        str(detail.get("event_occasion") or ""),
+                        str(encounter_context.get("occasion") or ""),
                         _optional_text(detail.get("rank")),
                         _optional_text(detail.get("country")),
                         _optional_text(detail.get("importance")),
@@ -2104,6 +2179,14 @@ class SQLiteIdentityStore:
                     ),
                 )
                 detail_ids.append(detail_id)
+                note_key = (person_id, detail_notes, tuple(sorted(mention_ids)))
+                if (detail_notes or mention_ids) and note_key not in created_note_keys:
+                    note_ids.append(_create_review_person_note(
+                        conn, person_id, detail_notes, mention_ids, operation_id, actor,
+                        _optional_text(source) or str(review["source"]),
+                        subject_type="RECOGNITION_DETAIL", subject_id=detail_id,
+                    ))
+                    created_note_keys.add(note_key)
             evidence_ids: list[str] = []
             for index, first_id in enumerate(participant_ids):
                 for second_id in participant_ids[index + 1:]:
@@ -2501,9 +2584,12 @@ class SQLiteIdentityStore:
                 staged = _staged_review_face_row(
                     conn, row["staged_face_type"], row["staged_face_id"],
                 )
+                recognition_state = _review_face_recognition_state(
+                    staged, json.loads(row["recognition_detail"] or "{}"),
+                )
                 duplicate = conn.execute(
                     """
-                    SELECT embedding_id FROM embeddings
+                    SELECT embedding_id, recognition_state FROM embeddings
                     WHERE person_id = ? AND vector = ? AND deleted_at IS NULL
                     """,
                     (person_id, staged["vector"]),
@@ -2514,17 +2600,23 @@ class SQLiteIdentityStore:
                         """
                         INSERT INTO embeddings(
                             embedding_id, person_id, vector, quality_score,
-                            source_image, crop_path, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                            source_image, crop_path, created_at, recognition_state
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             embedding_id, person_id, staged["vector"], staged["quality_score"],
                             staged["source_image"], staged["crop_path"], utc_now(),
+                            recognition_state,
                         ),
                     )
                     created_embedding_ids.append(embedding_id)
                 else:
                     embedding_id = str(duplicate["embedding_id"])
+                    if recognition_state == "POOR_ACCEPTED" and duplicate["recognition_state"] == "PROOF_ONLY":
+                        conn.execute(
+                            "UPDATE embeddings SET recognition_state = 'POOR_ACCEPTED' WHERE embedding_id = ?",
+                            (embedding_id,),
+                        )
                 embedding_ids.append(embedding_id)
                 conn.execute(
                     """
@@ -2830,6 +2922,148 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             _require_observation(conn, observation_id)
             return _list_observation_media(conn, observation_id)
+
+    def query_encounters(
+        self, *, limit: int = 25, cursor: str = "", search: str = "",
+        date_from: str = "", date_to: str = "", location: str = "",
+        context: str = "", participant_id: str = "", mentioned_person_id: str = "",
+        person_id: str = "", person_status: str = "",
+    ) -> dict:
+        """Bounded read of finalized observations; mentions never become participants."""
+        page_size = max(1, min(int(limit), 50))
+        if context and context not in {"ordinary", "public", "unknown"}:
+            raise ValueError("Unknown Encounter context")
+        if person_status and person_status not in {"PRESENT", "MENTIONED", "BOTH"}:
+            raise ValueError("Unknown Person Event status")
+        with self._connect() as conn:
+            requested = {
+                name: _resolve_canonical_person_id(conn, value) if value else ""
+                for name, value in (
+                    ("participant", participant_id),
+                    ("mentioned", mentioned_person_id),
+                    ("person", person_id),
+                )
+            }
+            conditions = ["status = 'FINALIZED'"]
+            arguments: list[str] = []
+            if search.strip():
+                conditions.append("(LOWER(COALESCE(location, '')) LIKE ? OR LOWER(COALESCE(json_extract(context, '$.occasion'), '')) LIKE ?)")
+                needle = f"%{search.strip().lower()}%"
+                arguments.extend((needle, needle))
+            if location.strip():
+                conditions.append("LOWER(COALESCE(location, '')) LIKE ?")
+                arguments.append(f"%{location.strip().lower()}%")
+            if date_from:
+                conditions.append("SUBSTR(COALESCE(observed_at, created_at), 1, 10) >= ?")
+                arguments.append(date_from)
+            if date_to:
+                conditions.append("SUBSTR(COALESCE(observed_at, created_at), 1, 10) <= ?")
+                arguments.append(date_to)
+            if context:
+                conditions.append("COALESCE(json_extract(context, '$.category'), 'unknown') = ?")
+                arguments.append(context)
+            if cursor:
+                try:
+                    cursor_time, cursor_id = cursor.rsplit("|", 1)
+                except ValueError as exc:
+                    raise ValueError("Invalid Encounter page cursor") from exc
+                conditions.append("(COALESCE(observed_at, created_at), observation_id) < (?, ?)")
+                arguments.extend((cursor_time, cursor_id))
+            items: list[dict] = []
+            last_scanned: tuple[str, str] | None = None
+            while len(items) <= page_size:
+                where = " AND ".join(conditions)
+                rows = conn.execute(
+                    f"SELECT * FROM observations WHERE {where} "
+                    "ORDER BY COALESCE(observed_at, created_at) DESC, observation_id DESC LIMIT 100",
+                    arguments,
+                ).fetchall()
+                if not rows:
+                    break
+                for row in rows:
+                    last_scanned = (str(row["observed_at"] or row["created_at"]), str(row["observation_id"]))
+                    record = _encounter_read_record(conn, row)
+                    participant_ids = set(record["participant_ids"])
+                    mention_ids = set(record["mentioned_person_ids"])
+                    if requested["participant"] and requested["participant"] not in participant_ids:
+                        continue
+                    if requested["mentioned"] and requested["mentioned"] not in mention_ids:
+                        continue
+                    if requested["person"]:
+                        selected = requested["person"]
+                        record["person_status"] = (
+                            "BOTH" if selected in participant_ids and selected in mention_ids else
+                            "PRESENT" if selected in participant_ids else
+                            "MENTIONED" if selected in mention_ids else ""
+                        )
+                        if not record["person_status"] or (person_status and record["person_status"] != person_status):
+                            continue
+                        record["person_media"] = []
+                        record["sighting_notes"] = []
+                        if selected in participant_ids:
+                            for face in conn.execute(
+                                "SELECT e.embedding_id, e.person_id, e.source_image, e.crop_path "
+                                "FROM observation_face_assignments assignment "
+                                "JOIN embeddings e ON e.embedding_id = assignment.embedding_id "
+                                "WHERE assignment.observation_id = ? ORDER BY assignment.created_at, assignment.assignment_id",
+                                (record["observation_id"],),
+                            ):
+                                if _effective_embedding_owner_person_id(conn, face) == selected:
+                                    media_path = face["source_image"] or face["crop_path"]
+                                    if media_path and media_path not in record["person_media"]:
+                                        record["person_media"].append(str(media_path))
+                            record["sighting_notes"] = [
+                                str(detail["notes"]) for detail in conn.execute(
+                                    "SELECT person_id, notes FROM recognition_details "
+                                    "WHERE observation_id = ? AND notes <> '' ORDER BY created_at, detail_id",
+                                    (record["observation_id"],),
+                                ) if _resolve_canonical_person_id(conn, str(detail["person_id"])) == selected
+                            ]
+                    items.append(record)
+                    if len(items) > page_size:
+                        break
+                if len(items) > page_size or len(rows) < 100 or last_scanned is None:
+                    break
+                conditions = [item for item in conditions if "COALESCE(observed_at, created_at), observation_id" not in item]
+                if cursor:
+                    arguments = arguments[:-2]
+                conditions.append("(COALESCE(observed_at, created_at), observation_id) < (?, ?)")
+                arguments.extend(last_scanned)
+                cursor = "continued"
+            has_more = len(items) > page_size
+            items = items[:page_size]
+            next_cursor = (
+                f"{items[-1]['sort_at']}|{items[-1]['observation_id']}" if has_more and items else None
+            )
+            return {"events": items, "next_cursor": next_cursor}
+
+    def get_encounter_read(self, observation_id: str) -> dict:
+        with self._connect() as conn:
+            row = _require_observation(conn, observation_id)
+            if row["status"] != "FINALIZED":
+                raise KeyError(f"Unknown finalized Encounter: {observation_id}")
+            record = _encounter_read_record(conn, row)
+            record["media"] = [
+                {"media_id": item.media_id, "media_path": item.media_path}
+                for item in _list_observation_media(conn, observation_id)
+            ]
+            record["sighting_notes"] = [
+                {
+                    "person_id": _resolve_canonical_person_id(conn, str(item["person_id"])),
+                    "raw_person_id": str(item["person_id"]),
+                    "content": str(item["content"]),
+                }
+                for item in conn.execute(
+                    "SELECT d.person_id, n.content FROM recognition_details d "
+                    "JOIN (SELECT notes.subject_id, revisions.content FROM notes "
+                    "JOIN note_revisions revisions ON revisions.note_id = notes.note_id "
+                    "WHERE notes.subject_type = 'RECOGNITION_DETAIL' AND notes.status = 'ACTIVE' "
+                    "AND revisions.revision_number = (SELECT MAX(r2.revision_number) FROM note_revisions r2 WHERE r2.note_id = notes.note_id)) n "
+                    "ON n.subject_id = d.detail_id WHERE d.observation_id = ? ORDER BY d.created_at, d.detail_id",
+                    (observation_id,),
+                )
+            ]
+            return record
 
     def _finalize_observation_without_graph_evidence(
         self,
@@ -5751,7 +5985,7 @@ class SQLiteIdentityStore:
             rows = conn.execute(
                 """
                 SELECT e.embedding_id, e.person_id, e.vector, e.quality_score,
-                       e.source_image, e.crop_path, e.created_at
+                       e.source_image, e.crop_path, e.created_at, e.recognition_state
                 FROM embeddings e
                 WHERE e.deleted_at IS NULL
                 """
@@ -5775,7 +6009,9 @@ class SQLiteIdentityStore:
                     ))
             return records
 
-    def current_embedding_person_ids(self, embedding_ids: list[str]) -> dict[str, str]:
+    def current_embedding_person_ids(
+        self, embedding_ids: list[str], *, quality_only: bool = True,
+    ) -> dict[str, str]:
         normalized_ids = list(dict.fromkeys(
             str(embedding_id).strip() for embedding_id in embedding_ids
             if str(embedding_id).strip()
@@ -5786,16 +6022,29 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             rows = conn.execute(
                 f"""
-                SELECT e.embedding_id, e.person_id
+                SELECT e.embedding_id, e.person_id, e.recognition_state
                 FROM embeddings e
                 WHERE e.embedding_id IN ({placeholders})
                   AND e.deleted_at IS NULL
                 """,
                 normalized_ids,
             ).fetchall()
+            good_reference_people: set[str] = set()
+            if quality_only:
+                for good_row in conn.execute(
+                    "SELECT embedding_id, person_id FROM embeddings "
+                    "WHERE recognition_state = 'GOOD' AND deleted_at IS NULL"
+                ):
+                    good_reference_people.add(
+                        _effective_embedding_owner_person_id(conn, good_row)
+                    )
             result: dict[str, str] = {}
             for row in rows:
+                if row["recognition_state"] == "PROOF_ONLY":
+                    continue
                 canonical_person_id = _effective_embedding_owner_person_id(conn, row)
+                if quality_only and row["recognition_state"] != "GOOD" and canonical_person_id in good_reference_people:
+                    continue
                 canonical = conn.execute(
                     "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
                     (canonical_person_id,),
@@ -6032,7 +6281,7 @@ class SQLiteIdentityStore:
         embedding_row = conn.execute(
             """
             SELECT embedding_id, person_id, vector, quality_score,
-                   source_image, crop_path, created_at
+                   source_image, crop_path, created_at, recognition_state
             FROM embeddings WHERE embedding_id = ?
             """,
             (embedding_id,),
@@ -6045,19 +6294,20 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             conn.execute("DELETE FROM pending_additions WHERE pending_id = ?", (pending_id,))
 
-    def create_init_session(self, source_path: str) -> InitSession:
+    def create_init_session(self, source_path: str, *, quality_only: bool = True) -> InitSession:
         session = InitSession(
             session_id=str(uuid.uuid4()),
             source_path=source_path,
             status="pending",
+            quality_only=quality_only,
         )
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO init_sessions(session_id, source_path, status, created_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO init_sessions(session_id, source_path, status, created_at, quality_only)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (session.session_id, session.source_path, session.status, session.created_at),
+                (session.session_id, session.source_path, session.status, session.created_at, int(quality_only)),
             )
         return session
 
@@ -6103,7 +6353,7 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT session_id, source_path, status, created_at
+                SELECT session_id, source_path, status, created_at, quality_only
                 FROM init_sessions
                 WHERE session_id = ?
                 """,
@@ -6116,13 +6366,14 @@ class SQLiteIdentityStore:
             source_path=row["source_path"],
             status=row["status"],
             created_at=row["created_at"],
+            quality_only=bool(row["quality_only"]),
         )
 
     def list_init_sessions(self) -> list[InitSession]:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT session_id, source_path, status, created_at
+                SELECT session_id, source_path, status, created_at, quality_only
                 FROM init_sessions
                 ORDER BY created_at DESC
                 """
@@ -6133,6 +6384,7 @@ class SQLiteIdentityStore:
                 source_path=row["source_path"],
                 status=row["status"],
                 created_at=row["created_at"],
+                quality_only=bool(row["quality_only"]),
             )
             for row in rows
         ]
@@ -6412,6 +6664,46 @@ def _pack_embedding(vector: Embedding) -> bytes:
 def _unpack_embedding(payload: bytes) -> Embedding:
     count = len(payload) // 4
     return struct.unpack(f"{count}f", payload)
+
+
+def _proof_only_duplicate_matches(
+    conn: sqlite3.Connection, incoming_vectors: list[Embedding], threshold: float,
+) -> list[dict]:
+    """Exceptional duplicate hint, isolated from ordinary index/search eligibility."""
+    if not incoming_vectors:
+        return []
+    records = conn.execute(
+        "SELECT embedding_id, person_id, vector, recognition_state FROM embeddings "
+        "WHERE deleted_at IS NULL ORDER BY embedding_id"
+    ).fetchall()
+    states_by_person: dict[str, set[str]] = {}
+    for record in records:
+        person_id = _effective_embedding_owner_person_id(conn, record)
+        states_by_person.setdefault(person_id, set()).add(str(record["recognition_state"]))
+    scores: dict[str, float] = {}
+    for record in records:
+        if record["recognition_state"] != "PROOF_ONLY":
+            continue
+        person_id = _effective_embedding_owner_person_id(conn, record)
+        if states_by_person[person_id] != {"PROOF_ONLY"}:
+            continue
+        person = conn.execute(
+            "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
+            (person_id,),
+        ).fetchone()
+        if person is None or person["lifecycle_status"] != "ACTIVE" or person["deleted_at"] is not None:
+            continue
+        reference = _unpack_embedding(record["vector"])
+        score = max(sum(left * right for left, right in zip(incoming, reference))
+                    for incoming in incoming_vectors)
+        if score >= threshold:
+            scores[person_id] = max(scores.get(person_id, -1.0), score)
+    return [
+        {"person_id": person_id, "name": str(conn.execute(
+            "SELECT name FROM persons WHERE person_id = ?", (person_id,),
+        ).fetchone()[0]), "score": score, "basis": "PROOF_ONLY_DUPLICATE_CHECK"}
+        for person_id, score in sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:5]
+    ]
 
 
 def _execute_migration_script(conn: sqlite3.Connection, script: str) -> None:
@@ -8181,6 +8473,24 @@ def _migrate_27_to_28(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_28_to_29(conn: sqlite3.Connection) -> None:
+    """Keep biometric provenance and search eligibility on the existing embedding."""
+    conn.execute(
+        "ALTER TABLE embeddings ADD COLUMN recognition_state TEXT NOT NULL "
+        "DEFAULT 'GOOD' CHECK (recognition_state IN ('GOOD', 'POOR_ACCEPTED', 'PROOF_ONLY'))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS init_sessions ("
+        "session_id TEXT PRIMARY KEY, source_path TEXT NOT NULL, "
+        "status TEXT NOT NULL, created_at TEXT NOT NULL)"
+    )
+    conn.execute(
+        "ALTER TABLE init_sessions ADD COLUMN quality_only INTEGER NOT NULL "
+        "DEFAULT 1 CHECK (quality_only IN (0, 1))"
+    )
+    conn.execute("PRAGMA user_version = 29")
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -8217,6 +8527,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(25, 26, _migrate_25_to_26),
         SchemaMigration(26, 27, _migrate_26_to_27),
         SchemaMigration(27, 28, _migrate_27_to_28),
+        SchemaMigration(28, 29, _migrate_28_to_29),
     )
 
 
@@ -8545,7 +8856,7 @@ def _staged_review_face_row(
         row = conn.execute(
             """
             SELECT pending_id AS staged_face_id, vector, quality_score,
-                   source_image, crop_path
+                   source_image, crop_path, quality_status
             FROM pending_additions WHERE pending_id = ?
             """,
             (normalized_id,),
@@ -8554,7 +8865,7 @@ def _staged_review_face_row(
         row = conn.execute(
             """
             SELECT init_face_id AS staged_face_id, vector, quality_score,
-                   source_image, crop_path
+                   source_image, crop_path, quality_status
             FROM init_faces WHERE init_face_id = ?
             """,
             (normalized_id,),
@@ -8564,6 +8875,15 @@ def _staged_review_face_row(
     if row is None:
         raise KeyError(f"Unknown staged review face: {normalized_id}")
     return row
+
+
+def _review_face_recognition_state(staged: sqlite3.Row, detail: dict) -> str:
+    if str(staged["quality_status"]).lower() != "bad":
+        return "GOOD"
+    state = str(detail.get("embedding_state") or "PROOF_ONLY").upper()
+    if state not in EMBEDDING_RECOGNITION_STATES - {"GOOD"}:
+        raise ValueError("Poor-quality review face requires accepted or proof-only state")
+    return state
 
 
 def _require_active_review_person(
@@ -8646,6 +8966,9 @@ def _create_review_person_note(
     operation_id: str,
     actor: dict | None,
     source: str,
+    *,
+    subject_type: str = "PERSON",
+    subject_id: str | None = None,
 ) -> str:
     mentions = _normalize_note_mentions(conn, owner_person_id, mentioned_person_ids)
     note_id = str(uuid.uuid4())
@@ -8655,9 +8978,9 @@ def _create_review_person_note(
         INSERT INTO notes(
             note_id, owner_person_id, subject_type, subject_id,
             is_profile_note, status, created_operation_id, created_at, updated_at
-        ) VALUES (?, ?, 'PERSON', ?, 0, 'ACTIVE', ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, 0, 'ACTIVE', ?, ?, ?)
         """,
-        (note_id, owner_person_id, owner_person_id, operation_id, created_at, created_at),
+        (note_id, owner_person_id, subject_type, subject_id or owner_person_id, operation_id, created_at, created_at),
     )
     revision_id = _insert_note_revision(
         conn,
@@ -11844,7 +12167,10 @@ def _world_event_batch_data(
 
 def _world_context_summary(payload: str) -> dict[str, object]:
     context = json.loads(payload or "{}")
-    allowed = ("occasion", "event_type", "description")
+    allowed = (
+        "occasion", "event_type", "description", "category",
+        "time_precision", "start_time", "end_time", "event_notes",
+    )
     values = {
         key: str(context[key]) for key in allowed
         if context.get(key) is not None and str(context[key]).strip()
@@ -12592,6 +12918,51 @@ def _list_observation_media(
     return [_observation_media_from_row(row) for row in rows]
 
 
+def _encounter_read_record(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    observation_id = str(row["observation_id"])
+    context = json.loads(row["context"] or "{}")
+    participant_ids = _effective_observation_person_ids(conn, observation_id)
+    mentioned_ids = sorted({
+        _resolve_canonical_person_id(conn, person_id)
+        for person_id in context.get("event_mentioned_person_ids", [])
+        if conn.execute("SELECT 1 FROM persons WHERE person_id = ?", (person_id,)).fetchone()
+    })
+    all_ids = sorted(set(participant_ids) | set(mentioned_ids))
+    names = {}
+    if all_ids:
+        placeholders = ",".join("?" for _ in all_ids)
+        names = {
+            str(person["person_id"]): str(person["name"])
+            for person in conn.execute(
+                f"SELECT person_id, name FROM persons WHERE person_id IN ({placeholders})", all_ids,
+            )
+        }
+    media_count = int(conn.execute(
+        "SELECT COUNT(*) FROM observation_media WHERE observation_id = ?", (observation_id,),
+    ).fetchone()[0])
+    return {
+        "observation_id": observation_id,
+        "sort_at": str(row["observed_at"] or row["created_at"]),
+        "observed_at": row["observed_at"],
+        "occasion": context.get("occasion"),
+        "start_time": context.get("start_time"),
+        "end_time": context.get("end_time"),
+        "time_precision": context.get("time_precision", "unknown"),
+        "location": row["location"],
+        "context": context.get("category", "unknown"),
+        "event_notes": context.get("event_notes") or "",
+        "participant_ids": participant_ids,
+        "participants": [{"person_id": person_id, "name": names.get(person_id, "Historical person")}
+                         for person_id in participant_ids],
+        "mentioned_person_ids": mentioned_ids,
+        "mentioned_people": [{"person_id": person_id, "name": names.get(person_id, "Historical person")}
+                             for person_id in mentioned_ids],
+        "media_count": media_count,
+        "created_operation_id": row["created_operation_id"],
+        "finalized_at": row["finalized_at"],
+    }
+
+
 def _insert_identity_correction(
     conn: sqlite3.Connection,
     *,
@@ -12969,6 +13340,74 @@ def _list_raw_observation_participants(
         (observation_id,),
     ).fetchall()
     return [_observation_participant_from_row(conn, row) for row in rows]
+
+
+def _review_encounter_metadata(details: list[dict]) -> tuple[str | None, str | None, dict]:
+    """Resolve one event's metadata from finalized face decisions, rejecting conflicts."""
+    fields = ("date", "time", "end_time", "time_precision", "place_seen", "event_occasion", "event_context", "event_notes")
+    values: dict[str, str] = {}
+    for detail in details:
+        for field in fields:
+            value = str(detail.get(field) or "").strip()
+            if not value:
+                continue
+            if field in values and values[field] != value:
+                raise ValueError(f"Conflicting Encounter {field} across reviewed faces")
+            values[field] = value
+    date = values.get("date")
+    start = values.get("time")
+    end = values.get("end_time")
+    if date:
+        try:
+            if len(date) != 10:
+                raise ValueError("invalid date width")
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("Encounter date must use ISO format") from exc
+    for field, value in (("time", start), ("end_time", end)):
+        if value:
+            try:
+                if len(value) != 5 or value[2] != ":":
+                    raise ValueError("invalid time width")
+                datetime.strptime(value, "%H:%M")
+            except ValueError as exc:
+                raise ValueError(f"Encounter {field} must use HH:MM format") from exc
+    if start and not date:
+        raise ValueError("Encounter time requires a date")
+    if end and not start:
+        raise ValueError("Encounter end time requires a start time")
+    if start and end and end < start:
+        raise ValueError("Encounter end time precedes start time")
+    precision = values.get("time_precision", "exact" if start else "unknown").lower()
+    if precision not in {"exact", "approximate", "unknown"}:
+        raise ValueError("Encounter time precision must be exact, approximate, or unknown")
+    if (precision == "unknown") == bool(start):
+        raise ValueError("Encounter time and precision disagree")
+    category = values.get("event_context", "unknown").lower()
+    if category not in {"ordinary", "public", "unknown"}:
+        raise ValueError("Encounter context must be ordinary, public, or unknown")
+    mention_sets: set[tuple[str, ...]] = set()
+    for detail in details:
+        mentions = detail.get("event_mentioned_person_ids") or []
+        if not isinstance(mentions, list) or any(
+            not isinstance(item, str) or not item.strip() for item in mentions
+        ):
+            raise ValueError("Event Note mentions must be selected person IDs")
+        mention_sets.add(tuple(sorted(set(mentions))))
+    if len(mention_sets) > 1:
+        raise ValueError("Conflicting Encounter Event Note mentions across reviewed faces")
+    event_mentions = list(next(iter(mention_sets), ()))
+    context = {
+        "occasion": values.get("event_occasion") or None,
+        "start_time": start or None,
+        "end_time": end or None,
+        "time_precision": precision,
+        "category": category,
+        "event_notes": values.get("event_notes") or None,
+        "event_mentioned_person_ids": event_mentions,
+        "added_by": next((str(item.get("added_by") or "").strip() for item in details if item.get("added_by")), None),
+    }
+    return (f"{date}T{start}:00" if date and start else date), values.get("place_seen") or None, context
 
 
 def _observation_from_row(row: sqlite3.Row) -> Observation:
@@ -13584,7 +14023,7 @@ def _list_embeddings_in_transaction(conn: sqlite3.Connection) -> list[EmbeddingR
     for row in conn.execute(
         """
         SELECT embedding_id, person_id, vector, quality_score,
-               source_image, crop_path, created_at
+               source_image, crop_path, created_at, recognition_state
         FROM embeddings WHERE deleted_at IS NULL ORDER BY embedding_id
         """
     ).fetchall():
@@ -14547,8 +14986,8 @@ def _r01_precondition_from_report(
     report: object,
     survivor_person_id: str,
 ) -> ArchivedCanonicalSurvivorRepairPrecondition:
-    if report.schema_version != SCHEMA_VERSION or SCHEMA_VERSION != 28:
-        raise StructuredRepairRefused("R01 requires schema version 28", report=report)
+    if report.schema_version != SCHEMA_VERSION or SCHEMA_VERSION < 28:
+        raise StructuredRepairRefused("R01 requires schema version 28 or later", report=report)
     if report.findings_truncated:
         raise StructuredRepairRefused("R01 requires an untruncated P11-A report", report=report)
     blocking = [
@@ -15255,8 +15694,8 @@ def _r02_precondition_from_report(
     note_id: str,
     referenced_person_id: str,
 ) -> NoteReferenceReconciliationPrecondition:
-    if report.schema_version != SCHEMA_VERSION or SCHEMA_VERSION != 28:
-        raise StructuredRepairRefused("R02 requires schema version 28", report=report)
+    if report.schema_version != SCHEMA_VERSION or SCHEMA_VERSION < 28:
+        raise StructuredRepairRefused("R02 requires schema version 28 or later", report=report)
     if report.findings_truncated:
         raise StructuredRepairRefused("R02 requires an untruncated P11-A report", report=report)
     graph_revision = _graph_revision_token(conn)
@@ -16419,6 +16858,7 @@ def _embedding_from_row(
         crop_path=row["crop_path"],
         created_at=row["created_at"],
         canonical_person_id=canonical_person_id,
+        recognition_state=row["recognition_state"] if "recognition_state" in row.keys() else "GOOD",
     )
 
 

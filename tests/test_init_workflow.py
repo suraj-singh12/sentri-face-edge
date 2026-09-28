@@ -12,9 +12,21 @@ from sentriface.config import RuntimeConfig
 from sentriface.engine import _assign_groups, group_representative_embedding
 from sentriface.errors import QueueCancellationError
 from sentriface.models import DetectedFace, FaceBox, InitFace, InitGroup, PersonMatch, QualityReport, QualityStatus
+from sentriface.storage.sqlite_store import SQLiteIdentityStore
 
 
 class InitWorkflowTest(unittest.TestCase):
+    def test_queue_search_policy_survives_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "data" / "sentriface.db"
+            store = SQLiteIdentityStore(path, embedding_dim=2)
+            store.initialize()
+            session = store.create_init_session("/managed/queue", quality_only=False)
+            reopened = SQLiteIdentityStore(path, embedding_dim=2)
+            reopened.initialize()
+            self.assertFalse(reopened.get_init_session(session.session_id).quality_only)
+            self.assertFalse(reopened.list_init_sessions()[0].quality_only)
+
     def test_queue_groups_merge_faces_with_same_strong_known_match(self) -> None:
         faces = [
             self._init_face("face_1", (1.0, 0.0)),
@@ -391,11 +403,24 @@ class InitWorkflowTest(unittest.TestCase):
                 ["face_1"],
                 "Subset Person",
                 "queue-subset",
+                recognition_detail={
+                    "rank": "Captain", "country": "India", "importance": "High",
+                    "added_by": "Operator", "date": "2026-09-27", "time": "09:30",
+                    "place_seen": "Lobby", "event_occasion": "Visit",
+                },
                 actor={"username": "operator"},
             )
 
             self.assertTrue(person_id)
             self.assertEqual(len(accepted), 1)
+            saved = engine.get_person(person_id)
+            self.assertEqual(saved.metadata["rank"], "Captain")
+            self.assertEqual(saved.metadata["country"], "India")
+            self.assertEqual(saved.metadata["importance"], "High")
+            self.assertEqual(saved.metadata["added_by"], "Operator")
+            encounter = engine.list_observations_for_person(person_id)[0]
+            self.assertEqual(encounter.location, "Lobby")
+            self.assertEqual(encounter.context["occasion"], "Visit")
             groups = engine.list_init_groups(session.session_id)
             pending_groups = [group for group in groups if group.status == "pending"]
             self.assertEqual(len(pending_groups), 2)

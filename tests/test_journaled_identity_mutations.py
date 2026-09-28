@@ -21,6 +21,30 @@ class JournaledIdentityMutationTest(unittest.TestCase):
         self.assertEqual(operation["actor"]["username"], "operator")
         return operation
 
+    def test_identified_person_profile_and_notes_survive_edit_and_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            store = self._store(root)
+            person = store.create_identified_person(
+                "Asha", {"rank": "Captain", "country": "India", "importance": "High", "added_by": "Operator", "tags": ["priority"]},
+                "create-roundtrip", actor={"username": "operator"},
+            )
+            self.assertEqual(store.get_person(person.person_id).metadata["added_by"], "Operator")
+            store.update_person_notes(person.person_id, "General context", "", "Operator", "note-roundtrip")
+            store.update_person_profile(
+                person.person_id, "Asha Rao", "Major", "India", "Critical", "Operator",
+                tags=["priority", "reviewed"], operation_id="edit-roundtrip",
+            )
+            reopened = self._store(root)
+            saved = reopened.get_person(person.person_id)
+            self.assertEqual(saved.name, "Asha Rao")
+            self.assertEqual(saved.metadata["rank"], "Major")
+            self.assertEqual(saved.metadata["country"], "India")
+            self.assertEqual(saved.metadata["importance"], "Critical")
+            self.assertEqual(saved.metadata["added_by"], "Operator")
+            self.assertEqual(saved.metadata["tags"], ["priority", "reviewed"])
+            self.assertEqual(reopened.get_person_note(person.person_id).content, "General context")
+
     def test_profile_preferences_and_face_lifecycle_writes_are_journaled(self) -> None:
         actor = {"user_id": "operator-1", "username": "operator"}
         with tempfile.TemporaryDirectory() as temp:

@@ -190,6 +190,38 @@ class IdentityCorrectionTest(unittest.TestCase):
             )
             self.assertEqual(store.list_observations_for_person(person.person_id), [])
             self.assertEqual(store.get_operation("add-raj-op")["operation_type"], "identity.face.add")
+            embedding_id = store.list_embeddings_for_person(person.person_id)[0].embedding_id
+            reopened = self._store(Path(temp))
+            self.assertEqual(
+                reopened.face_origins_for_embeddings([embedding_id])[embedding_id][0]["face_origin"],
+                "STANDALONE_ENROLLMENT",
+            )
+
+    def test_add_face_proof_only_is_enrolled_without_encounter_or_search(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            person = store.create_person("Known without a photo")
+            store.save_pending_addition(PendingAddition(
+                pending_id="proof-face", source_image="/managed/proof.jpg",
+                face=DetectedFace(FaceBox(1, 1, 10, 10, 0.99), 0.2),
+                vector=(1.0, 0.0), matches=[], decision=MatchDecision.UNKNOWN,
+                quality=QualityReport(QualityStatus.BAD, 0.2),
+            ))
+            store.create_photo_review("proof-review", "proof.jpg", [{
+                "face_id": "proof-face", "staged_face_type": "PENDING_ADDITION",
+                "staged_face_id": "proof-face",
+            }], media_path="/managed/proof.jpg")
+            store.set_photo_review_face_decision(
+                "proof-review", "proof-face", "ACCEPT_EXISTING_PERSON",
+                person_id=person.person_id, recognition_detail={"embedding_state": "PROOF_ONLY"},
+            )
+            result = store.add_face_to_person("proof-review", person.person_id, "proof-add-op")
+            self.assertEqual(store.get_person(person.person_id).biometric_status, "ENROLLED")
+            record = store.list_embeddings_for_person(person.person_id)[0]
+            self.assertEqual(record.recognition_state, "PROOF_ONLY")
+            self.assertEqual(store.current_embedding_person_ids([record.embedding_id], quality_only=False), {})
+            self.assertEqual(store.list_observations_for_person(person.person_id), [])
+            self.assertEqual(result["created_person_ids"], [])
 
     def test_add_face_failure_rolls_back_embedding_state_and_journal(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -100,6 +100,12 @@ class IdentityStore(Protocol):
     ) -> list[EmbeddingRecord]:
         """List embeddings belonging to one person."""
 
+    def face_origins_for_embeddings(self, embedding_ids: list[str]) -> dict[str, list[dict]]:
+        """Read proved Encounter/Add Face origins or explicit legacy uncertainty."""
+
+    def proof_only_duplicate_candidates(self, vectors: list[Embedding], threshold: float) -> list[dict]:
+        """Exceptional proof-only duplicate hint, outside normal matching."""
+
     def update_person_profile(
         self,
         person_id: str,
@@ -364,6 +370,12 @@ class IdentityStore(Protocol):
     def list_observation_media(self, observation_id: str) -> list[ObservationMedia]:
         """List durable media memberships for one observation."""
 
+    def query_encounters(self, **filters) -> dict:
+        """Page finalized Encounter history without changing graph authority."""
+
+    def get_encounter_read(self, observation_id: str) -> dict:
+        """Read one finalized Encounter and its supporting records."""
+
     def list_observations_for_person(self, person_id: str) -> list[Observation]:
         """List observations for a person's current canonical identity."""
 
@@ -622,7 +634,9 @@ class IdentityStore(Protocol):
     ) -> list[RecognitionDetail]:
         """Load recognition details retaining exact historical ownership."""
 
-    def current_embedding_person_ids(self, embedding_ids: list[str]) -> dict[str, str]:
+    def current_embedding_person_ids(
+        self, embedding_ids: list[str], *, quality_only: bool = True,
+    ) -> dict[str, str]:
         """Resolve indexed embeddings to their current active identity owners."""
 
     def backup_to(self, target_path: Path) -> None:
@@ -643,7 +657,7 @@ class IdentityStore(Protocol):
     def delete_pending_addition(self, pending_id: str) -> None:
         """Remove a pending addition after review."""
 
-    def create_init_session(self, source_path: str) -> InitSession:
+    def create_init_session(self, source_path: str, *, quality_only: bool = True) -> InitSession:
         """Create a durable initialization review session."""
 
     def save_init_faces(self, faces: list[InitFace]) -> None:
