@@ -6,7 +6,7 @@ import json
 import sqlite3
 import struct
 import uuid
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, nullcontext
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -86,10 +86,11 @@ from sentriface.models import (
     WorldRelationship,
     utc_now,
 )
+from sentriface.media_registry import media_content_identity
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 31
 EMBEDDING_RECOGNITION_STATES = frozenset({"GOOD", "POOR_ACCEPTED", "PROOF_ONLY"})
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
@@ -508,9 +509,9 @@ class SQLiteIdentityStore:
                 for embedding_id, records in origins.items()
             }
 
-    def proof_only_duplicate_candidates(self, vectors: list[Embedding], threshold: float) -> list[dict]:
+    def proof_only_duplicate_candidates(self, vectors: list[Embedding], threshold: float, *, review_id: str | None = None) -> list[dict]:
         with self._connect() as conn:
-            return _proof_only_duplicate_matches(conn, vectors, threshold)
+            return _proof_only_duplicate_matches(conn, vectors, threshold, review_id=review_id)
 
     def list_raw_embeddings_for_person(
         self, person_id: str, include_deleted: bool = False,
@@ -1840,7 +1841,172 @@ class SQLiteIdentityStore:
                     """,
                     (normalized_review_id, face_id, staged_type, staged_id, created_at, created_at),
                 )
+            if media_path:
+                conn.execute(
+                    "INSERT OR IGNORE INTO photo_review_media(review_id, media_id, media_path, ordinal) "
+                    "VALUES (?, ?, ?, 0)",
+                    (normalized_review_id, normalized_media_id, str(media_path)),
+                )
             return _photo_review_from_conn(conn, normalized_review_id)
+
+    def plan_init_session_encounters(self, session_id: str, media_groups: list[list[str]]) -> list[dict]:
+        """Partition a scanned Queue session into serial, non-authoritative reviews."""
+        with self._connect() as conn:
+            if conn.execute("SELECT 1 FROM init_sessions WHERE session_id = ?", (session_id,)).fetchone() is None:
+                raise KeyError(f"Unknown init session: {session_id}")
+            existing_reviews = conn.execute(
+                "SELECT review_id FROM photo_reviews WHERE session_id = ? ORDER BY sequence_number", (session_id,),
+            ).fetchall()
+            if existing_reviews:
+                existing_groups = [[str(item["media_id"]) for item in conn.execute(
+                    "SELECT media_id FROM photo_review_media WHERE review_id = ? ORDER BY ordinal",
+                    (review["review_id"],),
+                )] for review in existing_reviews]
+                if existing_groups == media_groups:
+                    return _list_init_session_encounter_reviews(conn, session_id)
+                raise ValueError("Encounter grouping has already been confirmed for this session")
+            media_rows = conn.execute(
+                "SELECT media_id, media_path FROM init_session_media WHERE session_id = ? AND excluded = 0 ORDER BY media_id",
+                (session_id,),
+            ).fetchall()
+            known_media = {str(row["media_id"]): str(row["media_path"]) for row in media_rows}
+            supplied = [media_id for group in media_groups for media_id in group]
+            if not media_groups or any(not group for group in media_groups) or len(supplied) != len(set(supplied)) or not set(supplied).issubset(known_media):
+                raise ValueError("Every selected media item must belong to exactly one Encounter")
+            for media_id in supplied:
+                media_path = known_media[media_id]
+                previous = conn.execute(
+                    "SELECT om.observation_id FROM observation_media om "
+                    "JOIN observations o ON o.observation_id = om.observation_id "
+                    "WHERE (om.media_id = ? OR om.media_path = ?) AND o.status = 'FINALIZED' LIMIT 1",
+                    (media_content_identity(media_path), media_path),
+                ).fetchone()
+                if previous is not None:
+                    raise ValueError(
+                        f"This media already belongs to finalized Encounter {previous['observation_id']}"
+                    )
+            created_at = utc_now()
+            staged_group_encounters: dict[str, set[int]] = {}
+            staged_face_encounter: dict[str, tuple[str, int]] = {}
+            for sequence_number, group in enumerate(media_groups):
+                first_id = group[0]
+                review_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:queue-encounter:{session_id}:{sequence_number}"))
+                phase = "EVENT" if sequence_number == 0 else "WAITING"
+                conn.execute(
+                    "INSERT INTO photo_reviews(review_id, media_id, media_path, source, status, created_at, "
+                    "session_id, sequence_number, review_phase) VALUES (?, ?, ?, 'queue', 'IN_PROGRESS', ?, ?, ?, ?)",
+                    (review_id, first_id, known_media[first_id], created_at, session_id, sequence_number, phase),
+                )
+                for ordinal, media_id in enumerate(group):
+                    conn.execute(
+                        "INSERT INTO photo_review_media(review_id, media_id, media_path, ordinal) VALUES (?, ?, ?, ?)",
+                        (review_id, media_id, known_media[media_id], ordinal),
+                    )
+                placeholders = ",".join("?" for _ in group)
+                media_paths = [known_media[media_id] for media_id in group]
+                group_faces = conn.execute(
+                    f"SELECT init_face_id, group_id FROM init_faces WHERE session_id = ? AND source_image IN ({placeholders}) "
+                    "ORDER BY created_at, init_face_id",
+                    (session_id, *media_paths),
+                ).fetchall()
+                if not group_faces:
+                    raise ValueError("Each Encounter review needs at least one detected face")
+                for face in group_faces:
+                    staged_group_encounters.setdefault(str(face["group_id"]), set()).add(sequence_number)
+                    staged_face_encounter[str(face["init_face_id"])] = (str(face["group_id"]), sequence_number)
+                    conn.execute(
+                        "INSERT INTO photo_review_faces(review_id, face_id, staged_face_type, staged_face_id, "
+                        "created_at, updated_at) VALUES (?, ?, 'INIT_FACE', ?, ?, ?)",
+                        (review_id, face["init_face_id"], face["init_face_id"], created_at, created_at),
+                    )
+            # Split only scan groups that actually cross confirmed Encounter boundaries.
+            for face_id, (group_id, sequence_number) in staged_face_encounter.items():
+                if len(staged_group_encounters[group_id]) > 1:
+                    conn.execute(
+                        "UPDATE init_faces SET group_id = ? WHERE init_face_id = ?",
+                        (f"encounter_{sequence_number}_{face_id}", face_id),
+                    )
+            return _list_init_session_encounter_reviews(conn, session_id)
+
+    def list_init_session_encounter_reviews(self, session_id: str) -> list[dict]:
+        with self._connect() as conn:
+            return _list_init_session_encounter_reviews(conn, session_id)
+
+    def get_encounter_review(self, review_id: str) -> dict:
+        with self._connect() as conn:
+            return _encounter_review_read(conn, review_id)
+
+    def list_encounter_draft_references(self, review_id: str) -> list[dict]:
+        """Read accepted draft faces for transient in-session matching only."""
+        with self._connect() as conn:
+            return _encounter_draft_references(conn, review_id)
+
+    def save_encounter_review_event(self, review_id: str, event_details: dict) -> dict:
+        """Store Event details once on the active draft; no Observation is created."""
+        if not isinstance(event_details, dict):
+            raise ValueError("Event details must be an object")
+        _review_encounter_metadata([event_details])
+        with self._connect() as conn:
+            review = conn.execute("SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,)).fetchone()
+            if review is None or review["status"] != "IN_PROGRESS" or review["review_phase"] not in {"EVENT", "IDENTITIES"}:
+                raise ValueError("Event details can only be saved for the active Encounter review")
+            for person_id in event_details.get("event_mentioned_person_ids", []):
+                if conn.execute("SELECT 1 FROM persons WHERE person_id = ?", (person_id,)).fetchone() is None:
+                    raise ValueError(f"Unknown Event Note mentioned person: {person_id}")
+            conn.execute(
+                "UPDATE photo_reviews SET event_details = ?, event_details_complete = 1, review_phase = 'IDENTITIES' "
+                "WHERE review_id = ?",
+                (json.dumps(event_details, separators=(",", ":")), review_id),
+            )
+            return _encounter_review_read(conn, review_id)
+
+    def complete_encounter_identity_review(self, review_id: str) -> dict:
+        with self._connect() as conn:
+            review = conn.execute("SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,)).fetchone()
+            if review is None or review["status"] != "IN_PROGRESS" or review["review_phase"] != "IDENTITIES" or not review["event_details_complete"]:
+                raise ValueError("Complete Event details and identity review first")
+            rows = conn.execute("SELECT * FROM photo_review_faces WHERE review_id = ?", (review_id,)).fetchall()
+            if not rows or any(row["decision"] in (None, "SKIP") for row in rows):
+                raise ValueError("Every detected face needs a final identity decision")
+            candidates = _review_relation_candidates(conn, review_id)
+            conn.execute("UPDATE photo_reviews SET review_phase = 'RELATIONS' WHERE review_id = ?", (review_id,))
+            result = _encounter_review_read(conn, review_id)
+            result["relation_candidates"] = candidates
+            return result
+
+    def set_encounter_relation_decision(
+        self, review_id: str, first_ref: str, second_ref: str, disposition: str,
+    ) -> dict:
+        normalized_disposition = str(disposition).upper()
+        if normalized_disposition not in {"INCLUDE", "EXCLUDE"}:
+            raise ValueError("Relation decision must be INCLUDE or EXCLUDE")
+        pair = tuple(sorted((first_ref, second_ref)))
+        if pair[0] == pair[1]:
+            raise ValueError("A Person cannot have a Relation to themselves")
+        with self._connect() as conn:
+            review = conn.execute("SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,)).fetchone()
+            if review is None or review["status"] != "IN_PROGRESS" or review["review_phase"] != "RELATIONS":
+                raise ValueError("Relations can only be decided after identity review")
+            candidates = {(item["first_ref"], item["second_ref"]): item for item in _review_relation_candidates(conn, review_id)}
+            candidate = candidates.get(pair)
+            if candidate is None:
+                raise ValueError("Relation pair is not a final participant candidate")
+            previous = conn.execute(
+                "SELECT decision_id, disposition FROM encounter_relation_decisions "
+                "WHERE review_id = ? AND first_ref = ? AND second_ref = ? AND active = 1",
+                (review_id, *pair),
+            ).fetchone()
+            if previous is not None and previous["disposition"] == normalized_disposition:
+                return _encounter_review_read(conn, review_id)
+            if previous is not None:
+                conn.execute("UPDATE encounter_relation_decisions SET active = 0 WHERE decision_id = ?", (previous["decision_id"],))
+            conn.execute(
+                "INSERT INTO encounter_relation_decisions(decision_id, review_id, first_ref, second_ref, "
+                "disposition, support, supersedes_decision_id, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), review_id, *pair, normalized_disposition,
+                 candidate["support"], previous["decision_id"] if previous else None, utc_now()),
+            )
+            return _encounter_review_read(conn, review_id)
 
     def set_photo_review_face_decision(
         self,
@@ -1855,6 +2021,8 @@ class SQLiteIdentityStore:
         notes: str = "",
         mentioned_person_ids: list[str] | None = None,
         recognition_detail: dict | None = None,
+        proof_only_duplicate_threshold: float = 0.5,
+        _conn=None,
     ) -> PhotoReview:
         normalized_decision = str(decision).strip().upper()
         if normalized_decision not in REVIEW_DECISIONS:
@@ -1867,14 +2035,18 @@ class SQLiteIdentityStore:
             recognition_detail, "recognition detail",
         )
         mention_ids = sorted({str(item).strip() for item in (mentioned_person_ids or []) if str(item).strip()})
-        with self._connect() as conn:
+        with self._connect() if _conn is None else nullcontext(_conn) as conn:
             review = conn.execute(
-                "SELECT status FROM photo_reviews WHERE review_id = ?", (review_id,),
+                "SELECT status, review_phase FROM photo_reviews WHERE review_id = ?", (review_id,),
             ).fetchone()
             if review is None:
                 raise KeyError(f"Unknown photo review: {review_id}")
             if review["status"] != "IN_PROGRESS":
                 raise ValueError("Only an in-progress review can be changed")
+            if review["review_phase"] != "LEGACY" and review["review_phase"] != "IDENTITIES":
+                raise ValueError("Complete Event details before deciding identities")
+            if review["review_phase"] == "IDENTITIES" and normalized_decision == "SKIP":
+                raise ValueError("Skip defers an identity group; it is not a final decision")
             if normalized_decision == "ACCEPT_EXISTING_PERSON":
                 _require_active_review_person(conn, person_id)
                 new_person_key = new_person_name = None
@@ -1883,6 +2055,16 @@ class SQLiteIdentityStore:
                     raise ValueError("A name is required for a new person decision")
                 person_id = None
                 new_person_key = str(new_person_key or face_id).strip()
+                if review["review_phase"] == "IDENTITIES" and (recognition_detail or {}).get("proof_only_duplicate_override") is not True:
+                    staged = conn.execute(
+                        "SELECT i.vector FROM init_faces i JOIN photo_review_faces f ON f.staged_face_id = i.init_face_id "
+                        "WHERE f.review_id = ? AND f.face_id = ? AND f.staged_face_type = 'INIT_FACE'", (review_id, face_id),
+                    ).fetchone()
+                    if staged and _proof_only_duplicate_matches(
+                        conn, [_unpack_embedding(staged["vector"])], proof_only_duplicate_threshold,
+                        review_id=review_id, excluded_draft_key=new_person_key,
+                    ):
+                        raise ValueError("A proof-only Person may already match this face; choose existing or explicitly create anyway")
             else:
                 person_id = new_person_key = new_person_name = None
                 metadata_payload = "{}"
@@ -1908,6 +2090,14 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown review face: {face_id}")
             return _photo_review_from_conn(conn, review_id)
 
+    def set_photo_review_face_decisions(self, review_id: str, decisions: list[dict], **values) -> PhotoReview:
+        """Commit a selected-face draft action and its duplicate guards together."""
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            for item in decisions:
+                self.set_photo_review_face_decision(review_id, **values, **item, _conn=conn)
+            return _photo_review_from_conn(conn, review_id)
+
     def get_photo_review(self, review_id: str) -> PhotoReview | None:
         with self._connect() as conn:
             if conn.execute(
@@ -1919,7 +2109,7 @@ class SQLiteIdentityStore:
     def cancel_photo_review(self, review_id: str) -> PhotoReview:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT status FROM photo_reviews WHERE review_id = ?", (review_id,),
+                "SELECT status, session_id, review_phase FROM photo_reviews WHERE review_id = ?", (review_id,),
             ).fetchone()
             if row is None:
                 raise KeyError(f"Unknown photo review: {review_id}")
@@ -1929,7 +2119,24 @@ class SQLiteIdentityStore:
                 "UPDATE photo_reviews SET status = 'CANCELLED' WHERE review_id = ?",
                 (review_id,),
             )
+            conn.execute(
+                "DELETE FROM encounter_relation_decisions WHERE review_id = ? AND observation_id IS NULL",
+                (review_id,),
+            )
             _remove_review_staging(conn, review_id)
+            if row["session_id"] is not None and row["review_phase"] != "WAITING":
+                next_review = conn.execute(
+                    "SELECT review_id FROM photo_reviews WHERE session_id = ? AND status = 'IN_PROGRESS' "
+                    "AND review_phase = 'WAITING' ORDER BY sequence_number LIMIT 1",
+                    (row["session_id"],),
+                ).fetchone()
+                if next_review is not None:
+                    conn.execute("UPDATE photo_reviews SET review_phase = 'EVENT' WHERE review_id = ?", (next_review["review_id"],))
+            if row["session_id"] is not None and conn.execute(
+                "SELECT 1 FROM photo_reviews WHERE session_id = ? AND status = 'IN_PROGRESS' LIMIT 1",
+                (row["session_id"],),
+            ).fetchone() is None:
+                conn.execute("UPDATE init_sessions SET status = 'closed' WHERE session_id = ?", (row["session_id"],))
             return _photo_review_from_conn(conn, review_id)
 
     def complete_photo_review(
@@ -1961,8 +2168,39 @@ class SQLiteIdentityStore:
                 "SELECT * FROM photo_review_faces WHERE review_id = ? ORDER BY face_id",
                 (review_id,),
             ).fetchall()
-            if not face_rows or any(row["decision"] is None for row in face_rows):
+            if not face_rows or any(row["decision"] is None or (review["review_phase"] != "LEGACY" and row["decision"] == "SKIP") for row in face_rows):
                 raise ValueError("Every detected face requires a final decision before completion")
+            encounter_review = review["review_phase"] == "RELATIONS"
+            if review["review_phase"] not in {"LEGACY", "RELATIONS"}:
+                raise ValueError("Complete Event details, identity review, and Relations first")
+            if encounter_review:
+                for media_row in conn.execute(
+                    "SELECT media_id, media_path FROM photo_review_media WHERE review_id = ?", (review_id,),
+                ).fetchall():
+                    previous = conn.execute(
+                        "SELECT om.observation_id FROM observation_media om "
+                        "JOIN observations o ON o.observation_id = om.observation_id "
+                        "WHERE (om.media_id = ? OR om.media_path = ?) AND o.status = 'FINALIZED' LIMIT 1",
+                        (media_row["media_id"], media_row["media_path"]),
+                    ).fetchone()
+                    if previous is not None:
+                        raise ValueError(
+                            f"This media already belongs to finalized Encounter {previous['observation_id']}"
+                        )
+            relation_rows: list[sqlite3.Row] = []
+            if encounter_review:
+                candidates = {
+                    (item["first_ref"], item["second_ref"]): item
+                    for item in _review_relation_candidates(conn, review_id)
+                }
+                relation_rows = conn.execute(
+                    "SELECT * FROM encounter_relation_decisions WHERE review_id = ? AND active = 1 "
+                    "ORDER BY first_ref, second_ref", (review_id,),
+                ).fetchall()
+                if {(item["first_ref"], item["second_ref"]) for item in relation_rows} != set(candidates):
+                    raise ValueError("Every candidate Relation requires INCLUDE or EXCLUDE")
+                if any(item["support"] != candidates[(item["first_ref"], item["second_ref"])]["support"] for item in relation_rows):
+                    raise ValueError("Relation support changed; review the draft again")
             _begin_journal_operation(
                 conn,
                 "review.complete",
@@ -2074,7 +2312,8 @@ class SQLiteIdentityStore:
                 raw_id = assigned_by_face[face_id]
                 canonical_participants.setdefault(_resolve_canonical_person_id(conn, raw_id), raw_id)
             observed_at, location, encounter_context = _review_encounter_metadata(
-                [detail for _, _, _, detail, _, _, _ in detail_inputs]
+                [json.loads(review["event_details"] or "{}")] if encounter_review
+                else [detail for _, _, _, detail, _, _, _ in detail_inputs]
             )
             event_mentions = encounter_context.get("event_mentioned_person_ids") or []
             for mentioned_id in event_mentions:
@@ -2102,10 +2341,20 @@ class SQLiteIdentityStore:
                     str(review["source"]), operation_id, now, now,
                 ),
             )
-            _attach_observation_media(
-                conn, observation_id, review["media_id"], review["media_path"],
-                str(review["source"]), operation_id,
-            )
+            staged_review_media = conn.execute(
+                "SELECT media_id, media_path FROM photo_review_media WHERE review_id = ? ORDER BY ordinal, media_id",
+                (review_id,),
+            ).fetchall()
+            for media_row in staged_review_media:
+                _attach_observation_media(
+                    conn, observation_id, media_row["media_id"], media_row["media_path"],
+                    str(review["source"]), operation_id,
+                )
+            if not staged_review_media:
+                _attach_observation_media(
+                    conn, observation_id, review["media_id"], review["media_path"],
+                    str(review["source"]), operation_id,
+                )
             for face_id in sorted(assigned_by_face):
                 assignment_id = str(uuid.uuid5(
                     uuid.NAMESPACE_URL,
@@ -2126,7 +2375,7 @@ class SQLiteIdentityStore:
                 )
             primary_path = str(review["media_path"] or "")
             for media_path in sorted(staged_media_paths):
-                if media_path == primary_path:
+                if media_path == primary_path or (encounter_review and any(item["media_path"] == media_path for item in staged_review_media)):
                     continue
                 _attach_observation_media(
                     conn, observation_id, media_path, media_path,
@@ -2188,8 +2437,39 @@ class SQLiteIdentityStore:
                     ))
                     created_note_keys.add(note_key)
             evidence_ids: list[str] = []
-            for index, first_id in enumerate(participant_ids):
-                for second_id in participant_ids[index + 1:]:
+            included_pairs: list[tuple[str, str]] = []
+            if encounter_review:
+                ref_to_person = {
+                    **{f"person:{person_id}": person_id for person_id in participant_ids},
+                    **{f"draft:{key}": person_id for key, person_id in created_by_key.items()},
+                }
+                resolved_pairs: set[tuple[str, str]] = set()
+                for relation in relation_rows:
+                    first_id = ref_to_person.get(str(relation["first_ref"]))
+                    second_id = ref_to_person.get(str(relation["second_ref"]))
+                    if first_id is None or second_id is None:
+                        raise ValueError("A Relation identity changed before finalization")
+                    effective_pair = tuple(sorted((
+                        _resolve_canonical_person_id(conn, first_id),
+                        _resolve_canonical_person_id(conn, second_id),
+                    )))
+                    if effective_pair[0] == effective_pair[1] or effective_pair in resolved_pairs:
+                        raise ValueError("Relations collapsed to an ambiguous canonical pair")
+                    resolved_pairs.add(effective_pair)
+                    conn.execute(
+                        "UPDATE encounter_relation_decisions SET observation_id = ?, first_person_id = ?, "
+                        "second_person_id = ?, operation_id = ? WHERE decision_id = ?",
+                        (observation_id, effective_pair[0], effective_pair[1], operation_id, relation["decision_id"]),
+                    )
+                    if relation["disposition"] == "INCLUDE":
+                        included_pairs.append(effective_pair)
+            else:
+                included_pairs = [
+                    (first_id, second_id)
+                    for index, first_id in enumerate(participant_ids)
+                    for second_id in participant_ids[index + 1:]
+                ]
+            for first_id, second_id in included_pairs:
                     evidence_ids.append(_insert_relationship_evidence(
                         conn,
                         evidence_type="CO_OBSERVED",
@@ -2219,6 +2499,16 @@ class SQLiteIdentityStore:
                 (observation_id, operation_id, finalized_at, review_id),
             )
             _remove_review_staging(conn, review_id)
+            if encounter_review and review["session_id"] is not None:
+                next_review = conn.execute(
+                    "SELECT review_id FROM photo_reviews WHERE session_id = ? AND status = 'IN_PROGRESS' "
+                    "AND review_phase = 'WAITING' ORDER BY sequence_number LIMIT 1",
+                    (review["session_id"],),
+                ).fetchone()
+                if next_review is not None:
+                    conn.execute("UPDATE photo_reviews SET review_phase = 'EVENT' WHERE review_id = ?", (next_review["review_id"],))
+                else:
+                    conn.execute("UPDATE init_sessions SET status = 'closed' WHERE session_id = ?", (review["session_id"],))
             result = {
                 "review_id": review_id,
                 "media_id": str(review["media_id"]),
@@ -2348,6 +2638,10 @@ class SQLiteIdentityStore:
                     to_person_id=canonical_to_person_id,
                     operation_id=operation_id,
                 ))
+            _revise_encounter_relations_for_identity_correction(
+                conn, observation_id, canonical_from_person_id,
+                canonical_to_person_id, operation_id,
+            )
             effective_after, evidence_ids = _recalculate_observation_evidence(
                 conn, observation_id, operation_id,
                 _optional_text(source) or "identity-correction-service",
@@ -4106,6 +4400,7 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown person: {person_id}")
             if row["lifecycle_status"] not in {"ACTIVE", "ARCHIVED"}:
                 raise KeyError(f"Only active or archived people can be archived: {person_id}")
+            _require_no_active_encounter_draft_reference(conn, person_id)
             _begin_journal_operation(
                 conn,
                 "identity.archive",
@@ -4816,6 +5111,7 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown person: {person_id}")
             if person["lifecycle_status"] == "MERGED":
                 raise KeyError("Merged source identities cannot be deleted independently")
+            _require_no_active_encounter_draft_reference(conn, person_id)
             _begin_journal_operation(
                 conn,
                 "identity.delete",
@@ -6349,6 +6645,73 @@ class SQLiteIdentityStore:
                 ],
             )
 
+    def save_init_session_media(self, session_id: str, media_paths: list[str]) -> None:
+        """Persist every distinct scanned image, including images without a detected face."""
+        with self._connect() as conn:
+            if conn.execute("SELECT 1 FROM init_sessions WHERE session_id = ?", (session_id,)).fetchone() is None:
+                raise KeyError(f"Unknown init session: {session_id}")
+            for media_path in dict.fromkeys(media_paths):
+                normalized_path = str(media_path).strip()
+                if not normalized_path:
+                    raise ValueError("Queue media path is required")
+                media_id = media_content_identity(normalized_path)
+                conn.execute(
+                    "INSERT OR IGNORE INTO init_session_media(session_id, media_id, media_path, created_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    (session_id, media_id, normalized_path, utc_now()),
+                )
+
+    def list_init_session_media(self, session_id: str) -> list[dict]:
+        with self._connect() as conn:
+            if conn.execute("SELECT 1 FROM init_sessions WHERE session_id = ?", (session_id,)).fetchone() is None:
+                raise KeyError(f"Unknown init session: {session_id}")
+            media = []
+            for row in conn.execute(
+                    "SELECT media_id, media_path, excluded FROM init_session_media "
+                    "WHERE session_id = ? ORDER BY created_at, media_id",
+                    (session_id,),
+                ):
+                previous = conn.execute(
+                    "SELECT o.observation_id, o.observed_at, o.context FROM observation_media om "
+                    "JOIN observations o ON o.observation_id = om.observation_id "
+                    "WHERE (om.media_id = ? OR om.media_path = ?) AND o.status = 'FINALIZED' "
+                    "ORDER BY o.finalized_at LIMIT 1",
+                    (row["media_id"], row["media_path"]),
+                ).fetchone()
+                context = json.loads(previous["context"] or "{}") if previous else {}
+                media.append({
+                    "media_id": str(row["media_id"]), "media_path": str(row["media_path"]),
+                    "excluded": bool(row["excluded"]),
+                    "face_count": conn.execute(
+                        "SELECT COUNT(*) FROM init_faces WHERE session_id = ? AND source_image = ?",
+                        (session_id, row["media_path"]),
+                    ).fetchone()[0],
+                    "finalized_encounter": {
+                        "observation_id": str(previous["observation_id"]),
+                        "observed_at": previous["observed_at"],
+                        "occasion": context.get("occasion"),
+                    } if previous else None,
+                })
+            return media
+
+    def set_init_media_excluded(self, session_id: str, media_id: str, excluded: bool) -> None:
+        """Selection only: never remove managed media or historical authority."""
+        with self._connect() as conn:
+            if conn.execute("SELECT 1 FROM photo_reviews WHERE session_id = ?", (session_id,)).fetchone():
+                raise ValueError("Media selection is locked after Encounter grouping")
+            cursor = conn.execute(
+                "UPDATE init_session_media SET excluded = ? WHERE session_id = ? AND media_id = ?",
+                (int(excluded), session_id, media_id),
+            )
+            if not cursor.rowcount:
+                raise KeyError(f"Unknown queued media: {media_id}")
+
+    def set_init_session_quality_policy(self, session_id: str, quality_only: bool) -> None:
+        with self._connect() as conn:
+            cursor = conn.execute("UPDATE init_sessions SET quality_only = ? WHERE session_id = ?", (int(quality_only), session_id))
+            if not cursor.rowcount:
+                raise KeyError(f"Unknown init session: {session_id}")
+
     def get_init_session(self, session_id: str) -> InitSession | None:
         with self._connect() as conn:
             row = conn.execute(
@@ -6375,6 +6738,7 @@ class SQLiteIdentityStore:
                 """
                 SELECT session_id, source_path, status, created_at, quality_only
                 FROM init_sessions
+                WHERE status <> 'closed'
                 ORDER BY created_at DESC
                 """
             ).fetchall()
@@ -6391,10 +6755,26 @@ class SQLiteIdentityStore:
 
     def delete_init_session(self, session_id: str) -> None:
         with self._connect() as conn:
+            reviews = conn.execute(
+                "SELECT review_id, status FROM photo_reviews WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
+            for review in reviews:
+                if review["status"] == "IN_PROGRESS":
+                    conn.execute("UPDATE photo_reviews SET status = 'CANCELLED' WHERE review_id = ?", (review["review_id"],))
+                    conn.execute(
+                        "DELETE FROM encounter_relation_decisions WHERE review_id = ? AND observation_id IS NULL",
+                        (review["review_id"],),
+                    )
+                    _remove_review_staging(conn, str(review["review_id"]))
             conn.execute("DELETE FROM init_face_person_exclusions WHERE session_id = ?", (session_id,))
             conn.execute("DELETE FROM init_groups WHERE session_id = ?", (session_id,))
             conn.execute("DELETE FROM init_faces WHERE session_id = ?", (session_id,))
-            conn.execute("DELETE FROM init_sessions WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM init_session_media WHERE session_id = ?", (session_id,))
+            if reviews:
+                conn.execute("UPDATE init_sessions SET status = 'closed' WHERE session_id = ?", (session_id,))
+            else:
+                conn.execute("DELETE FROM init_sessions WHERE session_id = ?", (session_id,))
 
     def list_init_groups(self, session_id: str) -> list[InitGroup]:
         with self._connect() as conn:
@@ -6666,44 +7046,66 @@ def _unpack_embedding(payload: bytes) -> Embedding:
     return struct.unpack(f"{count}f", payload)
 
 
+def _encounter_draft_references(conn, review_id: str) -> list[dict]:
+    review = conn.execute("SELECT status, review_phase FROM photo_reviews WHERE review_id = ?", (review_id,)).fetchone()
+    if review is None or review["status"] != "IN_PROGRESS" or review["review_phase"] not in {"IDENTITIES", "RELATIONS"}:
+        return []
+    rows = conn.execute(
+        "SELECT f.*, i.vector, i.quality_status, i.crop_path, i.source_image FROM photo_review_faces f "
+        "JOIN init_faces i ON i.init_face_id = f.staged_face_id WHERE f.review_id = ? "
+        "AND f.staged_face_type = 'INIT_FACE' AND f.decision IN ('ACCEPT_NEW_PERSON', 'ACCEPT_EXISTING_PERSON')",
+        (review_id,),
+    ).fetchall()
+    result = []
+    for row in rows:
+        draft_created = row["decision"] == "ACCEPT_NEW_PERSON"
+        person_id = None if draft_created else _resolve_canonical_person_id(conn, row["person_id"])
+        person = None if draft_created else conn.execute("SELECT * FROM persons WHERE person_id = ?", (person_id,)).fetchone()
+        if not draft_created and (person is None or person["lifecycle_status"] != "ACTIVE" or person["deleted_at"]):
+            continue
+        result.append({
+            "face_id": str(row["face_id"]), "key": str(row["new_person_key"] or row["face_id"]) if draft_created else person_id,
+            "person_id": person_id, "draft_created": draft_created,
+            "name": str(row["new_person_name"] or "New Person") if draft_created else str(person["name"]),
+            "metadata": json.loads((row["new_person_metadata"] if draft_created else person["metadata"]) or "{}"),
+            "vector": _unpack_embedding(row["vector"]),
+            "recognition_state": _review_face_recognition_state(row, json.loads(row["recognition_detail"] or "{}")),
+            "image": str(row["crop_path"] or row["source_image"]),
+        })
+    return result
+
+
 def _proof_only_duplicate_matches(
     conn: sqlite3.Connection, incoming_vectors: list[Embedding], threshold: float,
+    *, review_id: str | None = None, excluded_draft_key: str | None = None,
 ) -> list[dict]:
     """Exceptional duplicate hint, isolated from ordinary index/search eligibility."""
     if not incoming_vectors:
         return []
-    records = conn.execute(
-        "SELECT embedding_id, person_id, vector, recognition_state FROM embeddings "
-        "WHERE deleted_at IS NULL ORDER BY embedding_id"
-    ).fetchall()
-    states_by_person: dict[str, set[str]] = {}
-    for record in records:
-        person_id = _effective_embedding_owner_person_id(conn, record)
-        states_by_person.setdefault(person_id, set()).add(str(record["recognition_state"]))
-    scores: dict[str, float] = {}
-    for record in records:
-        if record["recognition_state"] != "PROOF_ONLY":
+    references = _encounter_draft_references(conn, review_id) if review_id else []
+    for record in _list_embeddings_in_transaction(conn):
+        person = conn.execute("SELECT name, metadata FROM persons WHERE person_id = ?", (record.person_id,)).fetchone()
+        references.append({"key": record.person_id, "person_id": record.person_id, "draft_created": False,
+                           "name": person["name"], "metadata": json.loads(person["metadata"] or "{}"),
+                           "vector": record.vector, "recognition_state": record.recognition_state,
+                           "image": record.crop_path or record.source_image})
+    by_person = {}
+    for reference in references:
+        by_person.setdefault((reference["draft_created"], reference["key"]), []).append(reference)
+    candidates = []
+    for (draft_created, key), samples in by_person.items():
+        if draft_created and key == excluded_draft_key:
             continue
-        person_id = _effective_embedding_owner_person_id(conn, record)
-        if states_by_person[person_id] != {"PROOF_ONLY"}:
+        if {sample["recognition_state"] for sample in samples} != {"PROOF_ONLY"}:
             continue
-        person = conn.execute(
-            "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
-            (person_id,),
-        ).fetchone()
-        if person is None or person["lifecycle_status"] != "ACTIVE" or person["deleted_at"] is not None:
-            continue
-        reference = _unpack_embedding(record["vector"])
-        score = max(sum(left * right for left, right in zip(incoming, reference))
-                    for incoming in incoming_vectors)
+        best = max(samples, key=lambda sample: max(sum(a * b for a, b in zip(vector, sample["vector"])) for vector in incoming_vectors))
+        score = max(sum(a * b for a, b in zip(vector, best["vector"])) for vector in incoming_vectors)
         if score >= threshold:
-            scores[person_id] = max(scores.get(person_id, -1.0), score)
-    return [
-        {"person_id": person_id, "name": str(conn.execute(
-            "SELECT name FROM persons WHERE person_id = ?", (person_id,),
-        ).fetchone()[0]), "score": score, "basis": "PROOF_ONLY_DUPLICATE_CHECK"}
-        for person_id, score in sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:5]
-    ]
+            candidates.append({"person_id": f"draft:{key}" if draft_created else key,
+                               "draft_person_key": key if draft_created else None, "draft_created": draft_created,
+                               "name": best["name"], "metadata": best["metadata"], "representative_image": best["image"],
+                               "score": score, "basis": "PROOF_ONLY_DUPLICATE_CHECK"})
+    return sorted(candidates, key=lambda item: (-item["score"], item["person_id"]))[:5]
 
 
 def _execute_migration_script(conn: sqlite3.Connection, script: str) -> None:
@@ -8491,6 +8893,73 @@ def _migrate_28_to_29(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA user_version = 29")
 
 
+def _migrate_29_to_30(conn: sqlite3.Connection) -> None:
+    """Extend durable review staging and retain explicit Encounter pair decisions."""
+    _execute_migration_script(conn, """
+        ALTER TABLE photo_reviews ADD COLUMN session_id TEXT REFERENCES init_sessions(session_id);
+        ALTER TABLE photo_reviews ADD COLUMN sequence_number INTEGER;
+        ALTER TABLE photo_reviews ADD COLUMN review_phase TEXT NOT NULL DEFAULT 'LEGACY'
+            CHECK(review_phase IN ('LEGACY', 'WAITING', 'EVENT', 'IDENTITIES', 'RELATIONS'));
+        ALTER TABLE photo_reviews ADD COLUMN event_details TEXT NOT NULL DEFAULT '{}';
+        ALTER TABLE photo_reviews ADD COLUMN event_details_complete INTEGER NOT NULL DEFAULT 0
+            CHECK(event_details_complete IN (0, 1));
+
+        CREATE TABLE init_session_media (
+            session_id TEXT NOT NULL REFERENCES init_sessions(session_id) ON DELETE CASCADE,
+            media_id TEXT NOT NULL,
+            media_path TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(session_id, media_id),
+            UNIQUE(session_id, media_path)
+        );
+
+        CREATE TABLE photo_review_media (
+            review_id TEXT NOT NULL REFERENCES photo_reviews(review_id) ON DELETE RESTRICT,
+            media_id TEXT NOT NULL,
+            media_path TEXT NOT NULL,
+            ordinal INTEGER NOT NULL,
+            PRIMARY KEY(review_id, media_id),
+            UNIQUE(review_id, media_path)
+        );
+        INSERT INTO photo_review_media(review_id, media_id, media_path, ordinal)
+        SELECT review_id, media_id, media_path, 0 FROM photo_reviews
+        WHERE media_path IS NOT NULL AND TRIM(media_path) <> '';
+
+        CREATE TABLE encounter_relation_decisions (
+            decision_id TEXT PRIMARY KEY,
+            review_id TEXT NOT NULL REFERENCES photo_reviews(review_id) ON DELETE RESTRICT,
+            observation_id TEXT REFERENCES observations(observation_id) ON DELETE RESTRICT,
+            first_ref TEXT NOT NULL,
+            second_ref TEXT NOT NULL,
+            first_person_id TEXT REFERENCES persons(person_id) ON DELETE RESTRICT,
+            second_person_id TEXT REFERENCES persons(person_id) ON DELETE RESTRICT,
+            disposition TEXT NOT NULL CHECK(disposition IN ('INCLUDE', 'EXCLUDE')),
+            support TEXT NOT NULL CHECK(support IN ('SHARED_FRAME', 'SAME_ENCOUNTER_ONLY')),
+            active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+            supersedes_decision_id TEXT REFERENCES encounter_relation_decisions(decision_id),
+            operation_id TEXT REFERENCES operation_journal(operation_id),
+            decided_at TEXT NOT NULL,
+            CHECK(first_ref < second_ref),
+            CHECK(first_person_id IS NULL OR second_person_id IS NULL OR first_person_id <> second_person_id)
+        );
+        CREATE UNIQUE INDEX idx_encounter_relation_active_pair
+        ON encounter_relation_decisions(review_id, first_ref, second_ref) WHERE active = 1;
+        CREATE INDEX idx_encounter_relation_observation
+        ON encounter_relation_decisions(observation_id, active, disposition);
+        CREATE UNIQUE INDEX idx_photo_review_session_sequence
+        ON photo_reviews(session_id, sequence_number)
+        WHERE session_id IS NOT NULL;
+        PRAGMA user_version = 30;
+    """)
+
+
+def _migrate_30_to_31(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(conn, """
+        ALTER TABLE init_session_media ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0 CHECK(excluded IN (0, 1));
+        PRAGMA user_version = 31;
+    """)
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -8528,6 +8997,8 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(26, 27, _migrate_26_to_27),
         SchemaMigration(27, 28, _migrate_27_to_28),
         SchemaMigration(28, 29, _migrate_28_to_29),
+        SchemaMigration(29, 30, _migrate_29_to_30),
+        SchemaMigration(30, 31, _migrate_30_to_31),
     )
 
 
@@ -8941,6 +9412,107 @@ def _photo_review_from_conn(conn: sqlite3.Connection, review_id: str) -> PhotoRe
         completed_operation_id=row["completed_operation_id"],
         completed_at=row["completed_at"],
     )
+
+
+def _review_identity_ref(conn: sqlite3.Connection, row: sqlite3.Row) -> str | None:
+    if row["decision"] == "ACCEPT_EXISTING_PERSON":
+        return f"person:{_resolve_canonical_person_id(conn, str(row['person_id']))}"
+    if row["decision"] == "ACCEPT_NEW_PERSON":
+        return f"draft:{str(row['new_person_key'] or row['face_id'])}"
+    return None
+
+
+def _review_relation_candidates(conn: sqlite3.Connection, review_id: str) -> list[dict]:
+    faces = conn.execute(
+        "SELECT * FROM photo_review_faces WHERE review_id = ? ORDER BY face_id", (review_id,),
+    ).fetchall()
+    media_by_ref: dict[str, set[str]] = {}
+    name_by_ref: dict[str, str] = {}
+    for face in faces:
+        identity_ref = _review_identity_ref(conn, face)
+        if identity_ref is None:
+            continue
+        staged = _staged_review_face_row(conn, face["staged_face_type"], face["staged_face_id"])
+        media_by_ref.setdefault(identity_ref, set()).add(str(staged["source_image"]))
+        if identity_ref.startswith("draft:"):
+            name_by_ref[identity_ref] = str(face["new_person_name"] or "New Person")
+        else:
+            person = conn.execute("SELECT name FROM persons WHERE person_id = ?", (identity_ref[7:],)).fetchone()
+            name_by_ref[identity_ref] = str(person["name"]) if person else "Historical Person"
+    refs = sorted(media_by_ref)
+    return [
+        {
+            "first_ref": first_ref, "second_ref": second_ref,
+            "first_name": name_by_ref[first_ref], "second_name": name_by_ref[second_ref],
+            "support": "SHARED_FRAME" if media_by_ref[first_ref] & media_by_ref[second_ref]
+                       else "SAME_ENCOUNTER_ONLY",
+        }
+        for index, first_ref in enumerate(refs)
+        for second_ref in refs[index + 1:]
+    ]
+
+
+def _encounter_review_read(conn: sqlite3.Connection, review_id: str) -> dict:
+    row = conn.execute("SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"Unknown Encounter review: {review_id}")
+    media = [
+        {"media_id": str(item["media_id"]), "media_path": str(item["media_path"])}
+        for item in conn.execute(
+            "SELECT media_id, media_path FROM photo_review_media WHERE review_id = ? ORDER BY ordinal, media_id",
+            (review_id,),
+        )
+    ]
+    faces = [
+        {
+            "face_id": str(item["face_id"]), "group_id": str(item["group_id"] or item["face_id"]),
+            "source_image": str(item["source_image"]) if item["source_image"] else None,
+            "decision": None if row["review_phase"] != "LEGACY" and item["decision"] == "SKIP" else item["decision"],
+            "person_id": item["person_id"], "new_person_key": item["new_person_key"],
+            "new_person_name": item["new_person_name"],
+            "new_person_metadata": json.loads(item["new_person_metadata"] or "{}"),
+            "notes": str(item["notes"] or ""),
+            "mentioned_person_ids": json.loads(item["mentioned_person_ids"] or "[]"),
+            "recognition_detail": json.loads(item["recognition_detail"] or "{}"),
+            "quality_status": item["quality_status"],
+        }
+        for item in conn.execute(
+            "SELECT f.*, i.group_id, COALESCE(i.source_image, e.source_image) AS source_image, "
+            "i.quality_status "
+            "FROM photo_review_faces f LEFT JOIN init_faces i "
+            "ON f.staged_face_type = 'INIT_FACE' AND i.init_face_id = f.staged_face_id "
+            "LEFT JOIN observation_face_assignments a ON a.review_id = f.review_id AND a.face_id = f.face_id "
+            "LEFT JOIN embeddings e ON e.embedding_id = a.embedding_id "
+            "WHERE f.review_id = ? ORDER BY f.face_id",
+            (review_id,),
+        )
+    ]
+    relations = [dict(item) for item in conn.execute(
+        "SELECT first_ref, second_ref, disposition, support FROM encounter_relation_decisions "
+        "WHERE review_id = ? AND active = 1 ORDER BY first_ref, second_ref",
+        (review_id,),
+    )]
+    return {
+        "review_id": review_id, "session_id": row["session_id"], "sequence_number": row["sequence_number"],
+        "status": str(row["status"]), "phase": str(row["review_phase"]),
+        "observation_id": row["observation_id"],
+        "event_details_complete": bool(row["event_details_complete"]),
+        "event_details": json.loads(row["event_details"] or "{}"),
+        "media": media, "faces": faces,
+        "identity_resolved": sum(face["decision"] is not None for face in faces),
+        "identity_total": len(faces),
+        "relation_candidates": _review_relation_candidates(conn, review_id)
+            if row["status"] == "IN_PROGRESS" and row["review_phase"] == "RELATIONS" else [],
+        "relations": relations,
+    }
+
+
+def _list_init_session_encounter_reviews(conn: sqlite3.Connection, session_id: str) -> list[dict]:
+    reviews = conn.execute(
+        "SELECT review_id FROM photo_reviews WHERE session_id = ? ORDER BY sequence_number",
+        (session_id,),
+    ).fetchall()
+    return [_encounter_review_read(conn, str(item["review_id"])) for item in reviews]
 
 
 def _remove_review_staging(conn: sqlite3.Connection, review_id: str) -> None:
@@ -9950,7 +10522,8 @@ def _graph_read_components(
         pair = tuple(sorted((source_id, target_id)))
         aggregate = aggregates.setdefault(pair, {
             "items": [], "types": {}, "relationships": {}, "sources": set(),
-            "directions": {}, "first": occurrence_at, "last": occurrence_at,
+            "directions": {}, "note_directions": {}, "encounters": set(),
+            "latest_encounter": None, "first": occurrence_at, "last": occurrence_at,
         })
         aggregate["items"].append(row)
         evidence_type = str(row["evidence_type"])
@@ -9965,6 +10538,13 @@ def _graph_read_components(
             else f"{source_id}->{target_id}"
         )
         aggregate["directions"][direction_key] = aggregate["directions"].get(direction_key, 0) + 1
+        if evidence_type == "NOTE_REFERENCE":
+            aggregate["note_directions"][direction_key] = aggregate["note_directions"].get(direction_key, 0) + 1
+        if evidence_type == "CO_OBSERVED" and observation is not None:
+            aggregate["encounters"].add(str(row["source_entity_id"]))
+            latest = aggregate["latest_encounter"]
+            if latest is None or _graph_occurrence_datetime(occurrence_at) > _graph_occurrence_datetime(latest):
+                aggregate["latest_encounter"] = occurrence_at
         if _graph_occurrence_datetime(occurrence_at) < _graph_occurrence_datetime(str(aggregate["first"])):
             aggregate["first"] = occurrence_at
         if _graph_occurrence_datetime(occurrence_at) > _graph_occurrence_datetime(str(aggregate["last"])):
@@ -10021,6 +10601,9 @@ def _graph_read_components(
                 "relationship_type_counts": dict(sorted(aggregate["relationships"].items())),
                 "source_record_count": len(aggregate["sources"]),
                 "direction_counts": dict(sorted(directions.items())),
+                "distinct_encounter_count": len(aggregate["encounters"]),
+                "latest_shared_encounter_at": aggregate["latest_encounter"],
+                "note_reference_direction_counts": dict(sorted(aggregate["note_directions"].items())),
             },
         ))
     return nodes, tuple(edges)
@@ -13273,9 +13856,31 @@ def _recalculate_observation_evidence(
     participant_ids = _effective_observation_person_ids(conn, observation_id)
     evidence_ids: list[str] = []
     created_at = utc_now()
-    for index, first_person_id in enumerate(participant_ids):
-        for second_person_id in participant_ids[index + 1:]:
-            evidence_ids.append(_insert_relationship_evidence(
+    decision_rows = conn.execute(
+        "SELECT first_person_id, second_person_id, disposition FROM encounter_relation_decisions "
+        "WHERE observation_id = ? AND active = 1", (observation_id,),
+    ).fetchall()
+    has_relation_authority = conn.execute(
+        "SELECT 1 FROM encounter_relation_decisions WHERE observation_id = ? LIMIT 1",
+        (observation_id,),
+    ).fetchone() is not None
+    if has_relation_authority:
+        included_pairs = sorted({tuple(sorted((
+            _resolve_canonical_person_id(conn, str(row["first_person_id"])),
+            _resolve_canonical_person_id(conn, str(row["second_person_id"])),
+        ))) for row in decision_rows if row["disposition"] == "INCLUDE"})
+    else:
+        included_pairs = [
+            (first_person_id, second_person_id)
+            for index, first_person_id in enumerate(participant_ids)
+            for second_person_id in participant_ids[index + 1:]
+        ]
+    for first_person_id, second_person_id in included_pairs:
+        if first_person_id == second_person_id:
+            continue
+        if first_person_id not in participant_ids or second_person_id not in participant_ids:
+            raise ValueError("Encounter Relation no longer matches its participants")
+        evidence_ids.append(_insert_relationship_evidence(
                 conn,
                 evidence_type="CO_OBSERVED",
                 source_entity_type="OBSERVATION",
@@ -13288,7 +13893,7 @@ def _recalculate_observation_evidence(
                 source=source,
                 created_operation_id=operation_id,
                 created_at=created_at,
-            ))
+        ))
     _replace_graph_projection(conn)
     validation = _validate_graph_projection(conn)
     if not validation["valid"]:
@@ -13296,6 +13901,60 @@ def _recalculate_observation_evidence(
             "Graph projection validation failed: " + "; ".join(validation["errors"])
         )
     return participant_ids, evidence_ids
+
+
+def _revise_encounter_relations_for_identity_correction(
+    conn: sqlite3.Connection, observation_id: str, from_person_id: str,
+    to_person_id: str, operation_id: str,
+) -> None:
+    """Append effective pair revisions; preserve retired decisions as history."""
+    rows = conn.execute(
+        "SELECT * FROM encounter_relation_decisions WHERE observation_id = ? AND active = 1 "
+        "ORDER BY decided_at, decision_id", (observation_id,),
+    ).fetchall()
+    if not rows:
+        return
+    mapped: dict[tuple[str, str], list[sqlite3.Row]] = {}
+    changed: set[str] = set()
+    self_rows: list[sqlite3.Row] = []
+    for row in rows:
+        before = tuple(sorted((
+            _resolve_canonical_person_id(conn, str(row["first_person_id"])),
+            _resolve_canonical_person_id(conn, str(row["second_person_id"])),
+        )))
+        after = tuple(sorted(to_person_id if person_id == from_person_id else person_id for person_id in before))
+        if after[0] == after[1]:
+            self_rows.append(row)
+            continue
+        mapped.setdefault(after, []).append(row)
+        if after != before:
+            changed.add(str(row["decision_id"]))
+    for pair, pair_rows in mapped.items():
+        if len({str(row["disposition"]) for row in pair_rows}) > 1:
+            raise ValueError(f"Encounter Relation conflict after identity correction for {pair[0]} and {pair[1]}")
+    for row in self_rows:
+        conn.execute("UPDATE encounter_relation_decisions SET active = 0 WHERE decision_id = ?", (row["decision_id"],))
+    for pair, pair_rows in mapped.items():
+        if not any(str(row["decision_id"]) in changed for row in pair_rows) and len(pair_rows) == 1:
+            continue
+        conn.executemany(
+            "UPDATE encounter_relation_decisions SET active = 0 WHERE decision_id = ?",
+            [(row["decision_id"],) for row in pair_rows],
+        )
+        predecessor = pair_rows[-1]
+        conn.execute(
+            "INSERT INTO encounter_relation_decisions(decision_id, review_id, observation_id, "
+            "first_ref, second_ref, first_person_id, second_person_id, disposition, "
+            "support, supersedes_decision_id, operation_id, decided_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                str(uuid.uuid4()), predecessor["review_id"], observation_id,
+                f"person:{pair[0]}", f"person:{pair[1]}", *pair,
+                predecessor["disposition"],
+                "SHARED_FRAME" if any(row["support"] == "SHARED_FRAME" for row in pair_rows) else "SAME_ENCOUNTER_ONLY",
+                predecessor["decision_id"], operation_id, utc_now(),
+            ),
+        )
 
 
 def _list_observation_participants(
@@ -13543,6 +14202,29 @@ def _write_merge_profile_note_revision(
     conn.execute("UPDATE persons SET notes = ? WHERE person_id = ?", (content, target_person_id))
 
 
+def _require_no_active_encounter_draft_reference(conn: sqlite3.Connection, person_id: str) -> None:
+    selected = conn.execute(
+        "SELECT r.review_id FROM photo_review_faces f "
+        "JOIN photo_reviews r ON r.review_id = f.review_id "
+        "WHERE r.status = 'IN_PROGRESS' AND r.review_phase <> 'LEGACY' "
+        "AND (f.person_id = ? OR EXISTS ("
+        "SELECT 1 FROM json_each(f.mentioned_person_ids) WHERE value = ?)) LIMIT 1",
+        (person_id, person_id),
+    ).fetchone()
+    if selected is None:
+        selected = conn.execute(
+            "SELECT review_id FROM photo_reviews WHERE status = 'IN_PROGRESS' "
+            "AND review_phase <> 'LEGACY' AND EXISTS ("
+            "SELECT 1 FROM json_each(json_extract(event_details, '$.event_mentioned_person_ids')) "
+            "WHERE value = ?) LIMIT 1",
+            (person_id,),
+        ).fetchone()
+    if selected is not None:
+        raise ValueError(
+            f"Person is selected in active Encounter draft {selected['review_id']}; complete or discard that draft first"
+        )
+
+
 def _preview_identity_merge(
     conn: sqlite3.Connection,
     source_person_id: str,
@@ -13587,6 +14269,29 @@ def _preview_identity_merge(
     if source_id not in component_ids:
         component_ids.append(source_id)
         component_ids.sort()
+    for person_id in [*component_ids, terminal_target_id]:
+        _require_no_active_encounter_draft_reference(conn, person_id)
+    relation_pairs: dict[tuple[str, str, str], str] = {}
+    for relation in conn.execute(
+        "SELECT observation_id, first_person_id, second_person_id, disposition "
+        "FROM encounter_relation_decisions WHERE active = 1 AND observation_id IS NOT NULL",
+    ).fetchall():
+        identities = [
+            terminal_target_id if _resolve_canonical_person_id(conn, str(relation[column])) in component_ids
+            else _resolve_canonical_person_id(conn, str(relation[column]))
+            for column in ("first_person_id", "second_person_id")
+        ]
+        pair = tuple(sorted(identities))
+        if pair[0] == pair[1]:
+            continue
+        key = (str(relation["observation_id"]), *pair)
+        prior = relation_pairs.get(key)
+        if prior is not None:
+            raise ValueError(
+                "Merge would collapse distinct Encounter Relation decisions onto one effective pair; "
+                "correct the Encounter before merging"
+            )
+        relation_pairs[key] = str(relation["disposition"])
     conflicts = _proposed_merge_conflicts(conn, source_row, target_row)
     affected_items = _discover_merge_affected_items(
         conn, component_ids, source_id, terminal_target_id,

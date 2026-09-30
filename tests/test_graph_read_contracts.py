@@ -82,6 +82,12 @@ class GraphReadContractsTest(unittest.TestCase):
                 by_neighbor[frequent.person_id]["provenance_summary"]["evidence_type_counts"],
                 {"CO_OBSERVED": 2, "NOTE_REFERENCE": 1},
             )
+            summary = by_neighbor[frequent.person_id]["provenance_summary"]
+            self.assertEqual(summary["distinct_encounter_count"], 2)
+            self.assertEqual(summary["latest_shared_encounter_at"], "2026-02-10T10:00:00+00:00")
+            self.assertEqual(summary["note_reference_direction_counts"], {
+                f"{root.person_id}->{frequent.person_id}": 1,
+            })
             self.assertEqual(by_neighbor[frequent.person_id]["first_occurrence"], "2026-01-10T10:00:00+00:00")
             self.assertTrue(by_neighbor[frequent.person_id]["last_occurrence"])
 
@@ -96,7 +102,7 @@ class GraphReadContractsTest(unittest.TestCase):
                 observed_at="2026-01-01T10:00:00+00:00", location="HQ",
             )
             self._observe(
-                store, "third-pair", [source.person_id, third.person_id],
+                store, "third-pair", [source.person_id, survivor.person_id, third.person_id],
                 observed_at="2026-01-02T10:00:00+00:00", location="HQ",
             )
             store.execute_identity_merge(source.person_id, survivor.person_id, "graph-read-merge")
@@ -113,6 +119,8 @@ class GraphReadContractsTest(unittest.TestCase):
                 {model.edges[0].source_person_id, model.edges[0].target_person_id},
                 {survivor.person_id, third.person_id},
             )
+            self.assertEqual(model.edges[0].evidence_count, 2)
+            self.assertEqual(model.edges[0].provenance_summary["distinct_encounter_count"], 1)
             merged_request = GraphReadService(store).person_graph(source.person_id)
             self.assertEqual(merged_request.root_person_id, survivor.person_id)
             self.assertEqual(merged_request.root_requested_state, "MERGED")

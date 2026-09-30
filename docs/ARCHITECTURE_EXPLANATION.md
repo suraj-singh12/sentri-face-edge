@@ -14,7 +14,13 @@ This explanation covers source architecture implemented through P14, with P10 th
 
 The 2026-09-27 Encounter stabilization preserves that authority line: the existing observation owns occurrence metadata once after explicit review completion, and face detail rows only mirror it for compatibility. General Person Notes use `PERSON`; Sighting Notes use `RECOGNITION_DETAIL`; Event Notes and selected IDs remain on observation context. Event-selected IDs encode Encounter→Person reference provenance, not Person relationship evidence: there is no source Person to put into `NOTE_REFERENCE` without fabricating one. The review UI asks Event details once, then presents Person/Sighting fields with read-only inherited Event context. Schema v29 adds recognition eligibility to existing embeddings and the search preference to Queue sessions. The existing managed upload reduces inputs above about 1 MB before persistence; that reduced object is historical media, and CPU detector letterboxing is transient. No giant original or parallel event/media service is retained.
 
+Batch 2 keeps those boundaries while moving Queue from immediate group confirmation to a durable serial Encounter review. Existing `init_sessions`, `init_faces` and `photo_reviews` stage grouping, one Event payload, face decisions, and multiple media references. No Person, participant, graph evidence or Encounter is committed until `review.complete`. The existing SQLite/journal transaction remains the authoritative boundary. One small `encounter_relation_decisions` table is necessary because positive evidence cannot represent intentional `EXCLUDE`: a missing row is also consistent with undecided or uncommitted. Every candidate pair must be decided, with `SHARED_FRAME` or `SAME_ENCOUNTER_ONLY` support. Corrections append/retire this decision history and regenerate only included evidence; merge refuses ambiguous effective pair collapse. The global index stays committed-only. A transient Queue candidate view may score accepted draft faces with the existing cosine and quality policy, never `PROOF_ONLY`. Exact content identity and the existing encrypted content-addressed upload objects prevent repeated physical or Encounter media authority. World scoring and read-only Events remain unchanged.
+
+The post-Batch-2 Queue pass uses the same draft records and phase boundary. Media membership reads mark and automatically exclude each photo whose retained bytes already belong to a finalized observation, while valid siblings proceed. The plan accepts only selected staged media and splits an existing scan identity group only when its faces cross confirmed Encounter boundaries. Scan-time groups are not shown before that confirmation. Existing group status records temporary Skip deferral; no face decision is saved for Skip, all-deferred drafts are requeued, and the store rejects `SKIP` as a final decision in planned Encounter reviews. Final `EXCLUDE` stays separate. The UI uses folder paths already preserved by local upload staging as optional grouping hints and still requires confirmation. Existing detector face boxes, authenticated media reads, and the Person Graph evidence projection supply the current-face highlight and association details. Distinct Encounter counts deduplicate observation IDs after canonical endpoint resolution; directed note counts come from active `NOTE_REFERENCE` rows. No new table, transaction framework, media path, or World score was added.
+
 ### Current pre-Batch-2 integration
+
+The 2026-10-01 correction extends these existing boundaries rather than adding another index or duplicate system. Accepted faces of both draft-created and committed Persons join committed embeddings in a transient active-Encounter candidate view. Canonical ownership is resolved first; GOOD preference/fallback is evaluated over that combined Person set. A proof-only-only Person is excluded from normal recognition but may appear in the shared exceptional pre-creation check, including a draft-only Person. Draft identity reuse retains the same new-person key. Selected-face draft writes use one SQLite transaction through the existing face-decision implementation. Schema v31 adds only an exclusion field to scan media membership because an omitted local UI selection cannot survive restart. Grouping locks media selection; authoritative history and physical objects remain intact. The page refreshes group IDs/membership after regrouping instead of acting on a scan snapshot. Peek In renders an existing crop or stored box coordinates transiently without detection, enrollment or media writes.
 
 Browse preserves the existing ranked biometric list and percentages by default. The explicit alternate list selects ACTIVE Persons whose actual `biometric_status` is `NO_FACE`, without a fabricated match score. Add Face remains standalone enrollment; observation face assignments and biometric enrollment history already provide durable ENCOUNTER/STANDALONE_ENROLLMENT origin, including review and operation IDs. An embedding without either history is honestly UNKNOWN_LEGACY. The origin is independent of GOOD/POOR_ACCEPTED/PROOF_ONLY and survives canonical ownership changes because the raw provenance rows remain.
 
@@ -344,8 +350,8 @@ This was chosen instead of compensating transactions across frontend request loo
 - create embeddings and immutable face assignments;
 - finalize the observation and attach media;
 - insert deduplicated raw participants;
-- save normalized note revisions and explicit mentions;
-- create co-observation and mention evidence;
+- save normalized Person/Sighting Note revisions and explicit mentions, plus Event Note selected IDs on the observation;
+- create co-observation and Person/Sighting Note mention evidence;
 - replace and validate the graph projection;
 - commit the `review.complete` journal operation;
 - mark the review completed and remove staging.
@@ -359,7 +365,7 @@ A photo contains Meera, Nikhil, and one poor-quality face. The operator accepts 
 #### Edge cases
 
 - A review with any undecided face cannot complete.
-- `EXCLUDE` and `SKIP` remain review history but create no participant.
+- `EXCLUDE` is the final negative face decision and creates no participant. Legacy review history may contain `SKIP`; planned Encounter reviews now use group status to defer instead, and cannot finalize while a face is skipped.
 - Retrying the same committed operation ID returns the committed result without duplicating evidence or advancing graph revision again.
 - A failure inside the transaction removes its started journal row along with all partial authoritative changes. Some service-level commands then record a separate durable failed attempt; failure semantics are command-specific and must not be generalized blindly.
 - A cancelled review cannot later be treated as finalized identity history.
@@ -455,7 +461,7 @@ Raj already exists as a `NO_FACE` identity with notes and relationships. An oper
 - An enrollment failure leaves the review in progress and creates no embedding.
 - Existing notes, mentions, and graph evidence are untouched.
 
-### 4.6 Notes and mentions are structured evidence
+### 4.6 Selected mentions preserve their note scope
 
 #### What problem existed?
 
@@ -463,9 +469,9 @@ Plain text such as “Met @Alex” is ambiguous. Names are not stable IDs, two p
 
 #### Design decision
 
-Notes are normalized, revisioned records. Mentions are explicit saved occurrences referencing person IDs. Display text helps the operator, but it is not the source of relationship truth.
+Person and Sighting Notes are normalized, revisioned records. Their mentions are explicit saved occurrences referencing person IDs. Display text helps the operator, but it is not the source of relationship truth. A Sighting Note's source Person is the sighted Person. Event Notes instead belong once to the observation: their selected person IDs are structured Encounter→Person provenance and do not produce `relationship_evidence`, `NOTE_REFERENCE`, `CO_OBSERVED`, or any World/cluster/recurrence effect. All three scopes require a selected person ID; literal unselected `@Name` is inert.
 
-An active mention occurrence requires exactly one current directed `NOTE_REFERENCE` evidence row from the note owner to the referenced person. Editing a note diffs exact mention IDs: removed occurrences retire only their active evidence; unchanged occurrences remain; new occurrences create new evidence. A later evidence replacement for an unchanged current occurrence retires the old evidence revision and appends a new one; it never reactivates or deletes the old row.
+An active Person/Sighting Note mention occurrence requires exactly one current directed `NOTE_REFERENCE` evidence row from the note owner to the referenced person. Editing such a note diffs exact mention IDs: removed occurrences retire only their active evidence; unchanged occurrences remain; new occurrences create new evidence. A later evidence replacement for an unchanged current occurrence retires the old evidence revision and appends a new one; it never reactivates or deletes the old row.
 
 #### How it works internally
 
@@ -741,7 +747,7 @@ Created from each unordered pair of effective accepted participants in one final
 
 #### `NOTE_REFERENCE`
 
-Created from one exact active saved mention occurrence. The source is that mention, not merely the note text. It is directed from note owner to referenced person.
+Created from one exact active selected mention occurrence in a Person or Sighting Note. The source is that occurrence, not merely the note text. It is directed from the note owner (the sighted Person for a Sighting Note) to the referenced person. Event Note selections are Encounter provenance and never enter this evidence type.
 
 #### `MANUAL_ASSOCIATION`
 
@@ -1319,7 +1325,7 @@ A finalized event has accepted participants and no location. It contributes to a
 
 **Why rejected:** Names are ambiguous and the original author's intended entity cannot be proven.
 
-**Chosen alternative:** Preserve migrated text without fabricated mentions; only explicit saved person-ID occurrences create current evidence.
+**Chosen alternative:** Preserve migrated text without fabricated mentions; only explicit saved person-ID occurrences in Person/Sighting Notes create current `NOTE_REFERENCE` evidence. Event Note selected IDs remain structured Encounter provenance outside relationship evidence.
 
 ### Continuous graph polling
 

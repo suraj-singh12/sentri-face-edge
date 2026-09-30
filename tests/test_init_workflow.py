@@ -363,11 +363,16 @@ class InitWorkflowTest(unittest.TestCase):
             image_dir.mkdir()
             self._write_image(image_dir / "person_a_1.jpg", shade=120)
             self._write_image(image_dir / "person_a_2.jpg", shade=120)
+            with (image_dir / "person_a_2.jpg").open("ab") as stream:
+                stream.write(b"distinct photo fixture")
 
             engine = build_dev_engine(temp_path / "data")
             engine.initialize()
 
             session = engine.create_init_session(image_dir)
+            staged_faces = [face for item in engine.list_init_groups(session.session_id) for face in item.faces]
+            engine.store.update_init_face_groups({face.init_face_id: "selected-fixture" for face in staged_faces})
+            engine.store.mark_init_group_status(session.session_id, "selected-fixture", "pending")
             group = max(engine.list_init_groups(session.session_id), key=lambda item: len(item.faces))
             self.assertGreaterEqual(len(group.faces), 2)
 
@@ -477,11 +482,16 @@ class InitWorkflowTest(unittest.TestCase):
             image_dir.mkdir()
             self._write_image(image_dir / "person_a_1.jpg", shade=120)
             self._write_image(image_dir / "person_a_2.jpg", shade=120)
+            with (image_dir / "person_a_2.jpg").open("ab") as stream:
+                stream.write(b"distinct photo fixture")
 
             engine = build_dev_engine(temp_path / "data")
             engine.initialize()
 
             session = engine.create_init_session(image_dir)
+            staged_faces = [face for item in engine.list_init_groups(session.session_id) for face in item.faces]
+            engine.store.update_init_face_groups({face.init_face_id: "selected-fixture" for face in staged_faces})
+            engine.store.mark_init_group_status(session.session_id, "selected-fixture", "pending")
             group = max(engine.list_init_groups(session.session_id), key=lambda item: len(item.faces))
             self.assertGreaterEqual(len(group.faces), 2)
 

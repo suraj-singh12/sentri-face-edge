@@ -36,6 +36,7 @@ export function isNewPersonSuggestion(match) {
 
 export function matchDisplay(match) {
   switch (match?.classification) {
+    case "draft": return { badge: "Encounter draft", color: "teal", guidance: "Proposed from a resolved face in this Encounter" };
     case "manual": return { badge: "Selected", color: "teal", guidance: "Chosen manually" };
     case "duplicate":
     case "strong": return { badge: "Strong Match", color: "green", guidance: "Strong match based on the calibrated model setting" };

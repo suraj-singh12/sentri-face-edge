@@ -270,7 +270,7 @@ def _required_capability(method: str, path: str) -> str | None:
             return "backups"
         if path in {"/api/deleted-faces"}:
             return "destroy"
-        if path in {"/api/pending", "/api/queue-progress", "/api/queue-sessions", "/api/queue-groups", "/api/queue-person-candidates"}:
+        if path in {"/api/pending", "/api/queue-progress", "/api/queue-sessions", "/api/queue-groups", "/api/queue-person-candidates", "/api/queue-encounters"}:
             return "add"
         return "view"
     if method == "DELETE":
@@ -309,6 +309,11 @@ def _required_capability(method: str, path: str) -> str | None:
         "/api/photo-review", "/api/photo-review-decision",
         "/api/photo-review-complete", "/api/photo-review-cancel",
         "/api/queue-scan", "/api/queue-confirm-new", "/api/queue-confirm-existing",
+        "/api/queue-encounters-plan", "/api/queue-encounter-event",
+        "/api/queue-encounter-decision", "/api/queue-encounter-identities-complete",
+        "/api/queue-encounter-relation", "/api/queue-encounter-complete",
+        "/api/queue-encounter-discard",
+        "/api/queue-media-selection", "/api/queue-quality-policy",
         "/api/queue-refresh-suggestions", "/api/queue-discard", "/api/queue-skip",
         "/api/queue-resume-skipped", "/api/queue-reject-match",
         "/api/confirm-new", "/api/confirm-existing", "/api/reject-pending",
@@ -1479,20 +1484,72 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 sessions = []
                 for session in self.server.engine.list_init_sessions():
                     groups = self.server.engine.list_init_groups(session.session_id)
-                    if groups:
+                    media = self.server.engine.list_init_session_media(session.session_id)
+                    reviews = self.server.engine.list_init_session_encounter_reviews(session.session_id)
+                    if groups or media or reviews:
                         sessions.append(_init_session_summary(session, groups))
                 self._json({"sessions": sessions})
+                return
+            if parsed.path == "/api/queue-encounters":
+                session_id = _query_value(parsed.query, "session_id")
+                self._json({
+                    "media": self.server.engine.list_init_session_media(session_id),
+                    "reviews": self.server.engine.list_init_session_encounter_reviews(session_id),
+                })
                 return
             if parsed.path == "/api/queue-groups":
                 session_id = _query_value(parsed.query, "session_id")
                 groups = self.server.engine.refresh_init_groups(session_id)
-                self._json({"groups": [_init_group(self.server.engine, group) for group in groups]})
+                reviews = self.server.engine.list_init_session_encounter_reviews(session_id)
+                active_review = next((item for item in reviews if item["status"] == "IN_PROGRESS" and item["phase"] != "WAITING"), None)
+                if active_review is not None:
+                    active_ids = {face["face_id"] for face in active_review["faces"] if face["decision"] in (None, "SKIP")}
+                    groups = [InitGroup(
+                        group_id=group.group_id, session_id=group.session_id, status=group.status,
+                        faces=[face for face in group.faces if face.init_face_id in active_ids],
+                    ) for group in groups]
+                    groups = [group for group in groups if group.faces]
+                session = self.server.engine.store.get_init_session(session_id)
+                self._json({"quality_only": session.quality_only if session else True, "groups": [
+                    _init_group(self.server.engine, group, encounter_review_id=active_review["review_id"] if active_review else None)
+                    for group in groups
+                ]})
                 return
             if parsed.path == "/api/queue-person-candidates":
                 session_id = _query_value(parsed.query, "session_id")
                 group_id = _query_value(parsed.query, "group_id")
                 group = self.server.engine.get_init_group(session_id, group_id)
+                reviews = self.server.engine.list_init_session_encounter_reviews(session_id)
+                active_review = next((item for item in reviews if item["status"] == "IN_PROGRESS" and item["phase"] != "WAITING"), None)
+                if active_review is not None:
+                    active_ids = {face["face_id"] for face in active_review["faces"] if face["decision"] in (None, "SKIP")}
+                    group = InitGroup(
+                        group_id=group.group_id, session_id=group.session_id, status=group.status,
+                        faces=[face for face in group.faces if face.init_face_id in active_ids],
+                    )
+                    if not group.faces:
+                        raise KeyError("This identity group does not belong to the active Encounter")
                 candidates = self.server.engine.ranked_people_for_init_group(group)
+                if active_review:
+                    combined = self.server.engine.encounter_matches_for_init_group(group, active_review["review_id"], limit=False)
+                    by_id = {item["person_id"]: item for item in combined}
+                    people = [{**_person_summary_from_embeddings(candidate.summary, candidate.embeddings),
+                               "match": {**_match_policy(self.server.engine, by_id[candidate.summary.person_id]["score"]), "score": by_id[candidate.summary.person_id]["score"]} if candidate.summary.person_id in by_id else None}
+                              for candidate in candidates]
+                    for item in combined:
+                        if item["draft_created"]:
+                            people.append({**item, "biometric_status": "ENROLLED", "embedding_count": 1,
+                                           "match": {**_match_policy(self.server.engine, item["score"]), "score": item["score"]}})
+                        else:
+                            existing = next((person for person in people if person["person_id"] == item["person_id"]), None)
+                            if existing is not None:
+                                existing["representative_image"] = item["representative_image"]
+                    people.sort(key=lambda item: (-(item["match"]["score"] if item["match"] else -1), item["person_id"]))
+                    for rank, item in enumerate(people, 1):
+                        if item["match"]:
+                            item["match"]["rank"] = rank
+                    self._json({"candidates": people})
+                    return
                 self._json({
                     "candidates": [
                         {
@@ -2201,14 +2258,15 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 })
                 return
             if parsed.path == "/api/proof-only-duplicate-check":
-                if payload.get("review_id"):
+                if payload.get("review_id") and not payload.get("session_id"):
                     candidates = self.server.engine.proof_only_duplicate_candidates_for_review_face(
                         _required(payload, "review_id"), _required(payload, "face_id"),
                     )
                 else:
                     candidates = self.server.engine.proof_only_duplicate_candidates_for_init_faces(
                         _required(payload, "session_id"), _required(payload, "group_id"),
-                        _queue_face_ids(self.server.engine, payload),
+                        payload.get("face_ids") if payload.get("review_id") else _queue_face_ids(self.server.engine, payload),
+                        review_id=payload.get("review_id"),
                     )
                 self._json({"candidates": candidates, "basis": "PROOF_ONLY_DUPLICATE_CHECK"})
                 return
@@ -2549,7 +2607,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                             client_side=False,
                         )
                     session_id = queue_result.session.session_id
-                    if not queue_result.groups:
+                    if not queue_result.media_paths:
                         self.server.engine.discard_init_session(session_id)
                         session_id = ""
                     self._json(
@@ -2561,6 +2619,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                                 _init_group(self.server.engine, group, queue_result.matches_by_face_id)
                                 for group in queue_result.groups
                             ],
+                            "media": self.server.engine.store.list_init_session_media(session_id) if session_id else [],
                             "metrics": self.server.engine.metrics_snapshot(),
                         }
                     )
@@ -2575,8 +2634,86 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     raise
                 finally:
                     self.server.finish_queue_job(job_id)
+            if parsed.path == "/api/queue-media-selection":
+                if not isinstance(payload.get("excluded"), bool):
+                    raise ValueError("excluded must be a boolean")
+                self.server.engine.set_init_media_excluded(_required(payload, "session_id"), _required(payload, "media_id"), payload["excluded"])
+                self._json({"media": self.server.engine.list_init_session_media(payload["session_id"])})
+                return
+            if parsed.path == "/api/queue-quality-policy":
+                if not isinstance(payload.get("quality_only"), bool):
+                    raise ValueError("quality_only must be a boolean")
+                self.server.engine.set_init_session_quality_policy(_required(payload, "session_id"), payload["quality_only"])
+                self._json({"quality_only": payload["quality_only"]})
+                return
+            if parsed.path == "/api/queue-encounters-plan":
+                groups = payload.get("media_groups")
+                if not isinstance(groups, list) or any(not isinstance(group, list) for group in groups):
+                    raise ValueError("media_groups must be a list of media ID lists")
+                self._json({"reviews": self.server.engine.plan_init_session_encounters(
+                    _required(payload, "session_id"), groups,
+                )})
+                return
+            if parsed.path == "/api/queue-encounter-event":
+                self._json({"review": self.server.engine.save_encounter_review_event(
+                    _required(payload, "review_id"), payload.get("event_details"),
+                )})
+                return
+            if parsed.path == "/api/queue-encounter-decision":
+                review_id = _required(payload, "review_id")
+                face_ids = payload.get("face_ids")
+                if not isinstance(face_ids, list) or not face_ids:
+                    raise ValueError("Select at least one face")
+                choices = payload.get("quality_choices") or {}
+                if not isinstance(choices, dict):
+                    raise ValueError("quality_choices must be an object")
+                decisions = []
+                for face_id in face_ids:
+                    detail = dict(payload.get("recognition_detail") or {})
+                    if str(face_id) in choices:
+                        detail["embedding_state"] = choices[str(face_id)]
+                    decisions.append({"face_id": str(face_id), "recognition_detail": detail})
+                self.server.engine.set_photo_review_face_decisions(
+                        review_id, decisions, decision=_required(payload, "decision"),
+                        person_id=payload.get("person_id"),
+                        new_person_key=payload.get("new_person_key"),
+                        new_person_name=payload.get("new_person_name"),
+                        new_person_metadata=payload.get("new_person_metadata"),
+                        notes=str(payload.get("notes") or ""),
+                        mentioned_person_ids=list(payload.get("mentioned_person_ids") or []),
+                    )
+                self.server.engine.resume_deferred_encounter_groups(review_id)
+                self._json({"review": self.server.engine.get_encounter_review(review_id)})
+                return
+            if parsed.path == "/api/queue-encounter-identities-complete":
+                self._json({"review": self.server.engine.complete_encounter_identity_review(
+                    _required(payload, "review_id"),
+                )})
+                return
+            if parsed.path == "/api/queue-encounter-relation":
+                self._json({"review": self.server.engine.set_encounter_relation_decision(
+                    _required(payload, "review_id"), _required(payload, "first_ref"),
+                    _required(payload, "second_ref"), _required(payload, "disposition"),
+                )})
+                return
+            if parsed.path == "/api/queue-encounter-complete":
+                review_id = _required(payload, "review_id")
+                result = self.server.engine.complete_encounter_review(
+                    review_id, _operation_id(payload), actor=self._operation_actor(),
+                    source="queue-encounter-review",
+                )
+                self.server.log_event("queue-encounter-completed", **result)
+                self._json({"result": result, "review": self.server.engine.get_encounter_review(review_id)})
+                return
+            if parsed.path == "/api/queue-encounter-discard":
+                review_id = _required(payload, "review_id")
+                self.server.engine.cancel_photo_review(review_id)
+                self._json({"review": self.server.engine.get_encounter_review(review_id)})
+                return
             if parsed.path == "/api/queue-confirm-new":
                 session_id = _required(payload, "session_id")
+                if self.server.engine.list_init_session_encounter_reviews(session_id):
+                    raise ValueError("This Queue session uses Encounter review; complete the Encounter draft")
                 mentioned_person_ids = payload.get("mentioned_person_ids", [])
                 if not isinstance(mentioned_person_ids, list):
                     raise KeyError("mentioned_person_ids must be a list")
@@ -2617,6 +2754,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/queue-confirm-existing":
                 session_id = _required(payload, "session_id")
+                if self.server.engine.list_init_session_encounter_reviews(session_id):
+                    raise ValueError("This Queue session uses Encounter review; complete the Encounter draft")
                 person_id = _required(payload, "person_id")
                 accepted = self.server.engine.confirm_init_faces_existing(
                     session_id,
@@ -2660,6 +2799,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/queue-discard":
                 session_id = _required(payload, "session_id")
+                if self.server.engine.list_init_session_encounter_reviews(session_id):
+                    raise ValueError("Use the Encounter draft decision to exclude faces")
                 self.server.engine.discard_init_faces(
                     session_id,
                     _required(payload, "group_id"),
@@ -2679,6 +2820,15 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/queue-skip":
                 session_id = _required(payload, "session_id")
                 group_id = _required(payload, "group_id")
+                reviews = self.server.engine.list_init_session_encounter_reviews(session_id)
+                if reviews:
+                    active = next((item for item in reviews if item["status"] == "IN_PROGRESS" and item["phase"] == "IDENTITIES"), None)
+                    if active is None:
+                        raise ValueError("Only an active Encounter identity group can be deferred")
+                    resumed = self.server.engine.skip_encounter_identity_group(active["review_id"], group_id)
+                    self.server.log_event("queue-skip", session_id=session_id, group_id=group_id)
+                    self._json({"skipped": True, "resumed": resumed, "review": self.server.engine.get_encounter_review(active["review_id"])})
+                    return
                 self.server.engine.skip_init_group(session_id, group_id)
                 groups = self.server.engine.list_init_groups(session_id)
                 self.server.log_event("queue-skip", session_id=session_id, group_id=group_id)
@@ -4884,6 +5034,7 @@ def _init_group(
     engine: FaceEngine,
     group: InitGroup,
     matches_by_face_id: dict[str, list[PersonMatch]] | None = None,
+    encounter_review_id: str | None = None,
 ) -> dict[str, Any]:
     session = engine.store.get_init_session(group.session_id)
     quality_only = session.quality_only if session else True
@@ -4913,7 +5064,8 @@ def _init_group(
             representative.face.crop_path,
             representative.source_image,
         ) if representative else None,
-        "matches": [_match(engine, match, rank) for rank, match in enumerate(group_matches, 1)],
+        "matches": [{**match, "rank": rank, **_match_policy(engine, match["score"])} for rank, match in enumerate(engine.encounter_matches_for_init_group(group, encounter_review_id), 1)] if encounter_review_id else [_match(engine, match, rank) for rank, match in enumerate(group_matches, 1)],
+        "draft_matches": [],
         "faces": [
             {
                 "init_face_id": face.init_face_id,

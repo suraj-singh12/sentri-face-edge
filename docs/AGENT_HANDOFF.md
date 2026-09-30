@@ -7,7 +7,9 @@ normative rules in the repository-root `AGENTS.md`.
 ## Current checkpoint
 
 - Application version: `2.0.0` (`src/sentriface/_version.py`).
-- Database schema: v29 (`SQLiteIdentityStore`); v28 remains the frozen P11/P14 release baseline.
+- Database schema: v31 in the current correctness working tree (`SQLiteIdentityStore`); v30 is the Batch 2 staging foundation and v28 remains the frozen P11/P14 release baseline.
+- Current correction: durable pre-grouping media exclusion/restore, automatic finalized-media exclusion, reconciled group IDs/selected faces, combined canonical committed+active-draft recognition and proof-only duplicate prevention, atomic selected-face draft decisions, current-value form validation, 4.5-second default notifications, 250×250 Peek In and left-aligned recognition preference. Drafted means draft-created Person only. See the canonical tracker for verification; Encounter Management, Manual Association UI, World vNext and the deleted-Person regression remain deferred.
+- Final correctness gates: 561 backend tests passed, 47 skipped, 114 subtests; 112 frontend tests passed; production build/diff check passed. Authenticated synthetic-media development UI verified removal/reload, Event→Person flow, Peek In, filled forms, proof-only draft reuse, quality preference, final completion and Person Profile persistence. This is not production-model, full-role or release acceptance.
 - P0 through P14 source implementation is complete.
 - P10 through P13 are frozen.
 - Windows source mode and the unsigned pre-tag Windows 11 AMD64 build gates pass.
@@ -36,6 +38,8 @@ normative rules in the repository-root `AGENTS.md`.
   transitions still need live UI verification. Do not treat those manual flows
   as release acceptance.
 - The 2026-09-27 Encounter batch places shared Event metadata and selected Event Note IDs on finalized observations, separates Event and Person forms, repairs Queue metadata/mentions, and uses the existing sighting note subject. Event Note IDs are Encounter→Person references, never Person relationship evidence. Pre-Batch-2 integration adds explicit NO_FACE Browse, durable face-origin reads, accepted-poor recognition fallback, a proof-only pre-creation duplicate check, and bounded read-only Global/Person Events. Schema v29 carries embedding eligibility and Queue search preference. Historical >~1 MB upload media is reduced before persistence; CPU detector preparation is transient. Current feature/role inventory is `docs/FEATURES_BY_TAB.md`; exact status and risks are in `docs/IMPLEMENTATION_PLAN.md`.
+- The current uncommitted Batch 2 working tree extends existing Queue staging and atomic review completion with serial Encounter drafts and durable Relations decisions. Schema v30 adds staging links and the minimal negative decision authority; positive evidence and graph projection remain separate. Exact retained media dedup, draft recognition overlay, lifecycle guards and relation-aware correction are implemented in source. Full backend/frontend/build gates pass; the canonical tracker records exact results and the outstanding live authenticated UI walkthrough. Do not treat this as a signed release or Windows acceptance.
+- The 2026-09-29 post-Batch-2 stabilization refines this same working tree. Review Photos now identifies finalized-media conflicts per photo and can continue with valid siblings; grouping is Encounter-first, asks for a count, and can suggest existing uploaded-subfolder boundaries. Skip is temporary group deferral and never a final identity decision; all deferred groups return automatically. Long queue reviews use page scroll, the current face is boxed, Relations choices show pressed state, and Person Graph hover explains distinct canonical shared Encounters and directed note references. No new schema, authority, or World scoring was added. The tracker owns exact verification status and deferred manual walkthrough.
 
 ## Read in this order
 

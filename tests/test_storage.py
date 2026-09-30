@@ -17,6 +17,40 @@ from sentriface.storage.sqlite_store import (
 
 
 class StorageMigrationTest(unittest.TestCase):
+    def test_v30_media_selection_extension_preserves_history_and_rolls_back_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            db_path = Path(temp) / "sentriface.db"
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                for migration in _schema_migrations():
+                    if migration.to_version > 30:
+                        break
+                    migration.apply(conn)
+                for status in ("ACTIVE", "ARCHIVED", "DELETED", "MERGED"):
+                    conn.execute("INSERT INTO persons(person_id,name,metadata,created_at,lifecycle_status,identity_status,biometric_status,lifecycle_changed_at,canonical_person_id) VALUES (?,?, '{}','2026-01-01',?,'IDENTIFIED','NO_FACE','2026-01-01',?)", (status, status, status, "ACTIVE" if status == "MERGED" else None))
+                conn.execute("UPDATE persons SET deleted_at = '2026-01-01' WHERE lifecycle_status != 'ACTIVE'")
+                conn.execute("INSERT INTO init_sessions(session_id,source_path,status,created_at) VALUES ('legacy-session','/managed','pending','2026-01-01')")
+                conn.execute("INSERT INTO init_session_media(session_id,media_id,media_path,created_at) VALUES ('legacy-session','legacy-media','/managed/legacy.jpg','2026-01-01')")
+            store = SQLiteIdentityStore(db_path, embedding_dim=2)
+            from sentriface.storage.sqlite_store import _migrate_30_to_31
+            def fail_after_extension(conn):
+                _migrate_30_to_31(conn)
+                raise RuntimeError("forced selection migration failure")
+            with patch("sentriface.storage.sqlite_store._migrate_30_to_31", fail_after_extension):
+                with self.assertRaisesRegex(SchemaMigrationError, "forced selection migration failure"):
+                    store.initialize()
+            with sqlite3.connect(db_path) as conn:
+                self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 30)
+                self.assertNotIn("excluded", [row[1] for row in conn.execute("PRAGMA table_info(init_session_media)")])
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM persons").fetchone()[0], 4)
+            store.initialize()
+            store.initialize()
+            self.assertFalse(store.list_init_session_media("legacy-session")[0]["excluded"])
+            with sqlite3.connect(db_path) as conn:
+                self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+                self.assertEqual(conn.execute("SELECT person_id,lifecycle_status FROM persons ORDER BY person_id").fetchall(), [(status,status) for status in ("ACTIVE","ARCHIVED","DELETED","MERGED")])
+                self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
+
     def test_v28_embedding_and_queue_policy_migrate_without_history_loss(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             import struct

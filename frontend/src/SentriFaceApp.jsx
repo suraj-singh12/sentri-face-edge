@@ -246,6 +246,10 @@ function SentriFaceShell({ user, logout, changePassword }) {
               people={state.people}
               queueSessions={state.queueSessions}
               queueGroups={state.queueGroups}
+              encounterMedia={state.queueEncounterMedia}
+              encounterReviews={state.queueEncounterReviews}
+              activeEncounter={state.queueActiveEncounter}
+              visibleQueueGroups={state.queueVisibleGroups}
               queueSessionId={state.queueSessionId}
               queueProgress={state.queueProgress}
               queueSelectedGroup={state.queueSelectedGroup}
@@ -258,11 +262,17 @@ function SentriFaceShell({ user, logout, changePassword }) {
               queueGalleryImage={state.queueGalleryImage}
               queueReviewStats={state.queueReviewStats}
               qualityOnly={state.queueQualityOnly}
-              onQualityOnlyChange={actions.setQueueQualityOnly}
+              onQualityOnlyChange={guarded(actions.setQueueQualityOnly)}
               eventDetails={state.queueEvent}
               eventDraft={state.queueEventDraft}
               onEventChange={actions.updateQueueEvent}
               onEventConfirm={actions.confirmQueueEvent}
+              onPlanEncounters={guarded(actions.planQueueEncounters)}
+              onMediaExcluded={guarded(actions.setQueueMediaExcluded)}
+              onCompleteIdentities={guarded(actions.completeQueueIdentities)}
+              onDecideRelation={guarded(actions.decideQueueRelation)}
+              onCompleteEncounter={guarded(actions.completeQueueEncounter)}
+              onDiscardEncounter={guarded(actions.discardQueueEncounter)}
               onFiles={guarded((files) => actions.scanQueueFiles(Array.from(files || [])))}
               onFolder={guarded((files) => actions.scanQueueFiles(Array.from(files || [])))}
               onDrop={guarded(actions.queueDrop)}

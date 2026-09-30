@@ -103,8 +103,20 @@ class IdentityStore(Protocol):
     def face_origins_for_embeddings(self, embedding_ids: list[str]) -> dict[str, list[dict]]:
         """Read proved Encounter/Add Face origins or explicit legacy uncertainty."""
 
-    def proof_only_duplicate_candidates(self, vectors: list[Embedding], threshold: float) -> list[dict]:
+    def proof_only_duplicate_candidates(self, vectors: list[Embedding], threshold: float, *, review_id: str | None = None) -> list[dict]:
         """Exceptional proof-only duplicate hint, outside normal matching."""
+
+    def list_encounter_draft_references(self, review_id: str) -> list[dict]:
+        """Accepted faces of the active draft, with canonical or draft-created ownership."""
+
+    def set_init_media_excluded(self, session_id: str, media_id: str, excluded: bool) -> None:
+        """Persist review selection without deleting media; lock after grouping."""
+
+    def set_init_session_quality_policy(self, session_id: str, quality_only: bool) -> None:
+        """Persist the candidate preference for a Queue session."""
+
+    def set_photo_review_face_decisions(self, review_id: str, decisions: list[dict], **values) -> PhotoReview:
+        """Atomically stage one selected-face decision through the existing review mechanism."""
 
     def update_person_profile(
         self,

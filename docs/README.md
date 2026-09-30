@@ -4,6 +4,8 @@ This directory separates the product overview and current architecture from froz
 
 ## Current status
 
+- The 2026-10-01 correctness pass extends existing staging to schema v31 for durable pre-grouping media exclusion, unifies committed/active-draft recognition and duplicate prevention, and fixes stale group/form state. `IMPLEMENTATION_PLAN.md` owns current verification and remaining work. No new Encounter, media, note or recognition-index system is introduced.
+
 - P0 through P14 source implementation is complete.
 - P10 through P13 are complete and frozen, including all of P11-A through P11-E.
 - Historical P14 unsigned Windows 11 x64 installer lifecycle acceptance passed
@@ -13,6 +15,7 @@ This directory separates the product overview and current architecture from froz
   artifact's disposable-Windows installer and packaged model lifecycle, and a
   clean exact `rc-v2.0.0` or `release-v2.0.0` rebuild.
 - The 2026-09-27 stabilization and pre-Batch-2 integration extend finalized observations with shared Encounter metadata, add embedding eligibility to schema v29, preserve no-face selection and face-origin provenance, and expose bounded read-only Events. The reduced managed upload is historical media. See `IMPLEMENTATION_PLAN.md` for verification and remaining risks.
+- Batch 2 established serial durable Encounter drafts and explicit Relations decisions in schema v30; the current correction extends that staging to v31. Final completion remains the existing atomic observation/person/evidence/journal command. The canonical tracker records automated gates and the authenticated synthetic-media development walkthrough; production-model and full role walkthroughs remain separate. Do not treat this source checkpoint as release acceptance.
 
 ## Start here
 

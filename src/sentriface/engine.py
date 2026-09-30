@@ -21,6 +21,7 @@ from sentriface.graph_read_service import GraphReadService
 from sentriface.identity_service import IdentityService
 from sentriface.intelligence_service import IntelligenceReadService
 from sentriface.metrics import MetricsCollector
+from sentriface.media_registry import media_content_identity
 from sentriface.merge_service import IdentityMergeService
 from sentriface.structured_repair_service import StructuredRepairService
 from sentriface.revert_service import GuardedOperationRevertService
@@ -442,11 +443,18 @@ class FaceEngine:
         return self.store.proof_only_duplicate_candidates([pending.vector], self.config.medium_confidence)
 
     def proof_only_duplicate_candidates_for_init_faces(
-        self, session_id: str, group_id: str, face_ids: list[str],
+        self, session_id: str, group_id: str, face_ids: list[str], *, review_id: str | None = None,
     ) -> list[dict]:
-        faces = self._selected_init_faces(session_id, group_id, face_ids)
+        if review_id:
+            review = self.store.get_encounter_review(review_id)
+            unresolved = {face["face_id"] for face in review["faces"] if face["decision"] in (None, "SKIP")}
+            if review["session_id"] != session_id or review["phase"] != "IDENTITIES" or not set(face_ids).issubset(unresolved):
+                raise ValueError("Select unresolved faces from the active Encounter")
+            faces = [face for group in self.list_init_groups(session_id) for face in group.faces if face.init_face_id in face_ids]
+        else:
+            faces = self._selected_init_faces(session_id, group_id, face_ids)
         return self.store.proof_only_duplicate_candidates(
-            [face.vector for face in faces], self.config.medium_confidence,
+            [face.vector for face in faces], self.config.medium_confidence, review_id=review_id,
         )
 
     def rename_person(
@@ -702,18 +710,149 @@ class FaceEngine:
     ) -> PhotoReview:
         return self.graph.create_photo_review(review_id, media_id, faces, **values)
 
+    def list_init_session_media(self, session_id: str) -> list[dict]:
+        return self.store.list_init_session_media(session_id)
+
+    def set_init_media_excluded(self, session_id: str, media_id: str, excluded: bool) -> None:
+        self.store.set_init_media_excluded(session_id, media_id, excluded)
+
+    def set_init_session_quality_policy(self, session_id: str, quality_only: bool) -> None:
+        self.store.set_init_session_quality_policy(session_id, quality_only)
+
+    def plan_init_session_encounters(self, session_id: str, media_groups: list[list[str]]) -> list[dict]:
+        self.store.plan_init_session_encounters(session_id, media_groups)
+        self._regroup_pending_init_session(session_id)
+        return self.store.list_init_session_encounter_reviews(session_id)
+
+    def skip_encounter_identity_group(self, review_id: str, group_id: str) -> int:
+        review = self.store.get_encounter_review(review_id)
+        if review["status"] != "IN_PROGRESS" or review["phase"] != "IDENTITIES":
+            raise ValueError("Only an active identity group can be deferred")
+        unresolved_ids = {face["face_id"] for face in review["faces"] if face["decision"] in (None, "SKIP")}
+        group = self._get_init_group(review["session_id"], group_id)
+        if group.status != "pending" or not any(face.init_face_id in unresolved_ids for face in group.faces):
+            raise ValueError("This identity group is not pending")
+        self.store.mark_init_group_status(review["session_id"], group_id, "skipped")
+        return self.resume_deferred_encounter_groups(review_id)
+
+    def resume_deferred_encounter_groups(self, review_id: str) -> int:
+        review = self.store.get_encounter_review(review_id)
+        if review["status"] != "IN_PROGRESS" or review["phase"] != "IDENTITIES":
+            return 0
+        unresolved_ids = {face["face_id"] for face in review["faces"] if face["decision"] in (None, "SKIP")}
+        groups = self.store.list_init_groups(review["session_id"])
+        pending = [group for group in groups if group.status == "pending" and any(
+            face.init_face_id in unresolved_ids for face in group.faces
+        )]
+        if pending:
+            return 0
+        deferred = [group for group in groups if group.status == "skipped" and any(
+            face.init_face_id in unresolved_ids for face in group.faces
+        )]
+        for group in deferred:
+            self.store.mark_init_group_status(review["session_id"], group.group_id, "pending")
+        return len(deferred)
+
+    def list_init_session_encounter_reviews(self, session_id: str) -> list[dict]:
+        return self.store.list_init_session_encounter_reviews(session_id)
+
+    def get_encounter_review(self, review_id: str) -> dict:
+        return self.store.get_encounter_review(review_id)
+
+    def draft_matches_for_init_group(self, group: InitGroup, review_id: str) -> list[dict]:
+        """Compatibility read for draft-created candidates in the combined view."""
+        return [item for item in self.encounter_matches_for_init_group(group, review_id) if item["draft_created"]]
+
+    def encounter_matches_for_init_group(self, group: InitGroup, review_id: str, *, limit: bool = True) -> list[dict]:
+        """Rank canonical committed + accepted active-draft references together, transiently."""
+        session = self.store.get_init_session(group.session_id)
+        quality_only = session.quality_only if session else True
+        current_ids = {face.init_face_id for face in group.faces}
+        references = [item for item in self.store.list_encounter_draft_references(review_id) if item["face_id"] not in current_ids]
+        for record in self.store.list_embeddings():
+            person = self.get_person(record.person_id)
+            if person is None:
+                continue
+            references.append({"key": record.person_id, "person_id": record.person_id, "draft_created": False,
+                               "name": person.name, "metadata": person.metadata, "vector": record.vector,
+                               "recognition_state": record.recognition_state, "image": record.crop_path or record.source_image})
+        by_key = {}
+        for reference in references:
+            by_key.setdefault((reference["draft_created"], reference["key"]), []).append(reference)
+        exclusions = self.excluded_person_ids_for_init_faces(group.session_id, list(current_ids))
+        candidates = []
+        for (draft_created, key), samples in by_key.items():
+            has_good = any(sample["recognition_state"] == "GOOD" for sample in samples)
+            eligible = [sample for sample in samples if sample["recognition_state"] != "PROOF_ONLY"
+                        and (not quality_only or sample["recognition_state"] == "GOOD" or not has_good)]
+            if not eligible:
+                continue
+            allowed_faces = [face for face in group.faces if draft_created or key not in exclusions.get(face.init_face_id, set())]
+            if not allowed_faces:
+                continue
+            best = max(eligible, key=lambda sample: max(_cosine(face.vector, sample["vector"]) for face in allowed_faces))
+            score = max(_cosine(face.vector, best["vector"]) for face in allowed_faces)
+            if score <= 0:
+                continue
+            candidates.append({"person_id": f"draft:{key}" if draft_created else key,
+                               "draft_person_key": key if draft_created else None, "draft_created": draft_created,
+                               "draft": draft_created, "name": best["name"], "metadata": best["metadata"],
+                               "representative_image": best["image"], "score": score})
+        ranked = sorted(candidates, key=lambda item: (-item["score"], item["person_id"]))
+        return ranked[:self.config.top_k] if limit else ranked
+
+    def set_photo_review_face_decisions(self, review_id: str, decisions: list[dict], **values):
+        result = self.store.set_photo_review_face_decisions(
+            review_id, decisions, proof_only_duplicate_threshold=self.config.medium_confidence, **values,
+        )
+        self.resume_deferred_encounter_groups(review_id)
+        return result
+
+    def save_encounter_review_event(self, review_id: str, event_details: dict) -> dict:
+        return self.store.save_encounter_review_event(review_id, event_details)
+
+    def complete_encounter_identity_review(self, review_id: str) -> dict:
+        return self.store.complete_encounter_identity_review(review_id)
+
+    def set_encounter_relation_decision(
+        self, review_id: str, first_ref: str, second_ref: str, disposition: str,
+    ) -> dict:
+        return self.store.set_encounter_relation_decision(review_id, first_ref, second_ref, disposition)
+
+    def complete_encounter_review(self, review_id: str, operation_id: str, **values) -> dict:
+        review = self.store.get_encounter_review(review_id)
+        result = self.complete_photo_review(review_id, operation_id, **values)
+        session_id = review["session_id"]
+        if session_id:
+            try:
+                session = self.store.get_init_session(session_id)
+                if session and session.status == "closed":
+                    self.discard_init_session(session_id)
+                elif session:
+                    self._regroup_pending_init_session(session_id)
+            except KeyError:
+                pass
+        return result
+
     def set_photo_review_face_decision(
         self, review_id: str, face_id: str, decision: str, **values,
     ) -> PhotoReview:
-        return self.graph.set_photo_review_face_decision(
+        result = self.graph.set_photo_review_face_decision(
             review_id, face_id, decision, **values,
         )
+        self.resume_deferred_encounter_groups(review_id)
+        return result
 
     def get_photo_review(self, review_id: str) -> PhotoReview | None:
         return self.graph.get_photo_review(review_id)
 
     def cancel_photo_review(self, review_id: str) -> PhotoReview:
-        return self.graph.cancel_photo_review(review_id)
+        review = self.store.get_encounter_review(review_id)
+        result = self.graph.cancel_photo_review(review_id)
+        if review["session_id"]:
+            self.resume_skipped_init_groups(review["session_id"])
+            self._regroup_pending_init_session(review["session_id"])
+        return result
 
     def complete_photo_review(
         self, review_id: str, operation_id: str, **values,
@@ -1166,11 +1305,18 @@ class FaceEngine:
                     groups=0,
                 )
                 init_faces: list[InitFace] = []
+                scanned_media_paths: list[str] = []
+                seen_media_ids: set[str] = set()
                 embeddings_generated = 0
                 invalid_images: list[str] = []
                 for image_index, image_path in enumerate(image_paths, start=1):
                     cancellation_checkpoint("before_image")
                     canonical_source = _canonical_source_path(image_path, self.config.data_dir)
+                    media_identity = media_content_identity(canonical_source)
+                    if media_identity in seen_media_ids:
+                        # Queue upload hard links may contain the same exact asset twice.
+                        # Keep one media membership and one set of staged detections.
+                        continue
                     try:
                         with self.metrics.timer("image_load_ms"):
                             image = load_bgr_image(image_path, self.config.storage_key)
@@ -1188,6 +1334,8 @@ class FaceEngine:
                             groups=0,
                         )
                         continue
+                    seen_media_ids.add(media_identity)
+                    scanned_media_paths.append(canonical_source)
                     cancellation_checkpoint("before_detection")
                     with self.metrics.timer("detect_ms"):
                         faces = self.detector.detect(image_path)
@@ -1284,6 +1432,7 @@ class FaceEngine:
                 )
                 cancellation_checkpoint("before_save")
                 with self.metrics.timer("db_save_init_faces_ms"):
+                    self.store.save_init_session_media(session.session_id, scanned_media_paths)
                     self.store.save_init_faces(grouped)
                 cancellation_checkpoint("after_save")
                 report(
@@ -1301,6 +1450,7 @@ class FaceEngine:
                     groups=_groups_from_faces(session.session_id, grouped),
                     matches_by_face_id=matches_by_face_id,
                     invalid_images=invalid_images,
+                    media_paths=scanned_media_paths,
                 )
             except QueueCancellationError:
                 try:
@@ -1365,6 +1515,10 @@ class FaceEngine:
 
     def refresh_init_groups(self, session_id: str) -> list[InitGroup]:
         self.list_init_groups(session_id)
+        active = next((review for review in self.store.list_init_session_encounter_reviews(session_id)
+                       if review["status"] == "IN_PROGRESS" and review["phase"] == "IDENTITIES"), None)
+        if active is not None:
+            self.resume_deferred_encounter_groups(active["review_id"])
         self._regroup_pending_init_session(session_id)
         return self.list_init_groups(session_id)
 
@@ -1620,23 +1774,44 @@ class FaceEngine:
                 self.store.mark_init_group_status(session_id, group_id, "pending")
 
     def _regroup_pending_init_session(self, session_id: str) -> None:
+        reviews = self.store.list_init_session_encounter_reviews(session_id)
+        active = next((review for review in reviews if review["status"] == "IN_PROGRESS" and review["phase"] != "WAITING"), None)
+        active_face_ids = {face["face_id"] for face in active["faces"]} if active else None
+        unresolved_face_ids = {face["face_id"] for face in active["faces"] if face["decision"] in (None, "SKIP")} if active else None
         pending_faces = [
             face
             for group in self.list_init_groups(session_id)
             if group.status == "pending"
             for face in group.faces
+            if (active_face_ids is None or face.init_face_id in active_face_ids)
+            and (unresolved_face_ids is None or face.init_face_id in unresolved_face_ids)
         ]
         if len(pending_faces) <= 1:
             return
         matches_by_face_id = self._matches_for_init_faces(pending_faces)
+        if active:
+            matches_by_face_id = {
+                face.init_face_id: [PersonMatch(person_id=item["person_id"], score=item["score"], embedding_ids=(), embeddings_matched=1)
+                                    for item in self.encounter_matches_for_init_group(
+                                        InitGroup(session_id=session_id, group_id=face.group_id, status="pending", faces=[face]), active["review_id"],
+                                    )]
+                for face in pending_faces
+            }
         regrouped = _assign_groups(
             pending_faces,
             threshold=self.config.high_confidence,
             medium_threshold=self.config.medium_confidence,
             matches_by_face_id=matches_by_face_id,
         )
+        local_group_ids = {}
+        if active:
+            for face in regrouped:
+                local_group_ids.setdefault(face.group_id, []).append(face.init_face_id)
         assignments = {
-            face.init_face_id: face.group_id
+            face.init_face_id: (
+                f"encounter_{active['sequence_number']}_{min(local_group_ids[face.group_id])}"
+                if active else face.group_id
+            )
             for face in regrouped
         }
         with self.metrics.timer("db_update_init_face_groups_ms"):
@@ -1945,11 +2120,13 @@ class QueueSessionResult:
         groups: list[InitGroup],
         matches_by_face_id: dict[str, list[PersonMatch]],
         invalid_images: list[str] | None = None,
+        media_paths: list[str] | None = None,
     ) -> None:
         self.session = session
         self.groups = groups
         self.matches_by_face_id = matches_by_face_id
         self.invalid_images = invalid_images or []
+        self.media_paths = media_paths or []
 
 
 def _iter_images(

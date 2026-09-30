@@ -25,7 +25,7 @@ export function EncounterDetailsModal({ opened, values, people = [], onChange, o
           {suggestions.map((person) => <Paper key={person.person_id} component="button" type="button" withBorder p="xs" onClick={() => {
             onChange("eventNotes", replaceMentionQuery(values.eventNotes, person.name));
             onChange("eventMentionedPersonIds", [...new Set([...(values.eventMentionedPersonIds || []), person.person_id])]);
-          }}>{person.name} · {String(person.person_id).slice(0, 8)}</Paper>)}
+          }}>{person.name}{person.metadata?.rank ? ` · ${person.metadata.rank}` : ""}</Paper>)}
           <Group justify="flex-end"><Button type="submit">Confirm Event</Button></Group>
         </Stack>
       </form>

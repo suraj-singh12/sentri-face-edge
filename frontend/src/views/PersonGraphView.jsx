@@ -256,7 +256,12 @@ export function PersonGraphView({ state, onBack, onRefresh, onOpenNode }) {
                       data-lifecycle={node.lifecycle_status}
                       data-root={isRoot}
                       data-navigation-allowed={navigation.allowed}
-                      onPointerEnter={() => setHovered({ type: "node", value: node })}
+                      onPointerEnter={() => {
+                        const connection = !isRoot && graph.edges.find((edge) =>
+                          [edge.source_person_id, edge.target_person_id].includes(node.person_id)
+                          && [edge.source_person_id, edge.target_person_id].includes(graph.root_person_id));
+                        setHovered(connection ? { type: "edge", value: connection } : { type: "node", value: node });
+                      }}
                       onPointerLeave={() => setHovered(null)}
                       onClick={() => {
                         setSelected({ type: "node", value: node });
@@ -298,14 +303,14 @@ export function PersonGraphView({ state, onBack, onRefresh, onOpenNode }) {
           <Text size="10px" c="dimmed" className="person-graph-pan-hint">Drag to pan · Scroll to zoom · Select an edge for evidence</Text>
         </Box>
         <Paper withBorder radius="md" className="person-graph-inspector">
-          <GraphInspector item={inspect} rootPersonId={graph.root_person_id} />
+          <GraphInspector item={inspect} rootPersonId={graph.root_person_id} nodes={graph.nodes} />
         </Paper>
       </Box>
     </Stack>
   );
 }
 
-function GraphInspector({ item, rootPersonId }) {
+function GraphInspector({ item, rootPersonId, nodes = [] }) {
   if (!item) {
     return (
       <Stack gap="xs">
@@ -336,10 +341,13 @@ function GraphInspector({ item, rootPersonId }) {
   }
   const edge = item.value;
   const provenance = edge.provenance_summary || {};
+  const names = Object.fromEntries(nodes.map((node) => [node.person_id, node.display_name]));
+  const firstName = names[edge.canonical_source_person_id] || edge.canonical_source_person_id;
+  const secondName = names[edge.canonical_target_person_id] || edge.canonical_target_person_id;
   return (
     <Stack gap="sm">
       <Box>
-        <Text fw={800}>Relationship evidence</Text>
+        <Text fw={800}>{firstName} ↔ {secondName}</Text>
         <Text size="xs" c="dimmed">{edge.relationship_type_summary}</Text>
       </Box>
       <Divider />
@@ -351,9 +359,15 @@ function GraphInspector({ item, rootPersonId }) {
       <InspectorRow label="Last occurrence" value={formatGraphDate(edge.last_occurrence)} />
       <Divider />
       <Text size="xs" fw={700}>Provenance summary</Text>
+      <InspectorRow label="Shared Encounters" value={provenance.distinct_encounter_count ?? "—"} />
+      <InspectorRow label="Latest shared Encounter" value={formatGraphDate(provenance.latest_shared_encounter_at)} />
       {Object.entries(provenance.evidence_type_counts || {}).map(([type, count]) => (
         <InspectorRow key={type} label={humanizeToken(type)} value={count} />
       ))}
+      {Object.entries(provenance.note_reference_direction_counts || {}).map(([direction, count]) => {
+        const [from, to] = direction.split("->");
+        return <InspectorRow key={direction} label={direction === "UNDIRECTED" ? "Undirected note references" : `${names[from] || from} → ${names[to] || to} notes`} value={count} />;
+      })}
       <InspectorRow label="Source records" value={provenance.source_record_count ?? "—"} />
     </Stack>
   );

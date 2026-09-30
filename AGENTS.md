@@ -10,7 +10,7 @@ Authoritative identity data is limited to persons, observations/events, accepted
 
 For a multi-face observation/event, persist graph-affecting results only when every detected face has a final decision and the operator explicitly completes the review. The final write, its graph evidence, and its operation-journal entry must commit atomically.
 
-Relationships retain provenance. Co-observation, saved-note mention, and manual assertion are separate evidence types. Removing one evidence record must not remove a relationship supported by other evidence. Deduplicate event participants by canonical person and never create self-links.
+Relationships retain provenance. `CO_OBSERVED`, Person/Sighting Note `NOTE_REFERENCE`, and `MANUAL_ASSOCIATION` are separate evidence types. Selected Event Note IDs are structured Encounter→Person mentions on the observation; they create no relationship evidence or World effect. Literal unselected `@Name` is inert in every note scope. Removing one evidence record must not remove a relationship supported by other evidence. Deduplicate event participants by canonical person and never create self-links.
 
 Archive and delete are identity states, not historical erasure. Archived people remain graph nodes but are inactive/non-clickable. Deleted people are tombstoned and remain historically represented. A merge preserves both identities, all history and provenance; the source resolves to the surviving canonical identity.
 

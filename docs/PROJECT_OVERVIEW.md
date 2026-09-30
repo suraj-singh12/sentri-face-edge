@@ -2,6 +2,8 @@
 
 ## Why this document exists
 
+Current Review Photos stabilization (2026-10-01) preserves the Batch 2 authority boundary. Media removal/restore is durable pre-grouping selection; finalized media is automatically excluded. The active Encounter ranks committed and accepted draft face references together under canonical identity and the shared quality policy. PROOF_ONLY remains outside ordinary recognition and is used only by the exceptional pre-creation duplicate check. A `Drafted` badge means the Person was created in this active draft. Peek In is a transient face preview; it creates no media or history. Schema v31 adds one selection field to existing Queue media membership, while global indexes and history remain committed-only.
+
 This is the broad, narrative introduction to SentriFace Edge. It is intended for
 new contributors, reviewers, product stakeholders, and AI coding assistants that
 need to understand the whole product before changing its code.
@@ -21,6 +23,10 @@ what a user can do with it, how the code realizes those capabilities, and which
 ideas must remain stable as the software evolves.
 
 The current Encounter foundation extends finalized observations instead of adding an event subsystem. Shared occurrence metadata belongs to one observation, with accepted people as participants and managed media as references. Review asks Event details once before Person/Sighting decisions. Global Events and Person Profile Events now read that history without owning it. Event Note selected people are structured Encounter references, separate from participants and Person relationship evidence. Embedding eligibility, face origin and Person biometric status are independent. See `FEATURES_BY_TAB.md` for the current UI and `IMPLEMENTATION_PLAN.md` for verification and remaining risks.
+
+The Batch 2 working tree adds durable, serial Encounter drafts to Review Photos. The operator groups media first, enters shared Event details once, resolves every face, then explicitly includes or excludes each participant pair from co-observation evidence before one atomic Complete Review. These drafts reuse existing staging and finalization; they cannot appear as finalized history. Identical retained media reuse a physical asset and cannot silently create another independent occurrence. `encounter_relation_decisions` records intentional exclusions because a missing positive evidence row is ambiguous. World and the Events browser remain read projections; later correction UI, Attach Media, and recurrence scoring are not part of this batch.
+
+The post-Batch-2 usability pass makes the order visible: inspect individual finalized-media conflicts, group the usable photos into Encounter drafts, enter one Event, resolve or defer Person groups, decide Relations, and finalize. Skip asks to return to a group later; Discard excludes its faces. Grouping can use uploaded subfolders as a suggestion only. Long reviews use page scrolling, source images mark the current face, and selected Relations choices are visible. Person Graph explains canonical association evidence, including distinct shared Encounters and note-reference direction, without changing World scoring or graph authority.
 
 ---
 
@@ -380,10 +386,15 @@ relationship evidence, graph update, and operation journal commit atomically.
 
 ### Notes and mentions
 
-Notes are revisioned records. A literal `@Name` string is not sufficient to
-create a relationship. The saved revision contains explicit person references,
-and active mention occurrences create independent `NOTE_REFERENCE` evidence.
-Old revisions and retired occurrence/evidence history remain immutable.
+`PERSON_NOTE`, `SIGHTING_NOTE`, and `EVENT_NOTE` all accept explicitly selected
+person IDs; a literal unselected `@Name` is inert. Person Notes are general
+profile history, and Sighting Notes belong to a Person in one Encounter. Their
+selected mentions create directed Person→Person `NOTE_REFERENCE` evidence from
+the note owner (the sighted Person for a Sighting Note). These Person-owned
+notes retain immutable revisions and retired occurrence/evidence history.
+An Event Note belongs to the Encounter once. Its selected IDs remain structured
+Encounter→Person mentions on the observation, with no relationship evidence,
+`NOTE_REFERENCE`, `CO_OBSERVED`, or World/cluster/recurrence effect.
 
 ### Relationship evidence
 
@@ -634,7 +645,7 @@ The projection path is:
 
 ```text
 finalized observations + accepted participants
-saved note revisions + explicit mentions
+saved Person/Sighting Note revisions + explicit selected mentions
 manual relationship assertions
 identity corrections
 canonical merge state
@@ -921,7 +932,8 @@ current reads resolve through canonical identity.
 ### “The graph can be rebuilt from recognition matches”
 
 No. It is rebuilt from authoritative evidence created by finalized events,
-saved note mentions, and manual assertions.
+selected Person/Sighting Note mentions, and manual assertions. Event Note
+mentions remain Encounter provenance outside the relationship graph.
 
 ### “World is a frontend graph assembled from API fragments”
 

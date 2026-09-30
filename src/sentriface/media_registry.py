@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+from pathlib import Path
 import sqlite3
 from typing import Iterator
 
@@ -41,9 +43,32 @@ MEDIA_AUTHORITY_REGISTRY: tuple[MediaReferenceSpec, ...] = (
         "OBSERVATION_MEDIA",
     ),
     MediaReferenceSpec("photo_reviews", ("review_id",), "media_path", "PHOTO_REVIEW_MEDIA"),
+    MediaReferenceSpec("init_session_media", ("session_id", "media_id"), "media_path", "INITIALIZATION_SOURCE"),
+    MediaReferenceSpec("photo_review_media", ("review_id", "media_id"), "media_path", "PHOTO_REVIEW_MEDIA"),
 )
 
 MEDIA_REGISTRY_BY_ID = {item.registry_id: item for item in MEDIA_AUTHORITY_REGISTRY}
+
+
+def media_content_identity(path: str | Path) -> str:
+    """Identify the retained media bytes; managed object names encode plaintext digest."""
+    media_path = Path(path)
+    stem = media_path.stem.lower()
+    if (
+        media_path.parent.name == "objects"
+        and media_path.parent.parent.name == "uploads"
+        and len(stem) == 64
+        and all(character in "0123456789abcdef" for character in stem)
+    ):
+        return stem
+    if media_path.is_file():
+        digest = hashlib.sha256()
+        with media_path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    # Historical fixture paths can lack a local file; retain stable path identity.
+    return hashlib.sha256(str(media_path).encode("utf-8")).hexdigest()
 
 
 def available_media_specs(conn: sqlite3.Connection) -> tuple[MediaReferenceSpec, ...]:

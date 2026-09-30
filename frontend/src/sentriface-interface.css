@@ -4328,3 +4328,94 @@ button {
   }
 
 }
+
+/* Review Photos uses the page scroll so long Encounter groups keep their actions reachable. */
+.queue-workspace,
+.queue-workspace[data-followup-open="true"],
+.queue-shell-grid,
+.queue-shell-grid > .mantine-Grid-inner,
+.queue-sidebar-col,
+.queue-main-col,
+.queue-review-list,
+.queue-group-review-v2,
+.queue-review-shell,
+.queue-review-content,
+.queue-review-content > .mantine-Grid-inner,
+.queue-review-content .mantine-Grid-col,
+.queue-incoming-panel,
+.queue-photo-selection-grid {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.queue-workspace,
+.queue-workspace[data-followup-open="true"] {
+  min-height: calc(100dvh - 152px);
+}
+
+.queue-photo-selection-grid {
+  flex: none;
+  grid-auto-rows: max-content;
+}
+
+.queue-group-review-v2 {
+  padding-bottom: 16px;
+}
+
+.queue-review-panel,
+.queue-reference-person,
+.queue-focused-stage {
+  height: auto;
+}
+
+.queue-review-actionbar {
+  position: sticky;
+  bottom: 12px;
+  left: auto;
+  right: auto;
+}
+
+.queue-quality-switch {
+  margin-left: 0;
+  max-width: none;
+}
+
+.queue-encounter-media-card[data-conflict="true"] {
+  border-color: var(--mantine-color-red-6);
+  background: color-mix(in srgb, var(--mantine-color-red-9) 12%, var(--sentriface-card-bg));
+}
+
+.queue-encounter-media-card[data-removed="true"] {
+  opacity: 0.58;
+}
+
+.queue-face-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 200px;
+}
+
+.queue-selection-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.queue-selection-image .queue-face-image-wrap img {
+  display: block;
+  max-width: 100%;
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.queue-face-boundary {
+  position: absolute;
+  border: 3px solid var(--mantine-color-teal-4);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px #102f2a, 0 0 12px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}

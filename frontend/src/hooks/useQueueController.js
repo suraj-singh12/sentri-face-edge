@@ -19,6 +19,9 @@ export function useQueueController({
 }) {
   const [queueSessions, setQueueSessions] = useState([]);
   const [queueGroups, setQueueGroups] = useState([]);
+  const [queueEncounterMedia, setQueueEncounterMedia] = useState([]);
+  const [queueEncounterReviews, setQueueEncounterReviews] = useState([]);
+  const [encounterCompletionIds, setEncounterCompletionIds] = usePersistentState("sentriface.queue.completionIds", {});
   const [queueSessionId, setQueueSessionId] = usePersistentState("sentriface.queue.sessionId", "");
   const [qualityOnly, setQualityOnly] = usePersistentState("sentriface.queue.qualityOnly", true);
   const [queueEvent, setQueueEvent] = usePersistentState("sentriface.queue.event", null);
@@ -26,7 +29,7 @@ export function useQueueController({
   const [queueProgress, setQueueProgress] = useState(null);
   const [queueSelectedGroup, setQueueSelectedGroup] = useState(null);
   useEffect(() => {
-    if (!queueSelectedGroup || queueEvent?.groupId === queueSelectedGroup.group_id || queueEventDraft) return;
+    if (!queueSelectedGroup || queueEvent || queueEventDraft) return;
     const { date } = currentDateTimeParts();
     setQueueEventDraft({ date, time: "", endTime: "", timePrecision: "unknown", placeSeen: "", eventOccasion: "", eventContext: "unknown", eventNotes: "", eventMentionedPersonIds: [] });
   }, [queueSelectedGroup, queueEvent, queueEventDraft, setQueueEventDraft]);
@@ -34,6 +37,8 @@ export function useQueueController({
   const [queueSelectedFaces, setQueueSelectedFaces] = usePersistentState("sentriface.queue.selectedFaces", []);
   const [queueAccepted, setQueueAccepted] = usePersistentState("sentriface.queue.accepted", false);
   const [queueFollowup, setQueueFollowup] = usePersistentState("sentriface.queue.followup", null);
+  const followupRef = useRef(queueFollowup);
+  followupRef.current = queueFollowup;
   const [queueFollowupDone, setQueueFollowupDone] = usePersistentState("sentriface.queue.followupDone", false);
   const [proofOnlyDuplicateCandidates, setProofOnlyDuplicateCandidates] = useState([]);
   const [queueGallery, setQueueGallery] = useState(null);
@@ -42,6 +47,23 @@ export function useQueueController({
   const canceledQueueJobs = useRef(new Set());
   const queueAbortControllers = useRef(new Map());
   const restoredQueueRef = useRef(false);
+  const activeEncounter = queueEncounterReviews.find((review) => review.status === "IN_PROGRESS" && review.phase !== "WAITING") || null;
+  const activeFaceIds = activeEncounter ? new Set(activeEncounter.faces.map((face) => face.face_id)) : null;
+  const visibleQueueGroups = activeFaceIds ? queueGroups.map((group) => ({
+    ...group, faces: group.faces.filter((face) => activeFaceIds.has(face.init_face_id)),
+  })).filter((group) => group.faces.length) : queueGroups;
+
+  const loadQueueEncounters = useCallback(async (sessionId) => {
+    if (!sessionId) {
+      setQueueEncounterMedia([]);
+      setQueueEncounterReviews([]);
+      return;
+    }
+    const payload = await apiGet(`/api/queue-encounters?session_id=${encodeURIComponent(sessionId)}`);
+    setQueueEncounterMedia(payload.media || []);
+    setQueueEncounterReviews(payload.reviews || []);
+    return payload;
+  }, [apiGet]);
 
   const loadQueueGroups = useCallback(async (sessionId = queueSessionId, options = {}) => {
     if (!sessionId) {
@@ -49,6 +71,8 @@ export function useQueueController({
       return;
     }
     const payload = await apiGet(`/api/queue-groups?session_id=${encodeURIComponent(sessionId)}`);
+    await loadQueueEncounters(sessionId);
+    if (typeof payload.quality_only === "boolean") setQualityOnly(payload.quality_only);
     setQueueSessionId(sessionId);
     setQueueGroups(payload.groups);
     const selectedGroupStillExists = !queueSelectedGroupId
@@ -68,14 +92,17 @@ export function useQueueController({
       if (!desiredGroupId) return null;
       const refreshedGroup = payload.groups.find((group) => group.group_id === desiredGroupId);
       if (refreshedGroup) return refreshedGroup;
-      if (!options.preserveSelectedGroup) return null;
-      const removedFaceIds = new Set(options.removeFaceIds || []);
-      return removedFaceIds.size
-        ? { ...current, faces: current.faces.filter((face) => !removedFaceIds.has(face.init_face_id)) }
-        : current;
+      return null;
     });
+    const currentGroup = payload.groups.find((group) => group.group_id === queueSelectedGroupId);
+    const liveIds = new Set((currentGroup?.faces || []).map((face) => face.init_face_id));
+    setQueueSelectedFaces((current) => current.filter((id) => liveIds.has(id)));
+    if (!currentGroup || followupRef.current?.faceIds?.some((id) => !liveIds.has(id))) {
+      resetQueueDecision();
+      setQueueSelectedGroupId(currentGroup?.group_id || "");
+    }
     return payload;
-  }, [apiGet, queueSelectedGroupId, queueSessionId, setQueueSessionId]);
+  }, [apiGet, loadQueueEncounters, queueSelectedGroupId, queueSessionId, setQueueSessionId]);
 
   const loadQueueSessions = useCallback(async (preferredSessionId = queueSessionId) => {
     const payload = await apiGet("/api/queue-sessions");
@@ -85,6 +112,8 @@ export function useQueueController({
     if (!selected) {
       setQueueSessionId("");
       setQueueGroups([]);
+      setQueueEncounterMedia([]);
+      setQueueEncounterReviews([]);
       setQueueSelectedGroup(null);
       setQueueSelectedGroupId("");
       resetQueueDecision();
@@ -159,6 +188,8 @@ export function useQueueController({
       }
       setQueueSessionId(payload.session_id);
       setQueueGroups(payload.groups);
+      setQueueEncounterMedia(payload.media || []);
+      setQueueEncounterReviews([]);
       setQueueSessions((current) => [
         queueSessionSummary(payload.session_id, payload.groups, path),
         ...current.filter((session) => session.session_id !== payload.session_id),
@@ -372,10 +403,13 @@ export function useQueueController({
   };
 
   const openQueueGroup = (group) => {
-    if (queueEvent?.groupId !== group.group_id) {
+    if (activeEncounter && !activeEncounter.event_details_complete) {
       const { date } = currentDateTimeParts();
       setQueueEvent(null);
       setQueueEventDraft({ date, time: "", endTime: "", timePrecision: "unknown", placeSeen: "", eventOccasion: "", eventContext: "unknown", eventNotes: "", eventMentionedPersonIds: [] });
+    } else if (activeEncounter?.event_details_complete) {
+      setQueueEvent({ ...eventFromApi(activeEncounter.event_details), reviewId: activeEncounter.review_id });
+      setQueueEventDraft(null);
     }
     setQueueSelectedGroup(group);
     setQueueSelectedGroupId(group.group_id);
@@ -399,6 +433,8 @@ export function useQueueController({
     setQueueProgress(null);
     setQueueSessionId("");
     setQueueGroups([]);
+    setQueueEncounterMedia([]);
+    setQueueEncounterReviews([]);
     setQueueSelectedGroup(null);
     setQueueSelectedGroupId("");
     resetQueueDecision();
@@ -431,8 +467,11 @@ export function useQueueController({
     if (!queueSelectedGroup || !best || isNewPersonSuggestion(best)) return;
     const faceIds = selectedOrGroupFaceIds();
     setQueueAccepted(true);
-    openQueueFollowup({ name: best.name, personId: best.person_id, decision: "existing", action: "existing", faceIds });
-    showToast(`Fill details for ${best.name}`);
+    openQueueFollowup({
+      name: best.name, personId: best.draft_created ? "" : best.person_id,
+      decision: best.draft_created ? "new" : "existing", action: best.draft_created ? "draft" : "existing",
+      draftPersonKey: best.draft_person_key, draftMetadata: best.metadata, faceIds,
+    });
   };
 
   const queueNewPerson = async () => {
@@ -440,7 +479,6 @@ export function useQueueController({
     const faceIds = selectedOrGroupFaceIds();
     setQueueAccepted(true);
     openQueueFollowup({ name: "", personId: "", decision: "new", action: "new", faceIds });
-    showToast("Fill new person details");
   };
 
   const queueSelectExisting = () => {
@@ -455,6 +493,17 @@ export function useQueueController({
   const queueDiscard = async () => {
     if (!queueSelectedGroup) return;
     const faceIds = selectedQueueFaceIds();
+    if (activeEncounter) {
+      const payload = await apiPost("/api/queue-encounter-decision", {
+        review_id: activeEncounter.review_id, face_ids: faceIds, decision: "EXCLUDE",
+      });
+      setQueueEncounterReviews((current) => current.map((review) => review.review_id === payload.review.review_id ? payload.review : review));
+      await loadQueueGroups(queueSelectedGroup.session_id);
+      setQueueSelectedGroup(null);
+      resetQueueDecision();
+      showToast("Faces excluded from Encounter draft", "yellow");
+      return;
+    }
     const payload = await apiPost("/api/queue-discard", {
       session_id: queueSelectedGroup.session_id,
       group_id: queueSelectedGroup.group_id,
@@ -476,6 +525,17 @@ export function useQueueController({
 
   const discardQueueGroup = async (group) => {
     if (!group?.faces?.length) return;
+    if (activeEncounter) {
+      const payload = await apiPost("/api/queue-encounter-decision", {
+        review_id: activeEncounter.review_id,
+        face_ids: group.faces.map((face) => face.init_face_id), decision: "EXCLUDE",
+      });
+      setQueueEncounterReviews((current) => current.map((review) => review.review_id === payload.review.review_id ? payload.review : review));
+      await loadQueueGroups(group.session_id);
+      setQueueSelectedGroup(null);
+      resetQueueDecision();
+      return;
+    }
     const payload = await apiPost("/api/queue-discard", {
       session_id: group.session_id,
       group_id: group.group_id,
@@ -498,16 +558,22 @@ export function useQueueController({
   };
 
   const updateQueueFollowup = (field, value) => {
+    if (followupRef.current) followupRef.current = { ...followupRef.current, [field]: value };
     setQueueFollowup((current) => current ? { ...current, [field]: value } : current);
   };
 
   const updateQueueEvent = (field, value) => setQueueEventDraft((current) => current ? { ...current, [field]: value } : current);
-  const confirmQueueEvent = (event) => {
+  const confirmQueueEvent = async (event) => {
     event.preventDefault();
-    if (!queueEventDraft || !queueSelectedGroup) return;
+    if (!queueEventDraft || !activeEncounter) return;
+    const details = eventToApi(queueEventDraft);
+    const payload = await apiPost("/api/queue-encounter-event", {
+      review_id: activeEncounter.review_id, event_details: details,
+    });
+    setQueueEncounterReviews((current) => current.map((review) => review.review_id === payload.review.review_id ? payload.review : review));
     setQueueEvent({
       ...queueEventDraft,
-      groupId: queueSelectedGroup.group_id,
+      reviewId: activeEncounter.review_id,
       time: queueEventDraft.timePrecision === "unknown" ? "" : queueEventDraft.time,
       endTime: queueEventDraft.timePrecision === "exact" ? queueEventDraft.endTime : "",
     });
@@ -542,12 +608,22 @@ export function useQueueController({
 
   const confirmQueueFollowup = async (event, createAnyway = false) => {
     event.preventDefault();
+    const queueFollowup = followupRef.current && { ...followupRef.current };
     if (!queueFollowup?.faceIds?.length || !queueSelectedGroup) return;
+    for (const field of ["name", "rank", "country", "importance", "addedBy"]) queueFollowup[field] = String(queueFollowup[field] || "").trim();
+    const required = queueFollowup.action === "new" ? [["name", "Name"], ["rank", "Rank"], ["country", "Country"], ["importance", "Tag"], ["addedBy", "Added by"]] : [];
+    const missing = required.filter(([field]) => !String(queueFollowup[field] || "").trim()).map(([, label]) => label);
+    if (missing.length) { showToast(`Required: ${missing.join(", ")}`, "red"); return; }
+    if (queueFollowup.individualCount === "" || !Number.isInteger(Number(queueFollowup.individualCount)) || Number(queueFollowup.individualCount) < 0) {
+      showToast("Required: a non-negative whole individual count", "red"); return;
+    }
+    if (!queueFollowup.addedBy) { showToast("Required: Added by", "red"); return; }
     if (queueFollowup.action === "new" && !createAnyway) {
       const duplicateCheck = await apiPost("/api/proof-only-duplicate-check", {
         session_id: queueSelectedGroup.session_id,
         group_id: queueSelectedGroup.group_id,
         face_ids: queueFollowup.faceIds,
+        review_id: activeEncounter?.review_id,
       });
       if (duplicateCheck.candidates?.length) {
         setProofOnlyDuplicateCandidates(duplicateCheck.candidates);
@@ -555,6 +631,41 @@ export function useQueueController({
       }
     }
     const confirmedSessionId = queueSelectedGroup.session_id;
+    if (activeEncounter) {
+      const detail = {
+        rank: queueFollowup.rank, country: queueFollowup.country,
+        importance: queueFollowup.importance, added_by: queueFollowup.addedBy,
+        individual_count: Number(queueFollowup.individualCount) || 0,
+        proof_only_duplicate_override: createAnyway,
+      };
+      const payload = await apiPost("/api/queue-encounter-decision", {
+        review_id: activeEncounter.review_id,
+        face_ids: queueFollowup.faceIds,
+        decision: ["new", "draft"].includes(queueFollowup.action) ? "ACCEPT_NEW_PERSON" : "ACCEPT_EXISTING_PERSON",
+        person_id: queueFollowup.personId || undefined,
+        new_person_key: ["new", "draft"].includes(queueFollowup.action) ? (queueFollowup.draftPersonKey || queueFollowup.identityOperationId) : undefined,
+        new_person_name: ["new", "draft"].includes(queueFollowup.action) ? queueFollowup.name : undefined,
+        new_person_metadata: ["new", "draft"].includes(queueFollowup.action) ? {
+          rank: queueFollowup.rank, country: queueFollowup.country,
+          importance: queueFollowup.importance, added_by: queueFollowup.addedBy,
+        } : undefined,
+        notes: queueFollowup.notes,
+        mentioned_person_ids: queueFollowup.mentionedPersonIds || [],
+        quality_choices: queueFollowup.poorFaceChoices || {},
+        recognition_detail: detail,
+      });
+      setQueueEncounterReviews((current) => current.map((review) => review.review_id === payload.review.review_id ? payload.review : review));
+      await loadQueueGroups(confirmedSessionId);
+      setQueueFollowup(null);
+      setQueueFollowupDone(false);
+      setProofOnlyDuplicateCandidates([]);
+      setQueueSelectedFaces([]);
+      setQueueAccepted(false);
+      showToast("Identity decision saved to Encounter draft");
+      setQueueSelectedGroup(null);
+      setQueueSelectedGroupId("");
+      return;
+    }
     const payload = queueFollowup.action === "new"
       ? await apiPost("/api/queue-confirm-new", {
         session_id: queueSelectedGroup.session_id,
@@ -651,8 +762,11 @@ export function useQueueController({
   const useProofOnlyDuplicatePerson = (candidate) => {
     setProofOnlyDuplicateCandidates([]);
     setQueueFollowup((current) => current ? {
-      ...current, action: "existing", decision: "existing",
-      personId: candidate.person_id, name: candidate.name,
+      ...current, action: candidate.draft_created ? "draft" : "existing", decision: candidate.draft_created ? "new" : "existing",
+      personId: candidate.draft_created ? "" : candidate.person_id, name: candidate.name,
+      draftPersonKey: candidate.draft_person_key,
+      rank: candidate.metadata?.rank || current.rank, country: candidate.metadata?.country || current.country,
+      importance: candidate.metadata?.importance || current.importance, addedBy: candidate.metadata?.added_by || current.addedBy,
     } : current);
   };
 
@@ -663,6 +777,18 @@ export function useQueueController({
 
   const queueSkipGroup = async () => {
     if (!queueSelectedGroup) return;
+    if (activeEncounter) {
+      const payload = await apiPost("/api/queue-skip", {
+        session_id: queueSelectedGroup.session_id,
+        group_id: queueSelectedGroup.group_id,
+      });
+      setQueueEncounterReviews((current) => current.map((review) => review.review_id === payload.review.review_id ? payload.review : review));
+      await loadQueueGroups(queueSelectedGroup.session_id);
+      setQueueSelectedGroup(null);
+      resetQueueDecision();
+      showToast(payload.resumed ? "Deferred groups returned for review" : "Group deferred until other pending groups are decided", "yellow");
+      return;
+    }
     const payload = await apiPost("/api/queue-skip", {
       session_id: queueSelectedGroup.session_id,
       group_id: queueSelectedGroup.group_id,
@@ -697,7 +823,7 @@ export function useQueueController({
 
   const queueRejectSuggestedMatch = async () => {
     const best = queueSelectedGroup?.matches?.[0];
-    if (!queueSelectedGroup || !best) return;
+    if (!queueSelectedGroup || !best || best.draft_created) return;
     const payload = await apiPost("/api/queue-reject-match", {
       session_id: queueSelectedGroup.session_id,
       group_id: queueSelectedGroup.group_id,
@@ -746,7 +872,7 @@ export function useQueueController({
     return selectedQueueFaceIds();
   }
 
-  function openQueueFollowup({ name, personId, decision, action, faceIds }) {
+  function openQueueFollowup({ name, personId, decision, action, faceIds, draftPersonKey, draftMetadata }) {
     const { date, time } = currentDateTimeParts();
     const poorFaces = (queueSelectedGroup?.faces || [])
       .filter((face) => faceIds.includes(face.init_face_id) && face.quality?.status === "bad")
@@ -759,19 +885,20 @@ export function useQueueController({
       eventContext: queueEvent?.eventContext || "unknown",
       eventNotes: queueEvent?.eventNotes || "",
       eventMentionedPersonIds: queueEvent?.eventMentionedPersonIds || [],
-      rank: "",
+      rank: draftMetadata?.rank || "",
       placeSeen: queueEvent?.placeSeen || "",
       individualCount: "",
       eventOccasion: queueEvent?.eventOccasion || "",
-      country: "",
-      importance: action === "new" ? NEW_PERSON_IMPORTANCE_OPTIONS[1] : "",
-      addedBy: "",
+      country: draftMetadata?.country || "",
+      importance: draftMetadata?.importance || (action === "new" ? NEW_PERSON_IMPORTANCE_OPTIONS[1] : ""),
+      addedBy: draftMetadata?.added_by || "",
       notes: "",
       mentionedPersonIds: [],
       name,
       personId,
       decision,
       action,
+      draftPersonKey,
       faceIds,
       poorFaces,
       poorFaceChoices: Object.fromEntries(poorFaces.map((face) => [face.id, "PROOF_ONLY"])),
@@ -805,6 +932,10 @@ export function useQueueController({
     state: {
       queueSessions,
       queueGroups,
+      queueEncounterMedia,
+      queueEncounterReviews,
+      queueActiveEncounter: activeEncounter,
+      queueVisibleGroups: visibleQueueGroups,
       queueSessionId,
       queueProgress,
       queueSelectedGroup,
@@ -822,7 +953,57 @@ export function useQueueController({
     },
     actions: {
       scanQueueFiles,
-      setQueueQualityOnly: setQualityOnly,
+      planQueueEncounters: async (mediaGroups) => {
+        const payload = await apiPost("/api/queue-encounters-plan", { session_id: queueSessionId, media_groups: mediaGroups });
+        setQueueEncounterReviews(payload.reviews || []);
+        setQueueSelectedGroup(null);
+        setQueueSelectedGroupId("");
+        resetQueueDecision();
+        await loadQueueGroups(queueSessionId);
+        return payload;
+      },
+      setQueueMediaExcluded: async (mediaId, excluded) => {
+        const payload = await apiPost("/api/queue-media-selection", { session_id: queueSessionId, media_id: mediaId, excluded });
+        setQueueEncounterMedia(payload.media || []);
+      },
+      completeQueueIdentities: async () => {
+        const payload = await apiPost("/api/queue-encounter-identities-complete", { review_id: activeEncounter.review_id });
+        setQueueEncounterReviews((current) => current.map((review) => review.review_id === payload.review.review_id ? payload.review : review));
+      },
+      decideQueueRelation: async (firstRef, secondRef, disposition) => {
+        const payload = await apiPost("/api/queue-encounter-relation", {
+          review_id: activeEncounter.review_id, first_ref: firstRef, second_ref: secondRef, disposition,
+        });
+        setQueueEncounterReviews((current) => current.map((review) => review.review_id === payload.review.review_id ? payload.review : review));
+      },
+      completeQueueEncounter: async () => {
+        const operationId = encounterCompletionIds[activeEncounter.review_id] || crypto.randomUUID();
+        setEncounterCompletionIds((current) => ({ ...current, [activeEncounter.review_id]: operationId }));
+        const payload = await apiPost("/api/queue-encounter-complete", {
+          review_id: activeEncounter.review_id, operation_id: operationId,
+        });
+        onGraphMutation?.(payload.result);
+        await loadPeople({ dedupe: false });
+        await loadQueueSessions(queueSessionId);
+        setQueueSelectedGroup(null);
+        setQueueSelectedGroupId("");
+        setQueueEvent(null);
+        showToast("Encounter finalized");
+      },
+      discardQueueEncounter: async () => {
+        await apiPost("/api/queue-encounter-discard", { review_id: activeEncounter.review_id });
+        await loadQueueSessions(queueSessionId);
+        setQueueSelectedGroup(null);
+        setQueueSelectedGroupId("");
+        setQueueEvent(null);
+      },
+      setQueueQualityOnly: async (value) => {
+        if (queueSessionId) {
+          await apiPost("/api/queue-quality-policy", { session_id: queueSessionId, quality_only: value });
+          await loadQueueGroups(queueSessionId);
+        }
+        setQualityOnly(value);
+      },
       updateQueueEvent,
       confirmQueueEvent,
       queueDrop,
@@ -908,4 +1089,32 @@ function readableUploadError(error) {
     return "The server connection was interrupted. Check that SentriFace is running, then try again.";
   }
   return message;
+}
+
+function eventToApi(values) {
+  return {
+    date: values.date || "",
+    time: values.timePrecision === "unknown" ? "" : values.time || "",
+    end_time: values.timePrecision === "exact" ? values.endTime || "" : "",
+    time_precision: values.timePrecision || "unknown",
+    place_seen: values.placeSeen || "",
+    event_occasion: values.eventOccasion || "",
+    event_context: values.eventContext || "unknown",
+    event_notes: values.eventNotes || "",
+    event_mentioned_person_ids: values.eventMentionedPersonIds || [],
+  };
+}
+
+function eventFromApi(details) {
+  return {
+    date: details.date || "",
+    time: details.time || "",
+    endTime: details.end_time || "",
+    timePrecision: details.time_precision || "unknown",
+    placeSeen: details.place_seen || "",
+    eventOccasion: details.event_occasion || "",
+    eventContext: details.event_context || "unknown",
+    eventNotes: details.event_notes || "",
+    eventMentionedPersonIds: details.event_mentioned_person_ids || [],
+  };
 }

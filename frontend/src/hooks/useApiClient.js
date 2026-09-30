@@ -15,7 +15,7 @@ export function useApiClient() {
       message,
       color,
       title: options.title,
-      autoClose: options.autoClose ?? 2400,
+      autoClose: options.autoClose ?? 4500,
     });
   }, []);
 
@@ -152,7 +152,7 @@ export function useApiClient() {
       if (error?.name !== "AbortError" && !error?.notified) {
         showToast(error?.message || "The operation failed", "red", {
           title: error?.code === "request_timeout" ? "Server timeout" : "Connection or operation error",
-          autoClose: 6000,
+          autoClose: 4500,
         });
       }
     }
