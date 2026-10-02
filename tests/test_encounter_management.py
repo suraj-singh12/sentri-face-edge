@@ -158,6 +158,75 @@ class EncounterManagementTest(unittest.TestCase):
                 self.store.create_manual_association(self.a.person_id, self.c.person_id, 'failed-create')
         self.assertIsNone(self.store.get_operation('failed-create'))
 
+    def test_manual_assertion_deduplicates_separate_requests_and_canonical_aliases(self):
+        original = self.store.create_manual_association(self.a.person_id, self.c.person_id, 'manual-original')
+        revision = self.store.get_graph_revision()
+        duplicate = self.store.create_manual_association(self.c.person_id, self.a.person_id, 'manual-duplicate')
+        self.assertEqual(original, duplicate)
+        self.assertEqual(self.store.get_graph_revision(), revision)
+        self.store.execute_identity_merge(self.d.person_id, self.c.person_id, 'manual-merge')
+        alias = self.store.create_manual_association(self.a.person_id, self.d.person_id, 'manual-alias')
+        self.assertEqual(original, alias)
+        with self.store._connect() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM relationship_evidence WHERE active = 1 AND evidence_type = 'MANUAL_ASSOCIATION'").fetchone()[0], 1)
+        self.store.retire_manual_association(original['evidence_id'], 'manual-remove')
+        replacement = self.store.create_manual_association(self.a.person_id, self.c.person_id, 'manual-replacement')
+        self.assertNotEqual(replacement['evidence_id'], original['evidence_id'])
+        self.assertEqual(ReadOnlyIntegrityChecker(self.store.db_path).run().findings, ())
+
+    def test_attachment_reused_vectors_preserve_actual_media_and_shared_frame(self):
+        # These exact vectors already belong to reference photos, not this frame.
+        first = self.store.add_embedding(self.a.person_id, (.3, .7), .9, source_image='/managed/reference-a.jpg')
+        second = self.store.add_embedding(self.b.person_id, (.4, .6), .9, source_image='/managed/reference-b.jpg')
+        rid = self.amendment([self.a, self.b], '/managed/shared-new-frame.jpg')
+        self.store.complete_encounter_identity_review(rid)
+        result = self.store.complete_photo_review(rid, 'reused-vector-attach')
+        self.assertEqual(set(result['embedding_assignments'].values()), {first.embedding_id, second.embedding_id})
+        current = self.store.get_encounter_read(self.oid)
+        self.assertEqual(current['relations'][0]['support'], 'SHARED_FRAME')
+        for person in (self.a, self.b):
+            media = [item['media_path'] for item in self.store.list_person_encounter_media(person.person_id)]
+            self.assertIn('/managed/shared-new-frame.jpg', media)
+            self.assertNotIn('/managed/reference-a.jpg', media)
+            self.assertNotIn('/managed/reference-b.jpg', media)
+        self.assertEqual(len(self.evidence()), 1)
+        self.assertEqual(ReadOnlyIntegrityChecker(self.store.db_path).run().findings, ())
+
+    def test_move_face_refuses_active_amendment_without_changing_authority(self):
+        rid = self.amendment([self.a])
+        with self.store._connect() as conn:
+            embedding_id = conn.execute('SELECT embedding_id FROM observation_face_assignments WHERE observation_id = ? AND original_person_id = ?', (self.oid, self.b.person_id)).fetchone()[0]
+        before = self.store.get_encounter_read(self.oid)
+        with self.assertRaisesRegex(ValueError, 'active Attach'):
+            self.store.move_face(embedding_id, self.d.person_id, 'blocked-face-move')
+        self.assertEqual(before, self.store.get_encounter_read(self.oid))
+        self.assertIsNone(self.store.get_operation('blocked-face-move'))
+        self.assertEqual(self.store.get_encounter_review(rid)['status'], 'IN_PROGRESS')
+
+    def test_attachment_can_explicitly_restore_removed_participation(self):
+        self.correct('remove-before-attach', participant_correction={'action': 'REMOVE', 'person_id': self.b.person_id})
+        rid = self.amendment([self.b])
+        review = self.store.complete_encounter_identity_review(rid)
+        self.assertEqual(len(review['relation_candidates']), 1)
+        for pair in review['relation_candidates']:
+            self.store.set_encounter_relation_decision(rid, pair['first_ref'], pair['second_ref'], 'INCLUDE')
+        self.store.complete_photo_review(rid, 'restored-by-attachment')
+        self.assertEqual(set(self.store.get_encounter_read(self.oid)['participant_ids']), {self.a.person_id, self.b.person_id})
+        self.assertEqual(len(self.evidence()), 1)
+        self.assertEqual(ReadOnlyIntegrityChecker(self.store.db_path).run().findings, ())
+
+    def test_existing_identity_correction_respects_explicit_presence_revisions(self):
+        self.correct('add-c-before-correction', participant_correction={'action': 'ADD', 'person_id': self.c.person_id},
+                     relations=[self.pair(self.a, self.c), self.pair(self.b, self.c, 'EXCLUDE')])
+        self.store.correct_observation_identity(self.oid, self.c.person_id, self.d.person_id, 'legacy-correct-explicit')
+        self.assertEqual(set(self.store.get_encounter_read(self.oid)['participant_ids']), {self.a.person_id, self.b.person_id, self.d.person_id})
+        self.assertEqual(ReadOnlyIntegrityChecker(self.store.db_path).run().findings, ())
+
+    def test_manual_retry_returns_original_result_after_endpoint_merge(self):
+        result = self.store.create_manual_association(self.a.person_id, self.c.person_id, 'manual-before-merge')
+        self.store.execute_identity_merge(self.c.person_id, self.d.person_id, 'manual-endpoint-merge')
+        self.assertEqual(result, self.store.create_manual_association(self.a.person_id, self.c.person_id, 'manual-before-merge'))
+
     def test_each_correction_rolls_back_before_and_after_authority(self):
         for op, values in [('metadata', {'event_details': {'place_seen': 'Agra'}}),
                            ('remove', {'participant_correction': {'action': 'REMOVE', 'person_id': self.b.person_id}}),

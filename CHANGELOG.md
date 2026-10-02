@@ -2,6 +2,8 @@
 
 ## 2.0.0 - Unreleased
 
+- Hardened Batch 3: deduplicate active canonical manual assertions, preserve accepted-photo provenance when vectors are reused, reconcile forward participation corrections, guard Move Face during amendments, and provide direct Encounter navigation for merge conflicts. Photo labels distinguish managed photos from enrolled faces.
+
 - Batch 3 adds compact finalized Encounter browsing, same-occurrence Attach Media, journaled append-only metadata/participant/Relations corrections, profile media/event integration and normalized Manual Association controls. Schema v32 preserves original history; historical reads retain named deleted people. World scoring/clustering and Windows release acceptance are unchanged.
 
 - Added deliberate `NO_FACE` selection to both review browsers, reused durable Encounter/standalone face-origin history, accepted-poor recognition fallback, a separate proof-only pre-creation duplicate check, and read-only Global/Person Events. Event Note selected IDs remain Encounter→Person references and do not create Person relationship evidence.

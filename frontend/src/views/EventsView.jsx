@@ -135,7 +135,7 @@ function historyDescription(entry, names) {
   if (entry.operation_type !== "encounter.correct") return entry.operation_type.replaceAll(".", " ");
   const before = result.historical_value || {};
   const after = result.effective_value || {};
-  const changes = ["occasion", "observed_at", "location", "context", "event_notes"].filter((field) => before[field] !== after[field]).map((field) => `${({ occasion: "Occasion", observed_at: "Date/time", location: "Location", context: "Context", event_notes: "Event Note" })[field]}: ${before[field] || "Unknown"} → ${after[field] || "Unknown"}`);
+  const changes = ["occasion", "observed_at", "start_time", "end_time", "time_precision", "location", "context", "event_notes"].filter((field) => before[field] !== after[field]).map((field) => `${({ occasion: "Occasion", observed_at: "Date/time", start_time: "Start time", end_time: "End time", time_precision: "Time precision", location: "Location", context: "Context", event_notes: "Event Note" })[field]}: ${before[field] || "Unknown"} → ${after[field] || "Unknown"}`);
   if (JSON.stringify(before.mentioned_person_ids) !== JSON.stringify(after.mentioned_person_ids)) changes.push("Selected Event Note mentions corrected");
   if (result.participant_correction) {
     const change = result.participant_correction;

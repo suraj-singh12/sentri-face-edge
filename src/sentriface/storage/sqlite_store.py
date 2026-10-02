@@ -14,6 +14,7 @@ from typing import Callable
 
 from sentriface.backup_service import BackupError, BackupService
 from sentriface.errors import (
+    EncounterRelationConflict,
     GraphProjectionPostcheckError,
     GraphProjectionRebuildRefused,
     StructuredRepairRefused,
@@ -2410,11 +2411,33 @@ class SQLiteIdentityStore:
                 _add_observation_participant(
                     conn, observation_id, canonical_id, str(review["source"]), operation_id,
                 )
+            # A reused embedding retains its original enrollment image. Preserve
+            # this face's actual Encounter media on its immutable review decision.
+            for face_id, media_path in media_by_face.items():
+                media = conn.execute(
+                    "SELECT media_id FROM observation_media WHERE observation_id = ? AND media_path = ? ORDER BY media_id LIMIT 1",
+                    (observation_id, media_path),
+                ).fetchone()
+                if media is None:
+                    raise ValueError("Accepted face has no attached Encounter media")
+                decision = conn.execute(
+                    "SELECT recognition_detail FROM photo_review_faces WHERE review_id = ? AND face_id = ?",
+                    (review_id, face_id),
+                ).fetchone()
+                detail = json.loads(decision[0] or "{}")
+                detail["encounter_media_id"] = str(media[0])
+                conn.execute(
+                    "UPDATE photo_review_faces SET recognition_detail = ? WHERE review_id = ? AND face_id = ?",
+                    (json.dumps(detail), review_id, face_id),
+                )
             finalized_at = utc_now()
             if not target_observation_id:
                 conn.execute("UPDATE observations SET status = 'FINALIZED', finalized_at = ?, updated_at = ? WHERE observation_id = ?",
                              (finalized_at, finalized_at, observation_id))
             else:
+                for person_id in canonical_participants:
+                    if person_id not in _effective_observation_person_ids(conn, observation_id):
+                        _append_participant_revision(conn, observation_id, person_id, "PRESENT", operation_id)
                 canonical_participants.update({pid: pid for pid in _effective_observation_person_ids(conn, observation_id)})
                 conn.execute("UPDATE observations SET updated_at = ? WHERE observation_id = ?", (finalized_at, observation_id))
             participant_ids = sorted(canonical_participants)
@@ -2680,6 +2703,8 @@ class SQLiteIdentityStore:
                 conn, observation_id, canonical_from_person_id,
                 canonical_to_person_id, operation_id,
             )
+            _append_participant_revision(conn, observation_id, canonical_from_person_id, "REMOVED", operation_id)
+            _append_participant_revision(conn, observation_id, canonical_to_person_id, "PRESENT", operation_id)
             effective_after, evidence_ids = _recalculate_observation_evidence(
                 conn, observation_id, operation_id,
                 _optional_text(source) or "identity-correction-service",
@@ -2747,6 +2772,8 @@ class SQLiteIdentityStore:
                 (embedding_id,),
             ).fetchall()
             affected_observation_ids = sorted({str(row["observation_id"]) for row in assignments})
+            for observation_id in affected_observation_ids:
+                _require_no_encounter_amendment(conn, observation_id)
             _begin_journal_operation(
                 conn,
                 "identity.face.move",
@@ -3385,7 +3412,8 @@ class SQLiteIdentityStore:
             existing = _existing_committed_operation_result(conn, operation_id, "manual_association.create")
             pair = tuple(sorted(_resolve_canonical_person_id(conn, pid) for pid in (first_person_id, second_person_id)))
             if existing is not None:
-                if existing["person_ids"] != list(pair):
+                committed_pair = tuple(sorted(_resolve_canonical_person_id(conn, pid) for pid in existing["person_ids"]))
+                if committed_pair != pair:
                     raise KeyError("Operation ID belongs to another association")
                 return existing
             if pair[0] == pair[1]:
@@ -3394,6 +3422,19 @@ class SQLiteIdentityStore:
                 _require_active_review_person(conn, pid)
             _begin_journal_operation(conn, "manual_association.create", operation_id=operation_id, actor=actor,
                 source=source or "manual-association", affected_entities=[{"entity_type": "person", "entity_id": pid} for pid in pair], details={})
+            # Different requests for the same canonical pair are one standing
+            # assertion. Keep historical rows and journal the reconciled result.
+            for assertion in conn.execute(
+                "SELECT evidence_id, source_person_id, target_person_id FROM relationship_evidence "
+                "WHERE evidence_type = 'MANUAL_ASSOCIATION' AND source_entity_type = 'MANUAL_ASSERTION' "
+                "AND directionality = 'UNDIRECTED' AND active = 1 ORDER BY created_at, evidence_id"
+            ):
+                existing_pair = tuple(sorted(_resolve_canonical_person_id(conn, str(assertion[key]))
+                    for key in ("source_person_id", "target_person_id")))
+                if existing_pair == pair:
+                    result = {"evidence_id": str(assertion["evidence_id"]), "person_ids": list(pair)}
+                    _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+                    return result
             evidence_id = _insert_relationship_evidence(conn, evidence_type="MANUAL_ASSOCIATION", source_entity_type="MANUAL_ASSERTION",
                 source_entity_id=operation_id, source_person_id=pair[0], target_person_id=pair[1], relationship_type="ASSOCIATED_WITH",
                 directionality="UNDIRECTED", source=source or "manual-association", created_operation_id=operation_id, created_at=utc_now())
@@ -3453,6 +3494,7 @@ class SQLiteIdentityStore:
         if person_status and person_status not in {"PRESENT", "MENTIONED", "BOTH"}:
             raise ValueError("Unknown Person Event status")
         with self._connect() as conn:
+            conn.execute("BEGIN")
             requested = {
                 name: _resolve_canonical_person_id(conn, value) if value else ""
                 for name, value in (
@@ -13909,6 +13951,16 @@ def _encounter_person_media(conn, observation_id, person_id):
     result = set()
     for assignment in _effective_face_assignments(conn, observation_id):
         if _resolve_canonical_person_id(conn, assignment["current_person_id"]) == person_id:
+            media = conn.execute(
+                "SELECT m.media_path FROM observation_face_assignments a "
+                "JOIN photo_review_faces f ON f.review_id = a.review_id AND f.face_id = a.face_id "
+                "JOIN observation_media m ON m.observation_id = a.observation_id "
+                "AND m.media_id = json_extract(f.recognition_detail, '$.encounter_media_id') "
+                "WHERE a.assignment_id = ?", (assignment["assignment_id"],),
+            ).fetchone()
+            if media and media[0]:
+                result.add(str(media[0]))
+                continue
             row = conn.execute("SELECT source_image FROM embeddings WHERE embedding_id = ?", (assignment["embedding_id"],)).fetchone()
             if row and row[0]:
                 result.add(str(row[0]))
@@ -14755,8 +14807,9 @@ def _preview_identity_merge(
             event = _require_observation(conn, str(relation["observation_id"]))
             occasion = json.loads(event["context"] or "{}").get("occasion") or "Unnamed Event"
             caption = f"{occasion}, {str(event['observed_at'] or 'Date unknown')[:10]}, {event['location'] or 'Location unknown'}"
-            raise ValueError(
-                f"Merge would collapse distinct Encounter Relation decisions in Encounter {relation['observation_id']} ({caption}); find it in Global Events and correct Relations before merging"
+            raise EncounterRelationConflict(
+                f"Merge would collapse distinct Encounter Relation decisions in Encounter {relation['observation_id']} ({caption}); find it in Global Events and correct Relations before merging",
+                str(relation["observation_id"]),
             )
         relation_pairs[key] = str(relation["disposition"])
     conflicts = _proposed_merge_conflicts(conn, source_row, target_row)

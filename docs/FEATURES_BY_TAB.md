@@ -43,6 +43,14 @@ Person Profile sub-tabs are:
 
 Archive, tombstone delete, and merge retain raw historical IDs; effective reads resolve the canonical survivor. Access to reads uses `view`; create/edit/Add Face uses `add`; destructive lifecycle actions use `destroy` where exposed. Historical summary reads now include named tombstones; deleted identities remain inactive and unavailable to active selection/recognition.
 
+### Profile surfaces and actions (implemented now)
+
+Photos distinguishes reference-face enrollment from accepted Encounter photos; it uses managed references and unique image tiles, not copied assets. A reused embedding does not substitute its original reference photo for the accepted Encounter photo. Read uses `view`; Add Face uses `add`; Move Face/delete use `destroy`. Face origin is displayed once with understandable labels. Mention-only Events supply no observed photos.
+
+Events answers where the Person is PRESENT, MENTIONED or BOTH and opens the shared Encounter detail. Sightings answers confirmed participation and Person-specific Sighting Notes, excluding mention-only history. Both are newest-first backend reads under `view`; they change no authority. Search/date/location/context/status filters belong to the existing Events query.
+
+Associations explains independent evidence and opens Person Graph. Add Association chooses a distinct active Person and creates one standing manual assertion under `add`; another request for the same active canonical pair reuses it. Remove manual association uses `add` and retires only that assertion. Encounter/note evidence can keep the relationship visible. A blocked identity merge offers Open conflicting Encounter, where `destroy` permits explicit Relation correction before retry.
+
 ## Events (`encounters`)
 
 **Meaning and purpose:** read finalized real-world occurrences, distinct from the technical Activity log. **Implemented:** newest-first bounded pages; occasion, date/range, location, context, participant, and mentioned-Person filters; Event detail with participants, all supporting media, Event Note selected IDs, and Sighting Notes. A selected Event Note ID is structured `Encounter → Person` mention provenance. It is searchable in Events and Person Profile Events, but does not imply attendance or produce Person relationship evidence. Literal unselected `@Name` is inert. An Event with unknown legacy metadata remains unknown. Detail includes explicit Relations, support and bounded human-readable correction history. Attach Media (`add`) reuses Review Photos, skips duplicate finalized media and keeps the same occurrence. Correct metadata/selected mentions, reassign/remove/add participants and revise Relations require `destroy`. Changed Encounters require reload; competing attachment drafts must finish or be discarded. Encounter Split/Merge remains deferred.
@@ -59,6 +67,12 @@ Archive, tombstone delete, and merge retain raw historical IDs; effective reads 
 
 | Term | Meaning and boundary |
 | --- | --- |
+| Attach Media | Review additional photographs as evidence of the existing Encounter. Requires `add`; finalization preserves the occurrence ID and does not increment recurrence. |
+| Correct Encounter | Revise occurrence metadata and selected Event Note IDs; requires `destroy`. Original values remain history. |
+| Participant Correction | Reassign, remove or add effective attendance under `destroy`. Original assignments remain; newly affected pairs require explicit Relations. |
+| Relation Correction | Deliberately revise INCLUDE/EXCLUDE under `destroy`; evidence and graph update atomically without changing attendance. |
+| Manual Association | Standing independent Person↔Person assertion; create/retire requires `add`, not merely view access. It is neither attendance nor a note reference. |
+| Historical / effective value | Originally saved or earlier revision / current interpretation after explicit corrections and canonical resolution. |
 | Person / canonical Person | Stable raw identity / effective merged survivor. Merge retains raw history. |
 | Encounter / Sighting | Finalized observation / one effective participant in it. Media count is not Encounter recurrence. |
 | `EVENT_NOTE` / `SIGHTING_NOTE` / `PERSON_NOTE` | Encounter context / Person in one Encounter / general editable Person information. All support selected-ID mentions, but only Person-owned Sighting/Person Notes produce Person→Person `NOTE_REFERENCE`. |

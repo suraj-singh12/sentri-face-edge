@@ -1025,6 +1025,7 @@ function PeopleGalleryView({
   const [editOpen, setEditOpen] = useState(false);
   const [notesEditOpen, setNotesEditOpen] = useState(false);
   const [managementDialog, setManagementDialog] = useState(null);
+  const [managementConflict, setManagementConflict] = useState(null);
   const [targetPersonId, setTargetPersonId] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [profileDeleteConfirmation, setProfileDeleteConfirmation] = useState("");
@@ -1081,6 +1082,7 @@ function PeopleGalleryView({
     setNotesEditOpen(false);
     setNotePlaceholderOpen(false);
     setManagementDialog(null);
+    setManagementConflict(null);
     setTargetPersonId("");
     setProfileDeleteConfirmation("");
     setSelectedNoteMentionIds(profileNote.mentioned_person_ids || []);
@@ -1190,12 +1192,16 @@ function PeopleGalleryView({
     }));
   const runManagement = async (action) => {
     if (actionBusy) return;
+    setManagementConflict(null);
     setActionBusy(true);
     try {
       await action();
       setManagementDialog(null);
       setTargetPersonId("");
     } catch (error) {
+      if (error.code === "encounter_relation_conflict" && error.payload?.observation_id) {
+        setManagementConflict(error.payload.observation_id);
+      }
       console.error(error);
     } finally {
       setActionBusy(false);
@@ -1620,6 +1626,10 @@ function PeopleGalleryView({
         centered
       >
         <Stack>
+          {managementConflict && <Box>
+            <Text size="sm" c="red" role="alert">This merge would combine contradictory Encounter Relations. Correct the affected Encounter before retrying.</Text>
+            <Button mt="xs" variant="light" onClick={() => { setManagementDialog(null); onOpenEncounter?.(managementConflict); }}>Open conflicting Encounter</Button>
+          </Box>}
           <Text size="sm">
             <strong>{payload.person.name}</strong> will resolve to the selected person. Photos, sightings, notes, and other history keep their original provenance.
           </Text>
@@ -1779,8 +1789,8 @@ function PeopleProfilePhotos({
       <Grid.Col span={{ base: 12, lg: 8 }}>
         <Group justify="space-between" mb="sm">
           <Box>
-            <Text size="sm" fw={700}>All Faces ({records.length})</Text>
-            <Text size="xs" c="dimmed">Select a face to set it as the profile photo, move it, or delete it.</Text>
+            <Text size="sm" fw={700}>Photos ({records.length})</Text>
+            <Text size="xs" c="dimmed">Reference faces and Encounter photos where this Person was observed. Select a photo to inspect its origin; enrolled faces can be managed below.</Text>
           </Box>
         </Group>
         <Group gap="sm" mb="md" className="people-profile-thumb-row">
@@ -1897,6 +1907,7 @@ function PeopleProfileAssociations({ person, people = [], canEdit, associations,
             Open Person Graph
           </Button>
         </Group>
+        <Text size="xs" c="dimmed" mb="sm">Removing a manual assertion preserves Encounter and note evidence. The relationship may remain visible.</Text>
         <Stack gap="xs">
           {associations.length ? associations.map((association) => {
             const associationHistorical = !personAllows(association.person, "OPEN");
@@ -1918,9 +1929,9 @@ function PeopleProfileAssociations({ person, people = [], canEdit, associations,
                 }
               }}
             >
-              <Group justify="space-between" wrap="nowrap">
+              <Group justify="space-between" wrap="wrap">
                 <AssociationIdentity person={association.person} />
-                <Group gap="xs" wrap="nowrap">
+                <Group gap="xs" wrap="wrap">
                   <Badge
                     variant="light"
                     color={association.evidence_type_counts?.NOTE_REFERENCE ? "violet" : "teal"}

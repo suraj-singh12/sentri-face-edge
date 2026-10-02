@@ -5,6 +5,14 @@ class SentriFaceError(Exception):
     """User-facing application error."""
 
 
+class EncounterRelationConflict(ValueError):
+    """A merge requires explicit correction of an existing Encounter's Relations."""
+
+    def __init__(self, message: str, observation_id: str) -> None:
+        super().__init__(message)
+        self.observation_id = observation_id
+
+
 class InputImageError(SentriFaceError):
     """The input image could not be read or processed."""
 

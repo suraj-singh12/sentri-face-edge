@@ -66,6 +66,9 @@ class EncounterManagementApiTest(unittest.TestCase):
                 status, manual = request('POST', '/api/person-association', 'operator', association)
                 self.assertEqual(status, 200, manual)
                 self.assertEqual(request('POST', '/api/person-association', 'operator', association)[1], manual)
+                for role in ('viewer', 'technician'):
+                    self.assertEqual(request('POST', '/api/person-association-remove', role,
+                        {'evidence_id': manual['evidence_id'], 'operation_id': str(uuid.uuid4())})[0], 403)
                 store.create_note(a.person_id, 'Remember @Bob', str(uuid.uuid4()), mentioned_person_ids=[b.person_id])
                 store.soft_delete_person(b.person_id, str(uuid.uuid4()))
                 for path in ('/api/persons', '/api/encounters', f'/api/encounter?observation_id={oid}',
@@ -80,6 +83,21 @@ class EncounterManagementApiTest(unittest.TestCase):
                 removed = request('POST', '/api/person-association-remove', 'operator', {'evidence_id': manual['evidence_id'], 'operation_id': str(uuid.uuid4())})
                 self.assertEqual(removed[0], 200, removed)
                 self.assertTrue(any('CO_OBSERVED' in item.evidence_types for item in store.get_person_neighbors(a.person_id)))
+                c = store.create_person('Charlie')
+                detail = request('GET', f'/api/encounter?observation_id={oid}')[1]
+                status, added = request('POST', '/api/encounter-correct', 'custodian', {
+                    'observation_id': oid, 'operation_id': str(uuid.uuid4()), 'expected_revision': detail['revision'],
+                    'participant_correction': {'action': 'ADD', 'person_id': c.person_id},
+                    'relations': [
+                        {'first_person_id': a.person_id, 'second_person_id': c.person_id, 'disposition': 'INCLUDE'},
+                        {'first_person_id': b.person_id, 'second_person_id': c.person_id, 'disposition': 'EXCLUDE'},
+                    ]})
+                self.assertEqual(status, 200, added)
+                status, conflict = request('POST', '/api/person-merge-preview', 'custodian',
+                    {'source_person_id': c.person_id, 'target_person_id': a.person_id})
+                self.assertEqual(status, 409, conflict)
+                self.assertEqual(conflict['code'], 'encounter_relation_conflict')
+                self.assertEqual(conflict['observation_id'], oid)
                 report = ReadOnlyIntegrityChecker(store.db_path, database_key=store.database_key).run()
                 self.assertEqual(report.findings, ())
             finally:

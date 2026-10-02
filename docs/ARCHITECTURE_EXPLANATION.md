@@ -8,8 +8,22 @@ Attach Media needs a durable target and a stale-state precondition, which ordina
 
 For example, Alice and Bob attend one meeting. A later image of Alice, Bob and Charlie attaches to that meeting. Alice–Bob remains settled; Alice–Charlie and Bob–Charlie need explicit choices. The image improves Alice–Bob's support but does not make a second meeting. Removing Bob from accepted participation retires only relevant Encounter evidence; an independent Person Note reference or Manual Association can still support the relationship. Mentioning Bob in Event Notes remains searchable history without claiming attendance.
 
-Merge preview refuses contradictory INCLUDE/EXCLUDE collapse and names the affected Encounter. Correct its Relations deliberately, then retry the merge; equal pairs and self-pairs are normalized within the merge transaction. Such authority-changing merges remain outside the frozen safe-revert subset; no recovery whitelist is expanded. Profile Photos deduplicates physical media while retaining face count/origin; Events and Sightings are separate effective reads. Historical summary resolution permits tombstone reads while active selectors still exclude them. All mutation authority stays behind storage/FaceEngine and existing authenticated capabilities. World scoring and cluster algorithms remain unchanged. Older dated read-only Events descriptions below document the preceding checkpoint.
+Merge preview refuses contradictory INCLUDE/EXCLUDE collapse, names the affected Encounter, and returns its ID in a typed conflict for the UI's Open conflicting Encounter action. Correct its Relations deliberately, then retry the merge; equal pairs and self-pairs are normalized within the merge transaction. Such authority-changing merges remain outside the frozen safe-revert subset; no recovery whitelist is expanded. Profile Photos deduplicates physical media while retaining face count/origin; Events and Sightings are separate effective reads. Historical summary resolution permits tombstone reads while active selectors still exclude them. All mutation authority stays behind storage/FaceEngine and existing authenticated capabilities. World scoring and cluster algorithms remain unchanged. Older dated read-only Events descriptions below document the preceding checkpoint.
 
+
+### Worked Encounter amendment and correction: E17
+
+**Implemented now.** E17 initially records A and B at one Delhi meeting, supported by P1 and P2. A–B is INCLUDE with SAME_ENCOUNTER_ONLY support because the accepted faces are in separate photographs.
+
+The operator attaches P3, which shows A, B and C. The existing content-addressed managed image is reused if already stored by standalone Add Face; otherwise the existing compression/storage policy stores it once. If P3 already belongs to E17, the UI explains that it is already attached. If it belongs to another finalized Encounter, it is excluded with an explicit conflict; it cannot become evidence of another independent occurrence. The accepted face decision records P3's media ID, even if a matching embedding vector is reused from a reference image.
+
+The operator resolves C and explicitly chooses A–C INCLUDE and B–C EXCLUDE. A–B remains INCLUDE without another decision. Its support improves to SHARED_FRAME. E17 still contributes one independent occurrence to A–B; three photographs are not three meetings.
+
+Later B is found to be D. Correct Participants reassigns B to D using face-assignment and ownership corrections plus forward participant revisions. Raw B decisions and all prior Relation revisions remain historical. Current participants are A, D and C; the corresponding pair decisions are revised to A–D INCLUDE and D–C EXCLUDE while A–C remains INCLUDE. A contradictory pair collapse refuses and requires explicit Relation correction first. Evidence and graph changes commit with this correction's journal in one transaction.
+
+Changing Delhi to Agra appends metadata revision history; current Events/Sightings/World explanations read Agra while the original Delhi value remains inspectable. Removing C retires E17-backed evidence involving C without removing independent Event Note mentions, Person Note references or Manual Associations. Rebuild cannot resurrect a retired INCLUDE. World vNext recurrence tiers, cooling and clustering remain future/locked; Encounter Split/Merge remains deferred.
+
+The media field is necessary because an embedding's original image describes enrollment provenance, which cannot safely prove the source photograph of a later accepted face. Existing completed face-decision JSON is already immutable and tied to the assignment. Extending it with a stable media ID avoids a new table, service, media copy or schema version.
 
 ## Purpose and scope
 
@@ -29,7 +43,7 @@ Batch 2 keeps those boundaries while moving Queue from immediate group confirmat
 
 The post-Batch-2 Queue pass uses the same draft records and phase boundary. Media membership reads mark and automatically exclude each photo whose retained bytes already belong to a finalized observation, while valid siblings proceed. The plan accepts only selected staged media and splits an existing scan identity group only when its faces cross confirmed Encounter boundaries. Scan-time groups are not shown before that confirmation. Existing group status records temporary Skip deferral; no face decision is saved for Skip, all-deferred drafts are requeued, and the store rejects `SKIP` as a final decision in planned Encounter reviews. Final `EXCLUDE` stays separate. The UI uses folder paths already preserved by local upload staging as optional grouping hints and still requires confirmation. Existing detector face boxes, authenticated media reads, and the Person Graph evidence projection supply the current-face highlight and association details. Distinct Encounter counts deduplicate observation IDs after canonical endpoint resolution; directed note counts come from active `NOTE_REFERENCE` rows. No new table, transaction framework, media path, or World score was added.
 
-### Current pre-Batch-2 integration
+### Historical Encounter foundation and pre-Batch-3 read-only checkpoint
 
 The 2026-10-01 correction extends these existing boundaries rather than adding another index or duplicate system. Accepted faces of both draft-created and committed Persons join committed embeddings in a transient active-Encounter candidate view. Canonical ownership is resolved first; GOOD preference/fallback is evaluated over that combined Person set. A proof-only-only Person is excluded from normal recognition but may appear in the shared exceptional pre-creation check, including a draft-only Person. Draft identity reuse retains the same new-person key. Selected-face draft writes use one SQLite transaction through the existing face-decision implementation. Schema v31 adds only an exclusion field to scan media membership because an omitted local UI selection cannot survive restart. Grouping locks media selection; authoritative history and physical objects remain intact. The page refreshes group IDs/membership after regrouping instead of acting on a scan snapshot. Peek In renders an existing crop or stored box coordinates transiently without detection, enrollment or media writes.
 
@@ -37,7 +51,7 @@ Browse preserves the existing ranked biometric list and percentages by default. 
 
 Recognition's preference is **Prefer quality photos for recognition**. For a Person with GOOD references, ON uses GOOD and OFF adds POOR_ACCEPTED. Where GOOD is absent, an explicitly accepted POOR_ACCEPTED reference is a fallback under either preference. PROOF_ONLY never enters normal index search, including stale-index defensive resolution and rebuild. A distinct check before new Person creation compares only otherwise unsearchable proof-only-only profiles; it presents possible existing identity or explicit create-anyway. It cannot itself create graph authority. The transaction rechecks the choice before Person creation, so bypassing the UI cannot silently create a likely duplicate.
 
-The bounded Events read API projects only finalized observations. It uses current correction/canonical participant resolution and separately resolves Event Note selected IDs; it never turns a mention into participation. Global Events is read-only with server-side filters and keyset pages; Person Profile Events reuses the same query and reports PRESENT, MENTIONED or BOTH. Mention-only history exposes no claimed sighting media. GET requires existing `view` permission and no Event mutation route exists. World remains Person-to-Person intelligence; this new read projection and Event Note mentions contribute no evidence, graph edge, recurrence or cluster membership. `FEATURES_BY_TAB.md` owns the complete current UI and permission map.
+The bounded Events read API projects only finalized observations. It uses current correction/canonical participant resolution and separately resolves Event Note selected IDs; it never turns a mention into participation. At that historical checkpoint Global Events was read-only with server-side filters and keyset pages; Person Profile Events reuses the same query and reports PRESENT, MENTIONED or BOTH. Mention-only history exposes no claimed sighting media. GET required existing `view` permission; Batch 3 now adds the capability-gated management routes described above. World remains Person-to-Person intelligence; this new read projection and Event Note mentions contribute no evidence, graph edge, recurrence or cluster membership. `FEATURES_BY_TAB.md` owns the complete current UI and permission map.
 
 **Current World:** evidence-count relationship strength and deterministic connected components of qualifying evidence relationships. One co-observation evidence row per finalized event/pair is already inserted by review finalization, but current analytics do not yet have a distinct-Encounter recurrence tier or frame-support breakdown. **Locked future direction:** count distinct `(Encounter ID, effective canonical Person pair)` after correction/merge, so many media and raw pre-merge pairs in one Encounter count once. Split support into shared-frame and same-Encounter/no-shared-frame; those counts must add to independent Encounters. Public/group context explains the distribution, without undocumented weighting. Recurrence asks repeated independent co-presence; activity asks how recent/ongoing it is; evidence types describe why an edge exists. Future group-forming eligibility must avoid a weak bridge welding two recurring groups, but no threshold is chosen now. Do not introduce arbitrary place/mention bonuses or public-event multipliers without explicit design. Events are not World nodes.
 
@@ -129,7 +143,7 @@ All later architectural work depended on changing the schema of databases that m
 
 ### Design decision
 
-The schema uses a contiguous, explicit migration registry through schema version 28. Each supported version advances one version at a time, old databases receive a verified pre-migration backup, and the migration chain runs inside an immediate SQLite transaction. A database newer than the application is rejected rather than guessed at.
+The schema uses a contiguous, explicit migration registry through current schema version 32 (the frozen P11 release checkpoint was v28). Each supported version advances one version at a time, old databases receive a verified pre-migration backup, and the migration chain runs inside an immediate SQLite transaction. A database newer than the application is rejected rather than guessed at.
 
 This was chosen instead of broad schema replacement or best-effort migration. Additive versioned migrations preserve compatibility records and make every supported upgrade path testable. A destructive “recreate current tables and copy what fits” approach was rejected because it could lose legacy history precisely when new authority rules are being introduced.
 
@@ -764,7 +778,7 @@ Created from one exact active selected mention occurrence in a Person or Sightin
 
 Represents an operator-created authoritative assertion with `MANUAL_ASSERTION` provenance. Its evidence type, schema constraints, directionality handling, projection behavior, and tests are present.
 
-**Production workflow boundary:** the current code proves storage/domain semantics and graph-projection support. No verified normalized production-facing service/API or UI workflow for creating or editing manual assertions is claimed; that workflow must be verified or added before the UI presents manual associations as fully operator-editable.
+**Implemented operator workflow:** Person → Associations exposes normalized create/retire commands through FaceEngine and the authenticated API, both requiring `add`. Separate create requests for the same active undirected canonical pair reuse the assertion; retirement deactivates that assertion only. Other Encounter/note evidence remains. Graph and hover summaries read the same ledger.
 
 ### How projection works internally
 
@@ -1012,7 +1026,7 @@ The five semantic detail levels now support the complete transition. `EVIDENCE` 
 
 ### Authoritative entities versus derived objects
 
-World topology may include terminal canonical people and focused finalized events. Everything else has a narrower role:
+World topology contains terminal canonical people only. Focused finalized events are history/evidence drilldowns, not graph nodes. Everything else has a narrower role:
 
 - **Person:** current canonical projection of an authoritative person, with historical IDs retained.
 - **Event:** authoritative finalized observation, never a draft or proposal.
@@ -1023,7 +1037,7 @@ World topology may include terminal canonical people and focused finalized event
 - **Media:** reference/provenance, never embedded bytes in World JSON.
 - **Location:** filter/facet metadata because current locations are free text, not normalized place entities.
 
-The intended edge taxonomy is `PERSON_RELATIONSHIP`, `PARTICIPATED_IN`, and explicitly typed `AGGREGATED_RELATIONSHIP`. Event-to-event edges are excluded because shared time, place, or participant is not an authoritative event-link assertion. Cluster-to-cluster edges, when implemented, are aggregate summaries and do not claim every member is related.
+Current topology edges are Person relationships. Event participation is drilldown information, not a new World edge; aggregate-summary expansion remains governed by the frozen read contract. Event-to-event edges are excluded because shared time, place, or participant is not an authoritative event-link assertion. Cluster-to-cluster edges, when implemented, are aggregate summaries and do not claim every member is related.
 
 ### Clusters and explanations
 
@@ -1382,7 +1396,7 @@ The architecture deliberately keeps three categories separate:
 
 Compatibility data remains valuable, but value does not confer authority. Deleting it casually would lose history; consulting it for current truth would reintroduce ambiguity.
 
-Several capabilities are intentionally future work:
+The implemented foundations and remaining future boundaries are distinct:
 
 - P10-F World UI is complete and frozen after the final post-fix integration/runtime gate; P10-FR-01 through P10-FR-04 are fixed.
 - P11-A provides the fixed authority/invariant model and explicit query-only checker. P11-A1 corrected occurrence history: active rows form the current occurrence layer, while retired same-note occurrences remain historical even when their person appears later. P11-C2A corrected the dependent evidence/graph history rule: retired evidence revisions remain valid with complete deactivation provenance, current evidence cardinality is separate, and only active evidence projects. Zero-row missing occurrence groups remain outside coverage. P11-B provides deterministic graph projection rebuild. P11-C is complete with the frozen R01/R02 whitelist; R02 implements every refrozen append/retire case without history rewrite. P11-D is complete with the single guarded safe-merge subset. P11-E is complete with the administrator-only, token-bound, manually invoked recovery API/UI; the whitelist and authority model are unchanged.

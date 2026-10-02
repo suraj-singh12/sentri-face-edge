@@ -53,6 +53,7 @@ from sentriface.cli import (
 from sentriface.config import HardwareProfile, RuntimeConfig, config_for_hardware
 from sentriface.engine import DomainWorkflowUnavailableError, IMAGE_EXTENSIONS, FaceEngine
 from sentriface.errors import (
+    EncounterRelationConflict,
     GraphProjectionPostcheckError,
     GraphProjectionRebuildRefused,
     InputImageError,
@@ -3225,6 +3226,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if validation_error:
             payload["code"] = "invalid_input"
             payload["reason"] = getattr(exc, "reason", "invalid_request")
+        if isinstance(exc, EncounterRelationConflict):
+            status = HTTPStatus.CONFLICT
+            payload["code"] = "encounter_relation_conflict"
+            payload["observation_id"] = exc.observation_id
         if recovery_refusal:
             stale_terms = ("stale", "fingerprint", "changed", "token")
             payload["code"] = (
