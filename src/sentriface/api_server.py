@@ -78,6 +78,7 @@ from sentriface.licensing.authority import packaged_windows_license_enforced
 from sentriface.paths import default_data_dir, default_log_dir
 from sentriface.recovery import RecoveryError, RecoveryService, available_recovery_destinations, recover_master_key
 from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key, validate_recovered_master_key
+from sentriface.secure_storage import load_linux_source_master_key
 from sentriface.secure_files import read_protected_bytes, write_protected_bytes
 from sentriface.offline_guard import install_offline_guard, offline_guard_installed, require_local_path
 from sentriface.os_network_policy import (
@@ -410,6 +411,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         super().__init__(server_address, SentriFaceApiHandler)
         self.engine = engine
         self.config = config
+        self.key_protection = "operating-system-vault" if config.storage_key else "none"
         self.hardware_profile = hardware_profile
         self.runtime = runtime
         self.model_ready = model_ready
@@ -2973,7 +2975,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 "managed_files_encrypted": bool(config.storage_key),
                 "managed_backups_encrypted": bool(config.storage_key),
                 "persistent_logs_encrypted": bool(config.storage_key),
-                "key_protection": "operating-system-vault" if config.storage_key else "none",
+                "key_protection": self.server.key_protection,
             },
             "recovery": self.server.recovery.status(),
             "recovery_readiness": self.server.recovery_readiness(),
@@ -3290,6 +3292,7 @@ def create_server(
     debug: bool = False,
     os_network_policy: OsNetworkPolicyStatus | None = None,
     instance_lock: InstanceLock | None = None,
+    linux_source_onnx: bool = False,
 ) -> SentriFaceApiServer:
     install_offline_guard()
     normalized_host = host.strip().casefold()
@@ -3304,6 +3307,8 @@ def create_server(
             raise ValueError("Server may bind only to an IPv4 loopback address")
     if runtime not in {"dev", "onnx"}:
         raise ValueError("Runtime must be dev or onnx")
+    if linux_source_onnx:
+        _startup_network_policy(runtime, allow_unpacked_source=True)
     data_dir = require_local_path(data_dir or default_data_dir()).expanduser().absolute()
     owned_lock = instance_lock is None
     runtime_lock = instance_lock or InstanceLock(data_dir).acquire()
@@ -3328,7 +3333,11 @@ def create_server(
             ),
         )
         cleanup_managed_temporaries((data_dir, config.backup_dir, data_dir / "models"))
-        config = replace(config, storage_key=load_or_create_master_key(data_dir))
+        config = replace(config, storage_key=(
+            load_linux_source_master_key(data_dir, explicit_source_onnx=True)
+            if linux_source_onnx and runtime == "onnx"
+            else load_or_create_master_key(data_dir)
+        ))
         protect_existing_managed_data(data_dir, config.storage_key)
         authority = ModelBundleAuthority(data_dir / "models")
         authority.cleanup_stale_uploads()
@@ -3365,6 +3374,8 @@ def create_server(
             model_bundles=authority,
             instance_lock=runtime_lock,
         )
+        if linux_source_onnx:
+            server.key_protection = "linux-source-development-file"
         server.log_event("startup", runtime=runtime, port=server.server_port)
         if not model_ready:
             server.log_event("model-setup-required", error=model_error)
@@ -3427,7 +3438,7 @@ def main() -> int:
         "--allow-unpackaged-source-onnx",
         action="store_true",
         help=(
-            "Allow real ONNX inference from a Windows or macOS Git checkout "
+            "Allow real ONNX inference from a Windows, macOS, or Linux Git checkout "
             "with the application socket guard but without the packaged OS-policy "
             "boundary; unavailable in packaged builds"
         ),
@@ -3516,7 +3527,11 @@ def main() -> int:
             recovered_key = recover_master_key(args.recover_kit, getpass("SentriFace recovery code: "))
             validate_recovered_master_key(args.data_dir, recovered_key)
             store_master_key(args.data_dir, recovered_key)
-        storage_key = load_or_create_master_key(args.data_dir)
+        linux_source_onnx = sys.platform == "linux" and args.allow_unpackaged_source_onnx
+        storage_key = (
+            load_linux_source_master_key(args.data_dir, explicit_source_onnx=True)
+            if linux_source_onnx else load_or_create_master_key(args.data_dir)
+        )
         setup_logging(
             debug=debug_enabled,
             log_dir=default_log_dir(args.data_dir),
@@ -3531,6 +3546,7 @@ def main() -> int:
             debug=debug_enabled,
             os_network_policy=os_network_policy,
             instance_lock=runtime_lock,
+            linux_source_onnx=linux_source_onnx,
         )
     except ModelSetupError as exc:
         if runtime_lock is not None and server is None:
@@ -3591,9 +3607,13 @@ def _startup_network_policy(
         return None
     if not allow_unpacked_source:
         return require_os_network_policy()
-    if sys.platform not in {"darwin", "win32"}:
+    if sys.platform not in {"darwin", "win32", "linux"}:
         raise ValueError(
-            "--allow-unpackaged-source-onnx is available only on Windows and macOS"
+            "--allow-unpackaged-source-onnx is available only on Windows, macOS, and Linux"
+        )
+    if sys.platform == "linux" and "__compiled__" in globals():
+        raise ValueError(
+            "--allow-unpackaged-source-onnx requires an unpackaged Git checkout"
         )
     checkout = source_root or Path(__file__).resolve().parents[2]
     if getattr(sys, "frozen", False) or not (checkout / ".git").exists():
@@ -5296,7 +5316,7 @@ def _support_diagnostic_report(server: SentriFaceApiServer) -> dict[str, Any]:
         "managed_files_encrypted": bool(config.storage_key),
         "managed_backups_encrypted": bool(config.storage_key),
         "persistent_logs_encrypted": bool(config.storage_key),
-        "key_protection": "operating-system-vault" if config.storage_key else "none",
+        "key_protection": getattr(server, "key_protection", "operating-system-vault" if config.storage_key else "none"),
     }
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),

@@ -9,7 +9,12 @@ import sys
 from pathlib import Path
 
 
-def reset(data_dir: Path) -> None:
+def reset(data_dir: Path, *, linux_source: bool = False) -> None:
+    if linux_source and (
+        sys.platform != "linux" or getattr(sys, "frozen", False)
+        or "__compiled__" in globals() or not (Path(__file__).resolve().parents[1] / ".git").exists()
+    ):
+        raise ValueError("Linux source reset requires an unpackaged checkout")
     home = Path.home()
     expected = home / "Library" / "Application Support" / "SentriFace-Dev"
     production = expected.with_name("SentriFace")
@@ -41,6 +46,10 @@ def reset(data_dir: Path) -> None:
     if data_dir.exists():
         shutil.rmtree(data_dir)
 
+    # Linux source custody lives inside the removed authority, not the OS vault.
+    if linux_source:
+        return
+
     # Remove vault entries only after the database is gone. A filesystem
     # failure must never strand an existing encrypted database without its key.
     # If vault cleanup fails, rerunning reset is safe even when files are gone.
@@ -60,4 +69,4 @@ def reset(data_dir: Path) -> None:
 
 
 if __name__ == "__main__":
-    reset(Path(sys.argv[1]))
+    reset(Path(sys.argv[1]), linux_source="--linux-source" in sys.argv[2:])

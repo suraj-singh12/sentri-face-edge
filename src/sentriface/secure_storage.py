@@ -5,6 +5,8 @@ import hashlib
 import os
 import secrets
 import sqlite3
+import stat
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -13,6 +15,8 @@ from typing import Any
 
 KEYRING_SERVICE = "SentriFace Edge storage"
 SQLITE_HEADER = b"SQLite format 3\x00"
+LINUX_SOURCE_KEY_NAME = ".sentriface-linux-source-key"
+_LINUX_SOURCE_KEY_MAGIC = b"SENTRIFACE-LINUX-SOURCE-KEY-v1\n"
 class _DatabaseLockEntry:
     """Reference-count one serialized SQLCipher path without retaining dead paths."""
 
@@ -27,6 +31,101 @@ _DATABASE_LOCKS_GUARD = threading.Lock()
 
 class StorageSecurityError(RuntimeError):
     """Raised when encrypted storage cannot be opened without weakening security."""
+
+
+def load_linux_source_master_key(data_dir: Path, *, explicit_source_onnx: bool) -> bytes:
+    """Persistent local custody only for explicitly admitted Linux source ONNX."""
+    checkout = Path(__file__).resolve().parents[2]
+    if (
+        sys.platform != "linux" or not explicit_source_onnx
+        or getattr(sys, "frozen", False) or "__compiled__" in globals()
+        or not (checkout / ".git").exists()
+    ):
+        raise StorageSecurityError("Linux source key custody requires explicit unpackaged source ONNX")
+    root = data_dir.expanduser().absolute()
+    production = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "sentriface"
+    if root.resolve() in {production.resolve(), (Path.home() / "Library" / "Application Support" / "SentriFace").resolve()}:
+        raise StorageSecurityError("Linux source key custody cannot use installed-product authority")
+    if any(path.is_symlink() for path in (root, *root.parents)):
+        raise StorageSecurityError("Linux source key authority cannot contain symbolic links")
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    root_info = root.stat()
+    if root_info.st_uid != os.getuid() or root_info.st_mode & 0o022:
+        raise StorageSecurityError("Linux source key authority must be owned and not writable by other users")
+    path = root / LINUX_SOURCE_KEY_NAME
+    binding = hashlib.sha256(os.fsencode(root.resolve())).digest()
+    prefix = _LINUX_SOURCE_KEY_MAGIC + binding
+    try:
+        if not path.exists() and not path.is_symlink():
+            # A lost key is not a fresh authority. Never replace it over history.
+            from sentriface.secure_files import is_protected_file
+            if any(
+                item.is_symlink() or (
+                    item.is_file() and item.stat().st_size and (
+                        item.suffix in {".db", ".sflog"} or is_protected_file(item)
+                    )
+                ) for item in root.rglob("*")
+            ):
+                raise StorageSecurityError("Linux source key is missing for existing authority")
+            key = secrets.token_bytes(32)
+            try:
+                descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            except FileExistsError:
+                pass
+            else:
+                with os.fdopen(descriptor, "wb") as output:
+                    output.write(prefix + key)
+                    output.flush()
+                    os.fsync(output.fileno())
+                directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(directory)
+                finally:
+                    os.close(directory)
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as source:
+            info = os.fstat(source.fileno())
+            if (
+                not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077 or info.st_nlink != 1
+            ):
+                raise StorageSecurityError("Linux source key file permissions or ownership are unsafe")
+            record = source.read(len(prefix) + 33)
+        if len(record) != len(prefix) + 32 or not secrets.compare_digest(record[:len(prefix)], prefix):
+            raise StorageSecurityError("Linux source key record is invalid or belongs to another authority")
+        key = record[len(prefix):]
+        validate_recovered_master_key(root, key)
+        for database in root.rglob("*.db"):
+            if database_is_encrypted(database):
+                _verify_encrypted_database(database, key)
+        _validate_source_log_keys(root, key)
+        return key
+    except StorageSecurityError:
+        raise
+    except Exception:
+        raise StorageSecurityError("Linux source key custody could not be opened safely") from None
+
+
+def _validate_source_log_keys(data_dir: Path, key: bytes) -> None:
+    """Avoid appending with a different key even when only encrypted logs survive."""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from sentriface.logging_config import ENCRYPTED_LOG_MAGIC
+
+    for path in data_dir.rglob("*.sflog"):
+        with path.open("rb") as source:
+            if source.read(len(ENCRYPTED_LOG_MAGIC)) != ENCRYPTED_LOG_MAGIC:
+                raise StorageSecurityError("Existing source encrypted log is invalid")
+            while nonce := source.read(12):
+                size = source.read(4)
+                if len(nonce) != 12 or len(size) != 4:
+                    raise StorageSecurityError("Existing source encrypted log is truncated")
+                length = int.from_bytes(size, "big")
+                if not 16 <= length <= 16 * 1024 * 1024:
+                    raise StorageSecurityError("Existing source encrypted log frame is invalid")
+                ciphertext = source.read(length)
+                if len(ciphertext) != length:
+                    raise StorageSecurityError("Existing source encrypted log is truncated")
+                AESGCM(key).decrypt(nonce, ciphertext, ENCRYPTED_LOG_MAGIC)
 
 
 def load_or_create_master_key(data_dir: Path) -> bytes:

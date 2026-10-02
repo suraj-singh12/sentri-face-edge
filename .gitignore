@@ -28,6 +28,7 @@ installer_output/
 *.onefile-build/
 
 # Local application and model authority
+.sentriface-linux-source-key
 data/
 logs/
 .model-cache/

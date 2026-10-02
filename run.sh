@@ -62,7 +62,11 @@ if [[ "$MODE" == "reset" ]]; then
   if [[ ! -x "$RESET_PYTHON" ]]; then
     RESET_PYTHON="$(command -v python3.12 || command -v python3.11 || command -v python3)"
   fi
-  "$RESET_PYTHON" "$PROJECT_DIR/scripts/reset_macos_dev_authority.py" "$DEV_DATA_DIR"
+  if [[ "$OSTYPE" == linux* ]]; then
+    "$RESET_PYTHON" "$PROJECT_DIR/scripts/reset_macos_dev_authority.py" "$DEV_DATA_DIR" --linux-source
+  else
+    "$RESET_PYTHON" "$PROJECT_DIR/scripts/reset_macos_dev_authority.py" "$DEV_DATA_DIR"
+  fi
   print "Removed SentriFace source-development data: $DEV_DATA_DIR"
   exit 0
 fi

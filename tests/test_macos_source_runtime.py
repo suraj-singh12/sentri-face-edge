@@ -14,10 +14,10 @@ class MacosSourceRuntimeTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires --runtime onnx"):
             _startup_network_policy("dev", allow_unpacked_source=True)
 
-    def test_override_is_macos_only(self) -> None:
+    def test_override_rejects_unsupported_platform(self) -> None:
         with (
-            patch("sentriface.api_server.sys.platform", "linux"),
-            self.assertRaisesRegex(ValueError, "only on Windows and macOS"),
+            patch("sentriface.api_server.sys.platform", "freebsd"),
+            self.assertRaisesRegex(ValueError, "only on Windows, macOS, and Linux"),
         ):
             _startup_network_policy("onnx", allow_unpacked_source=True)
 
