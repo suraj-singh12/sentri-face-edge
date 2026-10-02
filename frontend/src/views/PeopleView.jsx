@@ -99,6 +99,9 @@ export function PeopleView({
   onSave,
   onSaveNotes,
   onQueryEncounters,
+  onOpenEncounter,
+  onCreateAssociation,
+  onRetireAssociation,
   onAddPhoto,
   onFavorite,
   onSetRepresentative,
@@ -204,6 +207,9 @@ export function PeopleView({
           onSave={onSave}
           onSaveNotes={onSaveNotes}
           onQueryEncounters={onQueryEncounters}
+          onOpenEncounter={onOpenEncounter}
+          onCreateAssociation={onCreateAssociation}
+          onRetireAssociation={onRetireAssociation}
           onAddPhoto={onAddPhoto}
           onCreateIdentifiedPerson={onCreateIdentifiedPerson}
           onOpenGraph={onOpenGraph}
@@ -995,6 +1001,9 @@ function PeopleGalleryView({
   onSave,
   onSaveNotes,
   onQueryEncounters,
+  onOpenEncounter,
+  onCreateAssociation,
+  onRetireAssociation,
   onAddPhoto,
   onCreateIdentifiedPerson,
   onOpenGraph,
@@ -1391,13 +1400,13 @@ function PeopleGalleryView({
               <Select clearable label="Status" data={[{ value: "PRESENT", label: "Present" }, { value: "MENTIONED", label: "Mentioned" }, { value: "BOTH", label: "Present + Mentioned" }]} value={personEventFilters.person_status || null} onChange={(value) => setPersonEventFilters((current) => ({ ...current, person_status: value || "" }))} />
             </SimpleGrid>
             {(personEvents.events || []).map((event) => (
-              <Card key={event.observation_id} withBorder>
+              <Paper key={event.observation_id} className="encounter-list-row" component="button" onClick={() => onOpenEncounter?.(event.observation_id)} style={{ textAlign: "left" }}>
                 <Group justify="space-between"><Text fw={800}>{event.occasion || "Unnamed Event"}</Text><Badge>{event.person_status === "BOTH" ? "Present + Mentioned" : event.person_status === "PRESENT" ? "Present" : "Mentioned"}</Badge></Group>
                 <Text size="sm">{eventDateTime(event)} · {event.location || "Location unknown"} · {event.context}</Text>
                 {!!event.sighting_notes?.length && <Text size="sm">Sighting note: {event.sighting_notes.join(" · ")}</Text>}
                 {event.person_status !== "PRESENT" && event.event_notes && <Text size="sm">Event Note: {event.event_notes}</Text>}
-                {!!event.person_media?.length && <Group mt="xs">{event.person_media.map((path) => <Image key={path} src={mediaUrl(path)} alt="Person observed in this Event" w={80} h={80} fit="cover" />)}</Group>}
-              </Card>
+                <Text size="xs" c="dimmed">{event.person_media?.length || 0} observed media · {event.participant_ids?.length || 0} participants</Text>
+              </Paper>
             ))}
             {!personEvents.events?.length && <Text c="dimmed">No matching Events.</Text>}
             <Group><Button variant="default" disabled={personEventPageCursors.length < 2} onClick={() => setPersonEventPageCursors((current) => current.slice(0, -1))}>Previous</Button><Button variant="default" disabled={!personEvents.next_cursor} onClick={() => setPersonEventPageCursors((current) => [...current, personEvents.next_cursor])}>Next</Button></Group>
@@ -1406,6 +1415,10 @@ function PeopleGalleryView({
         <Tabs.Panel value="associations">
           <PeopleProfileAssociations
             person={payload.person}
+            people={people}
+            canEdit={canEdit && !archived}
+            onCreate={onCreateAssociation}
+            onRetire={onRetireAssociation}
             associations={relationships}
             onOpen={onOpen}
             onOpenGraph={onOpenGraph}
@@ -1773,7 +1786,7 @@ function PeopleProfilePhotos({
         <Group gap="sm" mb="md" className="people-profile-thumb-row">
           {records.map((record) => (
             <Card
-              key={record.embeddingId}
+              key={record.path}
               withBorder
               p={0}
               component="button"
@@ -1803,11 +1816,12 @@ function PeopleProfilePhotos({
             ["Location", photoDetail.place_seen || "-"],
             ["Quality", selectedRecord?.qualityScore == null ? "-" : `${Math.round(selectedRecord.qualityScore * 100)}%`],
             ["Embedding", selectedRecord?.embeddingId ? "Indexed" : "-"],
-            ["Face origin", selectedRecord?.faceOrigins?.map((origin) => origin.face_origin.replaceAll("_", " ")).join(", ") || "Unknown"],
+            ["Face origin", [...new Set(selectedRecord?.faceOrigins?.map((origin) => ({ ENCOUNTER: "Added from Encounter", STANDALONE_ENROLLMENT: "Added as reference face", UNKNOWN_LEGACY: "Legacy origin unknown" })[origin.face_origin] || "Legacy origin unknown") || [])].join(", ") || "Legacy origin unknown"],
+            ["Face samples", selectedRecord?.embeddingIds?.length || "Historical media"],
             ["Rank", profile.rank || "-"],
           ]} />
           {photoDetail.notes && <Text size="sm" mt="md" style={{ whiteSpace: "pre-wrap" }}><Text span fw={700}>Notes: </Text>{photoDetail.notes}</Text>}
-          {!archived && selectedRecord && (
+          {!archived && selectedRecord?.embeddingId && (
             <Stack gap="xs" mt="lg">
               <Button
                 variant="light"
@@ -1835,26 +1849,43 @@ function PeopleProfileSightings({ details, imageRecords, onSighting }) {
   return (
     <Stack mt="md" className="people-profile-list-panel">
       {details.length ? details.map((detail) => (
-        <Card key={detail.detail_id} withBorder radius="md" component="button" className="mantine-click-card people-sighting-card" onClick={() => onSighting(detail)}>
+        <Paper key={detail.detail_id} withBorder radius="sm" p="sm" component="button" className="mantine-click-card people-sighting-card" onClick={() => onSighting(detail)}>
           <Group justify="space-between" align="center" wrap="nowrap">
             <SightingSummary detail={detail} />
-            <SightingImage detail={detail} imageRecords={imageRecords} size={92} />
+            <SightingImage detail={detail} imageRecords={imageRecords} size={56} />
           </Group>
-        </Card>
+        </Paper>
       )) : <EmptyCard text="No sightings recorded yet." />}
     </Stack>
   );
 }
 
-function PeopleProfileAssociations({
-  person,
-  associations,
-  onOpen,
-  onOpenGraph,
-}) {
+function PeopleProfileAssociations({ person, people = [], canEdit, associations, onOpen, onOpenGraph, onCreate, onRetire }) {
+  const [adding, setAdding] = useState(false);
+  const [target, setTarget] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const operationRef = useRef({});
+  const create = async () => {
+    setBusy(true); setError("");
+    const key = `create:${target}`;
+    operationRef.current[key] ||= crypto.randomUUID();
+    try { await onCreate(person.person_id, target, operationRef.current[key]); setAdding(false); setTarget(null); delete operationRef.current[key]; }
+    catch (failure) { setError(failure.message); }
+    finally { setBusy(false); }
+  };
+  const retire = async (evidenceId) => {
+    setBusy(true); setError("");
+    operationRef.current[evidenceId] ||= crypto.randomUUID();
+    try { await onRetire(person.person_id, evidenceId, operationRef.current[evidenceId]); delete operationRef.current[evidenceId]; }
+    catch (failure) { setError(failure.message); }
+    finally { setBusy(false); }
+  };
   return (
     <Stack mt="md" gap="md" className="people-associations-panel">
-      <Card withBorder radius="md" className="people-profile-panel">
+      <Box>
+        {canEdit && <Button size="sm" mb="sm" onClick={() => setAdding(true)}>Add Association</Button>}
+        {error && <Text role="alert" c="red">{error}</Text>}
         <Group justify="space-between" mb="md">
           <Text fw={800}>Associated people ({associations.length})</Text>
           <Button
@@ -1872,8 +1903,6 @@ function PeopleProfileAssociations({
             return (
             <Paper
               key={association.relationship_id}
-              withBorder
-              radius="md"
               p="sm"
               component="div"
               role={associationHistorical ? undefined : "button"}
@@ -1899,13 +1928,21 @@ function PeopleProfileAssociations({
                     {association.presentation_label}
                   </Badge>
                   <Badge variant="outline" color="gray">{association.evidence_count} evidence</Badge>
+                  {canEdit && (association.manual_evidence || []).map((evidence) => <Button key={evidence.evidence_id} size="compact-xs" variant="subtle" color="red" disabled={busy} onClick={(event) => { event.stopPropagation(); retire(evidence.evidence_id); }}>Remove manual association</Button>)}
                 </Group>
               </Group>
             </Paper>
             );
           }) : <EmptyCard text="No person associations recorded yet." />}
         </Stack>
-      </Card>
+      </Box>
+      <Modal opened={adding} onClose={() => !busy && setAdding(false)} title="Add Association" centered>
+        <Stack><Text size="sm" c="dimmed">Record an operator assertion. It creates Manual Association evidence independently of Encounters and selected note mentions.</Text>
+          <Select searchable label="Person" value={target} onChange={setTarget} data={people.filter((p) => p.lifecycle_status === "ACTIVE" && p.person_id !== person.person_id).map((p) => ({ value: p.person_id, label: p.name }))} />
+          {error && <Text c="red" role="alert">{error}</Text>}
+          <Group justify="flex-end"><Button variant="default" disabled={busy} onClick={() => setAdding(false)}>Cancel</Button><Button loading={busy} disabled={!target} onClick={create}>Add Association</Button></Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
@@ -2271,16 +2308,23 @@ function importanceColor(value) {
 }
 
 function profileImageRecords(payload) {
-  return (payload.embeddings || [])
-    .map((record) => ({
-      embeddingId: record.embedding_id,
-      path: record.source_image || record.crop_path,
-      thumbPath: record.crop_path || record.source_image,
-      qualityScore: record.quality_score,
-      faceOrigins: record.face_origins || [],
-      createdAt: record.created_at,
-    }))
-    .filter((record) => record.path);
+  const byPath = new Map();
+  for (const record of payload.embeddings || []) {
+    const path = record.source_image || record.crop_path;
+    if (!path) continue;
+    const item = byPath.get(path);
+    if (item) {
+      item.embeddingIds.push(record.embedding_id);
+      item.faceOrigins.push(...(record.face_origins || []));
+    } else byPath.set(path, { embeddingId: record.embedding_id, embeddingIds: [record.embedding_id], path,
+      thumbPath: record.crop_path || path, qualityScore: record.quality_score,
+      faceOrigins: [...(record.face_origins || [])], createdAt: record.created_at });
+  }
+  for (const media of payload.encounter_media || []) {
+    if (!byPath.has(media.media_path)) byPath.set(media.media_path, { path: media.media_path, thumbPath: media.media_path,
+      embeddingId: null, embeddingIds: [], faceOrigins: [{ face_origin: "ENCOUNTER" }], observationIds: media.observation_ids });
+  }
+  return [...byPath.values()];
 }
 
 function managementEventLabel(event) {

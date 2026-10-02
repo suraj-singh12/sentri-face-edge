@@ -90,7 +90,7 @@ from sentriface.media_registry import media_content_identity
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 EMBEDDING_RECOGNITION_STATES = frozenset({"GOOD", "POOR_ACCEPTED", "PROOF_ONLY"})
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
@@ -1720,7 +1720,7 @@ class SQLiteIdentityStore:
             )
             if existing_result is not None:
                 row = conn.execute(
-                    "SELECT * FROM observations WHERE observation_id = ?",
+                    "SELECT * FROM effective_observations WHERE observation_id = ?",
                     (existing_result.get("observation_id"),),
                 ).fetchone()
                 if row is None:
@@ -1784,7 +1784,7 @@ class SQLiteIdentityStore:
             }
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             row = conn.execute(
-                "SELECT * FROM observations WHERE observation_id = ?",
+                "SELECT * FROM effective_observations WHERE observation_id = ?",
                 (observation_id,),
             ).fetchone()
             return _observation_from_row(row)
@@ -1849,11 +1849,17 @@ class SQLiteIdentityStore:
                 )
             return _photo_review_from_conn(conn, normalized_review_id)
 
-    def plan_init_session_encounters(self, session_id: str, media_groups: list[list[str]]) -> list[dict]:
+    def plan_init_session_encounters(self, session_id: str, media_groups: list[list[str]], *, target_observation_id: str | None = None, expected_revision: str | None = None) -> list[dict]:
         """Partition a scanned Queue session into serial, non-authoritative reviews."""
         with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             if conn.execute("SELECT 1 FROM init_sessions WHERE session_id = ?", (session_id,)).fetchone() is None:
                 raise KeyError(f"Unknown init session: {session_id}")
+            if target_observation_id:
+                if len(media_groups) != 1:
+                    raise ValueError("Attach Media requires one existing Encounter")
+                _require_encounter_revision(conn, target_observation_id, expected_revision)
+                _require_no_encounter_amendment(conn, target_observation_id, session_id=session_id)
             existing_reviews = conn.execute(
                 "SELECT review_id FROM photo_reviews WHERE session_id = ? ORDER BY sequence_number", (session_id,),
             ).fetchall()
@@ -1862,7 +1868,10 @@ class SQLiteIdentityStore:
                     "SELECT media_id FROM photo_review_media WHERE review_id = ? ORDER BY ordinal",
                     (review["review_id"],),
                 )] for review in existing_reviews]
-                if existing_groups == media_groups:
+                if existing_groups == media_groups and all(
+                    conn.execute("SELECT target_observation_id FROM photo_reviews WHERE review_id = ?", (r["review_id"],)).fetchone()[0] == target_observation_id
+                    for r in existing_reviews
+                ):
                     return _list_init_session_encounter_reviews(conn, session_id)
                 raise ValueError("Encounter grouping has already been confirmed for this session")
             media_rows = conn.execute(
@@ -1877,7 +1886,7 @@ class SQLiteIdentityStore:
                 media_path = known_media[media_id]
                 previous = conn.execute(
                     "SELECT om.observation_id FROM observation_media om "
-                    "JOIN observations o ON o.observation_id = om.observation_id "
+                    "JOIN effective_observations o ON o.observation_id = om.observation_id "
                     "WHERE (om.media_id = ? OR om.media_path = ?) AND o.status = 'FINALIZED' LIMIT 1",
                     (media_content_identity(media_path), media_path),
                 ).fetchone()
@@ -1897,6 +1906,13 @@ class SQLiteIdentityStore:
                     "session_id, sequence_number, review_phase) VALUES (?, ?, ?, 'queue', 'IN_PROGRESS', ?, ?, ?, ?)",
                     (review_id, first_id, known_media[first_id], created_at, session_id, sequence_number, phase),
                 )
+                if target_observation_id:
+                    observation = _require_observation(conn, target_observation_id)
+                    conn.execute(
+                        "UPDATE photo_reviews SET target_observation_id = ?, expected_encounter_revision = ?, "
+                        "event_details = ?, event_details_complete = 1, review_phase = 'IDENTITIES' WHERE review_id = ?",
+                        (target_observation_id, expected_revision, json.dumps(_encounter_event_details(observation)), review_id),
+                    )
                 for ordinal, media_id in enumerate(group):
                     conn.execute(
                         "INSERT INTO photo_review_media(review_id, media_id, media_path, ordinal) VALUES (?, ?, ?, ?)",
@@ -1909,7 +1925,7 @@ class SQLiteIdentityStore:
                     "ORDER BY created_at, init_face_id",
                     (session_id, *media_paths),
                 ).fetchall()
-                if not group_faces:
+                if not group_faces and not target_observation_id:
                     raise ValueError("Each Encounter review needs at least one detected face")
                 for face in group_faces:
                     staged_group_encounters.setdefault(str(face["group_id"]), set()).add(sequence_number)
@@ -1950,6 +1966,8 @@ class SQLiteIdentityStore:
             review = conn.execute("SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,)).fetchone()
             if review is None or review["status"] != "IN_PROGRESS" or review["review_phase"] not in {"EVENT", "IDENTITIES"}:
                 raise ValueError("Event details can only be saved for the active Encounter review")
+            if review["target_observation_id"]:
+                raise ValueError("Use Correct Encounter to change finalized Event details")
             for person_id in event_details.get("event_mentioned_person_ids", []):
                 if conn.execute("SELECT 1 FROM persons WHERE person_id = ?", (person_id,)).fetchone() is None:
                     raise ValueError(f"Unknown Event Note mentioned person: {person_id}")
@@ -1966,7 +1984,7 @@ class SQLiteIdentityStore:
             if review is None or review["status"] != "IN_PROGRESS" or review["review_phase"] != "IDENTITIES" or not review["event_details_complete"]:
                 raise ValueError("Complete Event details and identity review first")
             rows = conn.execute("SELECT * FROM photo_review_faces WHERE review_id = ?", (review_id,)).fetchall()
-            if not rows or any(row["decision"] in (None, "SKIP") for row in rows):
+            if (not rows and not review["target_observation_id"]) or any(row["decision"] in (None, "SKIP") for row in rows):
                 raise ValueError("Every detected face needs a final identity decision")
             candidates = _review_relation_candidates(conn, review_id)
             conn.execute("UPDATE photo_reviews SET review_phase = 'RELATIONS' WHERE review_id = ?", (review_id,))
@@ -2150,6 +2168,7 @@ class SQLiteIdentityStore:
     ) -> dict:
         """Commit a complete review and all authoritative consequences atomically."""
         with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             existing = _existing_committed_operation_result(
                 conn, operation_id, "review.complete",
             )
@@ -2164,11 +2183,16 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown photo review: {review_id}")
             if review["status"] != "IN_PROGRESS":
                 raise ValueError("Only an in-progress review can be completed")
+            target_observation_id = review["target_observation_id"]
+            original_participant_ids = []
+            if target_observation_id:
+                _require_encounter_revision(conn, target_observation_id, review["expected_encounter_revision"])
+                original_participant_ids = _effective_observation_person_ids(conn, target_observation_id)
             face_rows = conn.execute(
                 "SELECT * FROM photo_review_faces WHERE review_id = ? ORDER BY face_id",
                 (review_id,),
             ).fetchall()
-            if not face_rows or any(row["decision"] is None or (review["review_phase"] != "LEGACY" and row["decision"] == "SKIP") for row in face_rows):
+            if (not face_rows and not target_observation_id) or any(row["decision"] is None or (review["review_phase"] != "LEGACY" and row["decision"] == "SKIP") for row in face_rows):
                 raise ValueError("Every detected face requires a final decision before completion")
             encounter_review = review["review_phase"] == "RELATIONS"
             if review["review_phase"] not in {"LEGACY", "RELATIONS"}:
@@ -2179,7 +2203,7 @@ class SQLiteIdentityStore:
                 ).fetchall():
                     previous = conn.execute(
                         "SELECT om.observation_id FROM observation_media om "
-                        "JOIN observations o ON o.observation_id = om.observation_id "
+                        "JOIN effective_observations o ON o.observation_id = om.observation_id "
                         "WHERE (om.media_id = ? OR om.media_path = ?) AND o.status = 'FINALIZED' LIMIT 1",
                         (media_row["media_id"], media_row["media_path"]),
                     ).fetchone()
@@ -2305,7 +2329,7 @@ class SQLiteIdentityStore:
                         _optional_text(source) or str(review["source"]),
                     ))
                     created_note_keys.add(note_key)
-            if not assigned_by_face:
+            if not assigned_by_face and not target_observation_id:
                 raise ValueError("A completed review requires at least one accepted person")
             canonical_participants: dict[str, str] = {}
             for face_id in sorted(assigned_by_face):
@@ -2326,21 +2350,22 @@ class SQLiteIdentityStore:
                 or (actor or {}).get("username")
                 or encounter_context["added_by"]
             )
-            observation_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:review:{review_id}"))
+            observation_id = target_observation_id or str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:review:{review_id}"))
             now = utc_now()
-            conn.execute(
-                """
-                INSERT INTO observations(
-                    observation_id, status, observed_at, location, context,
-                    source, created_operation_id, created_at, updated_at
-                ) VALUES (?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    observation_id, observed_at, location,
-                    json.dumps(encounter_context, separators=(",", ":")),
-                    str(review["source"]), operation_id, now, now,
-                ),
-            )
+            if not target_observation_id:
+                conn.execute(
+                    """
+                    INSERT INTO observations(
+                        observation_id, status, observed_at, location, context,
+                        source, created_operation_id, created_at, updated_at
+                    ) VALUES (?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        observation_id, observed_at, location,
+                        json.dumps(encounter_context, separators=(",", ":")),
+                        str(review["source"]), operation_id, now, now,
+                    ),
+                )
             staged_review_media = conn.execute(
                 "SELECT media_id, media_path FROM photo_review_media WHERE review_id = ? ORDER BY ordinal, media_id",
                 (review_id,),
@@ -2386,13 +2411,12 @@ class SQLiteIdentityStore:
                     conn, observation_id, canonical_id, str(review["source"]), operation_id,
                 )
             finalized_at = utc_now()
-            conn.execute(
-                """
-                UPDATE observations SET status = 'FINALIZED', finalized_at = ?, updated_at = ?
-                WHERE observation_id = ?
-                """,
-                (finalized_at, finalized_at, observation_id),
-            )
+            if not target_observation_id:
+                conn.execute("UPDATE observations SET status = 'FINALIZED', finalized_at = ?, updated_at = ? WHERE observation_id = ?",
+                             (finalized_at, finalized_at, observation_id))
+            else:
+                canonical_participants.update({pid: pid for pid in _effective_observation_person_ids(conn, observation_id)})
+                conn.execute("UPDATE observations SET updated_at = ? WHERE observation_id = ?", (finalized_at, observation_id))
             participant_ids = sorted(canonical_participants)
             detail_ids: list[str] = []
             for face_id, person_id, embedding_id, detail, detail_notes, mention_ids, decision in detail_inputs:
@@ -2469,6 +2493,19 @@ class SQLiteIdentityStore:
                     for index, first_id in enumerate(participant_ids)
                     for second_id in participant_ids[index + 1:]
                 ]
+            if target_observation_id:
+                if not conn.execute("SELECT 1 FROM encounter_relation_decisions WHERE observation_id = ? AND review_id <> ?", (observation_id, review_id)).fetchone():
+                    original_participants = _effective_observation_person_ids(conn, observation_id)
+                    # Newly accepted participants are already present: only pre-amendment pairs were settled.
+                    original_participants = [pid for pid in original_participants if pid in original_participant_ids]
+                    desired = _effective_encounter_relations(conn, observation_id)
+                    for index, first in enumerate(original_participants):
+                        for second in original_participants[index+1:]:
+                            desired.setdefault((first, second), {"disposition": "INCLUDE", "support": _encounter_pair_support(conn, observation_id, first, second)})
+                    _write_encounter_relation_revisions(conn, observation_id, desired, operation_id)
+                _refresh_encounter_relation_support(conn, observation_id, operation_id)
+                _, evidence_ids = _recalculate_observation_evidence(conn, observation_id, operation_id, source or "encounter-attachment")
+                included_pairs = []
             for first_id, second_id in included_pairs:
                     evidence_ids.append(_insert_relationship_evidence(
                         conn,
@@ -2567,6 +2604,7 @@ class SQLiteIdentityStore:
             observation = _require_observation(conn, observation_id)
             if observation["status"] != "FINALIZED":
                 raise ValueError("Only a finalized observation can be corrected")
+            _require_no_encounter_amendment(conn, observation_id)
             canonical_from_person_id = _resolve_canonical_person_id(conn, from_person_id)
             canonical_to_person_id = _resolve_canonical_person_id(conn, to_person_id)
             _require_active_review_person(conn, canonical_to_person_id)
@@ -2976,7 +3014,7 @@ class SQLiteIdentityStore:
     def get_observation(self, observation_id: str) -> Observation | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM observations WHERE observation_id = ?",
+                "SELECT * FROM effective_observations WHERE observation_id = ?",
                 (observation_id,),
             ).fetchone()
         return _observation_from_row(row) if row else None
@@ -3035,7 +3073,7 @@ class SQLiteIdentityStore:
             result = {"observation_id": observation_id, "updated": True}
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             updated = conn.execute(
-                "SELECT * FROM observations WHERE observation_id = ?",
+                "SELECT * FROM effective_observations WHERE observation_id = ?",
                 (observation_id,),
             ).fetchone()
             return _observation_from_row(updated)
@@ -3217,6 +3255,191 @@ class SQLiteIdentityStore:
             _require_observation(conn, observation_id)
             return _list_observation_media(conn, observation_id)
 
+    def correct_encounter(self, observation_id: str, operation_id: str, *, expected_revision: str,
+                          event_details: dict | None = None, participant_correction: dict | None = None,
+                          relations: list[dict] | None = None, actor: dict | None = None, source: str | None = None) -> dict:
+        """Apply reviewed forward corrections, evidence and journal in one transaction."""
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            existing = _existing_committed_operation_result(conn, operation_id, "encounter.correct")
+            if existing is not None:
+                if existing["observation_id"] != observation_id:
+                    raise KeyError("Operation ID belongs to another Encounter")
+                return existing
+            _require_encounter_revision(conn, observation_id, expected_revision)
+            _require_no_encounter_amendment(conn, observation_id)
+            observation = _require_observation(conn, observation_id)
+            before = _encounter_read_record(conn, observation)
+            historical_relations = [{"first_person_id": pair[0], "second_person_id": pair[1],
+                "disposition": value["disposition"], "support": value["support"]}
+                for pair, value in _effective_encounter_relations(conn, observation_id).items()]
+            _begin_journal_operation(conn, "encounter.correct", operation_id=operation_id, actor=actor,
+                                     source=source or "encounter-management", affected_entities=[
+                                         {"entity_type": "observation", "entity_id": observation_id},
+                                         *[{"entity_type": "person", "entity_id": person_id} for person_id in sorted(set(before["participant_ids"] + before["mentioned_person_ids"] +
+                                             [value for key, value in (participant_correction or {}).items() if key in {"person_id", "to_person_id"}]) )]],
+                                     details={"historical_value": before})
+            if event_details is not None:
+                allowed = {"date", "time", "end_time", "time_precision", "place_seen", "event_occasion", "event_context", "event_notes", "event_mentioned_person_ids"}
+                if not isinstance(event_details, dict) or set(event_details) - allowed:
+                    raise ValueError("Unknown Encounter metadata field")
+                merged_details = {**_encounter_event_details(observation), **event_details}
+                observed_at, location, context = _review_encounter_metadata([merged_details])
+                for pid in context["event_mentioned_person_ids"]:
+                    _resolve_canonical_person_id(conn, pid)
+                context["added_by"] = json.loads(observation["context"]).get("added_by")
+                conn.execute("INSERT INTO encounter_metadata_revisions VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (str(uuid.uuid4()), observation_id, observed_at, location, json.dumps(context), operation_id, utc_now()))
+            if participant_correction:
+                if set(participant_correction) - {"action", "person_id", "to_person_id"}:
+                    raise ValueError("Unknown participant correction field")
+                action = str(participant_correction.get("action", "")).upper()
+                pid = _resolve_canonical_person_id(conn, str(participant_correction.get("person_id", "")))
+                participants = _effective_observation_person_ids(conn, observation_id)
+                if action == "REASSIGN":
+                    target = _require_active_review_person(conn, str(participant_correction.get("to_person_id", "")))
+                    target = _resolve_canonical_person_id(conn, target)
+                    if pid not in participants or target == pid:
+                        raise ValueError("Select a current participant and a different active Person")
+                    assignments = [a for a in _effective_face_assignments(conn, observation_id)
+                                   if _resolve_canonical_person_id(conn, a["current_person_id"]) == pid]
+                    for assignment in assignments:
+                        _insert_identity_correction(conn, correction_type="FACE_ASSIGNMENT", observation_id=observation_id,
+                            face_assignment_id=assignment["assignment_id"], embedding_id=assignment["embedding_id"],
+                            from_person_id=assignment["current_person_id"], to_person_id=target, operation_id=operation_id)
+                        embedding = conn.execute("SELECT embedding_id, person_id FROM embeddings WHERE embedding_id = ?", (assignment["embedding_id"],)).fetchone()
+                        owner = _effective_embedding_owner_person_id(conn, embedding)
+                        if owner == pid:
+                            _insert_identity_correction(conn, correction_type="FACE_OWNERSHIP", observation_id=None,
+                                face_assignment_id=None, embedding_id=assignment["embedding_id"], from_person_id=pid,
+                                to_person_id=target, operation_id=operation_id)
+                    for raw in _corrected_observation_person_ids(conn, observation_id):
+                        if _resolve_canonical_person_id(conn, raw) == pid:
+                            _insert_identity_correction(conn, correction_type="OBSERVATION_IDENTITY", observation_id=observation_id,
+                                face_assignment_id=None, embedding_id=None, from_person_id=raw, to_person_id=target, operation_id=operation_id)
+                    # A prior explicit presence revision needs a forward removal/presence revision too.
+                    _add_observation_participant(conn, observation_id, target, "identity-correction", operation_id)
+                    for person, disposition in ((pid, "REMOVED"), (target, "PRESENT")):
+                        _append_participant_revision(conn, observation_id, person, disposition, operation_id)
+                    _revise_encounter_relations_for_identity_correction(conn, observation_id, pid, target, operation_id)
+                elif action in {"ADD", "REMOVE"}:
+                    if action == "ADD":
+                        _require_active_review_person(conn, pid)
+                        if pid in participants:
+                            raise ValueError("Person is already a participant")
+                        _add_observation_participant(conn, observation_id, pid, "encounter-correction", operation_id)
+                    elif pid not in participants or len(participants) <= 1:
+                        raise ValueError("Cannot remove the last or an absent participant")
+                    _append_participant_revision(conn, observation_id, pid, "PRESENT" if action == "ADD" else "REMOVED", operation_id)
+                else:
+                    raise ValueError("Participant correction must be ADD, REMOVE or REASSIGN")
+            if participant_correction and participant_correction.get("action", "").upper() == "REASSIGN":
+                for affected in (pid, target):
+                    owns_faces = any(_effective_embedding_owner_person_id(conn, e) == affected for e in conn.execute("SELECT embedding_id, person_id FROM embeddings WHERE deleted_at IS NULL"))
+                    if owns_faces:
+                        _mark_person_enrolled(conn, affected)
+                    else:
+                        conn.execute("UPDATE persons SET biometric_status = 'NO_FACE', enrollment_status = 'placeholder' WHERE person_id = ?", (affected,))
+            participants = _effective_observation_person_ids(conn, observation_id)
+            if not participants:
+                raise ValueError("An Encounter needs at least one effective participant")
+            desired = _effective_encounter_relations(conn, observation_id)
+            # Legacy finalized reviews have implicit positive pair authority; materialize it on first correction.
+            if not conn.execute("SELECT 1 FROM encounter_relation_decisions WHERE observation_id = ?", (observation_id,)).fetchone():
+                desired = {tuple(sorted((a, b))): {"disposition": "INCLUDE", "support": _encounter_pair_support(conn, observation_id, a, b)}
+                           for index, a in enumerate(before["participant_ids"]) for b in before["participant_ids"][index+1:]}
+                if participant_correction and participant_correction.get("action", "").upper() == "REASSIGN":
+                    desired = {tuple(sorted(target if member == pid else member for member in pair)): value
+                               for pair, value in desired.items() if len({target if member == pid else member for member in pair}) == 2}
+            desired = {pair: value for pair, value in desired.items() if set(pair).issubset(participants)}
+            supplied_pairs = set()
+            for relation in relations or []:
+                if set(relation) != {"first_person_id", "second_person_id", "disposition"}:
+                    raise ValueError("Invalid Relation correction")
+                pair = tuple(sorted(_resolve_canonical_person_id(conn, relation[key]) for key in ("first_person_id", "second_person_id")))
+                disposition = str(relation["disposition"]).upper()
+                if pair[0] == pair[1] or not set(pair).issubset(participants) or disposition not in {"INCLUDE", "EXCLUDE"} or pair in supplied_pairs:
+                    raise ValueError("Invalid or duplicate effective Relation pair")
+                supplied_pairs.add(pair)
+                desired[pair] = {"disposition": disposition, "support": _encounter_pair_support(conn, observation_id, *pair)}
+            candidates = {(a, b) for index, a in enumerate(participants) for b in participants[index+1:]}
+            if set(desired) != candidates:
+                raise ValueError("Every new participant pair requires an explicit INCLUDE or EXCLUDE decision")
+            _write_encounter_relation_revisions(conn, observation_id, desired, operation_id)
+            _refresh_encounter_relation_support(conn, observation_id, operation_id)
+            _, evidence_ids = _recalculate_observation_evidence(conn, observation_id, operation_id, source or "encounter-management")
+            conn.execute("UPDATE observations SET updated_at = ? WHERE observation_id = ?", (utc_now(), observation_id))
+            after = _encounter_read_record(conn, _require_observation(conn, observation_id))
+            result = {"observation_id": observation_id, "historical_value": before, "effective_value": after,
+                      "participant_correction": participant_correction, "graph_evidence_ids": evidence_ids,
+                      "historical_relations": historical_relations,
+                      "effective_relations": [{"first_person_id": pair[0], "second_person_id": pair[1], "disposition": row["disposition"], "support": row["support"]}
+                          for pair, row in _effective_encounter_relations(conn, observation_id).items()]}
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def create_manual_association(self, first_person_id: str, second_person_id: str, operation_id: str,
+                                  *, actor: dict | None = None, source: str | None = None) -> dict:
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            existing = _existing_committed_operation_result(conn, operation_id, "manual_association.create")
+            pair = tuple(sorted(_resolve_canonical_person_id(conn, pid) for pid in (first_person_id, second_person_id)))
+            if existing is not None:
+                if existing["person_ids"] != list(pair):
+                    raise KeyError("Operation ID belongs to another association")
+                return existing
+            if pair[0] == pair[1]:
+                raise ValueError("A Person cannot be associated with themselves")
+            for pid in pair:
+                _require_active_review_person(conn, pid)
+            _begin_journal_operation(conn, "manual_association.create", operation_id=operation_id, actor=actor,
+                source=source or "manual-association", affected_entities=[{"entity_type": "person", "entity_id": pid} for pid in pair], details={})
+            evidence_id = _insert_relationship_evidence(conn, evidence_type="MANUAL_ASSOCIATION", source_entity_type="MANUAL_ASSERTION",
+                source_entity_id=operation_id, source_person_id=pair[0], target_person_id=pair[1], relationship_type="ASSOCIATED_WITH",
+                directionality="UNDIRECTED", source=source or "manual-association", created_operation_id=operation_id, created_at=utc_now())
+            _replace_graph_projection(conn)
+            result = {"evidence_id": evidence_id, "person_ids": list(pair)}
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def retire_manual_association(self, evidence_id: str, operation_id: str, *, actor: dict | None = None, source: str | None = None) -> dict:
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            existing = _existing_committed_operation_result(conn, operation_id, "manual_association.retire")
+            if existing is not None:
+                if existing["evidence_id"] != evidence_id:
+                    raise KeyError("Operation ID belongs to another association")
+                return existing
+            row = conn.execute("SELECT * FROM relationship_evidence WHERE evidence_id = ? AND evidence_type = 'MANUAL_ASSOCIATION'", (evidence_id,)).fetchone()
+            if row is None or not row["active"]:
+                raise ValueError("Select an active Manual Association")
+            _begin_journal_operation(conn, "manual_association.retire", operation_id=operation_id, actor=actor,
+                source=source or "manual-association", affected_entities=[
+                    {"entity_type": "evidence", "entity_id": evidence_id},
+                    *[{"entity_type": "person", "entity_id": pid} for pid in sorted({
+                        str(row["source_person_id"]), str(row["target_person_id"]),
+                        _resolve_canonical_person_id(conn, str(row["source_person_id"])),
+                        _resolve_canonical_person_id(conn, str(row["target_person_id"])),
+                    })]], details={})
+            conn.execute("UPDATE relationship_evidence SET active = 0, deactivated_operation_id = ?, deactivated_at = ? WHERE evidence_id = ?",
+                         (operation_id, utc_now(), evidence_id))
+            _replace_graph_projection(conn)
+            result = {"evidence_id": evidence_id, "retired": True}
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def list_person_encounter_media(self, person_id: str) -> list[dict]:
+        with self._connect() as conn:
+            conn.execute("BEGIN")
+            canonical = _resolve_canonical_person_id(conn, person_id)
+            items = {}
+            for observation in conn.execute("SELECT observation_id FROM effective_observations WHERE status = 'FINALIZED'"):
+                oid = str(observation[0])
+                for path in _encounter_person_media(conn, oid, canonical):
+                    item = items.setdefault(path, {"media_path": path, "observation_ids": []})
+                    item["observation_ids"].append(oid)
+            return list(items.values())
+
     def query_encounters(
         self, *, limit: int = 25, cursor: str = "", search: str = "",
         date_from: str = "", date_to: str = "", location: str = "",
@@ -3268,7 +3491,7 @@ class SQLiteIdentityStore:
             while len(items) <= page_size:
                 where = " AND ".join(conditions)
                 rows = conn.execute(
-                    f"SELECT * FROM observations WHERE {where} "
+                    f"SELECT * FROM effective_observations WHERE {where} "
                     "ORDER BY COALESCE(observed_at, created_at) DESC, observation_id DESC LIMIT 100",
                     arguments,
                 ).fetchall()
@@ -3295,24 +3518,12 @@ class SQLiteIdentityStore:
                         record["person_media"] = []
                         record["sighting_notes"] = []
                         if selected in participant_ids:
-                            for face in conn.execute(
-                                "SELECT e.embedding_id, e.person_id, e.source_image, e.crop_path "
-                                "FROM observation_face_assignments assignment "
-                                "JOIN embeddings e ON e.embedding_id = assignment.embedding_id "
-                                "WHERE assignment.observation_id = ? ORDER BY assignment.created_at, assignment.assignment_id",
-                                (record["observation_id"],),
-                            ):
-                                if _effective_embedding_owner_person_id(conn, face) == selected:
-                                    media_path = face["source_image"] or face["crop_path"]
-                                    if media_path and media_path not in record["person_media"]:
-                                        record["person_media"].append(str(media_path))
-                            record["sighting_notes"] = [
-                                str(detail["notes"]) for detail in conn.execute(
-                                    "SELECT person_id, notes FROM recognition_details "
-                                    "WHERE observation_id = ? AND notes <> '' ORDER BY created_at, detail_id",
-                                    (record["observation_id"],),
-                                ) if _resolve_canonical_person_id(conn, str(detail["person_id"])) == selected
-                            ]
+                            record["person_media"] = _encounter_person_media(conn, record["observation_id"], selected)
+                            record["sighting_notes"] = [str(note["content"]) for note in conn.execute(
+                                "SELECT d.person_id, d.embedding_id, r.content FROM recognition_details d JOIN notes n ON n.subject_id = d.detail_id "
+                                "JOIN note_revisions r ON r.note_id = n.note_id WHERE d.observation_id = ? AND n.status = 'ACTIVE' "
+                                "AND r.revision_number = (SELECT MAX(r2.revision_number) FROM note_revisions r2 WHERE r2.note_id = n.note_id)",
+                                (record["observation_id"],)) if _encounter_detail_person(conn, record["observation_id"], note) == selected]
                     items.append(record)
                     if len(items) > page_size:
                         break
@@ -3333,22 +3544,47 @@ class SQLiteIdentityStore:
 
     def get_encounter_read(self, observation_id: str) -> dict:
         with self._connect() as conn:
+            conn.execute("BEGIN")
             row = _require_observation(conn, observation_id)
             if row["status"] != "FINALIZED":
                 raise KeyError(f"Unknown finalized Encounter: {observation_id}")
             record = _encounter_read_record(conn, row)
+            record["revision"] = _encounter_revision(conn, observation_id)
+            record["event_details"] = _encounter_event_details(row)
+            record["historical_people"] = [{"person_id": str(person[0]), "name": str(person[1]), "lifecycle_status": str(person[2])}
+                for person in conn.execute("SELECT person_id, name, lifecycle_status FROM persons WHERE person_id IN ("
+                    "SELECT person_id FROM observation_participants WHERE observation_id = ? UNION SELECT from_person_id FROM identity_corrections WHERE observation_id = ? "
+                    "UNION SELECT to_person_id FROM identity_corrections WHERE observation_id = ?)", (observation_id, observation_id, observation_id))]
+            for collection in (record["participants"], record["mentioned_people"]):
+                for person in collection:
+                    person["lifecycle_status"] = str(conn.execute("SELECT lifecycle_status FROM persons WHERE person_id = ?", (person["person_id"],)).fetchone()[0])
+            record["relations"] = [{"first_person_id": pair[0], "second_person_id": pair[1],
+                "disposition": relation["disposition"], "support": relation["support"]}
+                for pair, relation in sorted(_effective_encounter_relations(conn, observation_id).items())]
+            record["history"] = []
+            operations = conn.execute(
+                "SELECT j.operation_id FROM operation_journal j WHERE j.status = 'COMMITTED' AND "
+                "(EXISTS(SELECT 1 FROM json_each(j.affected_entities) e WHERE json_extract(e.value, '$.entity_type') = 'observation' "
+                "AND json_extract(e.value, '$.entity_id') = ?) OR EXISTS(SELECT 1 FROM operation_journal_status_history h "
+                "WHERE h.operation_id = j.operation_id AND h.to_status = 'COMMITTED' AND json_extract(h.details, '$.observation_id') = ?)) "
+                "ORDER BY j.created_at DESC, j.rowid DESC LIMIT 101", (observation_id, observation_id)).fetchall()
+            record["history_has_more"] = len(operations) > 100
+            for operation in operations[:100]:
+                entry = _get_journal_operation(conn, str(operation[0]))
+                record["history"].append({**{key: entry.get(key) for key in ("operation_id", "operation_type", "actor", "created_at", "details")},
+                    "result": entry["status_history"][-1]["details"] if entry["status_history"] else {}})
             record["media"] = [
                 {"media_id": item.media_id, "media_path": item.media_path}
                 for item in _list_observation_media(conn, observation_id)
             ]
             record["sighting_notes"] = [
                 {
-                    "person_id": _resolve_canonical_person_id(conn, str(item["person_id"])),
+                    "person_id": _encounter_detail_person(conn, observation_id, item),
                     "raw_person_id": str(item["person_id"]),
                     "content": str(item["content"]),
                 }
                 for item in conn.execute(
-                    "SELECT d.person_id, n.content FROM recognition_details d "
+                    "SELECT d.person_id, d.embedding_id, n.content FROM recognition_details d "
                     "JOIN (SELECT notes.subject_id, revisions.content FROM notes "
                     "JOIN note_revisions revisions ON revisions.note_id = notes.note_id "
                     "WHERE notes.subject_type = 'RECOGNITION_DETAIL' AND notes.status = 'ACTIVE' "
@@ -3414,7 +3650,7 @@ class SQLiteIdentityStore:
             }
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             row = conn.execute(
-                "SELECT * FROM observations WHERE observation_id = ?",
+                "SELECT * FROM effective_observations WHERE observation_id = ?",
                 (observation_id,),
             ).fetchone()
             return _observation_from_row(row)
@@ -3425,7 +3661,7 @@ class SQLiteIdentityStore:
             rows = [
                 row for row in conn.execute(
                     """
-                    SELECT o.* FROM observations o
+                    SELECT o.* FROM effective_observations o
                     ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
                     """
                 ).fetchall()
@@ -3442,7 +3678,7 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown person: {person_id}")
             rows = conn.execute(
                 """
-                SELECT o.* FROM observations o
+                SELECT o.* FROM effective_observations o
                 JOIN observation_participants p ON p.observation_id = o.observation_id
                 WHERE p.person_id = ?
                 ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
@@ -3515,7 +3751,7 @@ class SQLiteIdentityStore:
             rows = conn.execute(
                 """
                 SELECT o.*
-                FROM observations o
+                FROM effective_observations o
                 JOIN observation_media m ON m.observation_id = o.observation_id
                 WHERE m.media_id = ?
                 ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
@@ -4329,6 +4565,14 @@ class SQLiteIdentityStore:
                 if failure_injector is not None:
                     failure_injector("after_canonical_update")
                 _synchronize_survivor_biometric_state(conn, preview["target_person_id"])
+                for encounter in conn.execute("SELECT DISTINCT observation_id FROM encounter_relation_decisions WHERE active = 1 AND observation_id IS NOT NULL").fetchall():
+                    oid = str(encounter[0])
+                    rows = conn.execute("SELECT first_person_id, second_person_id FROM encounter_relation_decisions WHERE observation_id = ? AND active = 1", (oid,)).fetchall()
+                    canonical_pairs = [tuple(sorted(_resolve_canonical_person_id(conn, str(member)) for member in pair)) for pair in rows]
+                    if len(set(canonical_pairs)) < len(rows) or any(pair[0] == pair[1] for pair in canonical_pairs):
+                        desired = _effective_encounter_relations(conn, oid)
+                        _write_encounter_relation_revisions(conn, oid, desired, normalized_operation_id)
+                        _recalculate_observation_evidence(conn, oid, normalized_operation_id, source or "identity-merge-service")
                 _replace_graph_projection(conn)
                 if failure_injector is not None:
                     failure_injector("after_graph_rebuild")
@@ -6673,7 +6917,7 @@ class SQLiteIdentityStore:
                 ):
                 previous = conn.execute(
                     "SELECT o.observation_id, o.observed_at, o.context FROM observation_media om "
-                    "JOIN observations o ON o.observation_id = om.observation_id "
+                    "JOIN effective_observations o ON o.observation_id = om.observation_id "
                     "WHERE (om.media_id = ? OR om.media_path = ?) AND o.status = 'FINALIZED' "
                     "ORDER BY o.finalized_at LIMIT 1",
                     (row["media_id"], row["media_path"]),
@@ -8960,6 +9204,65 @@ def _migrate_30_to_31(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_31_to_32(conn: sqlite3.Connection) -> None:
+    _execute_migration_script(conn, """
+        ALTER TABLE photo_reviews ADD COLUMN target_observation_id TEXT REFERENCES observations(observation_id);
+        ALTER TABLE photo_reviews ADD COLUMN expected_encounter_revision TEXT;
+        CREATE UNIQUE INDEX idx_active_encounter_amendment ON photo_reviews(target_observation_id)
+            WHERE status = 'IN_PROGRESS' AND target_observation_id IS NOT NULL;
+        CREATE TABLE encounter_participant_revisions (
+            revision_id TEXT PRIMARY KEY,
+            observation_id TEXT NOT NULL REFERENCES observations(observation_id),
+            person_id TEXT NOT NULL REFERENCES persons(person_id),
+            disposition TEXT NOT NULL CHECK(disposition IN ('PRESENT', 'REMOVED')),
+            operation_id TEXT NOT NULL REFERENCES operation_journal(operation_id),
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_encounter_participant_revision ON encounter_participant_revisions(observation_id, created_at);
+        CREATE TABLE encounter_metadata_revisions (
+            revision_id TEXT PRIMARY KEY,
+            observation_id TEXT NOT NULL REFERENCES observations(observation_id),
+            observed_at TEXT, location TEXT, context TEXT NOT NULL,
+            operation_id TEXT NOT NULL REFERENCES operation_journal(operation_id),
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_encounter_metadata_revision ON encounter_metadata_revisions(observation_id, created_at);
+        CREATE VIEW effective_observations AS
+            SELECT o.observation_id, o.status,
+                CASE WHEN r.revision_id IS NULL THEN o.observed_at ELSE r.observed_at END AS observed_at,
+                CASE WHEN r.revision_id IS NULL THEN o.location ELSE r.location END AS location,
+                CASE WHEN r.revision_id IS NULL THEN o.context ELSE r.context END AS context,
+                o.source, o.created_operation_id, o.created_at, o.updated_at, o.finalized_at
+            FROM observations o LEFT JOIN encounter_metadata_revisions r
+                ON r.rowid = (SELECT r2.rowid FROM encounter_metadata_revisions r2
+                    WHERE r2.observation_id = o.observation_id ORDER BY r2.created_at DESC, r2.rowid DESC LIMIT 1);
+        CREATE TRIGGER encounter_metadata_no_update BEFORE UPDATE ON encounter_metadata_revisions
+            BEGIN SELECT RAISE(ABORT, 'Encounter metadata revisions are immutable'); END;
+        CREATE TRIGGER encounter_metadata_no_delete BEFORE DELETE ON encounter_metadata_revisions
+            BEGIN SELECT RAISE(ABORT, 'Encounter metadata revisions cannot be deleted'); END;
+        CREATE TRIGGER encounter_participant_revision_no_update BEFORE UPDATE ON encounter_participant_revisions
+            BEGIN SELECT RAISE(ABORT, 'Participant revisions are immutable'); END;
+        CREATE TRIGGER encounter_participant_revision_no_delete BEFORE DELETE ON encounter_participant_revisions
+            BEGIN SELECT RAISE(ABORT, 'Participant revisions cannot be deleted'); END;
+        DROP TRIGGER observation_media_draft_insert;
+        CREATE TRIGGER observation_media_draft_insert BEFORE INSERT ON observation_media
+            WHEN NOT EXISTS(SELECT 1 FROM observations o WHERE o.observation_id = NEW.observation_id AND
+                (o.status = 'DRAFT' OR EXISTS(SELECT 1 FROM operation_journal j JOIN photo_reviews r
+                    ON r.target_observation_id = o.observation_id WHERE j.operation_id = NEW.operation_id
+                    AND j.operation_type = 'review.complete' AND j.status = 'STARTED' AND r.status = 'IN_PROGRESS')))
+            BEGIN SELECT RAISE(ABORT, 'observation media requires draft or journaled amendment'); END;
+        DROP TRIGGER observation_participants_draft_insert;
+        CREATE TRIGGER observation_participants_draft_insert BEFORE INSERT ON observation_participants
+            WHEN NOT EXISTS(SELECT 1 FROM observations o WHERE o.observation_id = NEW.observation_id AND
+                (o.status = 'DRAFT' OR EXISTS(SELECT 1 FROM operation_journal j WHERE j.operation_id = NEW.operation_id
+                    AND j.status = 'STARTED' AND (j.operation_type = 'encounter.correct' OR
+                    (j.operation_type = 'review.complete' AND EXISTS(SELECT 1 FROM photo_reviews r
+                        WHERE r.target_observation_id = o.observation_id AND r.status = 'IN_PROGRESS'))))))
+            BEGIN SELECT RAISE(ABORT, 'observation participants requires draft or journaled correction'); END;
+        PRAGMA user_version = 32;
+    """)
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -8999,6 +9302,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(28, 29, _migrate_28_to_29),
         SchemaMigration(29, 30, _migrate_29_to_30),
         SchemaMigration(30, 31, _migrate_30_to_31),
+        SchemaMigration(31, 32, _migrate_31_to_32),
     )
 
 
@@ -9439,6 +9743,18 @@ def _review_relation_candidates(conn: sqlite3.Connection, review_id: str) -> lis
         else:
             person = conn.execute("SELECT name FROM persons WHERE person_id = ?", (identity_ref[7:],)).fetchone()
             name_by_ref[identity_ref] = str(person["name"]) if person else "Historical Person"
+    review = conn.execute("SELECT target_observation_id FROM photo_reviews WHERE review_id = ?", (review_id,)).fetchone()
+    settled_pairs = set()
+    if review and review["target_observation_id"]:
+        target = str(review["target_observation_id"])
+        for pid in _effective_observation_person_ids(conn, target):
+            ref = f"person:{pid}"
+            media_by_ref.setdefault(ref, set()).update(_encounter_person_media(conn, target, pid))
+            name_by_ref[ref] = str(conn.execute("SELECT name FROM persons WHERE person_id = ?", (pid,)).fetchone()[0])
+        settled_pairs = {tuple(f"person:{pid}" for pid in pair) for pair in _effective_encounter_relations(conn, target)}
+        if not conn.execute("SELECT 1 FROM encounter_relation_decisions WHERE observation_id = ?", (target,)).fetchone():
+            original = _effective_observation_person_ids(conn, target)
+            settled_pairs = {(f"person:{a}", f"person:{b}") for index, a in enumerate(original) for b in original[index+1:]}
     refs = sorted(media_by_ref)
     return [
         {
@@ -9449,6 +9765,7 @@ def _review_relation_candidates(conn: sqlite3.Connection, review_id: str) -> lis
         }
         for index, first_ref in enumerate(refs)
         for second_ref in refs[index + 1:]
+        if (first_ref, second_ref) not in settled_pairs
     ]
 
 
@@ -9496,6 +9813,7 @@ def _encounter_review_read(conn: sqlite3.Connection, review_id: str) -> dict:
         "review_id": review_id, "session_id": row["session_id"], "sequence_number": row["sequence_number"],
         "status": str(row["status"]), "phase": str(row["review_phase"]),
         "observation_id": row["observation_id"],
+        "target_observation_id": row["target_observation_id"],
         "event_details_complete": bool(row["event_details_complete"]),
         "event_details": json.loads(row["event_details"] or "{}"),
         "media": media, "faces": faces,
@@ -10269,13 +10587,24 @@ def _batch_effective_observation_person_ids(
         effective: set[str] = set()
         for person_id in sorted(current):
             try:
-                effective.add(resolve_canonical(person_id))
+                resolve_canonical(person_id)
+                effective.add(person_id)
             except (KeyError, RuntimeError, ValueError) as exc:
                 errors.append(
                     f"Observation {observation_id} participant {person_id} "
                     f"cannot resolve: {exc}"
                 )
         result[observation_id] = effective
+    revision_rows = conn.execute("SELECT observation_id, person_id, disposition FROM encounter_participant_revisions ORDER BY created_at, rowid") if _table_exists(conn, "encounter_participant_revisions") else []
+    for revision in revision_rows:
+        oid = str(revision["observation_id"])
+        if oid in result:
+            pid = str(revision["person_id"])
+            if revision["disposition"] == "PRESENT":
+                result[oid].add(pid)
+            else:
+                result[oid].discard(pid)
+    result = {oid: {resolve_canonical(pid) for pid in ids} for oid, ids in result.items()}
     return result, errors
 
 
@@ -10478,7 +10807,7 @@ def _graph_read_components(
     observations = {
         str(row["observation_id"]): row
         for row in conn.execute(
-            "SELECT observation_id, status, observed_at, created_at, location FROM observations"
+            "SELECT observation_id, status, observed_at, created_at, location FROM effective_observations"
         ).fetchall()
     }
     scoped_people: set[str] = set()
@@ -11109,8 +11438,7 @@ def _world_location_facet_statistics(
         f"""WITH scoped_events AS (
                 SELECT LOWER(TRIM(COALESCE(o.location, ''))) AS location_key,
                        TRIM(COALESCE(o.location, '')) AS display_location
-                FROM observations o
-                     INDEXED BY idx_observations_finalized_time_location
+                FROM effective_observations o
                 WHERE {scope_sql}
                   AND EXISTS (
                       SELECT 1 FROM observation_participants p
@@ -11733,7 +12061,7 @@ def _world_relationship_scope(
                MIN(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) AS first_at,
                MAX(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) AS last_at
         FROM relationship_evidence e
-        LEFT JOIN observations o ON e.evidence_type = 'CO_OBSERVED'
+        LEFT JOIN effective_observations o ON e.evidence_type = 'CO_OBSERVED'
              AND e.source_entity_type = 'OBSERVATION' AND o.observation_id = e.source_entity_id
         WHERE e.active = 1{evidence_prefix} AND (
             (e.evidence_type = 'CO_OBSERVED' AND {scope_sql})
@@ -11802,7 +12130,7 @@ def _world_scoped_event_people(conn: sqlite3.Connection, filters: WorldReadFilte
         f"""
         WITH RECURSIVE corrected(observation_id, person_id) AS (
             SELECT p.observation_id, p.person_id
-            FROM observations o JOIN observation_participants p USING(observation_id)
+            FROM effective_observations o JOIN observation_participants p USING(observation_id)
             WHERE {scope_sql}
             UNION
             SELECT r.observation_id, c.to_person_id
@@ -11841,7 +12169,7 @@ def _world_activity_counts(
         f"""
         WITH RECURSIVE corrected(observation_id, person_id) AS (
             SELECT p.observation_id, p.person_id
-            FROM observations o JOIN observation_participants p USING(observation_id)
+            FROM effective_observations o JOIN observation_participants p USING(observation_id)
             WHERE {scope_sql}
             UNION
             SELECT r.observation_id, c.to_person_id
@@ -11903,7 +12231,7 @@ def _world_event_statistics(
                 SELECT e.observation_id, e.person_id,
                        CASE WHEN TRIM(COALESCE(o.location, '')) = '' THEN 'MISSING'
                             ELSE TRIM(o.location) END AS location
-                FROM effective e JOIN observations o USING(observation_id)
+                FROM effective e JOIN effective_observations o USING(observation_id)
                 WHERE e.person_id IN ({placeholders})
             ), event_set AS (
                 SELECT DISTINCT observation_id, location FROM eligible
@@ -11955,13 +12283,12 @@ def _world_full_scope_event_statistics(
         "world_overview_statistics", 3, _WorldOverviewStatisticsAggregate,
     )
     if not _world_use_participant_first_overview(conn, filters):
-        aggregate_from = """observations o
-                 INDEXED BY idx_observations_finalized_time_location
+        aggregate_from = """effective_observations o
             CROSS JOIN observation_participants p"""
     else:
         aggregate_from = """observation_participants p
                  INDEXED BY sqlite_autoindex_observation_participants_1
-            CROSS JOIN observations o"""
+            CROSS JOIN effective_observations o"""
     row = conn.execute(
         f"""SELECT world_overview_statistics(
                        p.person_id, o.observation_id, o.location
@@ -12000,7 +12327,8 @@ def _world_full_scope_event_statistics(
     correction_sources = {
         str(row[0]) for row in conn.execute(
             """SELECT DISTINCT from_person_id FROM identity_corrections
-               WHERE correction_type = 'OBSERVATION_IDENTITY'"""
+               WHERE correction_type = 'OBSERVATION_IDENTITY'
+               UNION SELECT person_id FROM encounter_participant_revisions"""
         ).fetchall()
     }
     affected_ids = {
@@ -12027,7 +12355,7 @@ def _world_full_scope_event_statistics(
                 SELECT DISTINCT p.observation_id
                 FROM observation_participants p
                      INDEXED BY idx_observation_participants_person
-                CROSS JOIN observations o
+                CROSS JOIN effective_observations o
                 WHERE p.person_id IN ({placeholders})
                   AND o.observation_id = p.observation_id
                   AND {scope_sql}
@@ -12045,6 +12373,8 @@ def _world_full_scope_event_statistics(
     ).fetchall()
     for row in adjustments:
         person_id, count = str(row["person_id"]), int(row["count"])
+        if not person_id:
+            continue
         activity[person_id] = activity.get(person_id, 0) + (
             count if str(row["kind"]) == "EFFECTIVE" else -count
         )
@@ -12446,11 +12776,15 @@ def _world_effective_participant_cte(scope_sql: str) -> str:
             )
         ), effective(observation_id, person_id) AS (
             SELECT DISTINCT p.observation_id, m.canonical_person_id
-            FROM observations o JOIN observation_participants p USING(observation_id)
+            FROM effective_observations o JOIN observation_participants p USING(observation_id)
             LEFT JOIN correction_terminal c
               ON c.observation_id = p.observation_id AND c.raw_person_id = p.person_id
             JOIN identity_map m ON m.person_id = COALESCE(c.person_id, p.person_id)
-            WHERE {scope_sql}
+            WHERE {scope_sql} AND COALESCE((
+                SELECT r.disposition FROM encounter_participant_revisions r
+                WHERE r.observation_id = p.observation_id AND r.person_id = COALESCE(c.person_id, p.person_id)
+                ORDER BY r.created_at DESC, r.rowid DESC LIMIT 1
+            ), 'PRESENT') <> 'REMOVED'
         )
     """
 
@@ -12476,7 +12810,7 @@ def _world_scoped_event_count(
         f"""SELECT COUNT(DISTINCT p.observation_id)
             FROM observation_participants p
                  INDEXED BY idx_observation_participants_person
-            CROSS JOIN observations o
+            CROSS JOIN effective_observations o
             WHERE p.person_id IN ({placeholders})
               AND o.observation_id = p.observation_id
               AND {scope_sql}
@@ -12546,7 +12880,7 @@ def _world_person_event_membership_sql(
     return (
         f"""FROM observation_participants p
                INDEXED BY idx_observation_participants_person
-            CROSS JOIN observations o
+            CROSS JOIN effective_observations o
             WHERE p.person_id IN ({placeholders})
               AND o.observation_id = p.observation_id
               AND {scope_sql}
@@ -12573,6 +12907,10 @@ def _world_register_effective_person_function(
         ).fetchall()
     }
 
+    participation = {}
+    for revision in conn.execute("SELECT observation_id, person_id, disposition FROM encounter_participant_revisions ORDER BY created_at, rowid"):
+        participation[(str(revision[0]), str(revision[1]))] = str(revision[2])
+
     def effective_person(observation_id: object, raw_person_id: object) -> str:
         current = str(raw_person_id)
         seen: set[str] = set()
@@ -12581,7 +12919,8 @@ def _world_register_effective_person_function(
                 raise RuntimeError("Observation identity correction cycle detected")
             seen.add(current)
             current = corrections[(str(observation_id), current)]
-        return canonical_map[current]
+        terminal = canonical_map[current]
+        return "" if participation.get((str(observation_id), current)) == "REMOVED" else terminal
 
     conn.create_function("world_effective_person", 2, effective_person, deterministic=True)
     if focus_person_id is not None and focus_person_ids is not None:
@@ -12620,7 +12959,7 @@ def _world_event_row(
 ) -> sqlite3.Row:
     scope_sql, params = _world_scope_sql(filters, evidence=False)
     row = conn.execute(
-        f"SELECT o.* FROM observations o WHERE {scope_sql} AND o.observation_id = ?",
+        f"SELECT o.* FROM effective_observations o WHERE {scope_sql} AND o.observation_id = ?",
         [*params, event_id],
     ).fetchone()
     if row is None:
@@ -12643,9 +12982,13 @@ def _world_event_participant_mapping(
         (event_id,),
     ).fetchall()
     canonical_map = _world_canonical_map(conn)
-    return _world_participant_mapping(
+    participants, provenance = _world_participant_mapping(
         [str(row["person_id"]) for row in raw_rows], corrections, canonical_map,
     )
+    if conn.execute("SELECT 1 FROM encounter_participant_revisions WHERE observation_id = ? LIMIT 1", (event_id,)).fetchone():
+        participants = tuple({"person_id": pid} for pid in _effective_observation_person_ids(conn, event_id))
+        provenance = tuple({**item, "effective_participation": item["effective_person_id"] in {p["person_id"] for p in participants}} for item in provenance)
+    return participants, provenance
 
 
 def _world_participant_mapping(
@@ -12733,9 +13076,11 @@ def _world_event_batch_data(
         event_ids,
     ).fetchall():
         media_by_event[str(row["observation_id"])] = int(row["count"])
+    revised_events = {str(row[0]) for row in conn.execute(
+        f"SELECT DISTINCT observation_id FROM encounter_participant_revisions WHERE observation_id IN ({placeholders})", event_ids)}
     return {
         event_id: (
-            _world_participant_mapping(
+            _world_event_participant_mapping(conn, event_id) if event_id in revised_events else _world_participant_mapping(
                 raw_by_event[event_id], corrections_by_event[event_id], canonical_map,
             ),
             {
@@ -12795,7 +13140,7 @@ def _world_event_media_page(
 ) -> tuple[int, tuple[WorldMediaReference, ...]]:
     total = _world_event_media_count(conn, event_id)
     event = conn.execute(
-        "SELECT COALESCE(observed_at, created_at) AS occurred_at FROM observations WHERE observation_id = ? AND status = 'FINALIZED'",
+        "SELECT COALESCE(observed_at, created_at) AS occurred_at FROM effective_observations WHERE observation_id = ? AND status = 'FINALIZED'",
         (event_id,),
     ).fetchone()
     if event is None:
@@ -12959,7 +13304,7 @@ def _world_evidence_page(
     elif filters.missing_location == "ONLY":
         clauses.append("(e.evidence_type <> 'CO_OBSERVED' OR TRIM(COALESCE(o.location, '')) = '')")
     where = " AND ".join(clauses)
-    joined = "relationship_evidence e LEFT JOIN observations o ON e.evidence_type = 'CO_OBSERVED' AND o.observation_id = e.source_entity_id"
+    joined = "relationship_evidence e LEFT JOIN effective_observations o ON e.evidence_type = 'CO_OBSERVED' AND o.observation_id = e.source_entity_id"
     total = int(conn.execute(f"SELECT COUNT(*) FROM {joined} WHERE {where}", params).fetchone()[0])
     rows = conn.execute(
         f"SELECT e.*, {occurrence} AS effective_occurred_at FROM {joined} "
@@ -13182,7 +13527,7 @@ def _world_location_facets_effective(
             )
             SELECT CASE WHEN TRIM(COALESCE(o.location, '')) = '' THEN 'MISSING'
                          ELSE TRIM(o.location) END AS value, COUNT(*) AS count
-            FROM eligible_events e JOIN observations o USING(observation_id)
+            FROM eligible_events e JOIN effective_observations o USING(observation_id)
             GROUP BY LOWER(TRIM(COALESCE(o.location, '')))
             ORDER BY count DESC, value LIMIT 100""",
         [*params, *sorted(eligible_person_ids)],
@@ -13329,7 +13674,7 @@ def _require_observation(conn: sqlite3.Connection, observation_id: str) -> sqlit
     if not normalized_id:
         raise ValueError("Observation ID is required")
     row = conn.execute(
-        "SELECT * FROM observations WHERE observation_id = ?", (normalized_id,),
+        "SELECT * FROM effective_observations WHERE observation_id = ?", (normalized_id,),
     ).fetchone()
     if row is None:
         raise KeyError(f"Unknown observation: {normalized_id}")
@@ -13363,6 +13708,7 @@ def _require_existing_media(
         ("pending_additions", "source_image"),
         ("init_faces", "source_image"),
         ("init_faces", "crop_path"),
+        ("init_session_media", "media_path"),
     )
     for table, column in references:
         if table not in tables:
@@ -13499,6 +13845,113 @@ def _list_observation_media(
         (observation_id,),
     ).fetchall()
     return [_observation_media_from_row(row) for row in rows]
+
+
+def _table_exists(conn, name):
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?", (name,)).fetchone() is not None
+
+
+def _encounter_detail_person(conn, observation_id, detail):
+    for assignment in _effective_face_assignments(conn, observation_id):
+        if assignment["embedding_id"] == detail["embedding_id"]:
+            return _resolve_canonical_person_id(conn, assignment["current_person_id"])
+    return _resolve_canonical_person_id(conn, str(detail["person_id"]))
+
+
+def _append_participant_revision(conn, observation_id, person_id, disposition, operation_id):
+    # Freeze the raw component being removed today. A later merge must not
+    # remove participation contributed by its future survivor.
+    ids = [person_id]
+    if disposition == "REMOVED":
+        ids = [str(row[0]) for row in conn.execute("SELECT person_id FROM persons")
+               if _resolve_canonical_person_id(conn, str(row[0])) == person_id]
+    for raw_id in ids:
+        conn.execute("INSERT INTO encounter_participant_revisions VALUES (?, ?, ?, ?, ?, ?)",
+                     (str(uuid.uuid4()), observation_id, raw_id, disposition, operation_id, utc_now()))
+
+
+def _encounter_event_details(row):
+    context = json.loads(row["context"] or "{}")
+    return {"date": str(row["observed_at"] or "")[:10], "time": context.get("start_time") or "",
+            "end_time": context.get("end_time") or "", "time_precision": context.get("time_precision", "unknown"),
+            "place_seen": row["location"] or "", "event_occasion": context.get("occasion") or "",
+            "event_context": context.get("category", "unknown"), "event_notes": context.get("event_notes") or "",
+            "event_mentioned_person_ids": context.get("event_mentioned_person_ids", [])}
+
+
+def _encounter_revision(conn, observation_id):
+    # Bind the complete reviewed authority, including lifecycle/canonical interpretation.
+    snapshot = {"observation": dict(_require_observation(conn, observation_id)),
+                "participants": _effective_observation_person_ids(conn, observation_id),
+                "media": [dict(row) for row in conn.execute("SELECT * FROM observation_media WHERE observation_id = ? ORDER BY media_id", (observation_id,))],
+                "relations": [dict(row) for row in conn.execute("SELECT * FROM encounter_relation_decisions WHERE observation_id = ? ORDER BY decision_id", (observation_id,))],
+                "corrections": [dict(row) for row in conn.execute("SELECT * FROM identity_corrections WHERE observation_id = ? ORDER BY correction_id", (observation_id,))],
+                "participant_revisions": [dict(row) for row in conn.execute("SELECT * FROM encounter_participant_revisions WHERE observation_id = ? ORDER BY revision_id", (observation_id,))]}
+    return hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
+
+
+def _require_encounter_revision(conn, observation_id, expected_revision):
+    if _require_observation(conn, observation_id)["status"] != "FINALIZED":
+        raise ValueError("Only a finalized Encounter can be managed")
+    if not expected_revision or expected_revision != _encounter_revision(conn, observation_id):
+        raise ValueError("Encounter changed; reload it before correcting or attaching media")
+
+
+def _require_no_encounter_amendment(conn, observation_id, *, session_id=None):
+    row = conn.execute("SELECT session_id FROM photo_reviews WHERE target_observation_id = ? AND status = 'IN_PROGRESS'", (observation_id,)).fetchone()
+    if row and (not session_id or row["session_id"] != session_id):
+        raise ValueError("Finish or discard the active Attach Media review before correcting this Encounter")
+
+
+def _encounter_person_media(conn, observation_id, person_id):
+    if person_id not in _effective_observation_person_ids(conn, observation_id):
+        return []
+    result = set()
+    for assignment in _effective_face_assignments(conn, observation_id):
+        if _resolve_canonical_person_id(conn, assignment["current_person_id"]) == person_id:
+            row = conn.execute("SELECT source_image FROM embeddings WHERE embedding_id = ?", (assignment["embedding_id"],)).fetchone()
+            if row and row[0]:
+                result.add(str(row[0]))
+    return sorted(result)
+
+
+def _encounter_pair_support(conn, observation_id, first_id, second_id):
+    return "SHARED_FRAME" if set(_encounter_person_media(conn, observation_id, first_id)) & set(_encounter_person_media(conn, observation_id, second_id)) else "SAME_ENCOUNTER_ONLY"
+
+
+def _effective_encounter_relations(conn, observation_id):
+    result = {}
+    for row in conn.execute("SELECT * FROM encounter_relation_decisions WHERE observation_id = ? AND active = 1 ORDER BY decided_at, rowid", (observation_id,)):
+        pair = tuple(sorted(_resolve_canonical_person_id(conn, str(row[key])) for key in ("first_person_id", "second_person_id")))
+        if pair[0] == pair[1]:
+            continue
+        if pair in result and result[pair]["disposition"] != row["disposition"]:
+            raise ValueError(f"Encounter {observation_id} has conflicting canonical Relations")
+        result[pair] = dict(row)
+    return result
+
+
+def _write_encounter_relation_revisions(conn, observation_id, desired, operation_id):
+    existing = _effective_encounter_relations(conn, observation_id)
+    review = conn.execute("SELECT review_id FROM photo_reviews WHERE observation_id = ? AND status = 'COMPLETED' ORDER BY completed_at LIMIT 1", (observation_id,)).fetchone()
+    if not review:
+        raise ValueError("Encounter has no completed review authority")
+    for row in conn.execute("SELECT * FROM encounter_relation_decisions WHERE observation_id = ? AND active = 1", (observation_id,)).fetchall():
+        pair = tuple(sorted(_resolve_canonical_person_id(conn, str(row[key])) for key in ("first_person_id", "second_person_id")))
+        if pair not in desired or (existing.get(pair, {}).get("decision_id") != row["decision_id"]) or any(row[key] != desired[pair][key] for key in ("disposition", "support")):
+            conn.execute("UPDATE encounter_relation_decisions SET active = 0 WHERE decision_id = ?", (row["decision_id"],))
+    for pair, value in desired.items():
+        previous = existing.get(pair)
+        if previous and all(previous[key] == value[key] for key in ("disposition", "support")):
+            continue
+        conn.execute("INSERT INTO encounter_relation_decisions(decision_id, review_id, observation_id, first_ref, second_ref, first_person_id, second_person_id, disposition, support, supersedes_decision_id, operation_id, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), review[0], observation_id, f"person:{pair[0]}", f"person:{pair[1]}", *pair, value["disposition"], value["support"], previous["decision_id"] if previous else None, operation_id, utc_now()))
+
+
+def _refresh_encounter_relation_support(conn, observation_id, operation_id):
+    desired = {pair: {**row, "support": _encounter_pair_support(conn, observation_id, *pair)}
+               for pair, row in _effective_encounter_relations(conn, observation_id).items()}
+    _write_encounter_relation_revisions(conn, observation_id, desired, operation_id)
 
 
 def _encounter_read_record(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
@@ -13656,6 +14109,15 @@ def _corrected_observation_person_ids(
         if from_person_id in effective_ids:
             effective_ids.remove(from_person_id)
             effective_ids.add(str(correction["to_person_id"]))
+    for revision in conn.execute(
+        "SELECT person_id, disposition FROM encounter_participant_revisions WHERE observation_id = ? ORDER BY created_at, rowid",
+        (observation_id,),
+    ):
+        pid = str(revision["person_id"])
+        if revision["disposition"] == "PRESENT":
+            effective_ids.add(pid)
+        else:
+            effective_ids.discard(pid)
     return sorted(effective_ids)
 
 
@@ -13675,7 +14137,7 @@ def _list_person_sightings(
     sightings: list[Sighting] = []
     rows = conn.execute(
         """
-        SELECT * FROM observations
+        SELECT * FROM effective_observations
         WHERE status = 'FINALIZED'
         ORDER BY COALESCE(observed_at, created_at) DESC, observation_id
         """
@@ -14203,6 +14665,9 @@ def _write_merge_profile_note_revision(
 
 
 def _require_no_active_encounter_draft_reference(conn: sqlite3.Connection, person_id: str) -> None:
+    for amendment in conn.execute("SELECT target_observation_id FROM photo_reviews WHERE target_observation_id IS NOT NULL AND status = 'IN_PROGRESS'"):
+        if _resolve_canonical_person_id(conn, person_id) in _effective_observation_person_ids(conn, str(amendment[0])):
+            raise ValueError("Person is referenced by an active Encounter amendment; finish or discard it first")
     selected = conn.execute(
         "SELECT r.review_id FROM photo_review_faces f "
         "JOIN photo_reviews r ON r.review_id = f.review_id "
@@ -14286,10 +14751,12 @@ def _preview_identity_merge(
             continue
         key = (str(relation["observation_id"]), *pair)
         prior = relation_pairs.get(key)
-        if prior is not None:
+        if prior is not None and prior != str(relation["disposition"]):
+            event = _require_observation(conn, str(relation["observation_id"]))
+            occasion = json.loads(event["context"] or "{}").get("occasion") or "Unnamed Event"
+            caption = f"{occasion}, {str(event['observed_at'] or 'Date unknown')[:10]}, {event['location'] or 'Location unknown'}"
             raise ValueError(
-                "Merge would collapse distinct Encounter Relation decisions onto one effective pair; "
-                "correct the Encounter before merging"
+                f"Merge would collapse distinct Encounter Relation decisions in Encounter {relation['observation_id']} ({caption}); find it in Global Events and correct Relations before merging"
             )
         relation_pairs[key] = str(relation["disposition"])
     conflicts = _proposed_merge_conflicts(conn, source_row, target_row)
@@ -14477,7 +14944,7 @@ def _discover_merge_affected_items(
     ).fetchall():
         add("ENROLLMENT_HISTORY", row["enrollment_id"], str(row["person_id"]), action=MergeAffectedAction.PRESERVE.value)
     affected_observation_ids: set[str] = set()
-    for row in conn.execute("SELECT * FROM observations ORDER BY observation_id").fetchall():
+    for row in conn.execute("SELECT * FROM effective_observations ORDER BY observation_id").fetchall():
         corrected = _corrected_observation_person_ids(conn, str(row["observation_id"]))
         if any(person_id in component for person_id in corrected):
             affected_observation_ids.add(str(row["observation_id"]))
@@ -17238,6 +17705,8 @@ def _p11d_precondition_from_report(
     statuses = tuple(item["to_status"] for item in operation["status_history"])
     if statuses != ("STARTED", "COMMITTED"):
         raise OperationRevertRefused("Operation journal history is incomplete or ambiguous")
+    if conn.execute("SELECT 1 FROM relationship_evidence WHERE source_entity_type = 'OBSERVATION' AND (created_operation_id = ? OR deactivated_operation_id = ?) LIMIT 1", (operation_id, operation_id)).fetchone():
+        raise OperationRevertRefused("Merge revised Encounter Relations and is outside the safe revert subset")
     manifest = _get_merge_operation(conn, operation_id)
     if manifest is None or manifest.operation_journal_id != operation_id:
         raise OperationRevertRefused("Merge manifest history is incomplete")

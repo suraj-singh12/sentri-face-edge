@@ -56,9 +56,11 @@ test("lifecycle and graph interactions consume explicit backend permissions", as
   assert.doesNotMatch(view, /createRelationshipGraph|mergeRelationshipGraph|relationshipGraphCollections/);
 });
 
-test("manual legacy association controls are not current UI authority", async () => {
+test("Manual Association controls use normalized evidence commands", async () => {
   const [view, controller] = await Promise.all([read("../src/views/PeopleView.jsx"), read("../src/hooks/usePeopleController.js")]);
   assert.equal((view.match(/>\s*Open Person Graph\s*<\/Button>/g) || []).length, 2);
   assert.doesNotMatch(view, /Link person|Remove association|Create placeholder/);
-  assert.doesNotMatch(controller, /person-association|createPersonAssociation|removePersonAssociation/);
+  assert.match(controller, /apiPost\("\/api\/person-association"/);
+  assert.match(controller, /evidence_id: evidenceId/);
+  assert.doesNotMatch(controller, /createPersonAssociation|removePersonAssociation/);
 });

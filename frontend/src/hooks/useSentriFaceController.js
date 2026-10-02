@@ -34,6 +34,11 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
   });
   const queue = useQueueController({
     enabled: canAdd && activeView === "queue",
+    onEncounterCompleted: async (result) => {
+      world.actions.invalidateWorld(result);
+      await appData.loadEncounters();
+      if (appData.encounterDetail?.observation_id === result.observation_id) await appData.loadEncounterDetail(result.observation_id);
+    },
     ...api,
     ...uploads,
     loadPeople: appData.loadPeople,
@@ -81,6 +86,19 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       loadEncounters: appData.loadEncounters,
       loadEncounterDetail: appData.loadEncounterDetail,
       closeEncounterDetail: appData.closeEncounterDetail,
+      correctEncounter: async (detail, changes) => {
+        const result = await api.apiPost("/api/encounter-correct", { observation_id: detail.observation_id, expected_revision: detail.revision, ...changes });
+        people.actions.invalidatePersonGraph(result);
+        world.actions.invalidateWorld(result);
+        await appData.loadEncounterDetail(detail.observation_id);
+        await appData.loadEncounters();
+        await appData.loadPeople({ dedupe: false });
+        return result;
+      },
+      attachEncounterMedia: async (detail, files) => {
+        await queue.actions.scanQueueFiles(files, { targetObservationId: detail.observation_id, expectedRevision: detail.revision });
+        setActiveView("queue");
+      },
       loadDeletedFaces: appData.loadDeletedFaces,
       loadBackups: appData.loadBackups,
       requestBackup: appData.requestBackup,

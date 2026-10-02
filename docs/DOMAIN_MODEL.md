@@ -1,5 +1,16 @@
 # SentriFace global identity domain model
 
+## Finalized Encounter amendment authority (Batch 3)
+
+An amendment retains the original `observation_id` and finalization time. `photo_reviews.target_observation_id` and `expected_encounter_revision` bind an existing durable review to that authority; no new observation is created at completion. Media references attach once; accepted faces add immutable assignment/embedding/note history. Previously settled canonical pairs retain their dispositions. Every newly introduced pair requires an explicit INCLUDE/EXCLUDE decision. Additional shared frames may improve support to SHARED_FRAME but do not add independent recurrence. Zero-face or all-excluded media may extend a finalized Encounter without inventing participants.
+
+`encounter_metadata_revisions` stores corrected observed time, location and context append-only. `effective_observations` overlays the latest revision while original observation metadata remains immutable. Event-selected IDs are corrected with that metadata and remain Encounter→Person mentions. `encounter_participant_revisions` records PRESENT/REMOVED interpretation append-only, independent of physical face ownership. Removal snapshots the current raw canonical component as revision rows; later merges must not erase participation supplied by another raw identity. Reassignment also uses the established face/observation/ownership correction records. A correction cannot remove the last effective participant.
+
+Relations changes retire superseded decisions and append revisions. Only current included canonical pairs generate CO_OBSERVED; retired originals retain provenance. A merge with contradictory pair dispositions refuses and identifies the Encounter requiring correction. After explicit resolution, merge collapses redundant equal pairs and retires self-pairs while retaining their history. Rebuild reproduces the same effective evidence/projection. Independent note and manual evidence is unaffected.
+
+Manual Association commands create active normalized MANUAL_ASSERTION evidence (projected as MANUAL_ASSOCIATION) between distinct active canonical people. Retirement affects exactly that assertion, preserving other manual assertions, CO_OBSERVED and NOTE_REFERENCE. Each command and amendment/correction commits its operation journal with authority and graph in one transaction; retries return the committed result before checking a now-stale revision.
+
+
 ## Architectural rule
 
 SentriFace owns one global identity graph. **Person Graph** is an identity-centred projection and **World** is a spatial/temporal projection of the same authoritative records and relationship evidence. They are not separate graphs or stores.

@@ -4,11 +4,17 @@ This is the shortest safe path for an engineer or coding agent taking over the
 current 2.0.0 release work. It is an orientation guide, not a replacement for the
 normative rules in the repository-root `AGENTS.md`.
 
+## Batch 3 handoff (2026-10-02)
+
+The uncommitted working tree now contains schema v32 finalized Encounter management and People integration. Use existing review completion for Attach Media; do not create a second observation or duplicate managed assets. Effective reads overlay append-only metadata/participant revisions and retain original face/correction/Relations history. Canonical merge conflicts require explicit Encounter Relations resolution. Manual create/retire uses normalized evidence and existing `add`; finalized corrections use `destroy`; reads use `view`. The deleted-Person historical summary fix permits tombstone access without widening active recognition eligibility.
+
+Batch 3 gates: 577 backend passed, 47 skipped, 115 subtests passed; 112 frontend passed; production build and diff check passed. Authenticated synthetic-data UI exercised corrections, profile integration, manual add/retire and same-occurrence attachment. The canonical tracker owns exact coverage and manual limits. Older gate counts below are historical. Preserve World vNext, Encounter Split/Merge, signing/current-artifact Windows acceptance and P14 update delivery as deferred. No auto-commit or tag. Reading order/README ownership is unchanged.
+
 ## Current checkpoint
 
 - Application version: `2.0.0` (`src/sentriface/_version.py`).
-- Database schema: v31 in the current correctness working tree (`SQLiteIdentityStore`); v30 is the Batch 2 staging foundation and v28 remains the frozen P11/P14 release baseline.
-- Current correction: durable pre-grouping media exclusion/restore, automatic finalized-media exclusion, reconciled group IDs/selected faces, combined canonical committed+active-draft recognition and proof-only duplicate prevention, atomic selected-face draft decisions, current-value form validation, 4.5-second default notifications, 250×250 Peek In and left-aligned recognition preference. Drafted means draft-created Person only. See the canonical tracker for verification; Encounter Management, Manual Association UI, World vNext and the deleted-Person regression remain deferred.
+- Database schema: v32 in the current Batch 3 working tree (`SQLiteIdentityStore`); v30 is the Batch 2 staging foundation and v28 remains the frozen P11/P14 release baseline.
+- Current correction: durable pre-grouping media exclusion/restore, automatic finalized-media exclusion, reconciled group IDs/selected faces, combined canonical committed+active-draft recognition and proof-only duplicate prevention, atomic selected-face draft decisions, current-value form validation, 4.5-second default notifications, 250×250 Peek In and left-aligned recognition preference. Drafted means draft-created Person only. This is the historical Batch 2 stabilization checkpoint. Batch 3 now implements Encounter Management/Attach/Correct, profile/manual association integration and the deleted-Person historical-read fix; World vNext and Encounter Split/Merge remain deferred.
 - Final correctness gates: 561 backend tests passed, 47 skipped, 114 subtests; 112 frontend tests passed; production build/diff check passed. Authenticated synthetic-media development UI verified removal/reload, Event→Person flow, Peek In, filled forms, proof-only draft reuse, quality preference, final completion and Person Profile persistence. This is not production-model, full-role or release acceptance.
 - P0 through P14 source implementation is complete.
 - P10 through P13 are frozen.

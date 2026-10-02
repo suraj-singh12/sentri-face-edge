@@ -1,6 +1,6 @@
 # SentriFace Edge features by tab
 
-This is the current user-facing map. `DOMAIN_MODEL.md` defines authority and `ARCHITECTURE_EXPLANATION.md` explains implementation. **Implemented** means present in the current source; post-finalization Encounter correction and the Relations graph remain deferred. Every tab reads the same local identity store through the authenticated loopback API.
+This is the current user-facing map. `DOMAIN_MODEL.md` defines authority and `ARCHITECTURE_EXPLANATION.md` explains implementation. **Implemented** means present in the current source; Batch 3 finalized Encounter management and normalized Manual Association controls are implemented; World vNext and Encounter Split/Merge remain deferred. Every tab reads the same local identity store through the authenticated loopback API.
 
 ## Access
 
@@ -12,7 +12,7 @@ This is the current user-facing map. `DOMAIN_MODEL.md` defines authority and `AR
 | Technician | Viewer + `backups`, `technical` | Also technical Settings sections; no review finalization |
 | Administrator | All listed capabilities | All tabs and Settings sections, including accounts, restore, integrity/recovery, and license administration |
 
-`Events` GET uses the existing `view` capability for all five roles; it has no Events mutation route. Review writes require `add`. The server enforces capabilities even for direct URLs. Settings section visibility follows its more specific capabilities. A restricted license can replace ordinary tabs with the recovery Settings shell.
+`Events` GET uses `view` for all five roles. Attach Media uses `add`; finalized metadata/participant/Relations correction uses `destroy`; Manual Association create/retire uses `add`. Review writes require `add`. The server enforces capabilities even for direct URLs. Settings section visibility follows its more specific capabilities. A restricted license can replace ordinary tabs with the recovery Settings shell.
 
 ## Check a photo (`recognize`)
 
@@ -37,15 +37,15 @@ Person Profile sub-tabs are:
 | Overview | Person identity, metadata, lifecycle, presence and note controls | General editable `PERSON_NOTE`; Person changes use authorized commands |
 | Photos | Effective face/media gallery, recognition quality and origin | `ENCOUNTER`, `STANDALONE_ENROLLMENT`, or `UNKNOWN_LEGACY` are durable provenance reads; a photo does not by itself imply a new Encounter |
 | Sightings | Confirmed Person + finalized Encounter history and detail | Derived from effective participants, never mention-only references |
-| Events | Newest-first occurrences where the Person is `PRESENT`, `MENTIONED`, or `BOTH`; filters, relevant observed media, Sighting/Event Note context | Read-only; mention-only media is never claimed to depict the Person |
-| Associations | Evidence-backed Person relationships/Person Graph entry | Reads `CO_OBSERVED`, `NOTE_REFERENCE`, `MANUAL_ASSOCIATION` distinctly; no UI-owned edges |
+| Events | Newest-first occurrences where the Person is `PRESENT`, `MENTIONED`, or `BOTH`; filters, relevant observed media, Sighting/Event Note context | Compact rows open Global Encounter detail; mention-only media is never claimed to depict the Person |
+| Associations | Evidence-backed Person relationships/Person Graph entry | Reads independent evidence; Add Association and per-assertion removal use normalized commands; no UI-owned edges |
 | Activity | Existing journaled Person changes | Historical read, not an Event/Encounter list |
 
-Archive, tombstone delete, and merge retain raw historical IDs; effective reads resolve the canonical survivor. Access to reads uses `view`; create/edit/Add Face uses `add`; destructive lifecycle actions use `destroy` where exposed. The known `Unknown person: <UUID>` after deletion is a tracked high-priority regression.
+Archive, tombstone delete, and merge retain raw historical IDs; effective reads resolve the canonical survivor. Access to reads uses `view`; create/edit/Add Face uses `add`; destructive lifecycle actions use `destroy` where exposed. Historical summary reads now include named tombstones; deleted identities remain inactive and unavailable to active selection/recognition.
 
 ## Events (`encounters`)
 
-**Meaning and purpose:** read finalized real-world occurrences, distinct from the technical Activity log. **Implemented, read-only:** newest-first bounded pages; occasion, date/range, location, context, participant, and mentioned-Person filters; Event detail with participants, all supporting media, Event Note selected IDs, and Sighting Notes. A selected Event Note ID is structured `Encounter → Person` mention provenance. It is searchable in Events and Person Profile Events, but does not imply attendance or produce Person relationship evidence. Literal unselected `@Name` is inert. An Event with unknown legacy metadata remains unknown. Access: existing `view` capability; no Event edit/delete/attach/correct endpoint or control.
+**Meaning and purpose:** read finalized real-world occurrences, distinct from the technical Activity log. **Implemented:** newest-first bounded pages; occasion, date/range, location, context, participant, and mentioned-Person filters; Event detail with participants, all supporting media, Event Note selected IDs, and Sighting Notes. A selected Event Note ID is structured `Encounter → Person` mention provenance. It is searchable in Events and Person Profile Events, but does not imply attendance or produce Person relationship evidence. Literal unselected `@Name` is inert. An Event with unknown legacy metadata remains unknown. Detail includes explicit Relations, support and bounded human-readable correction history. Attach Media (`add`) reuses Review Photos, skips duplicate finalized media and keeps the same occurrence. Correct metadata/selected mentions, reassign/remove/add participants and revise Relations require `destroy`. Changed Encounters require reload; competing attachment drafts must finish or be discarded. Encounter Split/Merge remains deferred.
 
 ## World (`world`)
 

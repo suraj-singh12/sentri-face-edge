@@ -329,6 +329,9 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onSave={actions.savePeopleProfile}
               onSaveNotes={guarded(actions.savePersonNotes)}
               onQueryEncounters={actions.queryEncounters}
+              onOpenEncounter={guarded(async (id) => { await actions.loadEncounterDetail(id); actions.setActiveView("encounters"); })}
+              onCreateAssociation={actions.createManualAssociation}
+              onRetireAssociation={actions.retireManualAssociation}
               onAddPhoto={beginPhotoEnrollment}
               onFavorite={guarded(actions.setPeopleFavorite)}
               onSetRepresentative={guarded(actions.setRepresentativePhoto)}
@@ -378,6 +381,10 @@ function SentriFaceShell({ user, logout, changePassword }) {
             <EventsView
               page={state.encounters}
               detail={state.encounterDetail}
+              canAttach={can("add")}
+              canCorrect={can("destroy")}
+              onCorrect={actions.correctEncounter}
+              onAttach={actions.attachEncounterMedia}
               people={state.people}
               onQuery={guarded(actions.loadEncounters)}
               onOpen={guarded(actions.loadEncounterDetail)}

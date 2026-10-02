@@ -410,6 +410,22 @@ export function usePeopleController({
       setPeopleGalleryImage,
       peopleBack,
       savePeopleProfile,
+      createManualAssociation: async (firstPersonId, secondPersonId, operationId) => {
+        const result = await apiPost("/api/person-association", { first_person_id: firstPersonId, second_person_id: secondPersonId, operation_id: operationId });
+        invalidatePersonGraph(result);
+        onWorldMutation?.(result);
+        await loadPeople({ dedupe: false });
+        await refreshPeopleProfile(firstPersonId);
+        return result;
+      },
+      retireManualAssociation: async (personId, evidenceId, operationId) => {
+        const result = await apiPost("/api/person-association-remove", { evidence_id: evidenceId, operation_id: operationId });
+        invalidatePersonGraph(result);
+        onWorldMutation?.(result);
+        await loadPeople({ dedupe: false });
+        await refreshPeopleProfile(personId);
+        return result;
+      },
       savePersonNotes,
       setPeopleFavorite: setFavorite,
       setRepresentativePhoto,

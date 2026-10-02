@@ -1,5 +1,16 @@
 # SentriFace Edge architecture explanation
 
+## Why Batch 3 uses revisions and the existing review
+
+A finalized observation is intentionally immutable. Editing that row would erase what was originally accepted. Metadata correction therefore appends an `encounter_metadata_revisions` row and existing readers use `effective_observations`; the original row and journal history remain inspectable. Face corrections alone cannot express adding a known person without a face or removing accepted participation while retaining the face's provenance. `encounter_participant_revisions` supplies that missing interpretation. REMOVED rows name the raw component present at correction time, preventing a subsequent merge into another participant from erasing the survivor's independent contribution.
+
+Attach Media needs a durable target and a stale-state precondition, which ordinary Batch 2 creation drafts lack. Two fields on existing `photo_reviews` and one active-target index provide those guarantees. The existing scan, identity decisions, Relations review, encrypted managed asset paths and finalization transaction are reused. An attachment increases media/history within the same Encounter, retains old pair choices, and asks only for new pairs. It refreshes shared-frame support and rebuilds one CO_OBSERVED occurrence per included canonical pair. No alternate asset store or transient recognition authority is created.
+
+For example, Alice and Bob attend one meeting. A later image of Alice, Bob and Charlie attaches to that meeting. Alice–Bob remains settled; Alice–Charlie and Bob–Charlie need explicit choices. The image improves Alice–Bob's support but does not make a second meeting. Removing Bob from accepted participation retires only relevant Encounter evidence; an independent Person Note reference or Manual Association can still support the relationship. Mentioning Bob in Event Notes remains searchable history without claiming attendance.
+
+Merge preview refuses contradictory INCLUDE/EXCLUDE collapse and names the affected Encounter. Correct its Relations deliberately, then retry the merge; equal pairs and self-pairs are normalized within the merge transaction. Such authority-changing merges remain outside the frozen safe-revert subset; no recovery whitelist is expanded. Profile Photos deduplicates physical media while retaining face count/origin; Events and Sightings are separate effective reads. Historical summary resolution permits tombstone reads while active selectors still exclude them. All mutation authority stays behind storage/FaceEngine and existing authenticated capabilities. World scoring and cluster algorithms remain unchanged. Older dated read-only Events descriptions below document the preceding checkpoint.
+
+
 ## Purpose and scope
 
 This document is the long-term architectural memory for SentriFace Edge. It explains not merely what the system contains, but why its boundaries exist, what simpler designs would have broken, and how the design behaves when history becomes complicated.

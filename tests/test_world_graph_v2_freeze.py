@@ -444,7 +444,7 @@ class WorldGraphV2FreezeTest(unittest.TestCase):
                     self.assertIn(
                         "observation_participants p\n"
                         "               INDEXED BY idx_observation_participants_person\n"
-                        "            CROSS JOIN observations o",
+                        "            CROSS JOIN effective_observations o",
                         statement,
                     )
                     plan = conn.execute(
@@ -531,7 +531,7 @@ class WorldGraphV2FreezeTest(unittest.TestCase):
                 self.assertIn(
                     "observation_participants p\n"
                     "                     INDEXED BY idx_observation_participants_person\n"
-                    "                CROSS JOIN observations o",
+                    "                CROSS JOIN effective_observations o",
                     adjustment,
                 )
                 plan = conn.execute(

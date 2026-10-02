@@ -1,5 +1,18 @@
 # Global identity graph implementation plan
 
+## Batch 3 — Encounter Management + People Integration (2026-10-02)
+
+Implemented in source on the existing Batch 2 authority: compact Global Events, finalized Encounter detail, Attach Media, metadata/selected-mention correction, participant reassign/remove/add, Relations INCLUDE/EXCLUDE revision, profile integration, and normalized Manual Association create/retire. The deleted-Person historical summary regression is fixed. Schema v32 follows the required migration/journal foundations; no second Encounter, Person, media, graph or recognition subsystem was introduced.
+
+Attach Media binds the existing durable review to one finalized observation and its expected revision. Completion appends media/accepted face history to that observation, retains settled pairs, requires explicit decisions for new canonical pairs, and refreshes support without creating another occurrence. Metadata and participant revisions preserve original finalized authority. Important mutations require operation IDs, commit their journal/evidence/projection together, and reject stale or competing amendment state. Recognition proposals and unsaved forms remain nonauthoritative.
+
+The seven canonical documents below now distinguish this implementation from historical Batch 1/2 checkpoints. README ownership and reading order remain unchanged. **Verification:** focused Encounter management tests: 15 passed; authenticated role/tombstone API test: 1 passed. Full backend: 577 passed, 47 skipped, 115 subtests passed. Frontend: 112 passed. Production build and `git diff --check` passed; the existing large-chunk build warning remains. The migration suite covers supported upgrades; new v31→v32 coverage injects failure after the extension and verifies rollback, backup, repeat startup and foreign keys. Focused coverage includes independent evidence, canonical merge/removal, explicit new pairs, zero-face/all-excluded/new-Person attachment, stale/idempotent writes, graph-failure rollback, rebuild and effective World reads.
+
+**Actual manual UI:** authenticated isolated synthetic-data development app: compact Events list/detail, location save, INCLUDE→EXCLUDE, Bob→Diana reassignment, human-readable correction history, profile Photos origin, profile Events PRESENT/navigation, Manual Association add/retire, and Attach Media upload → explicit face exclusion → Relations → Complete Review. Detail shows two media items within the same Encounter with unchanged participants/pair decision. Page scrolling was exercised. Production recognition, long-list stress, every role's visual walkthrough, and Windows artifact acceptance were not exercised. Role enforcement and named deleted historical reads were tested through the authenticated API, not a tombstone UI walkthrough. World vNext scoring/recurrence tiers/clustering, Encounter Split/Merge, and signed/current-artifact Windows acceptance remain deferred. No commit or tag is authorized.
+
+The older dated stabilization sections below are historical checkpoints. Their references to Encounter Management, Manual Association UI, or the deleted-Person bug as deferred are superseded by this Batch 3 section.
+
+
 ## Current correctness stabilization (2026-10-01)
 
 Completed: the eight manually reported Review Photos defects are corrected without starting Encounter Management, Manual Association UI or World vNext. Existing Queue/review staging remains the owner. Schema v31 minimally extends `init_session_media` with durable `excluded` selection; v30 membership alone cannot remember an operator removal on restart. Selection locks after grouping; no physical or historical media is deleted. There is no new table, subsystem, media path, note authority or recognition index.

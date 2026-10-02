@@ -479,9 +479,17 @@ class ReadOnlyIntegrityChecker:
                 if error is not None or terminal is None:
                     problems.append(f"participant {pid} cannot resolve ({error})")
                 else:
-                    effective.add(terminal)
+                    effective.add(pid)
             result[oid] = (effective, problems)
-        return result
+        for revision in conn.execute("SELECT observation_id, person_id, disposition FROM encounter_participant_revisions ORDER BY created_at, rowid"):
+            oid = str(revision[0])
+            terminal, _, error = self._resolve(str(revision[1]))
+            if oid in result and terminal is not None and error is None:
+                if revision[2] == "PRESENT":
+                    result[oid][0].add(str(revision[1]))
+                else:
+                    result[oid][0].discard(str(revision[1]))
+        return {oid: ({self._resolve(pid)[0] for pid in values[0]}, values[1]) for oid, values in result.items()}
 
     def _check_correction_interpretation(self, conn: sqlite3.Connection) -> None:
         self._load_people(conn)
@@ -529,7 +537,7 @@ class ReadOnlyIntegrityChecker:
     def _check_reviews(self, conn: sqlite3.Connection) -> None:
         query = """
         SELECT r.review_id, r.status, r.observation_id, r.completed_operation_id, r.completed_at,
-               SUM(CASE WHEN f.decision IS NULL THEN 1 ELSE 0 END) undecided,
+               SUM(CASE WHEN f.face_id IS NOT NULL AND f.decision IS NULL THEN 1 ELSE 0 END) undecided,
                COUNT(f.face_id) face_count, o.status observation_status, j.status operation_status
         FROM photo_reviews r LEFT JOIN photo_review_faces f USING(review_id)
         LEFT JOIN observations o ON o.observation_id = r.observation_id
@@ -540,7 +548,7 @@ class ReadOnlyIntegrityChecker:
             completed = row[1] == "COMPLETED"
             invalid = False
             if completed:
-                invalid = row[3] is None or row[4] is None or int(row[5] or 0) > 0 or int(row[6]) < 1 or row[8] != "COMMITTED"
+                invalid = row[3] is None or row[4] is None or int(row[5] or 0) > 0 or (int(row[6]) < 1 and conn.execute("SELECT target_observation_id FROM photo_reviews WHERE review_id = ?", (row[0],)).fetchone()[0] is None) or row[8] != "COMMITTED"
                 if row[2] is not None and row[7] != "FINALIZED":
                     invalid = True
             elif row[3] is not None or row[4] is not None or row[2] is not None:
@@ -887,6 +895,8 @@ class ReadOnlyIntegrityChecker:
             ("observation_participants", "operation_id", "observation_id || ':' || person_id"),
             ("observation_face_assignments", "created_operation_id", "assignment_id"),
             ("identity_corrections", "operation_id", "correction_id"),
+            ("encounter_participant_revisions", "operation_id", "revision_id"),
+            ("encounter_metadata_revisions", "operation_id", "revision_id"),
             ("relationship_evidence", "created_operation_id", "evidence_id"),
             ("relationship_evidence", "deactivated_operation_id", "evidence_id"),
             ("notes", "created_operation_id", "note_id"),

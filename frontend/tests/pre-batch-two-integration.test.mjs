@@ -37,14 +37,14 @@ test("both review surfaces expose the same profile selector and proof-only dupli
   }
 });
 
-test("Events reads use one bounded backend query and never mutate graph state", async () => {
+test("Events reads use one bounded backend query; corrections are explicit", async () => {
   const [events, appData, people] = await Promise.all([
     read("../src/views/EventsView.jsx"),
     read("../src/hooks/useAppData.js"),
     read("../src/views/PeopleView.jsx"),
   ]);
   assert.match(appData, /apiGet\(`\/api\/encounters\?/);
-  assert.match(events, /Read-only history of finalized Encounters/);
+  assert.match(events, /Finalized Encounters, newest first/);
   assert.match(events, /Mentioned: /);
   assert.match(people, /<Tabs\.Tab value="events">Events<\/Tabs\.Tab>/);
   assert.match(people, /person_status/);

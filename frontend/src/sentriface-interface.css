@@ -4419,3 +4419,9 @@ button {
   box-shadow: 0 0 0 1px #102f2a, 0 0 12px rgba(0, 0, 0, 0.7);
   pointer-events: none;
 }
+
+/* Encounter history shares the compact People row hierarchy. Page scroll owns long lists. */
+.encounter-list-row { display: block; width: 100%; padding: 10px 4px; border-bottom: 1px solid var(--mantine-color-default-border); }
+button.encounter-list-row:hover { background: var(--mantine-color-default-hover); }
+.encounter-detail { min-width: 0; padding-bottom: 24px; }
+.encounter-detail summary { cursor: pointer; font-weight: 600; }

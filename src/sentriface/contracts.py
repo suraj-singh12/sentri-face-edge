@@ -382,6 +382,18 @@ class IdentityStore(Protocol):
     def list_observation_media(self, observation_id: str) -> list[ObservationMedia]:
         """List durable media memberships for one observation."""
 
+    def correct_encounter(self, observation_id: str, operation_id: str, **values) -> dict:
+        ...
+
+    def create_manual_association(self, first_person_id: str, second_person_id: str, operation_id: str, **values) -> dict:
+        ...
+
+    def retire_manual_association(self, evidence_id: str, operation_id: str, **values) -> dict:
+        ...
+
+    def list_person_encounter_media(self, person_id: str) -> list[dict]:
+        ...
+
     def query_encounters(self, **filters) -> dict:
         """Page finalized Encounter history without changing graph authority."""
 

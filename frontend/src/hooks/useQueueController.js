@@ -16,6 +16,7 @@ export function useQueueController({
   uploadFile,
   uploadFolder,
   onGraphMutation,
+  onEncounterCompleted,
 }) {
   const [queueSessions, setQueueSessions] = useState([]);
   const [queueGroups, setQueueGroups] = useState([]);
@@ -200,6 +201,19 @@ export function useQueueController({
         totalFaces: payload.groups.reduce((total, group) => total + (group.faces?.length || 0), 0),
       });
       resetQueueReview();
+      if (options.targetObservationId) {
+        const usable = (payload.media || []).filter((item) => !item.finalized_encounter && !item.excluded);
+        const conflicts = (payload.media || []).filter((item) => item.finalized_encounter);
+        if (conflicts.length) showToast(conflicts.every((item) => item.finalized_encounter.observation_id === options.targetObservationId)
+          ? "Selected exact media is already attached to this Encounter." : "Some exact media already belongs to another finalized Encounter; it was excluded.", "yellow");
+        if (!usable.length) throw new Error("No new media to attach. Exact media already belongs to a finalized Encounter.");
+        const planned = await apiPost("/api/encounter-attach-media", {
+          observation_id: options.targetObservationId, expected_revision: options.expectedRevision,
+          session_id: payload.session_id, media_ids: usable.map((item) => item.media_id),
+        });
+        setQueueEncounterReviews(planned.reviews);
+        await loadQueueGroups(payload.session_id);
+      }
       const faceCount = payload.groups.reduce((total, group) => total + (group.faces?.length || 0), 0);
       showToast(`Queued ${faceCount} face(s) in ${payload.groups.length} group(s)`);
       setQueueProgress((current) => normalizeQueueProgress({
@@ -279,6 +293,8 @@ export function useQueueController({
         uploadedFiles: upload.uploadedFiles,
         signal: abortController.signal,
         qualityOnly,
+        targetObservationId: options.targetObservationId,
+        expectedRevision: options.expectedRevision,
       });
     } catch (error) {
       if (abortController.signal.aborted || error?.name === "AbortError") return;
@@ -983,12 +999,13 @@ export function useQueueController({
           review_id: activeEncounter.review_id, operation_id: operationId,
         });
         onGraphMutation?.(payload.result);
+        await onEncounterCompleted?.(payload.result);
         await loadPeople({ dedupe: false });
         await loadQueueSessions(queueSessionId);
         setQueueSelectedGroup(null);
         setQueueSelectedGroupId("");
         setQueueEvent(null);
-        showToast("Encounter finalized");
+        showToast(activeEncounter.target_observation_id ? "Media attached to the existing Encounter" : "Encounter finalized");
       },
       discardQueueEncounter: async () => {
         await apiPost("/api/queue-encounter-discard", { review_id: activeEncounter.review_id });

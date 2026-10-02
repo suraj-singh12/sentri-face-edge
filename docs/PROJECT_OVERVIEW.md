@@ -1,5 +1,14 @@
 # SentriFace Edge: complete project guide
 
+## Current product: managing finalized Encounters (Batch 3)
+
+Global Events now provides compact occurrence rows and a detail page with effective metadata, participants, supporting media, Event Note references, person-specific Sighting Notes, Relations decisions, and bounded correction history. Operators can attach additional media through the same explicit identity/Relations review. Custodians can correct occurrence details or accepted participants and Relations without rewriting the original history.
+
+Person Profile Photos shows unique managed media and durable face origins; multiple faces in one image do not create duplicate photo tiles. Events includes PRESENT, MENTIONED, and BOTH with navigation to the same detail. Sightings describes confirmed participation; an Event Note mention alone is not attendance or a face. Associations shows independent co-observation, directed note, and Manual Association evidence, with explicit manual create/retire actions. Deleted people remain named historical tombstones while active selection/recognition continues to exclude them.
+
+One occurrence may contain many images: media count is not recurrence. Events remain outside World topology, and Event Note mentions have no relationship/World effect. World vNext and Encounter Split/Merge remain future work. Earlier dated Batch 2 sections describe their historical checkpoint; the current implementation and verification are owned by the tracker and architecture-state documents.
+
+
 ## Why this document exists
 
 Current Review Photos stabilization (2026-10-01) preserves the Batch 2 authority boundary. Media removal/restore is durable pre-grouping selection; finalized media is automatically excluded. The active Encounter ranks committed and accepted draft face references together under canonical identity and the shared quality policy. PROOF_ONLY remains outside ordinary recognition and is used only by the exceptional pre-creation duplicate check. A `Drafted` badge means the Person was created in this active draft. Peek In is a transient face preview; it creates no media or history. Schema v31 adds one selection field to existing Queue media membership, while global indexes and history remain committed-only.

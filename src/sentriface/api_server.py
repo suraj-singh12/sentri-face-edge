@@ -287,7 +287,7 @@ def _required_capability(method: str, path: str) -> str | None:
         return "technical"
     if path in {
         "/api/person-archive", "/api/person-restore", "/api/person-merge-preview", "/api/person-merge", "/api/person-merge-undo", "/api/person-purge",
-        "/api/person-photo-move", "/api/observation-correct", "/api/person-photo-delete",
+        "/api/person-photo-move", "/api/observation-correct", "/api/encounter-correct", "/api/person-photo-delete",
         "/api/person-photo-restore", "/api/person-photo-purge",
     }:
         return "destroy"
@@ -300,7 +300,7 @@ def _required_capability(method: str, path: str) -> str | None:
     if path in {
         "/api/person-create", "/api/person-update", "/api/person-notes", "/api/person-preferences",
         "/api/person-association", "/api/person-association-placeholder",
-        "/api/person-association-remove",
+        "/api/person-association-remove", "/api/encounter-attach-media",
         "/api/recognition-person-candidates",
         "/api/proof-only-duplicate-check",
         "/api/recognition-accept-existing", "/api/recognition-new",
@@ -1321,6 +1321,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         },
                         "requested_person_id": person_id,
                         "view": "raw" if raw_view else "effective",
+                        "encounter_media": self.server.engine.list_person_encounter_media(person_id),
                         "embeddings": [
                             {**_embedding(record), "face_origins": face_origins[record.embedding_id]}
                             for record in embeddings
@@ -1937,13 +1938,46 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 raise DomainWorkflowUnavailableError(
                     "Identity Merge undo is not exposed in P8-B"
                 )
-            if parsed.path in {
-                "/api/person-association", "/api/person-association-placeholder",
-                "/api/person-association-remove",
-            }:
-                raise DomainWorkflowUnavailableError(
-                    "Manual associations are temporarily unavailable until they use normalized graph evidence"
+            if parsed.path == "/api/encounter-correct":
+                allowed = {"observation_id", "operation_id", "expected_revision", "event_details", "participant_correction", "relations"}
+                if set(payload) - allowed:
+                    raise ValueError("Unknown Encounter correction field")
+                result = self.server.engine.correct_encounter(
+                    _required(payload, "observation_id"), _operation_id(payload),
+                    expected_revision=_required(payload, "expected_revision"),
+                    event_details=payload.get("event_details"), participant_correction=payload.get("participant_correction"),
+                    relations=payload.get("relations"), actor=self._operation_actor(), source=parsed.path,
                 )
+                self._json(result)
+                return
+            if parsed.path == "/api/encounter-attach-media":
+                if set(payload) - {"observation_id", "session_id", "expected_revision", "media_ids"}:
+                    raise ValueError("Unknown attachment draft field")
+                media_ids = payload.get("media_ids")
+                if not isinstance(media_ids, list) or not media_ids or any(not isinstance(item, str) for item in media_ids):
+                    raise ValueError("Select scanned media to attach")
+                self._json({"reviews": self.server.engine.plan_init_session_encounters(
+                    _required(payload, "session_id"), [media_ids],
+                    target_observation_id=_required(payload, "observation_id"), expected_revision=_required(payload, "expected_revision"),
+                )})
+                return
+            if parsed.path == "/api/person-association":
+                if set(payload) - {"first_person_id", "second_person_id", "operation_id"}:
+                    raise ValueError("Unknown Manual Association field")
+                self._json(self.server.engine.create_manual_association(
+                    _required(payload, "first_person_id"), _required(payload, "second_person_id"), _operation_id(payload),
+                    actor=self._operation_actor(), source=parsed.path,
+                ))
+                return
+            if parsed.path == "/api/person-association-remove":
+                if set(payload) - {"evidence_id", "operation_id"}:
+                    raise ValueError("Unknown Manual Association retirement field")
+                self._json(self.server.engine.retire_manual_association(
+                    _required(payload, "evidence_id"), _operation_id(payload), actor=self._operation_actor(), source=parsed.path,
+                ))
+                return
+            if parsed.path == "/api/person-association-placeholder":
+                raise DomainWorkflowUnavailableError("Create a Person first, then add a Manual Association")
             if parsed.path == "/api/auth/signup":
                 user, token = self.server.auth.signup_initial(_required(payload, "username"), str(payload.get("display_name") or ""), _required(payload, "password"))
                 self._set_auth_cookie(token)
@@ -4509,6 +4543,8 @@ def _person_relationships(
             "last_evidence_at": item.last_evidence_at,
             "presentation_label": _relationship_label(item.evidence_type_counts),
             "person": _person_summary(summary, engine),
+            "manual_evidence": [{"evidence_id": evidence.evidence_id, "created_at": evidence.created_at}
+                                for evidence in item.evidence if evidence.evidence_type == "MANUAL_ASSOCIATION"],
         })
     return relationships
 

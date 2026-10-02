@@ -415,7 +415,7 @@ class FaceEngine:
     ):
         person = (
             self.store.get_person(person_id, include_archived=True)
-            if raw else self.store.get_effective_person(person_id)
+            if raw else self.store.get_person(self.store.resolve_canonical_person_id(person_id), include_archived=include_archived)
         )
         if person is None:
             raise KeyError(f"Unknown person: {person_id}")
@@ -648,6 +648,23 @@ class FaceEngine:
     def get_observation(self, observation_id: str) -> Observation | None:
         return self.store.get_observation(observation_id)
 
+    def correct_encounter(self, observation_id: str, operation_id: str, **values) -> dict:
+        _require_mutation_context(operation_id, values.get("actor"))
+        result = self.store.correct_encounter(observation_id, operation_id, **values)
+        self._rebuild_index()
+        return result
+
+    def create_manual_association(self, first_person_id: str, second_person_id: str, operation_id: str, **values) -> dict:
+        _require_mutation_context(operation_id, values.get("actor"))
+        return self.store.create_manual_association(first_person_id, second_person_id, operation_id, **values)
+
+    def retire_manual_association(self, evidence_id: str, operation_id: str, **values) -> dict:
+        _require_mutation_context(operation_id, values.get("actor"))
+        return self.store.retire_manual_association(evidence_id, operation_id, **values)
+
+    def list_person_encounter_media(self, person_id: str) -> list[dict]:
+        return self.store.list_person_encounter_media(person_id)
+
     def query_encounters(self, **filters) -> dict:
         return self.store.query_encounters(**filters)
 
@@ -719,8 +736,8 @@ class FaceEngine:
     def set_init_session_quality_policy(self, session_id: str, quality_only: bool) -> None:
         self.store.set_init_session_quality_policy(session_id, quality_only)
 
-    def plan_init_session_encounters(self, session_id: str, media_groups: list[list[str]]) -> list[dict]:
-        self.store.plan_init_session_encounters(session_id, media_groups)
+    def plan_init_session_encounters(self, session_id: str, media_groups: list[list[str]], **values) -> list[dict]:
+        self.store.plan_init_session_encounters(session_id, media_groups, **values)
         self._regroup_pending_init_session(session_id)
         return self.store.list_init_session_encounter_reviews(session_id)
 

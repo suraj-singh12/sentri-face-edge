@@ -349,7 +349,7 @@ function EncounterRelations({ review, onDecide, onComplete, onDiscard }) {
   const complete = candidates.every((item) => decisions.has(`${item.first_ref}|${item.second_ref}`));
   return <Stack gap="md">
     <Box><Title order={2} size="h3">Review Relations</Title><Text size="sm" c="dimmed">{decisions.size} of {candidates.length} pairs decided. Choose which confirmed participant pairs this Encounter supports.</Text></Box>
-    {candidates.length === 0 && <Card withBorder>Only one effective participant. There are no pairs to decide.</Card>}
+    {candidates.length === 0 && <Card withBorder>{review.target_observation_id ? "No new participant pairs need a decision. Existing Encounter Relations are retained." : "Only one effective participant. There are no pairs to decide."}</Card>}
     {candidates.map((candidate) => {
       const key = `${candidate.first_ref}|${candidate.second_ref}`;
       return <Card withBorder key={key}>

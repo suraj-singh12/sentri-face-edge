@@ -1,5 +1,16 @@
 # SentriFace Edge architecture state
 
+## Batch 3 current implementation — schema v32
+
+The current working tree implements Encounter Management and People Integration. Storage commands are `correct_encounter`, `create_manual_association`, and `retire_manual_association`; the existing review planner/completion accept a finalized target. FaceEngine remains the application boundary and the loopback API enforces existing capabilities. Reads require `view`; attachment/draft/finalization and manual create/retire require `add`; finalized metadata/participant/Relations correction requires `destroy`.
+
+Migration 31→32 adds nullable target/revision fields to `photo_reviews`, a unique active-target guard, append-only `encounter_metadata_revisions` and `encounter_participant_revisions`, and the `effective_observations` compatibility view. Original observation immutability remains. Narrow insert guards authorize finalized media/participant additions only inside the appropriate STARTED journaled review/correction transaction. Existing identity corrections preserve face assignment and embedding ownership history; existing relation revisions preserve positive and negative decisions. Participant removal freezes the raw canonical component at correction time so later merges retain survivor participation.
+
+Corrections and final attachment use `BEGIN IMMEDIATE`, authoritative revision preconditions, canonical deduplication, evidence regeneration, full graph replacement and same-transaction journal commitment. Drafts contribute no global index or graph truth. Manual assertions use normalized MANUAL_ASSERTION evidence, never legacy `person_associations`; retirement addresses one evidence ID. Historical person summaries now respect explicit archived/tombstoned read access rather than applying active-only lookup.
+
+World reads use effective metadata/participation and the existing projection. No strength, clustering, recurrence-tier or World-node model changes were made. P11 checks interpret the new revisions and permit zero-face amendment reviews without weakening ordinary creation checks. Current test results and manual limits are recorded in IMPLEMENTATION_PLAN. Earlier dated checkpoint paragraphs below retain historical context and are superseded where they describe these Batch 3 features as deferred.
+
+
 This document is a concise checkpoint of the stable implemented architecture. Detailed rules remain in `AGENTS.md`, `DOMAIN_MODEL.md`, and `p11/P11_INTEGRITY_MODEL.md`; phase scope remains in `IMPLEMENTATION_PLAN.md`.
 
 ## 2026-09-28 Batch 2 working-tree checkpoint
