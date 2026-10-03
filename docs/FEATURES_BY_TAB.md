@@ -1,6 +1,16 @@
 # SentriFace Edge features by tab
 
+## Batch 3.5 behavior clarifications
+
+- **Check a photo:** Skip displays Deferred and stays unresolved across refresh/restart; Discard is final negative; accepted-existing/new are final positive. Only final decisions permit completion, with at least one accepted participant. Add Face uses the explicitly chosen existing Person and the standalone enrollment command, preserves quality/origin, and creates no Encounter.
+- **Review photos:** “remaining” is actionable pending groups, excluding removed or already-finalized media. Background restoration/group refresh cannot replace newer selection/Event editing. A deferred group remains distinct from accepted/discarded work.
+- **People:** Archived cards open their historical profile when `VIEW_HISTORY` permits it. Restore remains restricted by existing backend capability and ARCHIVED lifecycle. Deleted/merged cards and historical graph nodes remain distinct. Associated people counts unique effective counterparts, not evidence/direction groups.
+- **Events / People / Graph / World:** successful domain mutations reconcile retained current read models from the backend; raw correction and alias history remains provenance. Shared frame support comes from effective Encounter media, not row order.
+- **Settings:** admitted source ONNX running status and packaged OS-boundary verification are separate facts. Explicit eligible Linux source development can configure normal encrypted recovery without an OS keyring; production and macOS/Windows custody are unchanged.
+
 This is the current user-facing map. `DOMAIN_MODEL.md` defines authority and `ARCHITECTURE_EXPLANATION.md` explains implementation. **Implemented** means present in the current source; Batch 3 finalized Encounter management and normalized Manual Association controls are implemented; World vNext and Encounter Split/Merge remain deferred. Every tab reads the same local identity store through the authenticated loopback API.
+
+Check a photo exposes **Finish enrollment** only for a staged explicit Person target, allowing an interrupted/lost completion response to retry the existing operation. Successful automatic completion still returns to People. Backups & restore supports fresh Linux source authority recovery with the normal recovery kit, encrypted import and safe restore; it does not package source custody secrets inside backups.
 
 ## Access
 

@@ -1,5 +1,23 @@
 # Global identity graph implementation plan
 
+## Current work — Batch 3.5 Canonical Coherence & Audit Completion
+
+Baseline: `release-v2.0.0-hardening` at `cf8c847337735dc7d1acc4b185f9d0e1f01a732d`. No commit/tag, Batch 4, World redesign or release-artifact work is authorized in this batch.
+
+Implemented: one effective-media pair-support interpretation; explicit target enrollment and durable face-decision projections; common mutation read reconciliation; reachable archived profile/restore; actionable queue counts and distinct counterpart counts; stale queue snapshot guards; terminal cancellation cleanup ordering; lifecycle preflight before backup with transaction revalidation; Linux source-only encrypted recovery custody and verified-kit key admission; truthful source-runtime/network-boundary status.
+
+Schema remains v32. No historical evidence is deleted to simplify current reads. Existing model/quality/recognition policy, note scopes, transaction/journal/idempotency, media dedup, lifecycle provenance, encryption, activation and production platform boundaries remain unchanged.
+
+**Final Batch 3.5 gates:** 676 backend tests passed, 47 skipped, 135 subtests passed; 118 frontend tests passed; production frontend build and `git diff --check` passed. Full backend checkpoints were green (649 before additional regression coverage, then 671, 675, 675 after atomic cancellation, and 676 after dense-history coverage). No intermittent full-suite failure occurred. Earlier focused/build/test-harness failures were recorded and corrected rather than hidden.
+
+**Targeted real-runtime qualification:** exact `./run.sh models` / `./run.sh onnx`, isolated SQLCipher authority, real SCRFD/ArcFace CPU and rendered Chromium. Verified three NO_FACE standalone quality states; durable Skip→restart and Discard→refresh; mixed-support merge with immediate retained Encounter refresh; Archived historical profile→Restore; distinct counterpart counts; finalized-only/mixed queue counts; five delayed Event transitions; three real processing cancellations and 20 publication-time cancellation subtests. A deliberately lost enrollment response retried the same operation ID with the identical result, one enrollment and one journal record.
+
+**Recovery completion:** supported source recovery setup, encrypted UI export, fresh models-only root, `./run.sh onnx --recover-kit …`, normal fresh administrator, encrypted UI import and safe restore, normal source administrator login and restart. Compared 8 Persons (5 ACTIVE, 1 ARCHIVED, 1 MERGED, 1 DELETED), 12 faces (10 GOOD, 1 POOR_ACCEPTED, 1 PROOF_ONLY), 7 Encounters, corrected metadata/participants/Event mentions, raw and active evidence, Manual Associations, canonical history, graph and current World. No compared effective domain changed through restore/restart; 34 assets/99 registry bindings had zero missing references. Custody records are not backup assets.
+
+Fresh restore exposed an existing broad completed-review UPDATE guard rejecting media relocation. The existing disposable-candidate restore transaction now suspends that exact guard only while registry-owned paths relocate, proves all other review fields unchanged, and reinstalls it before commit. Rollback covers paths and guard together; live review immutability remains enforced. No schema change or general mutation exception was added.
+
+The exact audited Event-form detachment was not reproduced. Baseline delayed-response controls did reproduce loss of active face selection; live selection/generation guards address that concrete race. Windows/macOS native runtime acceptance and the future complete three-phase clean-room reaudit remain separate. Artifacts: `/workspace/scratch/sentriface-batch3-5/`. No commit or tag was made.
+
 ## Batch 3 — Encounter Management + People Integration (2026-10-02)
 
 Implemented in source on the existing Batch 2 authority: compact Global Events, finalized Encounter detail, Attach Media, metadata/selected-mention correction, participant reassign/remove/add, Relations INCLUDE/EXCLUDE revision, profile integration, and normalized Manual Association create/retire. The deleted-Person historical summary regression is fixed. Schema v32 follows the required migration/journal foundations; no second Encounter, Person, media, graph or recognition subsystem was introduced.

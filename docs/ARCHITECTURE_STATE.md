@@ -1,5 +1,17 @@
 # SentriFace Edge architecture state
 
+## Batch 3.5 implementation checkpoint — schema remains v32
+
+Effective canonical Encounter pair support now has one frame-derived interpretation across finalization, merge, corrections, current detail reads and rebuild. Historical decision/evidence generations remain append-only provenance; current reads use active/effective authority. Recognition Add Face targets are explicit Persons, not proposals; standalone confirmation completes enrollment without a sighting. Deferred SKIP is never acceptance or completion readiness.
+
+The common frontend mutation boundary reconciles retained finalized reads and uses existing Graph/World invalidation. Archived People can open authorized historical profiles and Restore; deleted/merged and graph restrictions remain distinct. Queue progress excludes finalized/removed media from actionable work, and stale queue response generations cannot overwrite newer selection/Event context. Associated-people counts use unique canonical counterparts.
+
+Terminal scan cancellation publishes its response after cleanup. Guarded lifecycle commands perform early admission before backup and transaction-bound revalidation afterward. Linux source recovery uses persistent encrypted, authority-bound, owner-only custody selected before the retention worker starts, plus the existing verified recovery-kit startup path. OS-vault custody and packaged policy remain unchanged. System Details distinguishes running source ONNX from unverified packaged OS isolation.
+
+Targeted qualification and final verification are recorded in `IMPLEMENTATION_PLAN.md`. This is Batch 3.5 implementation, not the subsequent three-phase clean-room reaudit or release acceptance. World vNext and Batch 4 remain unimplemented.
+
+Final qualification: backend 676 passed / 47 skipped / 135 subtests; frontend 118 passed; build/diff check passed. Supported fresh-authority recovery/import/restore and restart preserved all compared effective domains and 34 assets/99 bindings. Completed-review path relocation is scoped to the disposable restore transaction with non-path comparison and guard reinstatement; live immutability is unchanged. Exact Event-form detachment remains unconfirmed, although stale face-selection refresh was reproduced and repaired. Full clean-room reaudit remains a separate next run.
+
 ## Batch 3 current implementation — schema v32
 
 The current source implements Encounter Management and People Integration. Storage commands are `correct_encounter`, `create_manual_association`, and `retire_manual_association`; the existing review planner/completion accept a finalized target. FaceEngine remains the application boundary and the loopback API enforces existing capabilities. Reads require `view`; attachment/draft/finalization and manual create/retire require `add`; finalized metadata/participant/Relations correction requires `destroy`.

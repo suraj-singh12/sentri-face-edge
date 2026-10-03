@@ -82,6 +82,7 @@ class AuthenticationApiTest(unittest.TestCase):
             self.assertEqual(self._request(server, "GET", "/api/encounters", cookie=viewer_cookie)[0], 200)
             self.assertNotEqual(self._request(server, "POST", "/api/encounters", {}, cookie=viewer_cookie)[0], 200)
             self.assertEqual(self._request(server, "POST", "/api/person-archive", {"person_id": "missing"}, cookie=viewer_cookie)[0], 403)
+            self.assertEqual(self._request(server, "POST", "/api/person-restore", {"person_id": "missing"}, cookie=viewer_cookie)[0], 403)
             self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": "missing"}, cookie=viewer_cookie)[0], 403)
 
             operator_cookie = self._login_cookie(server, "operator", "operator password long enough")
@@ -93,6 +94,14 @@ class AuthenticationApiTest(unittest.TestCase):
             custodian_cookie = self._login_cookie(server, "custodian", "custodian password long enough")
             self.assertEqual(self._request(server, "GET", "/api/encounters", cookie=custodian_cookie)[0], 200)
             self.assertNotEqual(self._request(server, "POST", "/api/person-archive", {"person_id": "missing"}, cookie=custodian_cookie)[0], 403)
+            person = server.engine.store.create_person("Archived history")
+            server.engine.store.archive_person(person.person_id, "role-archive")
+            status, historical, _ = self._request(server, "GET", f"/api/person?person_id={person.person_id}&include_archived=1&view=raw", cookie=viewer_cookie)
+            self.assertEqual(status, 200)
+            self.assertEqual(historical["person"]["lifecycle_status"], "ARCHIVED")
+            status, restored, _ = self._request(server, "POST", "/api/person-restore", {"person_id": person.person_id, "operation_id": str(uuid4())}, cookie=custodian_cookie)
+            self.assertEqual(status, 200)
+            self.assertEqual(restored["lifecycle_status"], "ACTIVE")
             self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": "missing"}, cookie=custodian_cookie)[0], 403)
 
             technician_cookie = self._login_cookie(server, "technician", "technician password long enough")

@@ -791,7 +791,8 @@ test("known graph mutations also invalidate retained World state", async () => {
     read("../src/hooks/useSentriFaceController.js"),
     read("../src/hooks/usePeopleController.js"),
   ]);
-  assert.match(root, /onWorldMutation: world\.actions\.invalidateWorld/);
+  assert.match(root, /world\.actions\.invalidateWorld\(mutation\)/);
+  assert.match(root, /await appData\.reconcileDomainReads\(\)/);
   assert.match(people, /invalidatePersonGraph[\s\S]*onWorldMutation\?\.\(mutation\)/);
 });
 

@@ -27,6 +27,8 @@ export function usePeopleController({
   onWorldMutation,
 }) {
   const [peopleGallery, setPeopleGallery] = useState(null);
+  const galleryRef = useRef(peopleGallery);
+  galleryRef.current = peopleGallery;
   const [peopleGalleryImage, setPeopleGalleryImage] = useState(null);
   const [personGraph, setPersonGraph] = useState({
     personId: null,
@@ -107,11 +109,20 @@ export function usePeopleController({
     setPersonGraph((current) => ({ ...current, active: false, loading: false, error: null }));
   }, []);
 
-  const invalidatePersonGraph = useCallback((mutation = null) => {
+  const invalidatePersonGraph = useCallback(async (mutation = null) => {
     graphRequestRef.current += 1;
     setPersonGraph((current) => invalidatePersonGraphSnapshot(current, mutation));
-    onWorldMutation?.(mutation);
-  }, [onWorldMutation]);
+    const gallery = galleryRef.current;
+    if (gallery) {
+      if (mutation?.person_id === gallery.person.person_id && mutation?.lifecycle_status === "DELETED") {
+        setPeopleGallery(null);
+      } else {
+        const archived = (mutation?.person_id === gallery.person.person_id ? mutation.lifecycle_status : gallery.person.lifecycle_status) === "ARCHIVED";
+        setPeopleGallery(await loadPerson(gallery.person.person_id, archived));
+      }
+    }
+    await onWorldMutation?.(mutation);
+  }, [onWorldMutation, apiGet]);
 
   const openPersonGraph = useCallback(async (personId) => {
     if (!personId) return null;
@@ -202,7 +213,7 @@ export function usePeopleController({
         operation_id: operationId(),
       });
     }
-    invalidatePersonGraph(graphMutation);
+    await invalidatePersonGraph(graphMutation);
     await loadPeople({ dedupe: false });
     showToast("Person created");
     return (await loadPerson(payload.person.person_id)).person;
@@ -219,7 +230,7 @@ export function usePeopleController({
       editor_name: values.editorName,
       operation_id: operationId(),
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await refreshPeopleProfile(values.personId);
     showToast("Person details updated");
@@ -235,7 +246,7 @@ export function usePeopleController({
       operation_id: operationId(),
     });
     if (!payload.updated) return { updated: false, notes: payload.notes };
-    invalidatePersonGraph(payload);
+    await invalidatePersonGraph(payload);
     await loadPeople({ dedupe: false });
     const refreshed = await refreshPeopleProfile(personId);
     showToast("Notes saved");
@@ -265,7 +276,7 @@ export function usePeopleController({
       representative_embedding_id: embeddingId,
       operation_id: requestId,
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await refreshPeopleProfile(personId);
     showToast("Profile photo updated");
@@ -276,7 +287,7 @@ export function usePeopleController({
       person_id: personId,
       operation_id: operationId(),
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     setPeopleGallery(null);
     setPeopleGalleryImage(null);
     await loadPeople({ dedupe: false });
@@ -288,7 +299,7 @@ export function usePeopleController({
       person_id: personId,
       operation_id: operationId(),
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     setPeopleGallery(await loadPerson(result.person_id || personId));
     showToast("Person restored");
@@ -299,7 +310,7 @@ export function usePeopleController({
       person_id: personId,
       operation_id: operationId(),
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     setPeopleGallery(null);
     setPeopleGalleryImage(null);
     await loadPeople({ dedupe: false });
@@ -323,7 +334,7 @@ export function usePeopleController({
       operation_id: operationId(),
       conflict_resolutions: preview.proposed_conflict_resolutions,
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     setPeopleGallery(null);
     setPeopleGalleryImage(null);
     await loadPeople({ dedupe: false });
@@ -337,7 +348,7 @@ export function usePeopleController({
       target_person_id: targetPersonId,
       operation_id: operationId(),
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     await refreshPeopleProfile(personId);
     await loadPeople({ dedupe: false });
     showToast("Face ownership corrected");
@@ -349,7 +360,7 @@ export function usePeopleController({
       embedding_id: embeddingId,
       operation_id: operationId(),
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await loadDeletedFaces({ dedupe: false });
     await refreshPeopleProfile(personId);
@@ -367,7 +378,7 @@ export function usePeopleController({
       embedding_id: embeddingId,
       operation_id: operationId(),
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await loadDeletedFaces({ dedupe: false });
     if (peopleGallery?.person?.effective_person_id === personId) await refreshPeopleProfile(personId);
@@ -380,7 +391,7 @@ export function usePeopleController({
       embedding_id: embeddingId,
       operation_id: operationId(),
     });
-    invalidatePersonGraph(result);
+    await invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await loadDeletedFaces({ dedupe: false });
     showToast(
@@ -412,16 +423,14 @@ export function usePeopleController({
       savePeopleProfile,
       createManualAssociation: async (firstPersonId, secondPersonId, operationId) => {
         const result = await apiPost("/api/person-association", { first_person_id: firstPersonId, second_person_id: secondPersonId, operation_id: operationId });
-        invalidatePersonGraph(result);
-        onWorldMutation?.(result);
+        await invalidatePersonGraph(result);
         await loadPeople({ dedupe: false });
         await refreshPeopleProfile(firstPersonId);
         return result;
       },
       retireManualAssociation: async (personId, evidenceId, operationId) => {
         const result = await apiPost("/api/person-association-remove", { evidence_id: evidenceId, operation_id: operationId });
-        invalidatePersonGraph(result);
-        onWorldMutation?.(result);
+        await invalidatePersonGraph(result);
         await loadPeople({ dedupe: false });
         await refreshPeopleProfile(personId);
         return result;

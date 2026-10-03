@@ -1,5 +1,21 @@
 # SentriFace Edge architecture explanation
 
+## Batch 3.5: convergence across equivalent paths
+
+The clean-room findings shared four causes: raw-history values being mistaken for effective facts; proposal objects and explicit Person targets sharing a predicate; deferred decisions sharing accepted UI state; and asynchronous reads/operational setup having inconsistent completion boundaries.
+
+The repair derives finalized pair support from the existing effective assignment/media machinery. Draft and finalized support share one frame-set intersection, while canonical merge and corrections reuse the finalized calculation. Stored decision generations remain provenance. Current graph, World and association readers continue using active canonical evidence; no new relationship authority, compaction, World algorithm or schema is introduced.
+
+The frontend now projects acceptance/readiness from durable face decisions and reloads the existing review DTO on resume. Explicit target enrollment bypasses proposal classification, but shares staging, quality handling and encrypted enrollment. A common mutation reconciliation boundary reloads People/profile, retained Encounter detail and Event collections, and invokes existing Person Graph/World invalidation. Queue snapshots carry request generations and reconcile against the live selection, preventing older restoration/group requests from replacing newer operator context. Event drafts are retained for the same active review.
+
+Operational completion is similarly explicit: a terminal queue-scan cancellation response follows registry/partial-session cleanup (the cancellation-request acknowledgement remains only an acknowledgement). Lifecycle admission is checked before the safety copy and rechecked inside the mutation transaction, with the existing API exclusive gate covering both. Linux source recovery selects its existing recovery service custody at construction, before background retention starts; there is no temporary production-vault service or implicit unavailable-keyring fallback.
+
+The test vault was inspected: it is process-memory test custody and cannot support real restart/recovery. The source master-key record already provides eligibility and authority isolation; it is reused for that boundary, while existing protected-file encryption stores a separate recovery-code record. The new record is the smallest persistence extension, not a second backup/encryption architecture. Normal production and macOS/Windows custody are unchanged. Source status reports admission/inference separately from packaged OS network-boundary verification.
+
+Backup relocation is a physical authority move, not a new review decision. The existing media registry already owns allowed fields and stable row identities, but the completed-review UPDATE guard also blocked its `media_path`. On the disposable restore candidate only, the same transaction suspends/reinstalls the exact guard, compares every non-path review field, and rolls back both SQL and guard changes on failure. The normal live database guard is unchanged. This is the smallest extension to existing restore staging; it introduces no live editing privilege or new provenance store.
+
+Standalone target enrollment still auto-finalizes via the existing command. If a completion response is lost, durable accepted/excluded decisions expose **Finish enrollment**, which retries the original operation ID. It does not restage another face or create an Encounter.
+
 ## Why Batch 3 uses revisions and the existing review
 
 A finalized observation is intentionally immutable. Editing that row would erase what was originally accepted. Metadata correction therefore appends an `encounter_metadata_revisions` row and existing readers use `effective_observations`; the original row and journal history remain inspectable. Face corrections alone cannot express adding a known person without a face or removing accepted participation while retaining the face's provenance. `encounter_participant_revisions` supplies that missing interpretation. REMOVED rows name the raw component present at correction time, preventing a subsequent merge into another participant from erasing the survivor's independent contribution.

@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { clearFile, currentDateTimeParts, imageIdFromPath, isNewPersonSuggestion, requirePersonContract } from "../utils.js";
+import { acceptedDecision, recognitionReviewReady } from "../reviewState.js";
 import { usePersistentState } from "./usePersistentState.js";
 
 export function useRecognizeController({
+  canReview = true,
   apiGet,
   apiPost,
   loadPeople,
@@ -19,7 +21,8 @@ export function useRecognizeController({
   const [selectedRecognitionFace, setSelectedRecognitionFace] = usePersistentState("sentriface.recognize.selectedFace", 1);
   const [recognitionGallery, setRecognitionGallery] = usePersistentState("sentriface.recognize.gallery", null);
   const [recognitionGalleryImage, setRecognitionGalleryImage] = usePersistentState("sentriface.recognize.galleryImage", null);
-  const [recognitionAcceptedFaces, setRecognitionAcceptedFaces] = usePersistentState("sentriface.recognize.acceptedFaces", []);
+  const decisions = recognition?.faceDecisions || {};
+  const recognitionAcceptedFaces = (recognition?.faces || []).filter((face) => acceptedDecision(decisions[face.index])).map((face) => face.index);
   const [recognitionFollowup, setRecognitionFollowup] = usePersistentState("sentriface.recognize.followup", null);
   const [recognitionFollowupDone, setRecognitionFollowupDone] = usePersistentState("sentriface.recognize.followupDone", false);
   const [recognitionTargetPerson, setRecognitionTargetPerson] = usePersistentState("sentriface.recognize.targetPerson", null);
@@ -28,12 +31,27 @@ export function useRecognizeController({
   const [proofOnlyDuplicateCandidates, setProofOnlyDuplicateCandidates] = useState([]);
   const recognizeFileRef = useRef(null);
   const recognitionRequestRef = useRef(null);
+  const reviewReadGeneration = useRef(0);
 
   useEffect(() => {
     if (!recognition?.faces?.length || recognition.encounterMetadata || eventDraft || recognitionTargetPerson) return;
     const { date } = currentDateTimeParts();
     setEventDraft({ date, time: "", endTime: "", timePrecision: "unknown", placeSeen: "", eventOccasion: "", eventContext: "unknown", eventNotes: "", eventMentionedPersonIds: [] });
   }, [recognition, eventDraft, recognitionTargetPerson, setEventDraft]);
+
+  const applyReview = useCallback((review) => {
+    ++reviewReadGeneration.current;
+    const faceDecisions = Object.fromEntries((review.faces || []).map((face) => [Number(face.face_id.replace("face-", "")), face.decision]));
+    setRecognition((current) => current?.reviewId === review.review_id ? { ...current, faceDecisions } : current);
+  }, [setRecognition]);
+  useEffect(() => {
+    if (!canReview || !recognition?.reviewId) return;
+    let active = true;
+    const generation = reviewReadGeneration.current;
+    apiGet(`/api/photo-review?review_id=${encodeURIComponent(recognition.reviewId)}`, { dedupe: false })
+      .then((review) => { if (active && generation === reviewReadGeneration.current) applyReview(review); }).catch(() => {});
+    return () => { active = false; };
+  }, [canReview, recognition?.reviewId, apiGet, applyReview]);
 
   const runRecognition = useCallback(async (path, signal) => {
     const payload = await apiPost("/api/recognize", { path, quality_only: qualityOnly }, { signal, timeoutMs: 10 * 60 * 1000 });
@@ -47,7 +65,6 @@ export function useRecognizeController({
     setSelectedRecognitionFace(payload.faces?.[0]?.index || 1);
     setRecognitionGallery(null);
     setRecognitionGalleryImage(null);
-    setRecognitionAcceptedFaces([]);
     setRecognitionFollowup(null);
     setProofOnlyDuplicateCandidates([]);
     setRecognitionFollowupDone(false);
@@ -94,6 +111,15 @@ export function useRecognizeController({
     showToast(`Fill details for ${best.name}`);
   };
 
+  const enrollTargetFace = (faceIndex, forceBadQuality = false, conflictAcknowledged = false) => {
+    // Explicit operator target is a Person contract, not a scored proposal.
+    const target = recognitionTargetPerson;
+    const face = recognition?.faces?.find((item) => item.index === faceIndex);
+    if (!target?.person_id || !face) return;
+    openRecognitionFollowup({ name: target.name, personId: target.person_id,
+      decision: "existing", action: "existing", faceIndex, faceBox: face.box, forceBadQuality, conflictAcknowledged });
+  };
+
   const recognitionNew = async (requestedFaceIndex, forceBadQuality = false) => {
     const faceIndex = requestedFaceIndex || selectedRecognitionFace;
     const face = recognition?.faces?.find((item) => item.index === faceIndex);
@@ -137,7 +163,6 @@ export function useRecognizeController({
     setSelectedRecognitionFace(1);
     setRecognitionGallery(null);
     setRecognitionGalleryImage(null);
-    setRecognitionAcceptedFaces([]);
     setRecognitionFollowup(null);
     setProofOnlyDuplicateCandidates([]);
     setRecognitionFollowupDone(false);
@@ -216,7 +241,7 @@ export function useRecognizeController({
         return;
       }
     }
-    await apiPost("/api/photo-review-decision", {
+    const review = await apiPost("/api/photo-review-decision", {
       review_id: recognition.reviewId,
       face_id: `face-${recognitionFollowup.faceIndex}`,
       decision: recognitionFollowup.action === "new"
@@ -278,9 +303,19 @@ export function useRecognizeController({
     setRecognitionFollowupDone(true);
     setRecognitionFollowup(null);
     setProofOnlyDuplicateCandidates([]);
-    setRecognitionAcceptedFaces((current) => current.includes(recognitionFollowup.faceIndex)
-      ? current
-      : [...current, recognitionFollowup.faceIndex]);
+    applyReview(review);
+    if (addFaceOnly) {
+      // Standalone enrollment explicitly selects this face; other detections
+      // are not sightings or enrollment targets. Finalize through the existing
+      // enrollment command, with durable negative decisions for those faces.
+      for (const other of review.faces || []) {
+        if (other.face_id !== `face-${recognitionFollowup.faceIndex}`) {
+          applyReview(await apiPost("/api/photo-review-decision", { review_id: review.review_id, face_id: other.face_id, decision: "EXCLUDE" }));
+        }
+      }
+      await finalizeRecognitionReview();
+      return;
+    }
     showToast("Face decision saved");
   };
 
@@ -297,33 +332,38 @@ export function useRecognizeController({
     return confirmRecognitionFollowup({ preventDefault() {} }, true);
   };
 
-  const skipRecognitionFace = async (faceIndex = selectedRecognitionFace) => {
+  const setRecognitionFaceDecision = async (decision, faceIndex = selectedRecognitionFace) => {
     if (!recognition?.reviewId) return;
-    await apiPost("/api/photo-review-decision", {
+    const review = await apiPost("/api/photo-review-decision", {
       review_id: recognition.reviewId,
       face_id: `face-${faceIndex}`,
-      decision: "SKIP",
+      decision,
     });
-    setRecognitionAcceptedFaces((current) => current.includes(faceIndex) ? current : [...current, faceIndex]);
+    applyReview(review);
   };
 
-  const completeRecognitionReview = async () => {
-    if (!recognition?.reviewId || recognitionAcceptedFaces.length !== recognition.faces.length) return;
+  const finalizeRecognitionReview = async () => {
     const result = await apiPost("/api/photo-review-complete", {
       review_id: recognition.reviewId,
       operation_id: recognition.completionOperationId,
       source: recognitionTargetPerson ? "add-face-review" : "check-photo",
       target_person_id: recognitionTargetPerson?.person_id,
     });
-    onGraphMutation?.(result);
+    await onGraphMutation?.(result);
     await loadPeople({ dedupe: false });
     if (recognitionTargetPerson?.person_id) {
       await onExistingPersonEnrolled?.(recognitionTargetPerson.person_id);
     }
     showToast("Review completed");
+    setRecognitionTargetPerson(null);
+    setEventDraft(null);
     setRecognition(null);
-    setRecognitionAcceptedFaces([]);
     setRecognitionFollowup(null);
+  };
+
+  const completeRecognitionReview = async () => {
+    if (!recognition?.reviewId || !recognitionReviewReady(recognition.faces, decisions)) return;
+    await finalizeRecognitionReview();
   };
 
   const openRecognitionGallery = async (personId) => {
@@ -391,6 +431,8 @@ export function useRecognizeController({
       recognitionGallery,
       recognitionGalleryImage,
       recognitionAcceptedFaces,
+      recognitionFaceDecisions: decisions,
+      recognitionReviewReady: recognitionReviewReady(recognition?.faces || [], decisions),
       recognitionFollowup,
       recognitionFollowupDone,
       recognitionProofOnlyDuplicateCandidates: proofOnlyDuplicateCandidates,
@@ -405,6 +447,7 @@ export function useRecognizeController({
       updateRecognitionEvent,
       confirmRecognitionEvent,
       recognitionAccept,
+      enrollTargetFace,
       recognitionNew,
       recognitionSelectExisting,
       recognitionClear,
@@ -419,7 +462,8 @@ export function useRecognizeController({
       confirmRecognitionFollowup,
       useProofOnlyDuplicatePerson,
       createAfterProofOnlyDuplicateCheck,
-      skipRecognitionFace,
+      skipRecognitionFace: (faceIndex) => setRecognitionFaceDecision("SKIP", faceIndex),
+      discardRecognitionFace: (faceIndex) => setRecognitionFaceDecision("EXCLUDE", faceIndex),
       completeRecognitionReview,
       clearRecognitionFollowupForm,
     },

@@ -1,5 +1,11 @@
 # SentriFace Edge: complete project guide
 
+## Batch 3.5 current coherence boundary
+
+Equivalent finalized history now converges on one canonical pair-support interpretation: the effective participants share a valid Encounter frame or they are same-Encounter only. Merging aliases, correcting identities/participants, changing Relations, restarting and rebuilding cannot change that factual interpretation merely by choosing a different raw row. Historical generations remain provenance, while current evidence/read projections use effective active authority.
+
+Standalone enrollment targets an existing Person explicitly; recognition suggestions remain proposals. Skip is deferred, not accepted, and Discard is final negative. Archived People remain historical but have a reachable authorized profile/Restore arc. A common successful-mutation boundary reconciles retained People/Event reads and existing graph/World views. Linux source recovery extends only explicitly admitted unpackaged source custody; encrypted storage, verified backup/recovery and packaged safety remain intact. World vNext and Batch 4 are still future work.
+
 ## Current product: managing finalized Encounters (Batch 3)
 
 Global Events now provides compact occurrence rows and a detail page with effective metadata, participants, supporting media, Event Note references, person-specific Sighting Notes, Relations decisions, and bounded correction history. Operators can attach additional media through the same explicit identity/Relations review. Custodians can correct occurrence details or accepted participants and Relations without rewriting the original history.

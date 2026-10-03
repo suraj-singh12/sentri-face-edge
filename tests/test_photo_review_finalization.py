@@ -413,7 +413,7 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
             self.assertEqual(len(new_result["created_person_ids"]), 1)
             self.assertEqual(store.get_photo_review("new").status, "COMPLETED")
 
-    def test_mixed_three_people_skip_and_notes_commit_together(self) -> None:
+    def test_mixed_three_people_deferred_then_discarded_and_notes_commit_together(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             store = self._store(Path(temp))
             first = store.create_person("First")
@@ -440,6 +440,12 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
             )
             store.set_photo_review_face_decision("review", "face-3", "SKIP")
 
+            with self.assertRaisesRegex(ValueError, "final decision"):
+                store.complete_photo_review("review", "mixed-op")
+            self.assertIsNone(store.get_operation("mixed-op"))
+            reopened = self._store(Path(temp))
+            self.assertEqual(reopened.get_photo_review("review").faces[3].decision, "SKIP")
+            store.set_photo_review_face_decision("review", "face-3", "EXCLUDE")
             result = store.complete_photo_review("review", "mixed-op")
 
             self.assertEqual(len(result["participant_ids"]), 3)

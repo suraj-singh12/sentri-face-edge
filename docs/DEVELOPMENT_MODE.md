@@ -1,5 +1,13 @@
 # macOS
 
+## Linux explicit source ONNX and recovery
+
+`./run.sh models` and `./run.sh onnx` use the existing isolated source authority selected by `SENTRIFACE_DEV_DATA_DIR`. Linux source ONNX admission remains explicit, Git-checkout only, unpackaged/uncompiled, and loopback-only. Real SCRFD/ArcFace models, calibration and downstream encrypted SQLCipher/storage are unchanged; no systemd path or unavailable-vault fallback is introduced.
+
+The Linux source master key and recovery code persist under that authority with owner-only custody. Recovery-code custody is a separate authority-bound AES-GCM protected file (`.sentriface-linux-source-recovery`), encrypted with the authority's existing master key. It is excluded from backup media closure; the normal external recovery kit remains required. Missing configured, corrupt, wrong-authority or unsafe custody fails closed. A normal fresh source root gets independent random key material; a root deliberately initialized by a verified recovery kit adopts the original key identity required by portable backup validation.
+
+For fresh-authority recovery, prepare verified models without first starting a new encrypted authority, then run `./run.sh onnx --recover-kit /local/path/sentriface-recovery-kit.json` with the isolated root selected. Enter the supported recovery code at the prompt, authenticate through the normal product flow, import the encrypted backup and restore normally. An existing incompatible authority/key is never silently overwritten. macOS/Windows OS-vault recovery and packaged/hardened custody are unchanged. Development reset removes only its intended source authority, including these custody records; external kits/exports and unrelated authorities are unaffected.
+
 Use this workflow to run SentriFace Edge directly from a Git checkout. Install
 Python 3.11 or 3.12 first. Git is required to obtain the repository. The
 launcher creates and maintains the repository-local `.venv312`; it does not

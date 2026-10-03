@@ -815,8 +815,9 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
   const cardClass = viewMode === "list" ? "people-person-card people-person-card--list" : "people-person-card";
   const lifecycleStatus = requirePersonContract(person).lifecycle_status;
   const historical = lifecycleStatus !== "ACTIVE";
+  const canOpen = lifecycleStatus === "ACTIVE" || (lifecycleStatus === "ARCHIVED" && personAllows(person, "VIEW_HISTORY"));
   const openPerson = () => {
-    if (!historical) onOpen(person.person_id);
+    if (canOpen) onOpen(person.person_id);
   };
   const toggleFavorite = (event) => {
     event.stopPropagation();
@@ -830,7 +831,7 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
   return (
     <Card withBorder radius="md" p="xs" className={cardClass}>
       <Stack gap="xs" align="stretch" className="people-person-card-inner">
-        <Box component="button" type="button" className="people-card-main" onClick={openPerson} disabled={historical} aria-label={`${historical ? "Historical identity" : "Open"} ${person.name}`}>
+        <Box component="button" type="button" className="people-card-main" onClick={openPerson} disabled={!canOpen} aria-label={`${historical ? "Historical identity" : "Open"} ${person.name}`}>
           <Box className="people-card-image-wrap">
             <ImageFrame variant="peopleCard">
               <SafeImage
@@ -870,8 +871,8 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
           {favorite ? <IconStar size={15} fill="currentColor" /> : <IconStar size={15} />}
         </ActionIcon>
         <Group justify="space-between" wrap="nowrap" className="people-card-actions">
-          <Button fullWidth size="compact-xs" variant="subtle" disabled={historical} onClick={(event) => { event.stopPropagation(); openPerson(); }}>
-            {historical ? lifecycleStatusLabel(lifecycleStatus) : "Open profile"}
+          <Button fullWidth size="compact-xs" variant="subtle" disabled={!canOpen} onClick={(event) => { event.stopPropagation(); openPerson(); }}>
+            {canOpen ? "Open profile" : lifecycleStatusLabel(lifecycleStatus)}
           </Button>
           <Menu withinPortal position="bottom-end">
             <Menu.Target>
@@ -1426,6 +1427,7 @@ function PeopleGalleryView({
             onCreate={onCreateAssociation}
             onRetire={onRetireAssociation}
             associations={relationships}
+            associationCount={payload.relationship_count}
             onOpen={onOpen}
             onOpenGraph={onOpenGraph}
           />
@@ -1870,7 +1872,7 @@ function PeopleProfileSightings({ details, imageRecords, onSighting }) {
   );
 }
 
-function PeopleProfileAssociations({ person, people = [], canEdit, associations, onOpen, onOpenGraph, onCreate, onRetire }) {
+function PeopleProfileAssociations({ person, people = [], canEdit, associations, associationCount = 0, onOpen, onOpenGraph, onCreate, onRetire }) {
   const [adding, setAdding] = useState(false);
   const [target, setTarget] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -1897,7 +1899,7 @@ function PeopleProfileAssociations({ person, people = [], canEdit, associations,
         {canEdit && <Button size="sm" mb="sm" onClick={() => setAdding(true)}>Add Association</Button>}
         {error && <Text role="alert" c="red">{error}</Text>}
         <Group justify="space-between" mb="md">
-          <Text fw={800}>Associated people ({associations.length})</Text>
+          <Text fw={800}>Associated people ({associationCount})</Text>
           <Button
             size="xs"
             variant="default"

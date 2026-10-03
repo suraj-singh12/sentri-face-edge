@@ -2,6 +2,8 @@
 
 ## 2.0.0 - Unreleased
 
+- Batch 3.5 unifies canonical effective Encounter frame support across merge/corrections/rebuild, repairs explicit standalone target enrollment and deferred face decisions, reconciles retained current views after mutation, completes Archived profile/Restore navigation, and separates unique counterpart/actionable queue counts. Cancellation cleanup and terminal progress publication are atomic and precede its terminal response; lifecycle admission precedes safety copies with mutation-bound revalidation. Explicit Linux source recovery extends existing encrypted custody and verified-kit startup without changing OS/packaged behavior. Source ONNX status is distinct from packaged network-boundary verification. Disposable restore candidates relocate completed-review media without relaxing live immutability; interrupted standalone enrollment can retry the original completion operation. Real fresh-authority recovery/restore/restart equivalence passed. World algorithms, historical provenance and schema v32 are preserved.
+
 - Hardened Batch 3: deduplicate active canonical manual assertions, preserve accepted-photo provenance when vectors are reused, reconcile forward participation corrections, guard Move Face during amendments, and provide direct Encounter navigation for merge conflicts. Photo labels distinguish managed photos from enrolled faces.
 
 - Batch 3 adds compact finalized Encounter browsing, same-occurrence Attach Media, journaled append-only metadata/participant/Relations corrections, profile media/event integration and normalized Manual Association controls. Schema v32 preserves original history; historical reads retain named deleted people. World scoring/clustering and Windows release acceptance are unchanged.

@@ -1718,8 +1718,22 @@ class BackupService:
         metadata: dict[str, object],
         restored_paths: dict[str, str],
     ) -> None:
+        if database_path.resolve() == self.db_path.resolve():
+            raise BackupError("Media relocation requires a disposable restore candidate")
         with _sqlite_connection(database_path, self.database_key) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("BEGIN IMMEDIATE")
+            # Completed review decisions remain immutable. Only their physical
+            # media location changes when restoring to a different authority.
+            # Suspend this broad UPDATE guard on the disposable candidate, then
+            # prove every non-location field unchanged and reinstall the exact
+            # guard before committing. Failure rolls back paths and DDL together.
+            guard = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'completed_photo_reviews_immutable'").fetchone()
+            review_columns = [row[1] for row in conn.execute('PRAGMA table_info(photo_reviews)') if row[1] != 'media_path']
+            review_select = 'SELECT ' + ', '.join(f'"{column}"' for column in review_columns) + ' FROM photo_reviews ORDER BY review_id' if review_columns else None
+            review_authority = conn.execute(review_select).fetchall() if review_select else []
+            if guard:
+                conn.execute('DROP TRIGGER completed_photo_reviews_immutable')
             if int(metadata.get("format_version", 0)) == PORTABLE_BACKUP_FORMAT_VERSION:
                 for reference in metadata.get("path_references", []):
                     registry_id = str(reference.get("registry_id") or "")
@@ -1774,6 +1788,10 @@ class BackupService:
                             "UPDATE init_sessions SET source_path = ? WHERE session_id = ?",
                             (str(Path(source_image).parent), session_id),
                         )
+            if review_select and conn.execute(review_select).fetchall() != review_authority:
+                raise BackupError("Media relocation changed review authority")
+            if guard:
+                conn.execute(guard[0])
             conn.commit()
 
     def _replace_live_database(self, replacement: Path) -> None:

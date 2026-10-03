@@ -1,5 +1,13 @@
 # SentriFace Edge agent handoff
 
+## Batch 3.5 handoff
+
+Starting branch/baseline: `release-v2.0.0-hardening`, `cf8c847337735dc7d1acc4b185f9d0e1f01a732d`. Batch 3.5 changes are uncommitted; do not auto-commit/tag. Final gates are 676 backend passed / 47 skipped / 135 subtests, 118 frontend passed, production build and diff check passed. Targeted real ONNX/SQLCipher browser qualification and fresh recovery→restore→restart equivalence are complete; consult the tracker for evidence and bounded uncertainty. The next step after acceptance is a separately frozen three-phase clean-room reaudit, not Batch 4.
+
+Preserve the canonical effective frame-support helper, durable face decision distinctions, explicit Person enrollment contract, common read reconciliation, archived historical profile capability, cancellation cleanup ordering and lifecycle preflight/revalidation. Do not replace active/effective evidence reads with historical generations or compact provenance. Linux source recovery uses the same source eligibility/storage boundary, a private encrypted recovery-code record, and validated recovery-kit key admission. Normal OS custody/packaged enforcement is unchanged. Select source recovery at construction before background workers, never as a late replacement. Preserve the staged-only completed-review media-relocation transaction and reinstated live guard. Standalone completion retries retain the original operation ID.
+
+Qualification artifacts are outside tracked source at `/workspace/scratch/sentriface-batch3-5/`; credentials/recovery codes there are private qualification data and must not be printed, screenshotted or committed. The original clean-room evidence remains separate. World scoring/clustering, note scope distinctions, draft isolation, idempotency, permissions, recognition models and release packaging remain protected.
+
 This is the shortest safe path for an engineer or coding agent taking over the
 current 2.0.0 release work. It is an orientation guide, not a replacement for the
 normative rules in the repository-root `AGENTS.md`.

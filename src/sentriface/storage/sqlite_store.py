@@ -2193,7 +2193,7 @@ class SQLiteIdentityStore:
                 "SELECT * FROM photo_review_faces WHERE review_id = ? ORDER BY face_id",
                 (review_id,),
             ).fetchall()
-            if (not face_rows and not target_observation_id) or any(row["decision"] is None or (review["review_phase"] != "LEGACY" and row["decision"] == "SKIP") for row in face_rows):
+            if (not face_rows and not target_observation_id) or any(row["decision"] is None or row["decision"] == "SKIP" for row in face_rows):
                 raise ValueError("Every detected face requires a final decision before completion")
             encounter_review = review["review_phase"] == "RELATIONS"
             if review["review_phase"] not in {"LEGACY", "RELATIONS"}:
@@ -2505,8 +2505,9 @@ class SQLiteIdentityStore:
                     resolved_pairs.add(effective_pair)
                     conn.execute(
                         "UPDATE encounter_relation_decisions SET observation_id = ?, first_person_id = ?, "
-                        "second_person_id = ?, operation_id = ? WHERE decision_id = ?",
-                        (observation_id, effective_pair[0], effective_pair[1], operation_id, relation["decision_id"]),
+                        "second_person_id = ?, operation_id = ?, support = ? WHERE decision_id = ?",
+                        (observation_id, effective_pair[0], effective_pair[1], operation_id,
+                         _encounter_pair_support(conn, observation_id, *effective_pair), relation["decision_id"]),
                     )
                     if relation["disposition"] == "INCLUDE":
                         included_pairs.append(effective_pair)
@@ -2909,7 +2910,7 @@ class SQLiteIdentityStore:
                 "SELECT * FROM photo_review_faces WHERE review_id = ? ORDER BY face_id",
                 (review_id,),
             ).fetchall()
-            if not faces or any(row["decision"] is None for row in faces):
+            if not faces or any(row["decision"] in {None, "SKIP"} for row in faces):
                 raise ValueError("Every detected face requires a final decision before completion")
             accepted = [row for row in faces if row["decision"] == "ACCEPT_EXISTING_PERSON"]
             if not accepted:
@@ -4667,6 +4668,13 @@ class SQLiteIdentityStore:
     def list_historical_persons(self) -> list[PersonSummary]:
         return self.list_persons(archived=True)
 
+    def validate_person_lifecycle_operation(self, person_id: str, operation_id: str, operation_type: str) -> None:
+        """Read-only early admission; mutations revalidate under their transaction."""
+        with self._connect() as conn:
+            if _existing_person_operation(conn, operation_id, operation_type) is not None:
+                return
+            _require_person_lifecycle_preconditions(conn, person_id, operation_type)
+
     def archive_person(
         self,
         person_id: str,
@@ -4678,15 +4686,7 @@ class SQLiteIdentityStore:
             existing = _begin_person_operation(conn, operation_id, "archive-person")
             if existing:
                 return existing
-            row = conn.execute(
-                "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
-                (person_id,),
-            ).fetchone()
-            if row is None:
-                raise KeyError(f"Unknown person: {person_id}")
-            if row["lifecycle_status"] not in {"ACTIVE", "ARCHIVED"}:
-                raise KeyError(f"Only active or archived people can be archived: {person_id}")
-            _require_no_active_encounter_draft_reference(conn, person_id)
+            row = _require_person_lifecycle_preconditions(conn, person_id, "archive-person")
             _begin_journal_operation(
                 conn,
                 "identity.archive",
@@ -5389,15 +5389,7 @@ class SQLiteIdentityStore:
             existing = _begin_person_operation(conn, operation_id, legacy_operation_type)
             if existing:
                 return existing
-            person = conn.execute(
-                "SELECT name, lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
-                (person_id,),
-            ).fetchone()
-            if person is None:
-                raise KeyError(f"Unknown person: {person_id}")
-            if person["lifecycle_status"] == "MERGED":
-                raise KeyError("Merged source identities cannot be deleted independently")
-            _require_no_active_encounter_draft_reference(conn, person_id)
+            person = _require_person_lifecycle_preconditions(conn, person_id, legacy_operation_type)
             _begin_journal_operation(
                 conn,
                 "identity.delete",
@@ -9802,8 +9794,7 @@ def _review_relation_candidates(conn: sqlite3.Connection, review_id: str) -> lis
         {
             "first_ref": first_ref, "second_ref": second_ref,
             "first_name": name_by_ref[first_ref], "second_name": name_by_ref[second_ref],
-            "support": "SHARED_FRAME" if media_by_ref[first_ref] & media_by_ref[second_ref]
-                       else "SAME_ENCOUNTER_ONLY",
+            "support": _media_pair_support(media_by_ref[first_ref], media_by_ref[second_ref]),
         }
         for index, first_ref in enumerate(refs)
         for second_ref in refs[index + 1:]
@@ -13961,25 +13952,45 @@ def _encounter_person_media(conn, observation_id, person_id):
             if media and media[0]:
                 result.add(str(media[0]))
                 continue
-            row = conn.execute("SELECT source_image FROM embeddings WHERE embedding_id = ?", (assignment["embedding_id"],)).fetchone()
-            if row and row[0]:
-                result.add(str(row[0]))
+            # Legacy single-photo review assignments belong to the review frame,
+            # including reused embeddings whose enrollment photo is different.
+            legacy = conn.execute("SELECT r.media_path FROM observation_face_assignments a JOIN photo_reviews r ON r.review_id = a.review_id WHERE a.assignment_id = ? AND r.review_phase = 'LEGACY'", (assignment["assignment_id"],)).fetchone()
+            path = legacy[0] if legacy else None
+            if not path:
+                row = conn.execute("SELECT source_image FROM embeddings WHERE embedding_id = ?", (assignment["embedding_id"],)).fetchone()
+                path = row[0] if row else None
+            if path and conn.execute("SELECT 1 FROM observation_media WHERE observation_id = ? AND media_path = ?", (observation_id, path)).fetchone():
+                result.add(str(path))
     return sorted(result)
 
 
-def _encounter_pair_support(conn, observation_id, first_id, second_id):
-    return "SHARED_FRAME" if set(_encounter_person_media(conn, observation_id, first_id)) & set(_encounter_person_media(conn, observation_id, second_id)) else "SAME_ENCOUNTER_ONLY"
+def _media_pair_support(first_media, second_media):
+    """One support meaning for draft and finalized effective frame sets."""
+    return "SHARED_FRAME" if set(first_media) & set(second_media) else "SAME_ENCOUNTER_ONLY"
+
+
+def _encounter_pair_support(conn, observation_id, first_id, second_id, *, media_by_person=None):
+    # Reuse frame sets only within the caller's one-Encounter read snapshot.
+    # This is not a durable cache or another source of pair support.
+    if media_by_person is None:
+        media_by_person = {}
+    for person_id in (first_id, second_id):
+        if person_id not in media_by_person:
+            media_by_person[person_id] = _encounter_person_media(conn, observation_id, person_id)
+    return _media_pair_support(media_by_person[first_id], media_by_person[second_id])
 
 
 def _effective_encounter_relations(conn, observation_id):
     result = {}
+    media_by_person = {}
     for row in conn.execute("SELECT * FROM encounter_relation_decisions WHERE observation_id = ? AND active = 1 ORDER BY decided_at, rowid", (observation_id,)):
         pair = tuple(sorted(_resolve_canonical_person_id(conn, str(row[key])) for key in ("first_person_id", "second_person_id")))
         if pair[0] == pair[1]:
             continue
         if pair in result and result[pair]["disposition"] != row["disposition"]:
             raise ValueError(f"Encounter {observation_id} has conflicting canonical Relations")
-        result[pair] = dict(row)
+        # Row ordering chooses a provenance predecessor, never current support.
+        result[pair] = {**dict(row), "support": _encounter_pair_support(conn, observation_id, *pair, media_by_person=media_by_person)}
     return result
 
 
@@ -13994,7 +14005,10 @@ def _write_encounter_relation_revisions(conn, observation_id, desired, operation
             conn.execute("UPDATE encounter_relation_decisions SET active = 0 WHERE decision_id = ?", (row["decision_id"],))
     for pair, value in desired.items():
         previous = existing.get(pair)
-        if previous and all(previous[key] == value[key] for key in ("disposition", "support")):
+        # Compare persisted history, not its derived effective support. A row
+        # retired above must never be mistaken for an unchanged current row.
+        stored = conn.execute("SELECT * FROM encounter_relation_decisions WHERE decision_id = ? AND active = 1", (previous["decision_id"],)).fetchone() if previous else None
+        if stored and all(stored[key] == value[key] for key in ("disposition", "support")):
             continue
         conn.execute("INSERT INTO encounter_relation_decisions(decision_id, review_id, observation_id, first_ref, second_ref, first_person_id, second_person_id, disposition, support, supersedes_decision_id, operation_id, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (str(uuid.uuid4()), review[0], observation_id, f"person:{pair[0]}", f"person:{pair[1]}", *pair, value["disposition"], value["support"], previous["decision_id"] if previous else None, operation_id, utc_now()))
@@ -14370,19 +14384,13 @@ def _recalculate_observation_evidence(
     participant_ids = _effective_observation_person_ids(conn, observation_id)
     evidence_ids: list[str] = []
     created_at = utc_now()
-    decision_rows = conn.execute(
-        "SELECT first_person_id, second_person_id, disposition FROM encounter_relation_decisions "
-        "WHERE observation_id = ? AND active = 1", (observation_id,),
-    ).fetchall()
     has_relation_authority = conn.execute(
         "SELECT 1 FROM encounter_relation_decisions WHERE observation_id = ? LIMIT 1",
         (observation_id,),
     ).fetchone() is not None
     if has_relation_authority:
-        included_pairs = sorted({tuple(sorted((
-            _resolve_canonical_person_id(conn, str(row["first_person_id"])),
-            _resolve_canonical_person_id(conn, str(row["second_person_id"])),
-        ))) for row in decision_rows if row["disposition"] == "INCLUDE"})
+        included_pairs = sorted(pair for pair, row in _effective_encounter_relations(conn, observation_id).items()
+                                if row["disposition"] == "INCLUDE")
     else:
         included_pairs = [
             (first_person_id, second_person_id)
@@ -14465,7 +14473,7 @@ def _revise_encounter_relations_for_identity_correction(
                 str(uuid.uuid4()), predecessor["review_id"], observation_id,
                 f"person:{pair[0]}", f"person:{pair[1]}", *pair,
                 predecessor["disposition"],
-                "SHARED_FRAME" if any(row["support"] == "SHARED_FRAME" for row in pair_rows) else "SAME_ENCOUNTER_ONLY",
+                _encounter_pair_support(conn, observation_id, *pair),
                 predecessor["decision_id"], operation_id, utc_now(),
             ),
         )
@@ -14714,6 +14722,18 @@ def _write_merge_profile_note_revision(
     conn.execute("UPDATE notes SET updated_at = ? WHERE note_id = ?", (created_at, note_id))
     # Compatibility mirror is deliberately last: normalized revision is current truth.
     conn.execute("UPDATE persons SET notes = ? WHERE person_id = ?", (content, target_person_id))
+
+
+def _require_person_lifecycle_preconditions(conn, person_id, operation_type):
+    row = conn.execute("SELECT name, lifecycle_status, deleted_at FROM persons WHERE person_id = ?", (person_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"Unknown person: {person_id}")
+    if operation_type == "archive-person" and row["lifecycle_status"] not in {"ACTIVE", "ARCHIVED"}:
+        raise KeyError(f"Only active or archived people can be archived: {person_id}")
+    if operation_type in {"purge-person", "soft-delete-person"} and row["lifecycle_status"] == "MERGED":
+        raise KeyError("Merged source identities cannot be deleted independently")
+    _require_no_active_encounter_draft_reference(conn, person_id)
+    return row
 
 
 def _require_no_active_encounter_draft_reference(conn: sqlite3.Connection, person_id: str) -> None:

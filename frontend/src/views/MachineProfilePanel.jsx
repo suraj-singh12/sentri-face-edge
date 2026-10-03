@@ -123,7 +123,9 @@ export function MachineProfilePanel({ profile, onConfigureRecovery, canConfigure
         ["Server listener", profile.offline_enforcement?.loopback_only ? "IPv4 loopback only" : "Unknown"],
         ["OS network boundary", profile.offline_enforcement?.os_network_enforced
           ? `Enforced (${profile.offline_enforcement.os_network_mechanism})`
-          : "Not verified — real-model startup is blocked"],
+          : profile.offline_enforcement?.source_runtime_admitted
+            ? `Source ONNX ${profile.offline_enforcement.real_model_running ? "running" : "admitted"} — packaged OS boundary not verified`
+            : "Not verified — packaged real-model startup requires OS policy"],
         ["Application socket guard", profile.offline_enforcement?.outbound_socket_guard ? "Blocked except loopback" : "Guard unavailable"],
       ]} />
       <Card withBorder radius="md">

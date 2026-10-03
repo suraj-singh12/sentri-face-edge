@@ -1,5 +1,23 @@
 # SentriFace global identity domain model
 
+## Batch 3.5 canonical coherence
+
+For a finalized effective Encounter, current canonical pair support is derived from effective accepted face assignments and valid Encounter media. `SHARED_FRAME` means the two canonical participants share at least one Encounter frame; otherwise their support is `SAME_ENCOUNTER_ONLY`. `_encounter_pair_support` owns this finalized interpretation, using the same frame-set intersection as draft candidates. Raw decision-row order never selects factual support. Initial finalization, alias collapse, participant/identity correction and Relations correction use this calculation; effective Encounter reads derive it directly, including after restart or graph rebuild.
+
+Historical Relation/evidence generations retain provenance. Current relationship reads use active evidence, canonical resolution and effective participants; superseded evidence is available only through explicit history/provenance reads. Graph rebuild derives the projection from that current authority and does not resurrect EXCLUDE or retire history to reduce row count. Stored support snapshots describe their generation; they do not override current frame facts.
+
+Face decisions are distinct: unresolved (`null`), deferred (`SKIP`), accepted-existing, accepted-new, and final negative (`EXCLUDE`). Only the two accepted decisions contribute participants. EXCLUDE resolves an item without participation; SKIP stays unresolved, is reviewable again, and cannot permit final completion or Relations progression. Recognition proposals and explicit enrollment targets are separate contracts. Standalone Add Face selects an existing Person and one detected face, durably excludes other detections, and completes the existing enrollment command without creating an Encounter.
+
+Archived People cards permit authorized historical profile navigation via `VIEW_HISTORY`. Restore remains a backend lifecycle/capability command; an archived Person is not active merely because its history is open. Deleted/merged cards and restricted graph nodes retain their separate navigation semantics. “Associated people” counts distinct effective counterpart Persons; separate evidence/direction rows retain their own breakdown.
+
+Linux recovery-code custody is an explicit unpackaged source-ONNX extension, using an authority-bound owner-only AES-GCM file under the source root and the existing storage master key. It shares the source key eligibility checks (Linux, explicit intent, Git checkout, not frozen/compiled, isolated non-production authority). Missing configured, corrupt, wrong-authority or unsafe custody fails closed. Normal macOS/Windows and packaged/hardened recovery remain OS-vault based. A verified recovery kit may install its validated master key into a fresh eligible source root; backup key identity/encryption checks are unchanged.
+
+Canonical pair reads reuse frame sets only within one Encounter read snapshot, never as persisted authority or a cross-mutation cache. Dense histories retain current pair/recurrence meaning even when retired evidence generations greatly outnumber active rows.
+
+Completed review decisions remain immutable in live authority. Portable restore may relocate registry-owned physical media paths on a disposable candidate; all non-path fields and the original guard must survive unchanged before commit. Stored correction/history IDs and content are preserved, while read revision/cursor tokens and physical locations are not portable identity.
+
+A staged standalone enrollment can retry completion using its existing operation ID after a lost response. Accepted/excluded face decisions remain the durable input; retry does not generate another enrollment authority.
+
 ## Finalized Encounter amendment authority (Batch 3)
 
 An amendment retains the original `observation_id` and finalization time. `photo_reviews.target_observation_id` and `expected_encounter_revision` bind an existing durable review to that authority; no new observation is created at completion. Media references attach once; accepted faces add immutable assignment/embedding/note history. Finalization saves the server-derived `encounter_media_id` in the existing immutable face-decision metadata. This binds each face to its actual occurrence media even when an existing embedding is reused; embedding source ownership is not changed. Older decisions without that field retain the proven enrollment-image fallback. Accepting a previously removed participant appends PRESENT and requires the affected pair decisions again. Finalization saves the server-derived `encounter_media_id` in the existing immutable face-decision metadata. This binds each face to its actual occurrence media even when an existing embedding is reused; embedding source ownership is not changed. Older decisions without that field retain the proven enrollment-image fallback. Accepting a previously removed participant appends PRESENT and requires the affected pair decisions again. Previously settled canonical pairs retain their dispositions. Every newly introduced pair requires an explicit INCLUDE/EXCLUDE decision. Additional shared frames may improve support to SHARED_FRAME but do not add independent recurrence. Zero-face or all-excluded media may extend a finalized Encounter without inventing participants.
@@ -21,7 +39,7 @@ Recognition output is non-authoritative proposal data. Only explicit operator fi
 
 ### Person and canonical identity
 
-`Person` is a stable historical identity node with one explicit lifecycle state: `ACTIVE`, `ARCHIVED`, `DELETED`, or `MERGED`. Archived and deleted nodes remain in graph history; UI projections render them inactive/non-clickable. A merged source also remains historically addressable.
+`Person` is a stable historical identity node with one explicit lifecycle state: `ACTIVE`, `ARCHIVED`, `DELETED`, or `MERGED`. Archived and deleted nodes remain in graph history; graph projections render them inactive/non-clickable. The Archived People collection separately permits authorized historical profile navigation and Restore. A merged source also remains historically addressable.
 
 Raw identity is the person ID stored on the authoritative historical record. Effective identity is that raw ID resolved through the explicit, transitive canonical mapping. A merged source resolves to one active canonical survivor. Current-view reads may group by effective identity, but they do not rewrite the raw owner or participant ID.
 

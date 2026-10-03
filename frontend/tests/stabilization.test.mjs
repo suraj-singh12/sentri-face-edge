@@ -146,7 +146,8 @@ test("Skip defers Encounter groups while Relations and proof-only review keep ex
 test("review decisions reconcile refreshed groups and persist selection and preference at the backend", () => {
   const controller = read("../src/hooks/useQueueController.js");
   assert.match(controller, /planQueueEncounters:[\s\S]*await loadQueueGroups\(queueSessionId\)/);
-  assert.match(controller, /current\.filter\(\(id\) => liveIds\.has\(id\)\)/);
+  assert.match(controller, /reconcileQueueSelection\(payload\.groups, selectedId, current\)\.faces/);
+  assert.match(controller, /const selectedId = selectedGroupIdRef\.current/);
   assert.match(controller, /followupRef\.current\?\.faceIds\?\.some/);
   assert.match(controller, /apiPost\("\/api\/queue-media-selection"/);
   assert.match(controller, /apiPost\("\/api\/queue-quality-policy"/);

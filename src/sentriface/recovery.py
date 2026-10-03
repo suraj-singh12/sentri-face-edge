@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import secrets
+import stat
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -20,6 +21,7 @@ from sentriface.backup_service import BackupRecord, BackupService
 RECOVERY_SERVICE = "SentriFace Edge disaster recovery"
 RECOVERY_KIT_NAME = "sentriface-recovery-kit.json"
 SETTINGS_NAME = "recovery-settings.json"
+LINUX_SOURCE_RECOVERY_NAME = ".sentriface-linux-source-recovery"
 SCRYPT_N = 2**15
 SCRYPT_R = 8
 SCRYPT_P = 1
@@ -86,11 +88,72 @@ def _require_local_destination(destination: Path) -> None:
 
 
 class RecoveryService:
-    def __init__(self, data_dir: Path, master_key: bytes, backups: BackupService) -> None:
+    def __init__(self, data_dir: Path, master_key: bytes, backups: BackupService, *, linux_source_onnx: bool = False) -> None:
         self.data_dir = data_dir
         self.master_key = master_key
         self.backups = backups
         self.settings_path = data_dir / SETTINGS_NAME
+        self.linux_source_onnx = linux_source_onnx
+        if linux_source_onnx:
+            self._source_root()
+
+    def _source_root(self) -> Path:
+        from sentriface.secure_storage import _linux_source_authority, load_linux_source_master_key, StorageSecurityError
+        root = _linux_source_authority(self.data_dir, explicit_source_onnx=self.linux_source_onnx)
+        try:
+            key = load_linux_source_master_key(root, explicit_source_onnx=True)
+        except StorageSecurityError:
+            raise RecoveryError("Source recovery authority could not be authenticated") from None
+        if not secrets.compare_digest(key, self.master_key):
+            raise RecoveryError("Source recovery custody does not match authority")
+        return root
+
+    def _load_code(self) -> str | None:
+        if not self.linux_source_onnx:
+            return _load_recovery_code(self.data_dir)
+        from sentriface.secure_files import is_protected_file, read_protected_bytes
+        root = self._source_root()
+        path = root / LINUX_SOURCE_RECOVERY_NAME
+        if not path.exists() and not path.is_symlink():
+            if self._read_settings().get("destination"):
+                raise RecoveryError("Source recovery secret is missing for configured authority")
+            return None
+        try:
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077 or info.st_nlink != 1:
+                raise ValueError("unsafe custody")
+            if not is_protected_file(path):
+                raise ValueError("unprotected custody")
+            record = json.loads(read_protected_bytes(path, self.master_key))
+            code = record["code"]
+            if record.get("authority") != _account(root) or not isinstance(code, str) or (not code.startswith("SF1-") or len(code) != 47):
+                raise ValueError("invalid custody")
+            return code
+        except Exception:
+            raise RecoveryError("Source recovery custody is invalid or belongs to another authority") from None
+
+    def _store_code(self, code: str) -> None:
+        if not self.linux_source_onnx:
+            _store_recovery_code(self.data_dir, code)
+            return
+        from sentriface.secure_files import write_protected_bytes
+        root = self._source_root()
+        path = root / LINUX_SOURCE_RECOVERY_NAME
+        # Secure staging keeps even temporary encrypted custody owner-only.
+        temporary = root / f".{LINUX_SOURCE_RECOVERY_NAME}.{uuid.uuid4().hex}"
+        try:
+            fd = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+            os.close(fd)
+            write_protected_bytes(temporary, json.dumps({"authority": _account(root), "code": code}).encode(), self.master_key, mode=0o600)
+            temporary.chmod(0o600)
+            os.replace(temporary, path)
+            directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def configure(self, destination: Path) -> dict[str, object]:
         _require_local_destination(destination)
@@ -99,8 +162,13 @@ class RecoveryService:
         if destination == data_root or data_root in destination.parents:
             raise RecoveryError("Disaster recovery destination must be outside the SentriFace data directory")
         destination.mkdir(parents=True, exist_ok=True)
+        # A configured but missing/corrupt secret is a recovery failure, not
+        # permission to silently rotate it and orphan the existing recovery kit.
+        if self.linux_source_onnx:
+            self._read_settings()
+            self._load_code()
         code = _new_recovery_code()
-        _store_recovery_code(self.data_dir, code)
+        self._store_code(code)
         _write_recovery_kit(destination / RECOVERY_KIT_NAME, self.master_key, code)
         self._write_settings({
             "destination": str(destination),
@@ -114,7 +182,7 @@ class RecoveryService:
         destination = Path(destination_value) if destination_value else None
         exports = sorted(destination.glob("*.sfbackup.enc"), key=lambda path: path.stat().st_mtime, reverse=True) if destination and destination.is_dir() else []
         return {
-            "configured": bool(destination_value and _load_recovery_code(self.data_dir)),
+            "configured": bool(destination_value and self._load_code()),
             "destination": destination_value,
             "destination_available": bool(destination and destination.is_dir()),
             "recovery_kit_present": bool(destination and (destination / RECOVERY_KIT_NAME).is_file()),
@@ -134,7 +202,7 @@ class RecoveryService:
             if datetime.now(timezone.utc) - created < timedelta(hours=max(1, interval_hours)):
                 return None
         destination = Path(str(status["destination"]))
-        code = _load_recovery_code(self.data_dir)
+        code = self._load_code()
         if not code:
             raise RecoveryError("Automatic recovery backup key is unavailable from the OS vault")
         backup = self.backups.create_backup(reason="automatic-recovery")
@@ -155,8 +223,14 @@ class RecoveryService:
     def _read_settings(self) -> dict[str, object]:
         try:
             payload = json.loads(self.settings_path.read_text(encoding="utf-8"))
+            if self.linux_source_onnx and (not isinstance(payload, dict) or not isinstance(payload.get("destination"), str) or not payload["destination"]):
+                raise RecoveryError("Source recovery settings are invalid")
             return payload if isinstance(payload, dict) else {}
+        except FileNotFoundError:
+            return {}
         except (OSError, json.JSONDecodeError):
+            if self.linux_source_onnx:
+                raise RecoveryError("Source recovery settings could not be read safely") from None
             return {}
 
     def _write_settings(self, payload: dict[str, object]) -> None:

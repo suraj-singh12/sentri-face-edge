@@ -210,6 +210,8 @@ function SentriFaceShell({ user, logout, changePassword }) {
               recognitionGallery={state.recognitionGallery}
               recognitionGalleryImage={state.recognitionGalleryImage}
               recognitionAcceptedFaces={state.recognitionAcceptedFaces}
+              recognitionFaceDecisions={state.recognitionFaceDecisions}
+              recognitionReviewReady={state.recognitionReviewReady}
               recognitionFollowup={state.recognitionFollowup}
               recognitionFollowupDone={state.recognitionFollowupDone}
               proofOnlyDuplicateCandidates={state.recognitionProofOnlyDuplicateCandidates}
@@ -223,9 +225,11 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onLoadAnother={() => refs.recognizeFileRef.current?.click()}
               onSelectFace={actions.selectRecognitionFace}
               onAccept={guarded(actions.recognitionAccept)}
+              onEnrollTarget={guarded(actions.enrollTargetFace)}
               onNew={guarded(actions.recognitionNew)}
               onSelectExisting={actions.recognitionSelectExisting}
               onSkip={guarded(actions.skipRecognitionFace)}
+              onDiscard={guarded(actions.discardRecognitionFace)}
               onComplete={guarded(actions.completeRecognitionReview)}
               onClear={actions.recognitionClear}
               onGallery={guarded(actions.openRecognitionGallery)}

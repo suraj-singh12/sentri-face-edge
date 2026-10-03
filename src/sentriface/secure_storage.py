@@ -33,8 +33,8 @@ class StorageSecurityError(RuntimeError):
     """Raised when encrypted storage cannot be opened without weakening security."""
 
 
-def load_linux_source_master_key(data_dir: Path, *, explicit_source_onnx: bool) -> bytes:
-    """Persistent local custody only for explicitly admitted Linux source ONNX."""
+def _linux_source_authority(data_dir: Path, *, explicit_source_onnx: bool) -> Path:
+    """The same fail-closed eligibility/authority boundary for source custody."""
     checkout = Path(__file__).resolve().parents[2]
     if (
         sys.platform != "linux" or not explicit_source_onnx
@@ -52,6 +52,18 @@ def load_linux_source_master_key(data_dir: Path, *, explicit_source_onnx: bool) 
     root_info = root.stat()
     if root_info.st_uid != os.getuid() or root_info.st_mode & 0o022:
         raise StorageSecurityError("Linux source key authority must be owned and not writable by other users")
+    return root
+
+
+def load_linux_source_master_key(data_dir: Path, *, explicit_source_onnx: bool,
+                                 recovered_key: bytes | None = None) -> bytes:
+    """Persistent source custody; only a verified recovery kit may supply a key."""
+    root = _linux_source_authority(data_dir, explicit_source_onnx=explicit_source_onnx)
+    if recovered_key is not None:
+        if len(recovered_key) != 32:
+            raise StorageSecurityError("Recovered source key is invalid")
+        validate_recovered_master_key(root, recovered_key)
+        _validate_source_log_keys(root, recovered_key)
     path = root / LINUX_SOURCE_KEY_NAME
     binding = hashlib.sha256(os.fsencode(root.resolve())).digest()
     prefix = _LINUX_SOURCE_KEY_MAGIC + binding
@@ -59,7 +71,7 @@ def load_linux_source_master_key(data_dir: Path, *, explicit_source_onnx: bool) 
         if not path.exists() and not path.is_symlink():
             # A lost key is not a fresh authority. Never replace it over history.
             from sentriface.secure_files import is_protected_file
-            if any(
+            if recovered_key is None and any(
                 item.is_symlink() or (
                     item.is_file() and item.stat().st_size and (
                         item.suffix in {".db", ".sflog"} or is_protected_file(item)
@@ -67,7 +79,7 @@ def load_linux_source_master_key(data_dir: Path, *, explicit_source_onnx: bool) 
                 ) for item in root.rglob("*")
             ):
                 raise StorageSecurityError("Linux source key is missing for existing authority")
-            key = secrets.token_bytes(32)
+            key = recovered_key if recovered_key is not None else secrets.token_bytes(32)
             try:
                 descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             except FileExistsError:
@@ -94,6 +106,8 @@ def load_linux_source_master_key(data_dir: Path, *, explicit_source_onnx: bool) 
         if len(record) != len(prefix) + 32 or not secrets.compare_digest(record[:len(prefix)], prefix):
             raise StorageSecurityError("Linux source key record is invalid or belongs to another authority")
         key = record[len(prefix):]
+        if recovered_key is not None and not secrets.compare_digest(key, recovered_key):
+            raise StorageSecurityError("Recovery key does not match existing source authority")
         validate_recovered_master_key(root, key)
         for database in root.rglob("*.db"):
             if database_is_encrypted(database):

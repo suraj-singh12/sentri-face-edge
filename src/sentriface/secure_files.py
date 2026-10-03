@@ -29,10 +29,10 @@ def is_protected_file(path: Path) -> bool:
         return False
 
 
-def write_protected_bytes(path: Path, data: bytes, key: bytes | None) -> Path:
+def write_protected_bytes(path: Path, data: bytes, key: bytes | None, *, mode: int | None = None) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     if key is None:
-        _atomic_write(path, data)
+        _atomic_write(path, data, mode=mode)
         return path
     nonce = os.urandom(12)
     header = _header(nonce, len(data))
@@ -40,7 +40,7 @@ def write_protected_bytes(path: Path, data: bytes, key: bytes | None) -> Path:
     encryptor = Cipher(algorithms.AES(_validate_key(key)), modes.GCM(nonce)).encryptor()
     encryptor.authenticate_additional_data(prefix)
     ciphertext = encryptor.update(data) + encryptor.finalize()
-    _atomic_write(path, prefix + ciphertext + encryptor.tag)
+    _atomic_write(path, prefix + ciphertext + encryptor.tag, mode=mode)
     return path
 
 
@@ -176,10 +176,11 @@ def _read_header(source) -> tuple[bytes, dict]:
     return magic + length_bytes + header_bytes, header
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
+def _atomic_write(path: Path, data: bytes, *, mode: int | None = None) -> None:
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
-        with temporary.open("xb") as output:
+        descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, mode if mode is not None else 0o666)
+        with os.fdopen(descriptor, "wb") as output:
             output.write(data)
             output.flush()
             os.fsync(output.fileno())

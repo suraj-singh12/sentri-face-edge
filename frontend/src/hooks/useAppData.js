@@ -17,6 +17,8 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const [events, setEvents] = useState([]);
   const [encounters, setEncounters] = useState({ events: [], next_cursor: null });
   const [encounterDetail, setEncounterDetail] = useState(null);
+  const encounterDetailRef = useRef(encounterDetail);
+  encounterDetailRef.current = encounterDetail;
   const [backups, setBackups] = useState([]);
   const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [backupCreating, setBackupCreating] = useState(false);
@@ -62,6 +64,15 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     setEncounterDetail(detail);
     return detail;
   }, [apiGet]);
+  const reconcileDomainReads = useCallback(async () => {
+    // One mutation boundary for retained finalized reads. Never patch IDs/counts
+    // from mutation payloads; replace with current backend projections.
+    loadedViews.current.clear();
+    const detailId = encounterDetailRef.current?.observation_id;
+    await Promise.all([loadPeople({ dedupe: false }), loadEncounters(),
+      ...(detailId ? [loadEncounterDetail(detailId)] : [])]);
+  }, [loadPeople, loadEncounters, loadEncounterDetail]);
+
   const loadDeletedFaces = useCallback(async (options = {}) => {
     if (!canDestroy) { setDeletedFaces([]); return { deleted_faces: [] }; }
     const payload = await apiGet("/api/deleted-faces", options);
@@ -374,6 +385,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     loadEncounters,
     loadEncounterDetail,
     closeEncounterDetail: () => setEncounterDetail(null),
+    reconcileDomainReads,
     loadDeletedFaces,
     loadBackups,
     refreshAll,

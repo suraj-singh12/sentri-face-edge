@@ -529,6 +529,8 @@ class IdentityStore(Protocol):
     def list_historical_persons(self) -> list[PersonSummary]:
         """List archived, deleted, and merged historical identities."""
 
+    def validate_person_lifecycle_operation(self, person_id: str, operation_id: str, operation_type: str) -> None: ...
+
     def archive_person(
         self, person_id: str, operation_id: str,
         actor: dict | None = None, source: str | None = None,

@@ -52,6 +52,8 @@ export function RecognizeView({
   recognitionGallery,
   recognitionGalleryImage,
   recognitionAcceptedFaces,
+  recognitionFaceDecisions = {},
+  recognitionReviewReady = false,
   recognitionFollowup,
   recognitionFollowupDone,
   proofOnlyDuplicateCandidates = [],
@@ -65,9 +67,11 @@ export function RecognizeView({
   onLoadAnother,
   onSelectFace,
   onAccept,
+  onEnrollTarget,
   onNew,
   onSelectExisting,
   onSkip,
+  onDiscard,
   onComplete,
   onClear,
   onGallery,
@@ -125,7 +129,7 @@ export function RecognizeView({
       setTargetConflict({ face, conflict, forceBadQuality });
       return;
     }
-    onAccept(face.index, forceBadQuality, targetPerson);
+    onEnrollTarget(face.index, forceBadQuality);
   };
   const requestFaceAction = (action, faceIndex) => {
     if (!canAdd) return;
@@ -294,6 +298,7 @@ export function RecognizeView({
                       imageSize={imageSize}
                       selectedFaceIndex={selectedFace?.index}
                       acceptedFaces={recognitionAcceptedFaces}
+                      faceDecisions={recognitionFaceDecisions}
                       canAdd={canAdd && !targetPerson}
                       manualMatches={manualMatches}
                       onSelectFace={onSelectFace}
@@ -349,22 +354,26 @@ export function RecognizeView({
               disabled={!canAdd || !selectedFace || selectedAccepted}
             >
               Skip Face
-              <Text component="span" size="xs" fw={400}>Exclude this face from the observation</Text>
+              <Text component="span" size="xs" fw={400}>Defer this face for later review</Text>
             </Button>
             <Button className="recognize-action recognize-action--clear" color="red" variant="light" leftSection={<IconTrash size={20} />} onClick={onClear} disabled={!recognition}>
               Clear
               <Text component="span" size="xs" fw={400}>Reset and try another photo</Text>
             </Button>
           </Group>}
-          {recognition && !targetPerson ? (
+          {recognition && (!targetPerson || recognitionAcceptedFaces.length > 0) ? (
+            <>
+            {!targetPerson && <Button variant="light" color="red" disabled={!canAdd || !selectedFace || selectedAccepted}
+              onClick={() => onDiscard(selectedFace.index)}>Discard Face</Button>}
             <Button
               className="recognize-complete-button"
               leftSection={<IconCheck size={20} />}
               onClick={onComplete}
-              disabled={!faces.length || recognitionAcceptedFaces.length !== faces.length}
+              disabled={!canAdd || !recognitionReviewReady}
             >
-              Complete Review
+              {targetPerson ? "Finish enrollment" : "Complete Review"}
             </Button>
+            </>
           ) : null}
         </Stack>
       </Paper>
@@ -435,10 +444,7 @@ export function RecognizeView({
               setTargetConflict(null);
               if (pending?.face) {
                 scrollToFollowup();
-                onAccept(pending.face.index, pending.forceBadQuality, {
-                  ...targetPerson,
-                  conflict_acknowledged: true,
-                });
+                onEnrollTarget(pending.face.index, pending.forceBadQuality, true);
               }
             }}>Add to {targetPerson?.name}</Button>
           </Group>
@@ -536,7 +542,7 @@ function QualityMeter({ label, value, color }) {
   );
 }
 
-function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acceptedFaces, canAdd, manualMatches, onSelectFace, onAccept, onNew, onBrowse, onGallery }) {
+function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acceptedFaces, faceDecisions = {}, canAdd, manualMatches, onSelectFace, onAccept, onNew, onBrowse, onGallery }) {
   if (!faces.length) {
     return (
       <Paper withBorder className="recognition-results-empty">
@@ -557,6 +563,7 @@ function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acc
               imageSize={imageSize}
               selected={face.index === selectedFaceIndex}
               accepted={acceptedFaces.includes(face.index)}
+              reviewDecision={faceDecisions[face.index]}
               canAdd={canAdd}
               manualMatch={manualMatches[face.index] || null}
               onSelect={() => onSelectFace(face.index)}
@@ -573,7 +580,7 @@ function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acc
   );
 }
 
-function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, canAdd, manualMatch, onSelect, onAccept, onNew, onBrowse, onGallery }) {
+function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, reviewDecision, canAdd, manualMatch, onSelect, onAccept, onNew, onBrowse, onGallery }) {
   const automaticBest = face.matches?.[0] || null;
   const automaticKnown = face.decision !== "unknown" && automaticBest && !isNewPersonSuggestion(automaticBest);
   const best = manualMatch || (automaticKnown ? automaticBest : null);
@@ -593,7 +600,7 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, ca
           <Text size="sm" fw={700} className="recognition-face-label">{faceLabel}</Text>
           <Text fw={800} truncate>{unknown ? "No match found" : best.name}</Text>
           <Badge size="xs" color={unknown ? "orange" : display.color} variant="light">
-            {unknown ? "Human review" : accepted ? "Accepted" : manualMatch ? "Selected" : display.badge}
+            {reviewDecision === "SKIP" ? "Deferred" : reviewDecision === "EXCLUDE" ? "Discarded" : accepted ? "Accepted" : unknown ? "Human review" : manualMatch ? "Selected" : display.badge}
           </Badge>
         </Box>
         {selected ? <IconChevronUp size={18} /> : <IconChevronDown size={18} />}

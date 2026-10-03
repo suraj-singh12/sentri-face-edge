@@ -272,7 +272,7 @@ def _required_capability(method: str, path: str) -> str | None:
             return "backups"
         if path in {"/api/deleted-faces"}:
             return "destroy"
-        if path in {"/api/pending", "/api/queue-progress", "/api/queue-sessions", "/api/queue-groups", "/api/queue-person-candidates", "/api/queue-encounters"}:
+        if path in {"/api/photo-review", "/api/pending", "/api/queue-progress", "/api/queue-sessions", "/api/queue-groups", "/api/queue-person-candidates", "/api/queue-encounters"}:
             return "add"
         return "view"
     if method == "DELETE":
@@ -407,6 +407,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         model_bundles: ModelBundleAuthority | None = None,
         instance_lock: InstanceLock | None = None,
         license_authority: LicenseAuthority | None = None,
+        linux_source_onnx: bool = False,
     ) -> None:
         super().__init__(server_address, SentriFaceApiHandler)
         self.engine = engine
@@ -467,7 +468,7 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         recovered_restores = self.backups.recover_interrupted_restores()
         for recovery_result in recovered_restores:
             self.log_event("backup-restore-interrupted-recovered", **recovery_result)
-        self.recovery = RecoveryService(config.data_dir, config.storage_key, self.backups)
+        self.recovery = RecoveryService(config.data_dir, config.storage_key, self.backups, linux_source_onnx=linux_source_onnx)
         self.auth = AuthService(config.db_path, config.storage_key)
         self.integrity_recovery = IntegrityRecoveryApplication(
             engine, token_secret=secrets.token_urlsafe(32),
@@ -763,11 +764,16 @@ class SentriFaceApiServer(ThreadingHTTPServer):
             self.queue_progress[job_id] = current
             return True
 
-    def finish_queue_job(self, job_id: str) -> None:
+    def finish_queue_job(self, job_id: str, **terminal_progress: Any) -> None:
         with self.queue_progress_lock:
             self.queue_cancellations.pop(job_id, None)
             self.queue_cancellation_created.pop(job_id, None)
             self.active_queue_jobs.discard(job_id)
+            if terminal_progress:
+                current = dict(self.queue_progress.get(job_id, {"job_id": job_id}))
+                current.update(terminal_progress)
+                self.queue_progress[job_id] = current
+                self._prune_queue_progress_locked()
 
     def _prune_queue_cancellations_locked(self) -> None:
         cutoff = time.time() - 60
@@ -794,11 +800,15 @@ class SentriFaceApiServer(ThreadingHTTPServer):
         operation_type: str,
         reason: str,
         action: Callable[[], dict],
+        *, person_id: str | None = None,
     ) -> dict:
         existing = self.engine.get_person_operation(operation_id, operation_type)
         if existing is not None:
             backup = self.backups.find_by_operation(operation_id)
             return {**existing, **({"backup": _backup(backup)} if backup else {})}
+        if operation_type in {"archive-person", "purge-person"}:
+            # API exclusive gate covers backup and mutation; store still rechecks.
+            self.engine.store.validate_person_lifecycle_operation(person_id, operation_id, operation_type)
         backup = self.backups.create_backup(reason=reason, operation_id=operation_id)
         result = action()
         return {**result, "backup": _backup(backup)}
@@ -1218,6 +1228,12 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/integrity/revert-operations":
                 self._json(self.server.integrity_recovery.list_revert_operations())
                 return
+            if parsed.path == "/api/photo-review":
+                review = self.server.engine.store.get_photo_review(_query_value(parsed.query, "review_id"))
+                if review is None:
+                    raise KeyError("Unknown photo review")
+                self._json(_photo_review(review))
+                return
             if parsed.path == "/api/persons":
                 self._json(_people_collection_payload(self.server.engine))
                 return
@@ -1348,7 +1364,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         "relationships": _person_relationships(
                             intelligence, person_summaries, self.server.engine,
                         ),
-                        "relationship_count": len(intelligence.relationships),
+                        "relationship_count": len({item.person_id for item in intelligence.relationships}),
                         "activity": list(intelligence.activity),
                         "changes": [_person_change(change) for change in changes],
                         "management_events": management_events,
@@ -2425,6 +2441,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         lambda: self.server.engine.archive_person(
                             person_id, operation_id, actor, parsed.path,
                         ),
+                        person_id=person_id,
                     )
                 self.server.log_event("person-archive", **result)
                 self._json(result)
@@ -2456,6 +2473,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         self._operation_actor(),
                         parsed.path,
                     ),
+                    person_id=person_id,
                 )
                 self.server.log_event("person-purge", **result)
                 self._json(result)
@@ -2567,6 +2585,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     allow_zero=True,
                 )
                 cancellation = self.server.register_queue_job(job_id)
+                job_finished = False
                 try:
                     self.server.update_queue_progress(
                         job_id,
@@ -2591,7 +2610,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                             quality_only=quality_only,
                         )
                     except QueueCancellationError as exc:
-                        self.server.update_queue_progress(
+                        self.server.finish_queue_job(
                             job_id,
                             phase="cancelled",
                             status="cancelled",
@@ -2599,6 +2618,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                             cancellation_phase=exc.phase,
                             finished_at=time.time(),
                         )
+                        job_finished = True
                         self.server.log_event(
                             "queue-cancelled",
                             path=str(source),
@@ -2615,14 +2635,6 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                             }
                         )
                         return
-                    self.server.update_queue_progress(
-                        job_id,
-                        phase="done",
-                        status="done",
-                        session_id=queue_result.session.session_id,
-                        groups=len(queue_result.groups),
-                        finished_at=time.time(),
-                    )
                     self.server.log_event(
                         "queue-scan",
                         path=str(source),
@@ -2647,6 +2659,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     if not queue_result.media_paths:
                         self.server.engine.discard_init_session(session_id)
                         session_id = ""
+                    self.server.finish_queue_job(
+                        job_id, phase="done", status="done", session_id=session_id,
+                        groups=len(queue_result.groups), finished_at=time.time(),
+                    )
+                    job_finished = True
                     self._json(
                         {
                             "session_id": session_id,
@@ -2662,15 +2679,15 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     )
                     return
                 except Exception:
-                    self.server.update_queue_progress(
-                        job_id,
-                        phase="failed",
-                        status="failed",
-                        finished_at=time.time(),
-                    )
+                    if not job_finished:
+                        self.server.finish_queue_job(
+                            job_id, phase="failed", status="failed", finished_at=time.time(),
+                        )
+                        job_finished = True
                     raise
                 finally:
-                    self.server.finish_queue_job(job_id)
+                    if not job_finished:
+                        self.server.finish_queue_job(job_id)
             if parsed.path == "/api/queue-media-selection":
                 if not isinstance(payload.get("excluded"), bool):
                     raise ValueError("excluded must be a boolean")
@@ -2959,6 +2976,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             },
             "offline_enforcement": {
                 "loopback_only": True,
+                "source_runtime_admitted": bool(getattr(self.server, "source_runtime_admitted", False)),
+                "real_model_running": self.server.runtime == "onnx" and self.server.models_available(),
                 "outbound_socket_guard": offline_guard_installed(),
                 "os_network_enforced": bool(
                     self.server.os_network_policy
@@ -3293,6 +3312,7 @@ def create_server(
     os_network_policy: OsNetworkPolicyStatus | None = None,
     instance_lock: InstanceLock | None = None,
     linux_source_onnx: bool = False,
+    source_runtime_admitted: bool = False,
 ) -> SentriFaceApiServer:
     install_offline_guard()
     normalized_host = host.strip().casefold()
@@ -3307,7 +3327,9 @@ def create_server(
             raise ValueError("Server may bind only to an IPv4 loopback address")
     if runtime not in {"dev", "onnx"}:
         raise ValueError("Runtime must be dev or onnx")
-    if linux_source_onnx:
+    if linux_source_onnx and runtime != "onnx":
+        raise ValueError("Linux source custody requires ONNX source runtime")
+    if linux_source_onnx or source_runtime_admitted:
         _startup_network_policy(runtime, allow_unpacked_source=True)
     data_dir = require_local_path(data_dir or default_data_dir()).expanduser().absolute()
     owned_lock = instance_lock is None
@@ -3373,7 +3395,9 @@ def create_server(
             os_network_policy=os_network_policy,
             model_bundles=authority,
             instance_lock=runtime_lock,
+            linux_source_onnx=linux_source_onnx,
         )
+        server.source_runtime_admitted = runtime == "onnx" and (source_runtime_admitted or linux_source_onnx) and not getattr(sys, "frozen", False)
         if linux_source_onnx:
             server.key_protection = "linux-source-development-file"
         server.log_event("startup", runtime=runtime, port=server.server_port)
@@ -3521,13 +3545,16 @@ def main() -> int:
                 startup_data_dir / "models",
             ),
         )
+        linux_source_onnx = sys.platform == "linux" and args.allow_unpackaged_source_onnx
         if args.recover_kit:
             require_local_path(args.recover_kit)
             from getpass import getpass
             recovered_key = recover_master_key(args.recover_kit, getpass("SentriFace recovery code: "))
             validate_recovered_master_key(args.data_dir, recovered_key)
-            store_master_key(args.data_dir, recovered_key)
-        linux_source_onnx = sys.platform == "linux" and args.allow_unpackaged_source_onnx
+            if linux_source_onnx:
+                load_linux_source_master_key(args.data_dir, explicit_source_onnx=True, recovered_key=recovered_key)
+            else:
+                store_master_key(args.data_dir, recovered_key)
         storage_key = (
             load_linux_source_master_key(args.data_dir, explicit_source_onnx=True)
             if linux_source_onnx else load_or_create_master_key(args.data_dir)
@@ -3547,6 +3574,7 @@ def main() -> int:
             os_network_policy=os_network_policy,
             instance_lock=runtime_lock,
             linux_source_onnx=linux_source_onnx,
+            source_runtime_admitted=args.allow_unpackaged_source_onnx,
         )
     except ModelSetupError as exc:
         if runtime_lock is not None and server is None:
@@ -4953,7 +4981,7 @@ def _person_intelligence(intelligence: PersonIntelligence) -> dict[str, Any]:
         "biometric_status": intelligence.biometric_status,
         "embedding_count": intelligence.embedding_count,
         "confidence_summary": intelligence.confidence_summary,
-        "relationship_count": len(intelligence.relationships),
+        "relationship_count": len({item.person_id for item in intelligence.relationships}),
         "presence": {
             "observation_count": presence.observation_count,
             "first_seen_at": presence.first_seen_at,

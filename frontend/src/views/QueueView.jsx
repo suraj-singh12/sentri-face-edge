@@ -1,3 +1,4 @@
+import { actionableQueueGroups } from "../reviewState.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -152,7 +153,7 @@ export function QueueView({
             <QueueInputPanel
               sessions={queueSessions}
               sessionId={queueSessionId}
-              pendingCount={visibleQueueGroups.filter((group) => group.status === "pending" && group.faces.length).length}
+              pendingCount={actionableQueueGroups(visibleQueueGroups, encounterMedia, encounterReviews.length > 0).filter((group) => group.status === "pending" && group.faces.length).length}
               onFiles={onFiles}
               onFolder={onFolder}
               onDrop={onDrop}

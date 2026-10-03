@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { currentDateTimeParts, droppedImageFiles, isNewPersonSuggestion, requirePersonContract } from "../utils.js";
+import { reconcileQueueSelection } from "../reviewState.js";
 import { usePersistentState } from "./usePersistentState.js";
 
 export function useQueueController({
@@ -24,6 +25,8 @@ export function useQueueController({
   const [queueEncounterReviews, setQueueEncounterReviews] = useState([]);
   const [encounterCompletionIds, setEncounterCompletionIds] = usePersistentState("sentriface.queue.completionIds", {});
   const [queueSessionId, setQueueSessionId] = usePersistentState("sentriface.queue.sessionId", "");
+  const queueSessionIdRef = useRef(queueSessionId);
+  queueSessionIdRef.current = queueSessionId;
   const [qualityOnly, setQualityOnly] = usePersistentState("sentriface.queue.qualityOnly", true);
   const [queueEvent, setQueueEvent] = usePersistentState("sentriface.queue.event", null);
   const [queueEventDraft, setQueueEventDraft] = usePersistentState("sentriface.queue.eventDraft", null);
@@ -35,6 +38,9 @@ export function useQueueController({
     setQueueEventDraft({ date, time: "", endTime: "", timePrecision: "unknown", placeSeen: "", eventOccasion: "", eventContext: "unknown", eventNotes: "", eventMentionedPersonIds: [] });
   }, [queueSelectedGroup, queueEvent, queueEventDraft, setQueueEventDraft]);
   const [queueSelectedGroupId, setQueueSelectedGroupId] = usePersistentState("sentriface.queue.selectedGroupId", "");
+  const selectedGroupIdRef = useRef(queueSelectedGroupId);
+  selectedGroupIdRef.current = queueSelectedGroupId;
+  const queueLoadGeneration = useRef(0);
   const [queueSelectedFaces, setQueueSelectedFaces] = usePersistentState("sentriface.queue.selectedFaces", []);
   const [queueAccepted, setQueueAccepted] = usePersistentState("sentriface.queue.accepted", false);
   const [queueFollowup, setQueueFollowup] = usePersistentState("sentriface.queue.followup", null);
@@ -54,13 +60,14 @@ export function useQueueController({
     ...group, faces: group.faces.filter((face) => activeFaceIds.has(face.init_face_id)),
   })).filter((group) => group.faces.length) : queueGroups;
 
-  const loadQueueEncounters = useCallback(async (sessionId) => {
+  const loadQueueEncounters = useCallback(async (sessionId, generation = queueLoadGeneration.current) => {
     if (!sessionId) {
       setQueueEncounterMedia([]);
       setQueueEncounterReviews([]);
       return;
     }
     const payload = await apiGet(`/api/queue-encounters?session_id=${encodeURIComponent(sessionId)}`);
+    if (generation !== queueLoadGeneration.current) return payload;
     setQueueEncounterMedia(payload.media || []);
     setQueueEncounterReviews(payload.reviews || []);
     return payload;
@@ -71,42 +78,36 @@ export function useQueueController({
       setQueueGroups([]);
       return;
     }
+    const generation = ++queueLoadGeneration.current;
     const payload = await apiGet(`/api/queue-groups?session_id=${encodeURIComponent(sessionId)}`);
-    await loadQueueEncounters(sessionId);
+    if (generation !== queueLoadGeneration.current) return payload;
+    await loadQueueEncounters(sessionId, generation);
+    if (generation !== queueLoadGeneration.current) return payload;
+    const selectedId = selectedGroupIdRef.current;
     if (typeof payload.quality_only === "boolean") setQualityOnly(payload.quality_only);
+    queueSessionIdRef.current = sessionId;
     setQueueSessionId(sessionId);
     setQueueGroups(payload.groups);
-    const selectedGroupStillExists = !queueSelectedGroupId
-      || payload.groups.some((group) => group.group_id === queueSelectedGroupId);
-    if (!selectedGroupStillExists && !options.preserveSelectedGroup) {
-      setQueueSelectedGroupId("");
-      resetQueueDecision();
-    }
+    const currentGroup = reconcileQueueSelection(payload.groups, selectedId, []).group;
     setQueueReviewStats((current) => current.totalGroups ? current : {
-      ...emptyQueueReviewStats,
-      totalGroups: payload.groups.length,
-      totalFaces: payload.groups.reduce((total, group) => total + (group.faces?.length || 0), 0),
+      ...emptyQueueReviewStats, totalGroups: payload.groups.length,
+      totalFaces: payload.groups.reduce((total, group) => total + group.faces.length, 0),
       skippedGroups: payload.groups.filter((group) => group.status === "skipped").length,
     });
-    setQueueSelectedGroup((current) => {
-      const desiredGroupId = current?.group_id || queueSelectedGroupId;
-      if (!desiredGroupId) return null;
-      const refreshedGroup = payload.groups.find((group) => group.group_id === desiredGroupId);
-      if (refreshedGroup) return refreshedGroup;
-      return null;
-    });
-    const currentGroup = payload.groups.find((group) => group.group_id === queueSelectedGroupId);
-    const liveIds = new Set((currentGroup?.faces || []).map((face) => face.init_face_id));
-    setQueueSelectedFaces((current) => current.filter((id) => liveIds.has(id)));
-    if (!currentGroup || followupRef.current?.faceIds?.some((id) => !liveIds.has(id))) {
+    setQueueSelectedGroup(currentGroup);
+    setQueueSelectedFaces((current) => reconcileQueueSelection(payload.groups, selectedId, current).faces);
+    if ((selectedId && !currentGroup) || followupRef.current?.faceIds?.some((id) => !currentGroup?.faces.some((face) => face.init_face_id === id))) {
       resetQueueDecision();
-      setQueueSelectedGroupId(currentGroup?.group_id || "");
+      selectedGroupIdRef.current = "";
+      setQueueSelectedGroupId("");
     }
     return payload;
   }, [apiGet, loadQueueEncounters, queueSelectedGroupId, queueSessionId, setQueueSessionId]);
 
   const loadQueueSessions = useCallback(async (preferredSessionId = queueSessionId) => {
+    const generation = queueLoadGeneration.current;
     const payload = await apiGet("/api/queue-sessions");
+    if (generation !== queueLoadGeneration.current) return payload;
     const sessions = payload.sessions || [];
     setQueueSessions(sessions);
     const selected = sessions.find((session) => session.session_id === preferredSessionId) || sessions[0] || null;
@@ -116,12 +117,14 @@ export function useQueueController({
       setQueueEncounterMedia([]);
       setQueueEncounterReviews([]);
       setQueueSelectedGroup(null);
+      selectedGroupIdRef.current = "";
       setQueueSelectedGroupId("");
       resetQueueDecision();
       return payload;
     }
-    if (selected.session_id !== queueSessionId) {
+    if (selected.session_id !== queueSessionIdRef.current) {
       setQueueSelectedGroup(null);
+      selectedGroupIdRef.current = "";
       setQueueSelectedGroupId("");
       resetQueueDecision();
     }
@@ -187,6 +190,8 @@ export function useQueueController({
           Math.max(0, Number(options.uploadedFiles || options.totalFiles || 0) - scanRejectedFiles),
         );
       }
+      queueSessionIdRef.current = payload.session_id;
+      ++queueLoadGeneration.current;
       setQueueSessionId(payload.session_id);
       setQueueGroups(payload.groups);
       setQueueEncounterMedia(payload.media || []);
@@ -422,12 +427,13 @@ export function useQueueController({
     if (activeEncounter && !activeEncounter.event_details_complete) {
       const { date } = currentDateTimeParts();
       setQueueEvent(null);
-      setQueueEventDraft({ date, time: "", endTime: "", timePrecision: "unknown", placeSeen: "", eventOccasion: "", eventContext: "unknown", eventNotes: "", eventMentionedPersonIds: [] });
+      setQueueEventDraft((current) => current?.reviewId === activeEncounter.review_id ? current : { reviewId: activeEncounter.review_id, date, time: "", endTime: "", timePrecision: "unknown", placeSeen: "", eventOccasion: "", eventContext: "unknown", eventNotes: "", eventMentionedPersonIds: [] });
     } else if (activeEncounter?.event_details_complete) {
       setQueueEvent({ ...eventFromApi(activeEncounter.event_details), reviewId: activeEncounter.review_id });
       setQueueEventDraft(null);
     }
     setQueueSelectedGroup(group);
+    selectedGroupIdRef.current = group.group_id;
     setQueueSelectedGroupId(group.group_id);
     resetQueueDecision();
     setQueueSelectedFaces(group.faces.map((face) => face.init_face_id));
@@ -435,7 +441,10 @@ export function useQueueController({
 
   const selectQueueSession = async (sessionId) => {
     if (!sessionId || sessionId === queueSessionId) return;
+    queueSessionIdRef.current = sessionId;
+    ++queueLoadGeneration.current;
     setQueueSelectedGroup(null);
+    selectedGroupIdRef.current = "";
     setQueueSelectedGroupId("");
     resetQueueDecision();
     setQueueReviewStats(emptyQueueReviewStats);
@@ -452,6 +461,7 @@ export function useQueueController({
     setQueueEncounterMedia([]);
     setQueueEncounterReviews([]);
     setQueueSelectedGroup(null);
+    selectedGroupIdRef.current = "";
     setQueueSelectedGroupId("");
     resetQueueDecision();
     setQueueReviewStats(emptyQueueReviewStats);
@@ -528,6 +538,7 @@ export function useQueueController({
     showToast(`Discarded ${faceIds.length} face(s)`);
     resetQueueDecision();
     setQueueSelectedGroup(null);
+    selectedGroupIdRef.current = "";
     setQueueSelectedGroupId("");
     if (payload.session_closed) {
       setQueueProgress(null);
@@ -559,6 +570,7 @@ export function useQueueController({
     });
     if (queueSelectedGroup?.group_id === group.group_id) {
       setQueueSelectedGroup(null);
+      selectedGroupIdRef.current = "";
       setQueueSelectedGroupId("");
       resetQueueDecision();
     }
@@ -679,6 +691,7 @@ export function useQueueController({
       setQueueAccepted(false);
       showToast("Identity decision saved to Encounter draft");
       setQueueSelectedGroup(null);
+      selectedGroupIdRef.current = "";
       setQueueSelectedGroupId("");
       return;
     }
@@ -735,7 +748,7 @@ export function useQueueController({
         added_by: queueFollowup.addedBy,
         quality_choices: queueFollowup.poorFaceChoices || {},
       });
-    onGraphMutation?.(payload);
+    await onGraphMutation?.(payload);
     const entries = payload.accepted || [];
     if (payload.session_closed) removeClosedQueueSession(confirmedSessionId);
     else {
@@ -769,6 +782,7 @@ export function useQueueController({
       setQueueFollowup(null);
       setQueueFollowupDone(false);
       setQueueSelectedGroup(null);
+      selectedGroupIdRef.current = "";
       setQueueSelectedGroupId("");
       setQueueEvent(null);
       setQueueEventDraft(null);
@@ -934,12 +948,14 @@ export function useQueueController({
 
   function resetQueueReview() {
     setQueueSelectedGroup(null);
+    selectedGroupIdRef.current = "";
     setQueueSelectedGroupId("");
     resetQueueDecision();
   }
 
   function closeQueueReview() {
     setQueueSelectedGroup(null);
+    selectedGroupIdRef.current = "";
     setQueueSelectedGroupId("");
     resetQueueDecision();
   }
@@ -973,6 +989,7 @@ export function useQueueController({
         const payload = await apiPost("/api/queue-encounters-plan", { session_id: queueSessionId, media_groups: mediaGroups });
         setQueueEncounterReviews(payload.reviews || []);
         setQueueSelectedGroup(null);
+        selectedGroupIdRef.current = "";
         setQueueSelectedGroupId("");
         resetQueueDecision();
         await loadQueueGroups(queueSessionId);
@@ -998,11 +1015,12 @@ export function useQueueController({
         const payload = await apiPost("/api/queue-encounter-complete", {
           review_id: activeEncounter.review_id, operation_id: operationId,
         });
-        onGraphMutation?.(payload.result);
+        await onGraphMutation?.(payload.result);
         await onEncounterCompleted?.(payload.result);
         await loadPeople({ dedupe: false });
         await loadQueueSessions(queueSessionId);
         setQueueSelectedGroup(null);
+        selectedGroupIdRef.current = "";
         setQueueSelectedGroupId("");
         setQueueEvent(null);
         showToast(activeEncounter.target_observation_id ? "Media attached to the existing Encounter" : "Encounter finalized");
@@ -1011,6 +1029,7 @@ export function useQueueController({
         await apiPost("/api/queue-encounter-discard", { review_id: activeEncounter.review_id });
         await loadQueueSessions(queueSessionId);
         setQueueSelectedGroup(null);
+        selectedGroupIdRef.current = "";
         setQueueSelectedGroupId("");
         setQueueEvent(null);
       },
