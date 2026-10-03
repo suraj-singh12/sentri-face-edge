@@ -1,6 +1,13 @@
 # SentriFace Edge: complete project guide
 
-## Batch 3.5 current coherence boundary
+## Batch 3.6 current qualification
+
+Normal multi-photo history, integrity checking, graph rebuild and backup restore now agree on registered source provenance. Reusing an enrolled face does not replace the photograph belonging to a later occurrence. Alias merge retains distinct manual history while retiring redundant current standing assertions. Accepted recognition cards confirm the operator's saved selection rather than the model's original proposal.
+
+A fresh real ONNX/encrypted authority with lifecycle, quality, correction, note, alias and multi-photo history passed supported rebuild, encrypted export, fresh recovery-kit import/restore, original-administrator authentication and ordinary restart. Detailed comparisons, first-run verification and bounded limits are owned by IMPLEMENTATION_PLAN. Schema remains v32; World vNext/Batch 4 and current signed Windows release acceptance remain future work.
+
+
+## Historical Batch 3.5 coherence checkpoint
 
 Equivalent finalized history now converges on one canonical pair-support interpretation: the effective participants share a valid Encounter frame or they are same-Encounter only. Merging aliases, correcting identities/participants, changing Relations, restarting and rebuilding cannot change that factual interpretation merely by choosing a different raw row. Historical generations remain provenance, while current evidence/read projections use effective active authority.
 

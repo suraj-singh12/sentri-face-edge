@@ -1554,7 +1554,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     combined = self.server.engine.encounter_matches_for_init_group(group, active_review["review_id"], limit=False)
                     by_id = {item["person_id"]: item for item in combined}
                     people = [{**_person_summary_from_embeddings(candidate.summary, candidate.embeddings),
-                               "match": {**_match_policy(self.server.engine, by_id[candidate.summary.person_id]["score"]), "score": by_id[candidate.summary.person_id]["score"]} if candidate.summary.person_id in by_id else None}
+                               "match": {**_match_policy(self.server.engine, by_id[candidate.summary.person.person_id]["score"]), "score": by_id[candidate.summary.person.person_id]["score"]} if candidate.summary.person.person_id in by_id else None}
                               for candidate in candidates]
                     for item in combined:
                         if item["draft_created"]:

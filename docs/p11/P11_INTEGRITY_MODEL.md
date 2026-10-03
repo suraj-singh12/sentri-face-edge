@@ -76,7 +76,7 @@ The executable registry is `sentriface.integrity.INTEGRITY_INVARIANTS`. Every fi
 | `P11-CORRECTION-002` | Correction / Error | Correction-before-canonical interpretation resolves legal identities; observation corrections remain applicable. | Manual review |
 | `P11-OBSERVATION-001` | Observation / Error | Finalized observations have timestamps plus raw/effective participants; drafts lack finalization timestamps. | Manual review |
 | `P11-OBSERVATION-002` | Observation / Error | Raw keys and current effective participants obey uniqueness/existence rules. | Manual review |
-| `P11-OBSERVATION-003` | Observation / Error | Observation media has a non-empty ID and durable database provenance. | Manual review |
+| `P11-OBSERVATION-003` | Observation / Error | Observation media has a non-empty ID and independent registry-owned source provenance; saved accepted-face occurrence-media IDs belong to their own observation. | Manual review |
 | `P11-REVIEW-001` | Review / Critical | Completed decisions, journal result, optional finalized observation, and completion fields agree. | Manual review |
 | `P11-EVIDENCE-001` | Evidence / Error | Type/source/direction/raw endpoints/lifecycle provenance and typed source are coherent. An active `NOTE_REFERENCE` requires an active occurrence on an active note; a fully retired evidence revision remains valid history regardless of whether that occurrence is current now. | Manual review |
 | `P11-EVIDENCE-002` | Evidence / Error | Active evidence resolves legally and co-observation endpoints remain effective participants. Canonically collapsed self-evidence is legal history. | Manual review |
@@ -219,3 +219,7 @@ P12 invokes the checker on the completed backup snapshot, on the staged candidat
 4. **P11-C2 / R01 and R02:** complete as explicit Python/service invocation with typed finding preconditions, in-transaction revalidation, immutable repair journaling, append/retire-only history preservation, exact projection/revision validation, rollback/idempotency rules, and full P11-A post-check. The whitelist remains exactly two.
 5. **P11-D — Revert execution:** complete; one operation-specific normalized-merge subset with immutable preconditions, conservative dependency refusal, atomic graph/journal execution, rollback tests, and P11-A post-check.
 6. **P11-E — Integrity/recovery UI and acceptance:** complete; administrator-only explicit checks, bounded factual DTOs, signed preparation tokens, typed refusal/post-check outcomes, manually confirmed execution, and no polling/background scan.
+
+## Batch 3.6 provenance interpretation
+
+The read-only checker and write admission share `media_registry` source lookup, excluding observation membership as its own proof. Retained multi-photo review/session references are valid independently of embedding reuse, correction generations or Person lifecycle. Enrollment images and later occurrence media are distinct provenance. Physical asset closure/authentication remains the existing backup verifier's responsibility; its checks are not disabled. Rebuild and restore consume this checker unchanged at their safety boundaries.

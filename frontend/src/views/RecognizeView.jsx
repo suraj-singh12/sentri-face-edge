@@ -1,3 +1,4 @@
+import { resolvedRecognitionPerson } from "../reviewState.js";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -94,7 +95,8 @@ export function RecognizeView({
   const [peoplePickerMode, setPeoplePickerMode] = useState("biometric");
   const [peopleCandidates, setPeopleCandidates] = useState({});
   const selectedManualMatch = manualMatches[selectedFace?.index] || null;
-  const selectedMatch = selectedManualMatch || selectedFace?.matches?.[0] || null;
+  const selectedMatch = resolvedRecognitionPerson(recognition?.faceResolutions?.[selectedFace?.index], selectedFace?.matches)
+    || selectedManualMatch || selectedFace?.matches?.[0] || null;
   const selectedAccepted = recognitionAcceptedFaces.includes(selectedFace?.index);
   const selectedIsKnown = Boolean(selectedManualMatch || (selectedFace?.decision !== "unknown" && selectedMatch?.is_known));
   const selectedIsBad = selectedFace?.quality?.status === "bad";
@@ -299,6 +301,7 @@ export function RecognizeView({
                       selectedFaceIndex={selectedFace?.index}
                       acceptedFaces={recognitionAcceptedFaces}
                       faceDecisions={recognitionFaceDecisions}
+                      faceResolutions={recognition?.faceResolutions || {}}
                       canAdd={canAdd && !targetPerson}
                       manualMatches={manualMatches}
                       onSelectFace={onSelectFace}
@@ -542,7 +545,7 @@ function QualityMeter({ label, value, color }) {
   );
 }
 
-function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acceptedFaces, faceDecisions = {}, canAdd, manualMatches, onSelectFace, onAccept, onNew, onBrowse, onGallery }) {
+function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acceptedFaces, faceDecisions = {}, faceResolutions = {}, canAdd, manualMatches, onSelectFace, onAccept, onNew, onBrowse, onGallery }) {
   if (!faces.length) {
     return (
       <Paper withBorder className="recognition-results-empty">
@@ -564,6 +567,7 @@ function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acc
               selected={face.index === selectedFaceIndex}
               accepted={acceptedFaces.includes(face.index)}
               reviewDecision={faceDecisions[face.index]}
+              resolution={faceResolutions[face.index]}
               canAdd={canAdd}
               manualMatch={manualMatches[face.index] || null}
               onSelect={() => onSelectFace(face.index)}
@@ -580,10 +584,11 @@ function RecognitionResults({ faces, inputSrc, imageSize, selectedFaceIndex, acc
   );
 }
 
-function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, reviewDecision, canAdd, manualMatch, onSelect, onAccept, onNew, onBrowse, onGallery }) {
+function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, reviewDecision, resolution, canAdd, manualMatch, onSelect, onAccept, onNew, onBrowse, onGallery }) {
   const automaticBest = face.matches?.[0] || null;
   const automaticKnown = face.decision !== "unknown" && automaticBest && !isNewPersonSuggestion(automaticBest);
-  const best = manualMatch || (automaticKnown ? automaticBest : null);
+  const resolved = resolvedRecognitionPerson(resolution, face.matches);
+  const best = accepted ? resolved : manualMatch || (automaticKnown ? automaticBest : null);
   const unknown = !best;
   const display = matchDisplay(best);
   const faceLabel = `Face ${faceNumber(face.index)}`;
@@ -598,7 +603,7 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, re
         </Box>
         <Box miw={0} className="recognition-face-identity">
           <Text size="sm" fw={700} className="recognition-face-label">{faceLabel}</Text>
-          <Text fw={800} truncate>{unknown ? "No match found" : best.name}</Text>
+          <Text fw={800} truncate>{accepted && !resolved ? "Accepted identity loading" : unknown ? "No match found" : best.name}</Text>
           <Badge size="xs" color={unknown ? "orange" : display.color} variant="light">
             {reviewDecision === "SKIP" ? "Deferred" : reviewDecision === "EXCLUDE" ? "Discarded" : accepted ? "Accepted" : unknown ? "Human review" : manualMatch ? "Selected" : display.badge}
           </Badge>
@@ -608,7 +613,7 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, re
       {selected && (
         <Box className="recognition-face-details">
           <Group justify="space-between" align="center" gap="xs" wrap="nowrap">
-            <Text size="xs" c="dimmed">{unknown ? "No person met the recognition threshold." : `ID ${best.person_id}`}</Text>
+            <Text size="xs" c="dimmed">{best?.staged_new ? "New Person · pending completion" : accepted && !resolved ? "Reloading saved decision" : unknown ? "No person met the recognition threshold." : `ID ${best.person_id}`}</Text>
             <Button size="compact-xs" variant="subtle" leftSection={<IconUsers size={14} />} disabled={!canAdd || accepted} onClick={onBrowse}>Browse People</Button>
           </Group>
           <Group grow mt="xs">
@@ -616,7 +621,7 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, re
               <Button size="xs" variant="light" leftSection={<IconUserPlus size={14} />} disabled={!canAdd || accepted} onClick={onNew}>Create new person</Button>
             ) : (
               <>
-                <Button size="xs" variant="default" onClick={() => onGallery(best.person_id)}>View profile</Button>
+                <Button size="xs" variant="default" disabled={!best?.person_id} onClick={() => onGallery(best.person_id)}>View profile</Button>
                 <Button size="xs" color={face.quality?.status === "bad" ? "orange" : "green"} leftSection={<IconCheck size={14} />} disabled={!canAdd || accepted} onClick={onAccept}>
                   {accepted ? "Accepted" : face.quality?.status === "bad" ? "Accept Anyway" : "Accept"}
                 </Button>

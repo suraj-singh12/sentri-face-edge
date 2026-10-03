@@ -140,3 +140,53 @@ def update_media_reference(
     )
     if cursor.rowcount != 1:
         raise KeyError(f"Media reference row is missing: {spec.registry_id}")
+
+
+def existing_media_provenance(conn: sqlite3.Connection) -> set[str]:
+    """Registry-owned source references, excluding the membership being proved.
+
+    Enrollment/crop provenance and retained review/session media are independent
+    source authority. Observation membership cannot prove itself. Historical
+    recognition IDs remain supported alongside the registry's relocatable paths.
+    Physical closure/authentication stays with BackupService and secure_files.
+    """
+    references = {
+        path for spec, _identity, path in iter_media_references(conn)
+        if spec.table != "observation_media"
+    }
+    references.update(str(row[0]) for row in conn.execute(
+        "SELECT image_id FROM recognition_details WHERE trim(image_id) != ''"
+    ))
+    return references
+
+
+def require_existing_media(conn: sqlite3.Connection, media_id: str, media_path: str | None) -> None:
+    if not str(media_id).strip() or not {media_id, media_path}.intersection(existing_media_provenance(conn)):
+        raise KeyError(f"Unknown existing media: {media_id}")
+
+
+def observation_media_provenance_issues(conn: sqlite3.Connection) -> Iterator[tuple[str, str, str | None]]:
+    """Use the write-admission contract, plus immutable review/face bindings.
+
+    A completed review owns all of its registered images, not merely its primary
+    image or an embedding's original enrollment photograph. Revisions and merges
+    change effective identity, never this historical media membership.
+    """
+    sources = existing_media_provenance(conn)
+    invalid: dict[tuple[str, str], str | None] = {}
+    for oid, mid, path in conn.execute("SELECT observation_id, media_id, media_path FROM observation_media"):
+        if not str(mid).strip() or not {mid, path}.intersection(sources):
+            invalid[(str(oid), str(mid))] = path
+    # A face's saved occurrence media must belong to its own observation. A
+    # registry reference in an unrelated Encounter is not an adequate binding.
+    for oid, mid in conn.execute("""
+        SELECT a.observation_id, json_extract(f.recognition_detail, '$.encounter_media_id')
+        FROM observation_face_assignments a
+        JOIN photo_review_faces f ON f.review_id = a.review_id AND f.face_id = a.face_id
+        WHERE json_extract(f.recognition_detail, '$.encounter_media_id') IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM observation_media m
+            WHERE m.observation_id = a.observation_id
+              AND m.media_id = json_extract(f.recognition_detail, '$.encounter_media_id'))
+    """):
+        invalid[(str(oid), str(mid))] = None
+    yield from ((oid, mid, invalid[(oid, mid)]) for oid, mid in sorted(invalid))

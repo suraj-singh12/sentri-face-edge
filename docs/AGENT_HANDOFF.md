@@ -1,6 +1,17 @@
 # SentriFace Edge agent handoff
 
-## Batch 3.5 handoff
+## Batch 3.6 handoff
+
+Baseline verified clean on `release-v2.0.0-hardening` at `1ea2a38d10be0da4c00fea4a3f53053b9eaef998`. Current repairs are uncommitted; do not commit/tag or start Batch 4. Reuse media_registry source provenance for writer admission and P11; preserve its exclusion of self-proving observation membership and scoped accepted-face media bindings. Preserve registry-owned authenticated backup closure and staged-only relocation guards.
+
+Merge retires affected canonical standing-manual collisions deterministically inside its transaction, retaining raw history and IDs. Recognition displays full server-staged operator decisions rather than stale proposals; candidate browsing fixes nested PersonSummary access. No schema, World algorithm, recognition model/threshold or packaged custody change.
+
+Verification: 694 backend passed / 47 skipped / 135 subtests; 120 frontend passed; production build passed. Earlier focused setup failures and browser action/response-capture limitations are preserved in `/workspace/scratch/sentriface-batch36/`. Real complex rebuild succeeded; fresh supported recovery-kit import/Restore Safely, original administrator login and ordinary restored restart succeeded. Domain/assets/current reads match after declared physical-path, precondition-token and photo tie-order normalization; supported journals are the only durable authority additions. Secrets/kit/export remain in separate private directories.
+
+The next gate is a separately frozen clean-room reaudit; current uncommitted qualification is not Windows packaged release acceptance. Previous batch sections below are historical checkpoints.
+
+
+## Historical Batch 3.5 handoff
 
 Starting branch/baseline: `release-v2.0.0-hardening`, `cf8c847337735dc7d1acc4b185f9d0e1f01a732d`. Batch 3.5 changes are uncommitted; do not auto-commit/tag. Final gates are 676 backend passed / 47 skipped / 135 subtests, 118 frontend passed, production build and diff check passed. Targeted real ONNX/SQLCipher browser qualification and fresh recovery→restore→restart equivalence are complete; consult the tracker for evidence and bounded uncertainty. The next step after acceptance is a separately frozen three-phase clean-room reaudit, not Batch 4.
 

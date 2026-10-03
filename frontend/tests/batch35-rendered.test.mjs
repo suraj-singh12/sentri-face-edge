@@ -40,3 +40,43 @@ test('source real-model status remains distinct from packaged network-boundary v
   assert.match(html,/Source ONNX running/);assert.match(html,/not verified/);
   assert.doesNotMatch(html,/real-model startup blocked/);
 });
+
+test('accepted recognition identity comes from operator resolution, never an unrelated proposal', () => {
+  const candidate={person_id:'proposal-a',name:'Proposal A',is_known:true,similarity:.95,embedding_ids:['ea']};
+  for (const [decision,person_id,new_person_name,name] of [
+    ['ACCEPT_EXISTING_PERSON','proposal-a',null,'Proposal A'],
+    ['ACCEPT_EXISTING_PERSON','selected-b',null,'Selected B'],
+    ['ACCEPT_NEW_PERSON',null,'New C','New C'],
+  ]) {
+    for (const status of ['good','bad']) {
+      const props=recognitionProps({1:decision,2:'SKIP'});
+      props.recognition.faces[0]={...face(1),quality:{status,score:.3},decision:'known',matches:[candidate]};
+      props.recognition.faceResolutions={1:{decision,person_id,new_person_name,recognition_detail:{name}}};
+      const html=render(RecognizeView,props);
+      const summary=html.match(/class="recognition-face-summary"[^]*?<\/button>/)?.[0];
+      assert.match(summary,new RegExp(`>${name}<`));
+      assert.match(summary,/>Accepted</);
+      assert.match(html,/>Deferred</);
+      if (name !== 'Proposal A') assert.doesNotMatch(summary,/>Proposal A</);
+      if (new_person_name) assert.match(html,/New Person · pending completion/);
+      else assert.match(html,new RegExp(`ID ${person_id}`));
+    }
+  }
+});
+
+test('no proposal and different per-face resolutions retain accepted identities on server resume', async () => {
+  const {recognitionReviewState}=await import('../src/reviewState.js');
+  const saved={faces:[
+    {face_id:'face-1',decision:'ACCEPT_EXISTING_PERSON',person_id:'b',recognition_detail:{name:'Resolved B'}},
+    {face_id:'face-2',decision:'ACCEPT_NEW_PERSON',new_person_name:'Resolved C'},
+  ]};
+  // JSON roundtrip models persisted state; server reread replaces it on resume.
+  const state=recognitionReviewState(JSON.parse(JSON.stringify(saved)));
+  const props=recognitionProps(state.faceDecisions);
+  props.recognition={...props.recognition,...state};
+  const html=render(RecognizeView,props);
+  assert.match(html,/>Resolved B</);assert.match(html,/>Resolved C</);
+  const summaries=[...html.matchAll(/class="recognition-face-summary"[^]*?<\/button>/g)].map((m)=>m[0]);
+  assert.equal(summaries.filter((summary)=>summary.includes('>Accepted<')).length,2);
+  assert.doesNotMatch(html,/No match found/);
+});

@@ -146,6 +146,13 @@ class QueueEncounterApiTest(unittest.TestCase):
                     status, browse = self._request(server, "GET", f"/api/queue-person-candidates?session_id={session.session_id}&group_id={groups['groups'][0]['group_id']}")
                     self.assertEqual(status, 200)
                     self.assertEqual(browse["candidates"][0]["name"], "Tony")
+                    # Include committed NO_FACE authority in the active-draft
+                    # browse projection, rather than only draft-created people.
+                    committed = store.create_person("Committed without face")
+                    status, with_committed = self._request(server, "GET", f"/api/queue-person-candidates?session_id={session.session_id}&group_id={groups['groups'][0]['group_id']}")
+                    self.assertEqual(status, 200)
+                    self.assertIn(committed.person_id, {item["person_id"] for item in with_committed["candidates"]})
+                    store.permanently_delete_person(committed.person_id, operation_id=f"remove-committed-{quality_only}")
                 self.assertEqual(store.list_embeddings(), [])
                 self.assertEqual(store.list_persons(), [])
             finally:

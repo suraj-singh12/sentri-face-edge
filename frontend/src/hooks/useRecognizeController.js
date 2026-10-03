@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { clearFile, currentDateTimeParts, imageIdFromPath, isNewPersonSuggestion, requirePersonContract } from "../utils.js";
-import { acceptedDecision, recognitionReviewReady } from "../reviewState.js";
+import { acceptedDecision, recognitionReviewReady, recognitionReviewState } from "../reviewState.js";
 import { usePersistentState } from "./usePersistentState.js";
 
 export function useRecognizeController({
@@ -41,8 +41,8 @@ export function useRecognizeController({
 
   const applyReview = useCallback((review) => {
     ++reviewReadGeneration.current;
-    const faceDecisions = Object.fromEntries((review.faces || []).map((face) => [Number(face.face_id.replace("face-", "")), face.decision]));
-    setRecognition((current) => current?.reviewId === review.review_id ? { ...current, faceDecisions } : current);
+    const staged = recognitionReviewState(review);
+    setRecognition((current) => current?.reviewId === review.review_id ? { ...current, ...staged } : current);
   }, [setRecognition]);
   useEffect(() => {
     if (!canReview || !recognition?.reviewId) return;

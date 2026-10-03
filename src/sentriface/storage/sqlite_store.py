@@ -87,7 +87,7 @@ from sentriface.models import (
     WorldRelationship,
     utc_now,
 )
-from sentriface.media_registry import media_content_identity
+from sentriface.media_registry import media_content_identity, require_existing_media
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
@@ -4608,6 +4608,7 @@ class SQLiteIdentityStore:
                 if failure_injector is not None:
                     failure_injector("after_canonical_update")
                 _synchronize_survivor_biometric_state(conn, preview["target_person_id"])
+                _retire_canonical_manual_collisions(conn, normalized_operation_id, preview["target_person_id"])
                 for encounter in conn.execute("SELECT DISTINCT observation_id FROM encounter_relation_decisions WHERE active = 1 AND observation_id IS NOT NULL").fetchall():
                     oid = str(encounter[0])
                     rows = conn.execute("SELECT first_person_id, second_person_id FROM encounter_relation_decisions WHERE observation_id = ? AND active = 1", (oid,)).fetchall()
@@ -10641,6 +10642,25 @@ def _batch_effective_observation_person_ids(
     return result, errors
 
 
+def _retire_canonical_manual_collisions(conn: sqlite3.Connection, operation_id: str, survivor_id: str) -> None:
+    """One standing assertion per canonical unordered pair; preserve raw history."""
+    seen: set[tuple[str, str]] = set()
+    resolve = _batch_canonical_resolver(conn)
+    for row in conn.execute(
+        "SELECT evidence_id, source_person_id, target_person_id FROM relationship_evidence "
+        "WHERE evidence_type = 'MANUAL_ASSOCIATION' AND active = 1 ORDER BY created_at, evidence_id"
+    ).fetchall():
+        pair = tuple(sorted(resolve(str(row[key])) for key in ("source_person_id", "target_person_id")))
+        if survivor_id not in pair:
+            continue
+        if pair[0] == pair[1] or pair in seen:
+            conn.execute(
+                "UPDATE relationship_evidence SET active = 0, deactivated_operation_id = ?, deactivated_at = ? "
+                "WHERE evidence_id = ?", (operation_id, utc_now(), row["evidence_id"]),
+            )
+        seen.add(pair)
+
+
 def _replace_graph_projection(conn: sqlite3.Connection) -> None:
     connections, errors, _ = _expected_graph_connections(conn)
     if errors:
@@ -13726,35 +13746,7 @@ def _require_existing_media(
     media_id: str,
     media_path: str | None,
 ) -> None:
-    candidates = {media_id}
-    if media_path:
-        candidates.add(media_path)
-    tables = {
-        str(row[0])
-        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
-    }
-    references = (
-        ("recognition_details", "image_id"),
-        ("recognition_details", "image_path"),
-        ("embeddings", "source_image"),
-        ("embeddings", "crop_path"),
-        ("pending_additions", "source_image"),
-        ("init_faces", "source_image"),
-        ("init_faces", "crop_path"),
-        ("init_session_media", "media_path"),
-    )
-    for table, column in references:
-        if table not in tables:
-            continue
-        columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
-        if column not in columns:
-            continue
-        for value in candidates:
-            if conn.execute(
-                f"SELECT 1 FROM {table} WHERE {column} = ? LIMIT 1", (value,),
-            ).fetchone() is not None:
-                return
-    raise KeyError(f"Unknown existing media: {media_id}")
+    require_existing_media(conn, media_id, media_path)
 
 
 def _attach_observation_media(
@@ -17780,6 +17772,8 @@ def _p11d_precondition_from_report(
         raise OperationRevertRefused("Operation journal history is incomplete or ambiguous")
     if conn.execute("SELECT 1 FROM relationship_evidence WHERE source_entity_type = 'OBSERVATION' AND (created_operation_id = ? OR deactivated_operation_id = ?) LIMIT 1", (operation_id, operation_id)).fetchone():
         raise OperationRevertRefused("Merge revised Encounter Relations and is outside the safe revert subset")
+    if conn.execute("SELECT 1 FROM relationship_evidence WHERE source_entity_type = 'MANUAL_ASSERTION' AND deactivated_operation_id = ? LIMIT 1", (operation_id,)).fetchone():
+        raise OperationRevertRefused("Merge retired standing Manual Associations and is outside the safe revert subset")
     manifest = _get_merge_operation(conn, operation_id)
     if manifest is None or manifest.operation_journal_id != operation_id:
         raise OperationRevertRefused("Merge manifest history is incomplete")

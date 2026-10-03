@@ -10,6 +10,10 @@ Authoritative identity data is limited to persons, observations/events, accepted
 
 For a multi-face observation/event, persist graph-affecting results only when every detected face has a final decision and the operator explicitly completes the review. The final write, its graph evidence, and its operation-journal entry must commit atomically.
 
+Media provenance uses the existing server-owned registry for independent source admission and P11 checks. Observation membership cannot prove itself. Retained review/session media are valid multi-photo provenance even when accepted vectors reuse earlier enrollment images; saved occurrence-media IDs must belong to the face's own observation. Backup file closure/authentication and restore path/immutability protection remain mandatory.
+
+Standing Manual Associations are unique per effective canonical unordered pair. Merge retires redundant current assertions within its existing transaction/journal without deleting raw rows, rewriting endpoints or losing metadata. Accepted recognition identity must come from the saved operator decision, never an unrelated model proposal; refresh/resume must reload that same decision.
+
 Relationships retain provenance. `CO_OBSERVED`, Person/Sighting Note `NOTE_REFERENCE`, and `MANUAL_ASSOCIATION` are separate evidence types. Selected Event Note IDs are structured Encounter→Person mentions on the observation; they create no relationship evidence or World effect. Literal unselected `@Name` is inert in every note scope. Removing one evidence record must not remove a relationship supported by other evidence. Deduplicate event participants by canonical person and never create self-links.
 
 Archive and delete are identity states, not historical erasure. Archived people remain graph nodes but are inactive/non-clickable in graph projections. Their historical People profile remains reachable for authorized Restore. Deleted people are tombstoned and remain historically represented. A merge preserves both identities, all history and provenance; the source resolves to the surviving canonical identity.

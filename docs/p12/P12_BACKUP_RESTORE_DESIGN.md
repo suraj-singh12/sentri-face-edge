@@ -15,6 +15,10 @@ P12 uses four distinct protections:
 
 Portable restore is therefore not key-independent. Format v3 stores only a non-secret SHA-256-derived key identifier. A missing or wrong source recovery-kit key fails during manifest verification, before staged mutation. Keys, recovery codes, passphrases, plaintext media, note content, embeddings, raw journal payloads, SQL, and stack traces never enter the manifest, restore receipt, journal result, or API response.
 
+## Batch 3.6 multi-media qualification
+
+Registry-owned review/session media also supply shared write-admission/P11 source provenance. Every retained photograph can support completed authority even when no new embedding is created; accepted occurrence-media pointers remain observation-scoped. The backup pipeline retains its exact registry bindings, file hashes/authentication, closure and staged/final P11 checks. Complex encrypted export/import/restore into a supported fresh Linux source authority and normal restart are qualified in IMPLEMENTATION_PLAN. Immutable old failed-validation fingerprints are not silently rewritten; create a new verified backup after repair.
+
 ## Server-owned media registry
 
 `src/sentriface/media_registry.py` is the only authority for durable media binding enumeration and rewrite. Each fixed entry owns its table, stable identity columns, path column, media class, protection expectation, and `RELOCATE` behavior:

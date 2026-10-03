@@ -1,5 +1,12 @@
 # SentriFace Edge features by tab
 
+## Batch 3.6 current user-facing integrity
+
+Check a photo displays the saved accepted Person or staged new identity, including after refresh/restart. The model's candidate list remains a proposal; an accepted new Person cannot open a committed profile before completion. Deferred faces remain Deferred. Browse People during an active Encounter now correctly includes committed profiles alongside draft candidates.
+
+Associations shows one active standing Manual Association after aliases merge. Redundant raw assertions remain inspectable history with merge-linked retirement; removing the surviving assertion preserves independent Encounter/note support. Settings backup/import/Restore Safely and supported graph rebuild accept valid multi-photo provenance while preserving strict validation. Actual complex fresh restore and normal restart are qualified in IMPLEMENTATION_PLAN; physical file relocation is not a new occurrence or identity decision.
+
+
 ## Batch 3.5 behavior clarifications
 
 - **Check a photo:** Skip displays Deferred and stays unresolved across refresh/restart; Discard is final negative; accepted-existing/new are final positive. Only final decisions permit completion, with at least one accepted participant. Add Face uses the explicitly chosen existing Person and the standalone enrollment command, preserves quality/origin, and creates no Encounter.

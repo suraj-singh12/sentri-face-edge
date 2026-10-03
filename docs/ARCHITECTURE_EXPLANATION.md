@@ -1,6 +1,19 @@
 # SentriFace Edge architecture explanation
 
-## Batch 3.5: convergence across equivalent paths
+## Batch 3.6: reuse provenance authority across safety operations
+
+The post-Batch-3.5 reaudit found a mismatch before restore: P11's hand-maintained query checked primary review/enrollment image paths, while normal queue writes and backup closure retained every image in the existing media registry. Reused sample vectors made the current occurrence's secondary image absent from the older query. Writers legitimately preserved both enrollment and occurrence provenance; the validator's narrower vocabulary was wrong. The registry now supplies shared independent source admission/validation, with legacy recognition identifiers retained for compatibility. No observation can prove itself merely by being registered as observation media. An additional scoped check prevents a saved face's occurrence-media pointer from borrowing an image in another observation. Physical file authentication/closure stays in its existing owner, not a second provenance service.
+
+Rebuild preparation and restore eligibility/staged/final validation already consume P11, so correcting that shared contract repairs both safety paths without catches, skips, schema changes or weakened file checks. The existing staged-only completed-review relocation guard remains intact. Old immutable backups that captured a failed validation fingerprint must not be silently relabeled; create a newly verified backup from the now-valid live authority.
+
+Standing Manual creation already normalized canonical unordered pairs. Merge normalized Encounter Relations but left colliding current manual assertions active. The smallest equivalent of effective deduplication is the existing evidence retirement model inside the merge transaction: preserve every raw endpoint/metadata/creation row, retain one deterministic standing survivor and record redundant retirement under the merge journal. There is no new relationship authority or history compaction.
+
+Recognition stored durable decisions but retained only their enums in the controller, while the view labeled Accepted using a local/manual/model proposal. Keeping the server's full face-decision records in the existing review-state cache lets identity and accepted status use the same snapshot on save/resume. Proposals remain unchanged and finalization is still backend-authoritative. A nested DTO typo exposed by the real existing-Person selection journey was corrected in that same candidate-read path.
+
+Fresh qualification demonstrates domain equivalence through complex rebuild and supported recovery-kit restore/restart. Encounter revision hashes include physical media rows, so relocation changes their precondition tokens; equal-date photo lists can reorder by destination paths. These are recorded physical/read-order differences, not altered identity, recurrence or evidence meaning. They were not redesigned in this batch.
+
+
+## Historical Batch 3.5: convergence across equivalent paths
 
 The clean-room findings shared four causes: raw-history values being mistaken for effective facts; proposal objects and explicit Person targets sharing a predicate; deferred decisions sharing accepted UI state; and asynchronous reads/operational setup having inconsistent completion boundaries.
 

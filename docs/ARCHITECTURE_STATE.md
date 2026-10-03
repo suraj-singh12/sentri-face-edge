@@ -1,6 +1,15 @@
 # SentriFace Edge architecture state
 
-## Batch 3.5 implementation checkpoint — schema remains v32
+## Batch 3.6 current integrity boundary — schema v32
+
+Write admission and read-only P11 provenance checks now share the existing media registry's independent source references, including durable multi-photo review/session membership. Observation membership cannot prove itself; saved face occurrence-media IDs must bind to their own observation. Historical sample enrollment paths are not substitutes for later occurrence media. Backup physical closure/authentication and staged relocation protections remain mandatory; rebuild and restore use the same checker.
+
+The merge transaction retires duplicate standing Manual assertions in affected canonical pairs deterministically, preserving all raw records/IDs and retirement provenance. Current creation, profile/graph reads, retirement, rebuild and restore see one active standing assertion per resulting pair. Recognition accepted identity and badge derive from the server-staged operator decision; original inference proposals stay available as suggestions. Active-draft candidate browsing accesses the nested PersonSummary correctly.
+
+Fresh real ONNX/encrypted/UI qualification now includes successful complex rebuild and fresh recovery-kit restore followed by normal restart. Domain/evidence/assets agree; only supported operation journals, physical-path-sensitive precondition tokens and photo tie ordering differ as documented in IMPLEMENTATION_PLAN. Full suites: 694 backend passed / 47 skipped, 120 frontend passed. No Batch 4, World algorithm, platform custody or schema change.
+
+
+## Historical Batch 3.5 implementation checkpoint — schema remains v32
 
 Effective canonical Encounter pair support now has one frame-derived interpretation across finalization, merge, corrections, current detail reads and rebuild. Historical decision/evidence generations remain append-only provenance; current reads use active/effective authority. Recognition Add Face targets are explicit Persons, not proposals; standalone confirmation completes enrollment without a sighting. Deferred SKIP is never acceptance or completion readiness.
 

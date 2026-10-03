@@ -1,5 +1,14 @@
 # SentriFace global identity domain model
 
+## Batch 3.6 provenance and standing-assertion contracts
+
+An observation media identifier must be nonempty and supported by an independent durable registry-owned source reference (enrollment/crop, recognition, pending/init, or retained review/session media). Its own observation membership is not provenance proof. All photographs retained by a completed review are source authority, including supporting images without a new embedding. Reused embeddings retain enrollment provenance; immutable accepted-face decision JSON binds actual occurrence media by ID to that face's observation. Participant/identity corrections and canonical merges interpret identity without rewriting those historical image facts. P11 validates database provenance/bindings; existing backup verification additionally requires complete registered file closure, safe bindings/paths, byte identity and protected-file authentication. Restore relocates only registry-owned physical paths on its disposable candidate; live completed decisions remain immutable.
+
+Manual Association is one standing assertion per effective canonical unordered pair. Separate pre-merge raw assertions remain distinct history. When a merge collapses them, the existing transaction retires redundant assertions under the merge operation, retaining the oldest by `(created_at, evidence_id)`; canonical self-assertions are retired too. Endpoints, metadata and original creation records are never rewritten/deleted. Retiring the survivor removes this standing support only; independent CO_OBSERVED and NOTE_REFERENCE may remain.
+
+Recognition proposals describe model inference. Accepted existing Person ID or staged new Person name comes from the saved operator decision, and that same record supplies the accepted display after mutation/refresh/resume. SKIP remains deferred. A new staged Person has no committed Person ID until finalization; its profile action remains unavailable until then.
+
+
 ## Batch 3.5 canonical coherence
 
 For a finalized effective Encounter, current canonical pair support is derived from effective accepted face assignments and valid Encounter media. `SHARED_FRAME` means the two canonical participants share at least one Encounter frame; otherwise their support is `SAME_ENCOUNTER_ONLY`. `_encounter_pair_support` owns this finalized interpretation, using the same frame-set intersection as draft candidates. Raw decision-row order never selects factual support. Initial finalization, alias collapse, participant/identity correction and Relations correction use this calculation; effective Encounter reads derive it directly, including after restart or graph rebuild.

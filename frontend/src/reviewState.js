@@ -18,3 +18,19 @@ export function reconcileQueueSelection(groups, selectedId, selectedFaces) {
   const live = new Set((group?.faces || []).map((face) => face.init_face_id));
   return { group, faces: selectedFaces.filter((id) => live.has(id)) };
 }
+
+// Retain the server's full staged decisions so acceptance and identity are read
+// from the same review snapshot on mutation, refresh and restart/resume.
+export function recognitionReviewState(review) {
+  const records = Object.fromEntries((review.faces || []).map((face) => [Number(face.face_id.replace("face-", "")), face]));
+  return { faceDecisions: Object.fromEntries(Object.entries(records).map(([id, face]) => [id, face.decision])), faceResolutions: records };
+}
+export function resolvedRecognitionPerson(record, proposals = []) {
+  if (!acceptedDecision(record?.decision)) return null;
+  if (record.decision === "ACCEPT_NEW_PERSON") {
+    return { person_id: null, name: record.new_person_name, is_known: true, staged_new: true };
+  }
+  const proposal = proposals.find((item) => item.person_id === record.person_id);
+  return { person_id: record.person_id, name: record.recognition_detail?.name || proposal?.name || record.person_id,
+    representative_image: proposal?.representative_image, is_known: true };
+}

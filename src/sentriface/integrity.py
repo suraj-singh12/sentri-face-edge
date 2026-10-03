@@ -11,6 +11,7 @@ from typing import Callable
 from urllib.parse import quote
 
 from sentriface.models import utc_now
+from sentriface.media_registry import observation_media_provenance_issues
 from sentriface.secure_storage import connect_database
 from sentriface.storage.sqlite_store import SCHEMA_VERSION, _expected_graph_connections
 
@@ -520,19 +521,8 @@ class ReadOnlyIntegrityChecker:
                 self._add("P11-OBSERVATION-002", "Effective participant does not exist", entities={"observation_id": oid})
 
     def _check_media_references(self, conn: sqlite3.Connection) -> None:
-        query = """
-        SELECT m.observation_id, m.media_id, m.media_path
-        FROM observation_media m
-        WHERE trim(m.media_id) = '' OR NOT EXISTS (
-            SELECT 1 FROM recognition_details r WHERE r.image_id = m.media_id OR r.image_path = m.media_id OR (m.media_path IS NOT NULL AND r.image_path = m.media_path)
-            UNION ALL SELECT 1 FROM embeddings e WHERE e.source_image = m.media_id OR e.crop_path = m.media_id OR (m.media_path IS NOT NULL AND (e.source_image = m.media_path OR e.crop_path = m.media_path))
-            UNION ALL SELECT 1 FROM pending_additions p WHERE p.source_image = m.media_id OR (m.media_path IS NOT NULL AND p.source_image = m.media_path)
-            UNION ALL SELECT 1 FROM init_faces i WHERE i.source_image = m.media_id OR i.crop_path = m.media_id OR (m.media_path IS NOT NULL AND (i.source_image = m.media_path OR i.crop_path = m.media_path))
-            UNION ALL SELECT 1 FROM photo_reviews pr WHERE pr.media_id = m.media_id OR (m.media_path IS NOT NULL AND pr.media_path = m.media_path)
-        ) ORDER BY m.observation_id, m.media_id
-        """
-        for row in conn.execute(query):
-            self._add("P11-OBSERVATION-003", "Observation media has no durable database provenance reference", entities={"observation_id": row[0], "media_id": row[1]}, evidence={"media_path": row[2]})
+        for oid, mid, path in observation_media_provenance_issues(conn):
+            self._add("P11-OBSERVATION-003", "Observation media has no durable provenance or valid face binding", entities={"observation_id": oid, "media_id": mid}, evidence={"media_path": path})
 
     def _check_reviews(self, conn: sqlite3.Connection) -> None:
         query = """
