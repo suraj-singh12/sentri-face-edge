@@ -142,7 +142,7 @@ class StorageMigrationTest(unittest.TestCase):
             self.assertEqual(table[0], "person_associations")
             self.assertEqual({row[6] for row in foreign_keys}, {"RESTRICT"})
 
-    def test_v12_migration_preserves_existing_people_as_enrolled(self) -> None:
+    def test_v34_migration_recomputes_legacy_status_from_usable_samples(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             db_path = root / "sentriface.db"
@@ -189,7 +189,7 @@ class StorageMigrationTest(unittest.TestCase):
             store.initialize()
 
             person = store.get_person("existing")
-            self.assertEqual(person.enrollment_status, "enrolled")
+            self.assertEqual(person.enrollment_status, "placeholder")
             with closing(sqlite3.connect(db_path)) as conn:
                 history_columns = {
                     row[1] for row in conn.execute("PRAGMA table_info(person_change_history)")

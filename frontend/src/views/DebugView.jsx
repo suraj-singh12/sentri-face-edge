@@ -494,7 +494,7 @@ function DatabaseBackupsPanel({
         </Group>
       </Paper>
 
-      <Paper withBorder radius="md" className="debug-table-card">
+      <Paper withBorder radius="md" className="debug-table-card database-backup-card">
         <Box className="debug-table-scroll">
           <table className="debug-table database-backup-table">
             <thead>

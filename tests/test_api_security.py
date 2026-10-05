@@ -41,6 +41,30 @@ class LocalApiSecurityTest(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertTrue(payload["cancel_requested"])
 
+    def test_reference_admission_cannot_be_forged_and_review_reads_remain_available(self) -> None:
+        with self._running_server() as server:
+            origin = f"http://127.0.0.1:{server.server_port}"
+            status, payload, _ = self._request(server, "POST", "/api/photo-review", {
+                "review_id": "forged-reference", "media_id": "source",
+                "source": "reference-only", "faces": [],
+            }, origin=origin)
+            self.assertEqual(status, 400)
+            self.assertIn("single-face admission", payload["error"])
+            self.assertIsNone(server.engine.store.get_photo_review("forged-reference"))
+            from sentriface.models import DetectedFace, FaceBox, MatchDecision, PendingAddition, QualityReport, QualityStatus
+            server.engine.store.save_pending_addition(PendingAddition(
+                pending_id="prepared-face", source_image="/managed/portrait.jpg",
+                face=DetectedFace(FaceBox(1, 1, 10, 10, .99), .9),
+                vector=(1., *([0.] * (server.engine.config.embedding_dim - 1))),
+                matches=[], decision=MatchDecision.UNKNOWN,
+                quality=QualityReport(QualityStatus.GOOD, .9)))
+            server.engine.store.create_photo_review("readable", "source", [{
+                "face_id": "face-1", "staged_face_type": "PENDING_ADDITION",
+                "staged_face_id": "prepared-face"}], media_path="/managed/portrait.jpg", source="reference-only")
+            status, payload, _ = self._request(server, "GET", "/api/photo-review?review_id=readable", {}, origin=origin)
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["review_id"], "readable")
+
     @staticmethod
     def _running_server():
         class ServerContext:

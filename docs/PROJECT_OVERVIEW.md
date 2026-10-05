@@ -1,5 +1,11 @@
 # SentriFace Edge: complete project guide
 
+## Batch 3.7 — contextless biometric references
+
+Ordinary photographs belong in Encounters: their date/place, participants, relationships and recurrence form historical authority. A known Person lacking reliable occurrence context can instead receive a cropped, single-face **Reference Only** image after explicit acknowledgment. NO_FACE Add Face is the prominent bootstrap entry; once enrolled, the same capability moves into secondary Recognition References management. This avoids turning generic Add Face into a contextless photo library. Four active sources allow limited biometric diversity; replace weaker material by retiring then adding. Retired history is preserved. PROOF_ONLY counts toward the cap but remains excluded from ordinary recognition.
+
+Reference identity/lifecycle are independent of Encounter assignments and Person lifecycle. Reference changes produce no Events, evidence, graph edges or World activity. Existing targeted Attach Retry/Cancel and compact backup-button fixes are preserved. Current representation is schema v34; older schema-v32 qualification sections below are historical checkpoints. No Batch 4.
+
 ## Batch 3.6 current qualification
 
 Normal multi-photo history, integrity checking, graph rebuild and backup restore now agree on registered source provenance. Reusing an enrolled face does not replace the photograph belonging to a later occurrence. Alias merge retains distinct manual history while retiring redundant current standing assertions. Accepted recognition cards confirm the operator's saved selection rather than the model's original proposal.

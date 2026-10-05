@@ -884,6 +884,8 @@ class InitSession:
     status: str
     created_at: str = field(default_factory=utc_now)
     quality_only: bool = True
+    target_observation_id: str | None = None
+    expected_encounter_revision: str | None = None
 
 
 @dataclass(frozen=True)

@@ -100,7 +100,7 @@ class IdentityStore(Protocol):
     ) -> list[EmbeddingRecord]:
         """List embeddings belonging to one person."""
 
-    def face_origins_for_embeddings(self, embedding_ids: list[str]) -> dict[str, list[dict]]:
+    def face_origins_for_embeddings(self, embedding_ids: list[str], person_id: str | None = None) -> dict[str, list[dict]]:
         """Read proved Encounter/Add Face origins or explicit legacy uncertainty."""
 
     def proof_only_duplicate_candidates(self, vectors: list[Embedding], threshold: float, *, review_id: str | None = None) -> list[dict]:
@@ -305,7 +305,23 @@ class IdentityStore(Protocol):
     def add_face_to_person(
         self, review_id: str, person_id: str, operation_id: str, **values,
     ) -> dict:
-        """Complete an add-face-only review without creating an observation."""
+        """Confirm the shared single-face Reference Only source admission."""
+
+    def list_recognition_references(self, person_id: str) -> dict:
+        """Read canonical source lifecycle, count and derived sample conflicts."""
+
+    def set_reference_active(self, reference_id: str, person_id: str, active: bool,
+                             operation_id: str, **values) -> dict:
+        """Journal retirement/restoration of the existing immutable source."""
+
+    def validate_reference_media(self, media_path: str, person_id: str) -> None:
+        """Require active identity and enforce exact semantic media roles."""
+
+    def validate_encounter_media(self, media_path: str) -> None:
+        """Reject exact Reference Only media from occurrence admission."""
+
+    def cancel_reference_review(self, review_id: str) -> None:
+        """Abandon staging without promoting it to ordinary review work."""
 
     def list_corrections_for_observation(
         self, observation_id: str,
@@ -683,8 +699,22 @@ class IdentityStore(Protocol):
     def delete_pending_addition(self, pending_id: str) -> None:
         """Remove a pending addition after review."""
 
-    def create_init_session(self, source_path: str, *, quality_only: bool = True) -> InitSession:
+    def create_init_session(self, source_path: str, *, quality_only: bool = True,
+                            target_observation_id: str | None = None,
+                            expected_revision: str | None = None) -> InitSession:
         """Create a durable initialization review session."""
+
+    def bind_init_session_attachment(self, session_id: str, observation_id: str, expected_revision: str | None) -> None:
+        """Retain attachment intent before planning can fail."""
+
+    def retry_targeted_scan(self, session_id: str) -> InitSession:
+        """Reset unplanned failed scan caches in the same targeted draft."""
+
+    def finish_targeted_scan(self, session_id: str, media_paths: list[str]) -> None:
+        """Retain successfully processed media in targeted staging."""
+
+    def mark_targeted_scan_failed(self, session_id: str) -> None:
+        """Preserve a failed targeted scan for Retry or explicit Cancel."""
 
     def save_init_faces(self, faces: list[InitFace]) -> None:
         """Persist clustered initialization faces."""

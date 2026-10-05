@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -16,6 +17,61 @@ from sentriface.storage.sqlite_store import SQLiteIdentityStore
 
 
 class InitWorkflowTest(unittest.TestCase):
+    def test_processing_failure_retains_same_targeted_draft_for_processing_retry(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / 'data'
+            engine = build_dev_engine(root)
+            engine.initialize()
+            person = engine.store.create_person('Known participant')
+            observation = engine.store.create_observation('scan-target-create', participant_ids=[person.person_id])
+            engine.store._finalize_observation_without_graph_evidence(observation.observation_id, 'scan-target-finalize')
+            source = root / 'uploads' / 'batches' / 'scan' / 'input.jpg'
+            source.parent.mkdir(parents=True)
+            self._write_image(source, 150)
+            revision = engine.store.get_encounter_read(observation.observation_id)['revision']
+            with patch.object(engine.detector, 'detect', side_effect=RuntimeError('detector failure')):
+                with self.assertRaisesRegex(RuntimeError, 'detector failure'):
+                    engine.create_queue_session(source, allow_bad_quality=True, quality_only=False,
+                        target_observation_id=observation.observation_id, expected_revision=revision)
+            session = engine.store.list_init_sessions()[0]
+            self.assertEqual(session.status, 'processing_failed')
+            self.assertEqual(session.target_observation_id, observation.observation_id)
+            self.assertTrue(source.exists())
+            self.assertEqual(len(engine.store.list_init_session_media(session.session_id)), 1)
+            engine.store.initialize()
+            retry = engine.create_queue_session(source, allow_bad_quality=True,
+                target_observation_id=observation.observation_id, expected_revision=revision,
+                session_id=session.session_id)
+            self.assertEqual(retry.session.session_id, session.session_id)
+            self.assertFalse(retry.session.quality_only)
+            self.assertEqual(engine.store.get_init_session(session.session_id).status, 'pending')
+            self.assertEqual(len(engine.store.list_init_sessions()), 1)
+            self.assertEqual(engine.store.get_encounter_read(observation.observation_id)['revision'], revision)
+
+    def test_cancel_targeted_draft_with_restored_source_anchor_cleans_only_owned_media(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / 'data'
+            engine = build_dev_engine(root)
+            engine.initialize()
+            person = engine.store.create_person('Known participant')
+            observation = engine.store.create_observation('target-create', participant_ids=[person.person_id])
+            engine.store._finalize_observation_without_graph_evidence(observation.observation_id, 'target-finalize')
+            objects = root / 'uploads' / 'objects'
+            objects.mkdir(parents=True, exist_ok=True)
+            owned, unrelated, shared = [objects / name for name in ('owned.jpg', 'other-upload.jpg', 'shared.jpg')]
+            for path in (owned, unrelated, shared):
+                path.write_bytes(path.name.encode())
+            engine.store.add_embedding(person.person_id, [1.0] * engine.config.embedding_dim,
+                quality_score=1.0, source_image=str(shared))
+            session = engine.store.create_init_session(str(objects), target_observation_id=observation.observation_id,
+                expected_revision=engine.store.get_encounter_read(observation.observation_id)['revision'])
+            engine.store.save_init_session_media(session.session_id, [str(owned), str(shared)])
+            engine.discard_init_session(session.session_id)
+            self.assertFalse(owned.exists())
+            self.assertTrue(unrelated.exists())
+            self.assertTrue(shared.exists())
+            self.assertIsNone(engine.store.get_init_session(session.session_id))
+
     def test_queue_search_policy_survives_restart(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "data" / "sentriface.db"

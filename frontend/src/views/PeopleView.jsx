@@ -67,6 +67,7 @@ import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
 import { CountrySelect } from "../components/CountrySelect.jsx";
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { PersonGraphView } from "./PersonGraphView.jsx";
+import { RecognitionReferences } from "./RecognitionReferences.jsx";
 import { eventDateTime } from "./EventsView.jsx";
 import {
   currentDateTimeParts,
@@ -102,7 +103,7 @@ export function PeopleView({
   onOpenEncounter,
   onCreateAssociation,
   onRetireAssociation,
-  onAddPhoto,
+  referenceActions,
   onFavorite,
   onSetRepresentative,
   onArchive,
@@ -210,7 +211,7 @@ export function PeopleView({
           onOpenEncounter={onOpenEncounter}
           onCreateAssociation={onCreateAssociation}
           onRetireAssociation={onRetireAssociation}
-          onAddPhoto={onAddPhoto}
+          referenceActions={referenceActions}
           onCreateIdentifiedPerson={onCreateIdentifiedPerson}
           onOpenGraph={onOpenGraph}
           onFavorite={onFavorite}
@@ -853,7 +854,7 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
               <Badge color={priority.color} variant="light" size="xs">{priority.label}</Badge>
             </Group>
             <Text size="xs" c="dimmed" mt={5}>
-              {person.is_placeholder ? "No photograph · No biometric data" : <>{photoCount} {photoCount === 1 ? "photo" : "photos"} <Text span mx={5}>·</Text> {sightings} {sightings === 1 ? "sighting" : "sightings"}</>}
+              {person.is_placeholder ? "No usable recognition sample" : <>{photoCount} {photoCount === 1 ? "photo" : "photos"} <Text span mx={5}>·</Text> {sightings} {sightings === 1 ? "sighting" : "sightings"}</>}
             </Text>
             <Text size="xs" c={person.last_seen_at ? "teal.4" : "dimmed"} mt={3}>{lastSeenLabelForCard(person.last_seen_at)}</Text>
           </Box>
@@ -1005,7 +1006,7 @@ function PeopleGalleryView({
   onOpenEncounter,
   onCreateAssociation,
   onRetireAssociation,
-  onAddPhoto,
+  referenceActions,
   onCreateIdentifiedPerson,
   onOpenGraph,
   onFavorite,
@@ -1020,6 +1021,8 @@ function PeopleGalleryView({
   const imageRecords = profileImageRecords(payload);
   const tabContentRef = useRef(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [referenceOpen, setReferenceOpen] = useState(false);
+  const [referenceAdding, setReferenceAdding] = useState(false);
   const [personEvents, setPersonEvents] = useState({ events: [], next_cursor: null });
   const [personEventFilters, setPersonEventFilters] = useState({ search: "", date_from: "", date_to: "", location: "", context: "", person_status: "" });
   const [personEventPageCursors, setPersonEventPageCursors] = useState([""]);
@@ -1211,6 +1214,9 @@ function PeopleGalleryView({
 
   return (
     <Stack className="people-profile-shell">
+      {referenceActions && <RecognitionReferences opened={referenceOpen} onClose={() => setReferenceOpen(false)}
+        person={payload.person} data={payload.recognition_references} actions={referenceActions}
+        canMutate={canEdit && lifecycleStatus === "ACTIVE"} startAdding={referenceAdding} />}
       <Group justify="space-between" align="flex-start" wrap="nowrap" className="people-profile-topbar">
         <Group gap="xs">
           <ActionIcon variant="subtle" onClick={onBack} aria-label="Back to people"><IconArrowLeft size={18} /></ActionIcon>
@@ -1230,8 +1236,8 @@ function PeopleGalleryView({
           {personAllows(payload.person, "EDIT") && (
             <>
               {payload.person.is_placeholder && (
-                <Button size="xs" leftSection={<IconPhoto size={14} />} disabled={!canEdit} onClick={() => onAddPhoto(payload.person)}>
-                  Add photograph
+                <Button size="xs" leftSection={<IconPhoto size={14} />} disabled={!canEdit} onClick={() => {setReferenceAdding(true);setReferenceOpen(true);}}>
+                  Add Face
                 </Button>
               )}
               <Button size="xs" variant="default" leftSection={<IconPhoto size={14} />} disabled={!canEdit && !canDestroy} onClick={() => changeTab("photos")}>
@@ -1258,6 +1264,7 @@ function PeopleGalleryView({
               </Button>
             </>
           )}
+          <Button size="xs" variant="subtle" onClick={() => {setReferenceAdding(false);setReferenceOpen(true);}}>Manage Recognition References</Button>
           {canRestore && personAllows(payload.person, "RESTORE") && (
             <Button size="xs" leftSection={<IconRestore size={14} />} disabled={!canDestroy} onClick={() => setManagementDialog("restore")}>
               Restore
@@ -1342,7 +1349,7 @@ function PeopleGalleryView({
               {imageRecords.length} {imageRecords.length === 1 ? "Photo" : "Photos"}
             </Badge>
             <Badge variant="outline">{latestSightingLabel}</Badge>
-            {payload.person.is_placeholder && <Badge color="gray" variant="light">No biometric data</Badge>}
+            {payload.person.is_placeholder && <Badge color="gray" variant="light">No ordinary recognition sample</Badge>}
           </Group>
           <Text size="xs" c="dimmed" mt="sm">ID: {payload.person.person_id}</Text>
         </Box>
@@ -1828,7 +1835,7 @@ function PeopleProfilePhotos({
             ["Location", photoDetail.place_seen || "-"],
             ["Quality", selectedRecord?.qualityScore == null ? "-" : `${Math.round(selectedRecord.qualityScore * 100)}%`],
             ["Embedding", selectedRecord?.embeddingId ? "Indexed" : "-"],
-            ["Face origin", [...new Set(selectedRecord?.faceOrigins?.map((origin) => ({ ENCOUNTER: "Added from Encounter", STANDALONE_ENROLLMENT: "Added as reference face", UNKNOWN_LEGACY: "Legacy origin unknown" })[origin.face_origin] || "Legacy origin unknown") || [])].join(", ") || "Legacy origin unknown"],
+            ["Face origin", [...new Set(selectedRecord?.faceOrigins?.map((origin) => ({ ENCOUNTER: "Added from Encounter", STANDALONE_ENROLLMENT: "Reference Only", UNKNOWN_LEGACY: "Legacy origin unknown" })[origin.face_origin] || "Legacy origin unknown") || [])].join(", ") || "Legacy origin unknown"],
             ["Face samples", selectedRecord?.embeddingIds?.length || "Historical media"],
             ["Rank", profile.rank || "-"],
           ]} />
@@ -1843,10 +1850,10 @@ function PeopleProfilePhotos({
               >
                 {selectedRecord.embeddingId === representativeEmbeddingId ? "Current profile photo" : "Set as profile photo"}
               </Button>
-              <Button variant="default" leftSection={<IconSwitchHorizontal size={16} />} disabled={!canDestroy} onClick={onMove}>
+              <Button variant="default" leftSection={<IconSwitchHorizontal size={16} />} disabled={!canDestroy || selectedRecord.faceOrigins?.some(o => o.face_origin === "STANDALONE_ENROLLMENT")} onClick={onMove}>
                 Move to another person
               </Button>
-              <Button color="red" variant="light" leftSection={<IconTrash size={16} />} disabled={!canDestroy} onClick={onDelete}>
+              <Button color="red" variant="light" leftSection={<IconTrash size={16} />} disabled={!canDestroy || selectedRecord.faceOrigins?.some(o => o.face_origin === "STANDALONE_ENROLLMENT")} onClick={onDelete}>
                 Move face to Deleted Faces
               </Button>
             </Stack>

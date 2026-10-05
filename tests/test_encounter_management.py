@@ -55,6 +55,136 @@ class EncounterManagementTest(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM relationship_evidence WHERE evidence_type = 'NOTE_REFERENCE'").fetchone()[0], 0)
         self.assertTrue(any(item['operation_id'] == 'metadata' for item in current['history']))
 
+    def test_rejected_attachment_keeps_ownership_across_restart_and_retry(self):
+        original = self.store.get_encounter_read(self.oid)
+        session = self.store.create_init_session('/managed/targeted',
+            target_observation_id=self.oid, expected_revision=original['revision'])
+        self.store.save_init_session_media(session.session_id, ['/managed/retry.jpg'])
+        media = self.store.list_init_session_media(session.session_id)[0]['media_id']
+        self.correct('change-before-plan', event_details={'place_seen': 'Revised place'})
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            self.store.plan_init_session_encounters(session.session_id, [[media]],
+                target_observation_id=self.oid, expected_revision=original['revision'])
+        restarted = SQLiteIdentityStore(self.store.db_path, embedding_dim=2)
+        restarted.initialize()
+        retained = restarted.get_init_session(session.session_id)
+        self.assertEqual(retained.target_observation_id, self.oid)
+        self.assertEqual(retained.expected_encounter_revision, original['revision'])
+        self.assertEqual(restarted.list_init_session_encounter_reviews(session.session_id), [])
+        with self.assertRaisesRegex(ValueError, 'targeted Attach'):
+            restarted.plan_init_session_encounters(session.session_id, [[media]])
+        before = restarted.get_encounter_read(self.oid)
+        reviews = restarted.plan_init_session_encounters(session.session_id, [[media]],
+            target_observation_id=self.oid, expected_revision=before['revision'])
+        rid = reviews[0]['review_id']
+        restarted.complete_encounter_identity_review(rid)
+        result = restarted.complete_photo_review(rid, 'retry-attachment')
+        self.assertEqual(result['observation_id'], self.oid)
+        self.assertEqual(result, restarted.complete_photo_review(rid, 'retry-attachment'))
+        self.assertEqual(len(restarted.query_encounters()['events']), 1)
+        self.assertEqual(restarted.get_encounter_read(self.oid)['participant_ids'], before['participant_ids'])
+
+    def test_compatibility_attachment_failure_cannot_change_workflow_or_target(self):
+        session = self.store.create_init_session('/managed/compatibility')
+        self.store.save_init_session_media(session.session_id, ['/managed/compatibility.jpg'])
+        media = self.store.list_init_session_media(session.session_id)[0]['media_id']
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            self.store.plan_init_session_encounters(session.session_id, [[media]],
+                target_observation_id=self.oid, expected_revision='stale')
+        self.assertEqual(self.store.get_init_session(session.session_id).target_observation_id, self.oid)
+        with self.assertRaisesRegex(ValueError, 'targeted Attach'):
+            self.store.plan_init_session_encounters(session.session_id, [[media]])
+        other = self._finalize(self.store, 'other-target', [self.c, self.d])['observation_id']
+        with self.assertRaisesRegex(ValueError, 'cannot change its target'):
+            self.store.plan_init_session_encounters(session.session_id, [[media]],
+                target_observation_id=other, expected_revision=self.store.get_encounter_read(other)['revision'])
+        before = self.store.get_encounter_read(self.oid)
+        self.store.delete_init_session(session.session_id)
+        self.assertEqual(self.store.get_encounter_read(self.oid), before)
+        self.assertEqual(self.store.list_init_session_media(session.session_id) if self.store.get_init_session(session.session_id) else [], [])
+        self.assertNotIn(session.session_id, [s.session_id for s in self.store.list_init_sessions()])
+
+    def test_attachment_ownership_survives_planner_rollback(self):
+        session = self.store.create_init_session('/managed/failing-plan')
+        self.store.save_init_session_media(session.session_id, ['/managed/failing-plan.jpg'])
+        media = self.store.list_init_session_media(session.session_id)[0]['media_id']
+        before = self.store.get_encounter_read(self.oid)
+        with patch('sentriface.storage.sqlite_store._require_no_encounter_amendment', side_effect=RuntimeError('planner failure')):
+            with self.assertRaisesRegex(RuntimeError, 'planner failure'):
+                self.store.plan_init_session_encounters(session.session_id, [[media]],
+                    target_observation_id=self.oid, expected_revision=before['revision'])
+        self.assertEqual(self.store.get_encounter_read(self.oid), before)
+        self.assertEqual(self.store.get_init_session(session.session_id).target_observation_id, self.oid)
+        self.assertEqual(self.store.list_init_session_encounter_reviews(session.session_id), [])
+
+    def test_attachment_ownership_migration_rollback_and_repeat(self):
+        path = Path(self.temp.name) / 'v32.db'
+        with sqlite3.connect(path) as conn:
+            conn.row_factory = sqlite3.Row
+            for migration in _schema_migrations():
+                if migration.to_version <= 32:
+                    migration.apply(conn)
+        old = SQLiteIdentityStore(path, embedding_dim=2)
+        from sentriface.storage.sqlite_store import _migrate_32_to_33
+        def fail_after_extension(conn):
+            _migrate_32_to_33(conn)
+            raise RuntimeError('forced ownership migration failure')
+        with patch('sentriface.storage.sqlite_store._migrate_32_to_33', fail_after_extension):
+            with self.assertRaisesRegex(SchemaMigrationError, 'forced ownership migration failure'):
+                old.initialize()
+        with sqlite3.connect(path) as conn:
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 32)
+            self.assertNotIn('target_observation_id', [r[1] for r in conn.execute('PRAGMA table_info(init_sessions)')])
+        old.initialize()
+        old.initialize()
+        with sqlite3.connect(path) as conn:
+            self.assertEqual(conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], SCHEMA_VERSION)
+        self.assertTrue(list(old.backup_dir.iterdir()))
+
+    def test_migration_recovers_existing_attachment_target_and_preserves_history(self):
+        rid = self.amendment([], path='/managed/legacy-attachment.jpg')
+        original = self.store.get_encounter_review(rid)
+        original_revision = self.store.get_init_session(original['session_id']).expected_encounter_revision
+        path = Path(self.temp.name) / 'populated-v32.db'
+        self.store.backup_to(path)
+        # A disposable schema fixture, never a running authority.
+        with sqlite3.connect(path) as conn:
+            conn.execute('DROP TRIGGER init_session_attachment_target_immutable')
+            conn.execute('ALTER TABLE init_sessions DROP COLUMN target_observation_id')
+            conn.execute('ALTER TABLE init_sessions DROP COLUMN expected_encounter_revision')
+            conn.execute('DROP TABLE recognition_reference_revisions')
+            conn.execute('DROP TRIGGER biometric_enrollment_history_no_update')
+            for column in ('source_media_id','source_image','crop_path','recognition_state','no_context_declared'):
+                conn.execute(f'ALTER TABLE biometric_enrollment_history DROP COLUMN {column}')
+            conn.execute("CREATE TRIGGER biometric_enrollment_history_no_update BEFORE UPDATE ON biometric_enrollment_history BEGIN SELECT RAISE(ABORT, 'Enrollment history is immutable'); END")
+            conn.execute('PRAGMA user_version = 32')
+        upgraded = SQLiteIdentityStore(path, embedding_dim=2)
+        upgraded.initialize()
+        upgraded.initialize()
+        session = upgraded.get_init_session(original['session_id'])
+        self.assertEqual(session.target_observation_id, self.oid)
+        self.assertEqual(session.expected_encounter_revision, original_revision)
+        self.assertEqual(upgraded.get_encounter_review(rid), original)
+        self.assertEqual(upgraded.get_encounter_read(self.oid), self.store.get_encounter_read(self.oid))
+
+    def test_target_is_immutable_and_malformed_ownership_fails_closed(self):
+        session = self.store.create_init_session('/managed/immutable-target',
+            target_observation_id=self.oid, expected_revision=self.store.get_encounter_read(self.oid)['revision'])
+        with self.assertRaisesRegex(sqlite3.IntegrityError, 'target is immutable'):
+            with self.store._connect() as conn:
+                conn.execute('UPDATE init_sessions SET target_observation_id = NULL WHERE session_id = ?', (session.session_id,))
+        invalid = self.store.create_init_session('/managed/invalid-target')
+        # Safe malformed fixture: a scan claimed by a draft rather than a finalized Encounter.
+        draft = self.store.create_observation('invalid-target-observation')
+        with self.store._connect() as conn:
+            conn.execute('UPDATE init_sessions SET target_observation_id = ?, expected_encounter_revision = ? WHERE session_id = ?',
+                         (draft.observation_id, 'fixture-revision', invalid.session_id))
+        report = ReadOnlyIntegrityChecker(self.store.db_path).run()
+        self.assertTrue(any(f.invariant_id == 'P11-REVIEW-001' for f in report.findings))
+        with self.assertRaisesRegex(SchemaMigrationError, 'Invalid Attach Media ownership'):
+            self.store.initialize()
+
     def test_remove_add_relations_rebuild_and_mention_independence(self):
         self.correct('mention-b', event_details={'event_mentioned_person_ids': [self.b.person_id]})
         self.correct('remove-b', participant_correction={'action': 'REMOVE', 'person_id': self.b.person_id})

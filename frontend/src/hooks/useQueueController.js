@@ -22,6 +22,7 @@ export function useQueueController({
   const [queueSessions, setQueueSessions] = useState([]);
   const [queueGroups, setQueueGroups] = useState([]);
   const [queueEncounterMedia, setQueueEncounterMedia] = useState([]);
+  const [queueAttachment, setQueueAttachment] = useState(null);
   const [queueEncounterReviews, setQueueEncounterReviews] = useState([]);
   const [encounterCompletionIds, setEncounterCompletionIds] = usePersistentState("sentriface.queue.completionIds", {});
   const [queueSessionId, setQueueSessionId] = usePersistentState("sentriface.queue.sessionId", "");
@@ -56,7 +57,7 @@ export function useQueueController({
   const restoredQueueRef = useRef(false);
   const activeEncounter = queueEncounterReviews.find((review) => review.status === "IN_PROGRESS" && review.phase !== "WAITING") || null;
   const activeFaceIds = activeEncounter ? new Set(activeEncounter.faces.map((face) => face.face_id)) : null;
-  const visibleQueueGroups = activeFaceIds ? queueGroups.map((group) => ({
+  const visibleQueueGroups = queueAttachment && !activeEncounter ? [] : activeFaceIds ? queueGroups.map((group) => ({
     ...group, faces: group.faces.filter((face) => activeFaceIds.has(face.init_face_id)),
   })).filter((group) => group.faces.length) : queueGroups;
 
@@ -64,12 +65,14 @@ export function useQueueController({
     if (!sessionId) {
       setQueueEncounterMedia([]);
       setQueueEncounterReviews([]);
+      setQueueAttachment(null);
       return;
     }
     const payload = await apiGet(`/api/queue-encounters?session_id=${encodeURIComponent(sessionId)}`);
     if (generation !== queueLoadGeneration.current) return payload;
     setQueueEncounterMedia(payload.media || []);
     setQueueEncounterReviews(payload.reviews || []);
+    setQueueAttachment(payload.attachment || null);
     return payload;
   }, [apiGet]);
 
@@ -116,6 +119,7 @@ export function useQueueController({
       setQueueGroups([]);
       setQueueEncounterMedia([]);
       setQueueEncounterReviews([]);
+      setQueueAttachment(null);
       setQueueSelectedGroup(null);
       selectedGroupIdRef.current = "";
       setQueueSelectedGroupId("");
@@ -181,6 +185,9 @@ export function useQueueController({
         uploaded_files: options.uploadedFiles || options.totalFiles || 0,
         force_bad_quality: options.includeLowQuality !== false,
         quality_only: options.qualityOnly !== false,
+        target_observation_id: options.targetObservationId,
+        expected_revision: options.expectedRevision,
+        session_id: options.sessionId,
       }, { signal: options.signal });
       if (canceledQueueJobs.current.has(jobId)) return;
       const scanRejectedFiles = Number(payload.rejected_files || 0);
@@ -196,6 +203,9 @@ export function useQueueController({
       setQueueGroups(payload.groups);
       setQueueEncounterMedia(payload.media || []);
       setQueueEncounterReviews([]);
+      setQueueAttachment(options.targetObservationId ? {
+        observation_id: options.targetObservationId, expected_revision: options.expectedRevision,
+      } : null);
       setQueueSessions((current) => [
         queueSessionSummary(payload.session_id, payload.groups, path),
         ...current.filter((session) => session.session_id !== payload.session_id),
@@ -232,6 +242,10 @@ export function useQueueController({
       }));
     } catch (error) {
       if (options.signal?.aborted || canceledQueueJobs.current.has(jobId)) return;
+      if (options.targetObservationId) {
+        try { await loadQueueSessions(""); }
+        catch { /* Durable ownership will reconcile when the server is reachable. */ }
+      }
       setQueueProgress((current) => normalizeQueueProgress({
         ...current,
         jobId,
@@ -460,6 +474,7 @@ export function useQueueController({
     setQueueGroups([]);
     setQueueEncounterMedia([]);
     setQueueEncounterReviews([]);
+    setQueueAttachment(null);
     setQueueSelectedGroup(null);
     selectedGroupIdRef.current = "";
     setQueueSelectedGroupId("");
@@ -966,6 +981,7 @@ export function useQueueController({
       queueGroups,
       queueEncounterMedia,
       queueEncounterReviews,
+      queueAttachment,
       queueActiveEncounter: activeEncounter,
       queueVisibleGroups: visibleQueueGroups,
       queueSessionId,
@@ -985,6 +1001,27 @@ export function useQueueController({
     },
     actions: {
       scanQueueFiles,
+      retryQueueAttachment: async () => {
+        if (!queueAttachment || !queueSessionId) return;
+        const current = await apiGet(`/api/encounter?observation_id=${encodeURIComponent(queueAttachment.observation_id)}`, { dedupe: false });
+        if (queueAttachment.processing_failed) {
+          return scanQueuePath(queueAttachment.source_path, {
+            targetObservationId: queueAttachment.observation_id,
+            expectedRevision: current.revision, sessionId: queueSessionId,
+            qualityOnly,
+          });
+        }
+        const usable = queueEncounterMedia.filter((item) => !item.finalized_encounter && !item.excluded);
+        if (!usable.length) throw new Error("No new media to attach. Cancel this draft or select new occurrence media.");
+        await apiPost("/api/encounter-attach-media", {
+          observation_id: queueAttachment.observation_id,
+          expected_revision: current.revision,
+          session_id: queueSessionId,
+          media_ids: usable.map((item) => item.media_id),
+        });
+        await loadQueueGroups(queueSessionId);
+      },
+      cancelQueueAttachment: discardQueueSession,
       planQueueEncounters: async (mediaGroups) => {
         const payload = await apiPost("/api/queue-encounters-plan", { session_id: queueSessionId, media_groups: mediaGroups });
         setQueueEncounterReviews(payload.reviews || []);

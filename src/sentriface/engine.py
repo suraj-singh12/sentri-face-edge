@@ -346,6 +346,7 @@ class FaceEngine:
         self, image_path: Path, *, quality_only: bool = True,
     ) -> tuple[PhotoReview | None, list[PendingAddition]]:
         """Stage all detected faces without creating authoritative identity state."""
+        self.store.validate_encounter_media(str(image_path))
         prepared = self._process_additions(
             image_path, allow_bad_quality=True, quality_only=quality_only,
         )
@@ -370,6 +371,75 @@ class FaceEngine:
             source="check-photo",
         )
         return review, prepared.accepted
+
+    def prepare_reference_review(self, image_path: Path, person_id: str) -> dict:
+        """One admission path for both biometric bootstrap and later references."""
+        self.store.validate_reference_media(str(image_path), person_id)
+        prepared = self._process_additions(image_path, allow_bad_quality=True)
+        if len(prepared.accepted) != 1:
+            paths = [image_path, *[p.face.crop_path for p in prepared.accepted if p.face.crop_path]]
+            cleanup = self.cleanup.schedule(paths, "rejected-reference-upload")
+            self.cleanup.run(cleanup, self.store.list_all_file_references)
+            raise ValueError("No usable face detected" if not prepared.accepted else
+                             "Multiple faces detected; crop the image so only this Person's face is visible and upload again")
+        pending = prepared.accepted[0]
+        self.store.save_pending_addition(pending)
+        review = self.graph.create_photo_review(str(uuid.uuid4()), Path(pending.source_image).name,
+            [{"face_id": "face-1", "staged_face_type": "PENDING_ADDITION", "staged_face_id": pending.pending_id}],
+            media_path=pending.source_image, source="reference-only")
+        self.graph.set_photo_review_face_decision(review.review_id, "face-1", "ACCEPT_EXISTING_PERSON", person_id=person_id,
+            recognition_detail={"embedding_state": "PROOF_ONLY" if pending.quality.status.value.lower() == "bad" else "GOOD"})
+        return {"review_id": review.review_id, "quality": pending.quality.status.value,
+                "quality_score": pending.quality.score, "image_path": pending.source_image}
+
+    def confirm_reference(self, review_id: str, person_id: str, operation_id: str,
+                          *, no_context_acknowledged: bool, recognition_state: str, actor=None) -> dict:
+        if recognition_state not in {"GOOD", "POOR_ACCEPTED", "PROOF_ONLY"}:
+            raise ValueError("Invalid Reference quality choice")
+        committed = self.store.get_operation(operation_id)
+        if committed and committed.get("status") == "COMMITTED":
+            saved = self.graph.get_photo_review(review_id)
+            if saved and saved.faces[0].recognition_detail.get("embedding_state") != recognition_state:
+                raise ValueError("Operation ID already used with another Reference quality choice")
+            return self.add_face_to_person(review_id, person_id, operation_id, actor=actor,
+                                          no_context_acknowledged=no_context_acknowledged)
+        review = self.graph.get_photo_review(review_id)
+        if review is None or review.source != "reference-only":
+            raise ValueError("Use the cropped single-face Reference Only admission flow")
+        if no_context_acknowledged is not True:
+            raise ValueError("Confirm that no reliable Encounter context is available")
+        if len(review.faces) != 1 or review.faces[0].person_id != person_id:
+            raise ValueError("Reference confirmation must use its prepared Person")
+        self.graph.set_photo_review_face_decision(review_id, "face-1", "ACCEPT_EXISTING_PERSON",
+            person_id=person_id, recognition_detail={"embedding_state": recognition_state})
+        paths = [review.media_path]
+        for face in review.faces:
+            pending = self.store.get_pending_addition(face.staged_face_id)
+            if pending and pending.face.crop_path:
+                paths.append(pending.face.crop_path)
+        result = self.add_face_to_person(review_id, person_id, operation_id, actor=actor,
+                                        no_context_acknowledged=no_context_acknowledged)
+        if not result.get("created_reference_ids"):
+            cleanup = self.cleanup.schedule([p for p in paths if p], "duplicate-reference-upload")
+            self.cleanup.run(cleanup, self.store.list_all_file_references)
+        return result
+
+    def set_reference_active(self, reference_id: str, person_id: str, active: bool, operation_id: str, *, actor=None) -> dict:
+        _require_mutation_context(operation_id, actor)
+        result = self.store.set_reference_active(reference_id, person_id, active, operation_id, actor=actor)
+        self._rebuild_index()
+        return result
+
+    def cancel_reference_review(self, review_id: str) -> None:
+        review = self.graph.get_photo_review(review_id)
+        paths = [review.media_path] if review and review.media_path else []
+        for face in review.faces if review else []:
+            pending = self.store.get_pending_addition(face.staged_face_id)
+            if pending and pending.face.crop_path:
+                paths.append(pending.face.crop_path)
+        self.store.cancel_reference_review(review_id)
+        cleanup = self.cleanup.schedule(paths, "cancelled-reference-upload")
+        self.cleanup.run(cleanup, self.store.list_all_file_references)
 
     def list_pending_additions(self) -> list[PendingAddition]:
         with self.metrics.timer("db_list_pending_ms"):
@@ -427,8 +497,8 @@ class FaceEngine:
                 include_archived=include_archived,
             )
 
-    def face_origins_for_embeddings(self, embedding_ids: list[str]) -> dict[str, list[dict]]:
-        return self.store.face_origins_for_embeddings(embedding_ids)
+    def face_origins_for_embeddings(self, embedding_ids: list[str], person_id: str | None = None) -> dict[str, list[dict]]:
+        return self.store.face_origins_for_embeddings(embedding_ids, person_id=person_id)
 
     def proof_only_duplicate_candidates_for_review_face(self, review_id: str, face_id: str) -> list[dict]:
         review = self.store.get_photo_review(review_id)
@@ -864,6 +934,10 @@ class FaceEngine:
         return self.graph.get_photo_review(review_id)
 
     def cancel_photo_review(self, review_id: str) -> PhotoReview:
+        staged = self.graph.get_photo_review(review_id)
+        if staged and staged.source == "reference-only":
+            self.cancel_reference_review(review_id)
+            return self.graph.get_photo_review(review_id)
         review = self.store.get_encounter_review(review_id)
         result = self.graph.cancel_photo_review(review_id)
         if review["session_id"]:
@@ -1273,6 +1347,9 @@ class FaceEngine:
         progress_callback: Callable[[dict], None] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         quality_only: bool = True,
+        target_observation_id: str | None = None,
+        expected_revision: str | None = None,
+        session_id: str | None = None,
     ) -> "QueueSessionResult":
         return self._create_init_session(
             source_path,
@@ -1280,6 +1357,9 @@ class FaceEngine:
             progress_callback=progress_callback,
             cancel_check=cancel_check,
             quality_only=quality_only,
+            target_observation_id=target_observation_id,
+            expected_revision=expected_revision,
+            session_id=session_id,
         )
 
     def _create_init_session(
@@ -1289,6 +1369,9 @@ class FaceEngine:
         progress_callback: Callable[[dict], None] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         quality_only: bool = True,
+        target_observation_id: str | None = None,
+        expected_revision: str | None = None,
+        session_id: str | None = None,
     ) -> "QueueSessionResult":
         def report(**payload) -> None:
             if progress_callback:
@@ -1296,7 +1379,17 @@ class FaceEngine:
 
         with self.metrics.timer("total_init_scan_ms"):
             with self.metrics.timer("db_create_init_session_ms"):
-                session = self.store.create_init_session(str(source_path), quality_only=quality_only)
+                retry_media = None
+                if session_id:
+                    previous = self.store.get_init_session(session_id)
+                    if previous is None or previous.target_observation_id != target_observation_id:
+                        raise ValueError("A scan retry must retain its target Encounter")
+                    quality_only = previous.quality_only
+                    retry_media = [Path(item["media_path"]) for item in self.store.list_init_session_media(session_id)]
+                    session = self.store.retry_targeted_scan(session_id)
+                else:
+                    session = self.store.create_init_session(str(source_path), quality_only=quality_only,
+                        target_observation_id=target_observation_id, expected_revision=expected_revision)
 
             def cancellation_checkpoint(phase: str) -> None:
                 if cancel_check is not None and cancel_check():
@@ -1310,7 +1403,12 @@ class FaceEngine:
 
             try:
                 cancellation_checkpoint("discovering_images")
-                image_paths = _iter_images(source_path, cancellation_checkpoint)
+                image_paths = retry_media if retry_media is not None else _iter_images(source_path, cancellation_checkpoint)
+                for path in image_paths:
+                    self.store.validate_encounter_media(str(path))
+                if session.target_observation_id:
+                    self.store.save_init_session_media(session.session_id,
+                        [_canonical_source_path(path, self.config.data_dir) for path in image_paths])
                 self.metrics.increment("images_scanned", len(image_paths))
                 report(
                     phase="detecting",
@@ -1451,6 +1549,8 @@ class FaceEngine:
                 with self.metrics.timer("db_save_init_faces_ms"):
                     self.store.save_init_session_media(session.session_id, scanned_media_paths)
                     self.store.save_init_faces(grouped)
+                    if session.target_observation_id:
+                        self.store.finish_targeted_scan(session.session_id, scanned_media_paths)
                 cancellation_checkpoint("after_save")
                 report(
                     phase="done",
@@ -1476,7 +1576,10 @@ class FaceEngine:
                     raise
             except Exception:
                 try:
-                    self.discard_init_session(session.session_id)
+                    if session.target_observation_id:
+                        self.store.mark_targeted_scan_failed(session.session_id)
+                    else:
+                        self.discard_init_session(session.session_id)
                 finally:
                     raise
 
@@ -1496,8 +1599,19 @@ class FaceEngine:
         session = self.store.get_init_session(session_id)
         if session is None:
             raise KeyError(f"Unknown init session: {session_id}")
+        cleanup_paths: list[str | Path] = [self.config.face_dir / "init" / session_id]
+        if session.target_observation_id:
+            cleanup_paths.extend(item["media_path"] for item in self.store.list_init_session_media(session_id))
+            source_path = Path(session.source_path).resolve()
+            batch_root = (self.config.data_dir / "uploads" / "batches").resolve()
+            # Restore reanchors scans to the shared media directory. Ownership
+            # of one Attach draft never authorizes recursively sweeping it.
+            if source_path.is_file() or batch_root in source_path.parents:
+                cleanup_paths.append(source_path)
+        else:
+            cleanup_paths.append(session.source_path)
         journal = self.cleanup.schedule(
-            (session.source_path, self.config.face_dir / "init" / session_id),
+            cleanup_paths,
             f"discard-init-session-{session_id}",
         ) if delete_files else None
         with self.metrics.timer("db_delete_init_session_ms"):
@@ -2088,7 +2202,7 @@ class FaceEngine:
     def _match_group_to_person(
         self, vector, person_id: str, *, quality_only: bool = True,
     ) -> PersonMatch | None:
-        person_embeddings = self.store.list_embeddings_for_person(person_id)
+        person_embeddings = [r for r in self.store.list_embeddings() if r.person_id == person_id]
         has_good_reference = any(record.recognition_state == "GOOD" for record in person_embeddings)
         matches = [
             Match(

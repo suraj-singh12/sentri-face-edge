@@ -13,7 +13,7 @@ from urllib.parse import quote
 from sentriface.models import utc_now
 from sentriface.media_registry import observation_media_provenance_issues
 from sentriface.secure_storage import connect_database
-from sentriface.storage.sqlite_store import SCHEMA_VERSION, _expected_graph_connections
+from sentriface.storage.sqlite_store import SCHEMA_VERSION, _attachment_ownership_errors, _reference_integrity_errors, _expected_graph_connections
 
 
 class IntegritySeverity(str, Enum):
@@ -525,6 +525,12 @@ class ReadOnlyIntegrityChecker:
             self._add("P11-OBSERVATION-003", "Observation media has no durable provenance or valid face binding", entities={"observation_id": oid, "media_id": mid}, evidence={"media_path": path})
 
     def _check_reviews(self, conn: sqlite3.Connection) -> None:
+        if "source_media_id" in {r[1] for r in conn.execute("PRAGMA table_info(biometric_enrollment_history)")}:
+            for reference_id in _reference_integrity_errors(conn):
+                self._add("P11-REVIEW-001", "Invalid Reference source authority", entities={"reference_id": reference_id})
+        for session_id in _attachment_ownership_errors(conn):
+            self._add("P11-REVIEW-001", "Attach Media draft ownership disagrees with its Encounter or reviews",
+                      entities={"session_id": session_id})
         query = """
         SELECT r.review_id, r.status, r.observation_id, r.completed_operation_id, r.completed_at,
                SUM(CASE WHEN f.face_id IS NOT NULL AND f.decision IS NULL THEN 1 ELSE 0 END) undecided,

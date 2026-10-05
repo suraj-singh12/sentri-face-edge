@@ -1,6 +1,8 @@
 # SentriFace Edge documentation map
 
-This directory separates the product overview and current architecture from frozen phase records, historical artifacts, and examples. `IMPLEMENTATION_PLAN.md` is the canonical current-work tracker.
+## Current Batch 3.7 work
+
+Schema v34 extends existing immutable enrollment history with Reference source identity/provenance and append-only lifecycle revisions. NO_FACE Add Face and ENROLLED Recognition References management share admission, cap, lifecycle, authorization and recognition. Encounter correction is source-scoped; equal-vector dedup cannot transfer Reference identity. Existing schema-v33 Attach ownership/Retry/Cancel and compact backup-card fix are preserved. IMPLEMENTATION_PLAN owns implementation/verification status; DOMAIN_MODEL owns the source contract, ARCHITECTURE_STATE its representation, FEATURES_BY_TAB operator entry points, and ARCHITECTURE_EXPLANATION the rationale. No Batch 4.
 
 ## Current status
 

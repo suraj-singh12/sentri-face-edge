@@ -91,7 +91,7 @@ from sentriface.media_registry import media_content_identity, require_existing_m
 
 from sentriface.secure_storage import connect_database, ensure_encrypted_database
 
-SCHEMA_VERSION = 32
+SCHEMA_VERSION = 34
 EMBEDDING_RECOGNITION_STATES = frozenset({"GOOD", "POOR_ACCEPTED", "PROOF_ONLY"})
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})
@@ -456,16 +456,36 @@ class SQLiteIdentityStore:
                 ORDER BY e.created_at ASC
                 """
             ).fetchall()
-            result = [
-                _embedding_from_row(
-                    row,
-                    raw_person_id=_raw_embedding_owner_person_id(conn, row),
-                    canonical_person_id=_effective_embedding_owner_person_id(conn, row),
-                )
-                for row in rows
-                if _effective_embedding_owner_person_id(conn, row)
-                == requested_canonical_id
-            ]
+            source_authority = _source_sample_authority(conn)
+            result = []
+            references = _reference_records(conn, requested_canonical_id)
+            for row in rows:
+                eid = row["embedding_id"]
+                if requested_canonical_id not in source_authority[eid]["owners"]:
+                    continue
+                record = _embedding_from_row(row, raw_person_id=_raw_embedding_owner_person_id(conn, row),
+                                             canonical_person_id=requested_canonical_id)
+                own_reference = next((r for r in references if r["active"] and r["embedding_id"] == eid), None)
+                if own_reference:
+                    record = replace(record, source_image=own_reference["source_image"], crop_path=own_reference["crop_path"],
+                                     recognition_state=own_reference["recognition_state"])
+                else:
+                    for observation in conn.execute("SELECT observation_id FROM observations WHERE status='FINALIZED'").fetchall():
+                        assignment = next((a for a in _effective_face_assignments(conn, observation[0])
+                            if a["embedding_id"] == eid and _resolve_canonical_person_id(conn, a["current_person_id"]) == requested_canonical_id), None)
+                        if assignment is None:
+                            continue
+                        source = conn.execute("""SELECT m.media_path, f.recognition_detail FROM observation_face_assignments a
+                            JOIN photo_review_faces f ON f.review_id=a.review_id AND f.face_id=a.face_id
+                            JOIN observation_media m ON m.observation_id=a.observation_id
+                              AND m.media_id=json_extract(f.recognition_detail,'$.encounter_media_id')
+                            WHERE a.assignment_id=?""", (assignment["assignment_id"],)).fetchone()
+                        if source and source[0] != record.source_image:
+                            record = replace(record, source_image=source[0], crop_path=None)
+                        if source:
+                            record = replace(record, recognition_state=json.loads(source[1] or "{}").get("source_recognition_state", record.recognition_state))
+                        break
+                result.append(record)
             if not include_archived:
                 canonical = conn.execute(
                     "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
@@ -475,19 +495,24 @@ class SQLiteIdentityStore:
                     return []
             return result
 
-    def face_origins_for_embeddings(self, embedding_ids: list[str]) -> dict[str, list[dict]]:
+    def face_origins_for_embeddings(self, embedding_ids: list[str], person_id: str | None = None) -> dict[str, list[dict]]:
         """Read immutable review provenance without guessing the origin of legacy faces."""
         ids = sorted(set(embedding_ids))
         if not ids:
             return {}
         placeholders = ",".join("?" for _ in ids)
         with self._connect() as conn:
+            canonical = _resolve_canonical_person_id(conn, person_id) if person_id else None
             origins: dict[str, list[dict]] = {embedding_id: [] for embedding_id in ids}
             for row in conn.execute(
-                f"SELECT embedding_id, observation_id, review_id, created_operation_id "
+                f"SELECT assignment_id, embedding_id, observation_id, review_id, created_operation_id "
                 f"FROM observation_face_assignments WHERE embedding_id IN ({placeholders}) "
                 "ORDER BY created_at, assignment_id", ids,
             ):
+                if canonical and not any(a["assignment_id"] == row["assignment_id"]
+                    and _resolve_canonical_person_id(conn, a["current_person_id"]) == canonical
+                    for a in _effective_face_assignments(conn, row["observation_id"])):
+                    continue
                 origins[str(row["embedding_id"])].append({
                     "face_origin": "ENCOUNTER",
                     "observation_id": str(row["observation_id"]),
@@ -495,10 +520,12 @@ class SQLiteIdentityStore:
                     "operation_id": str(row["created_operation_id"]),
                 })
             for row in conn.execute(
-                f"SELECT embedding_id, review_id, operation_id "
+                f"SELECT embedding_id, person_id, review_id, operation_id "
                 f"FROM biometric_enrollment_history WHERE embedding_id IN ({placeholders}) "
                 "ORDER BY created_at, enrollment_id", ids,
             ):
+                if canonical and _resolve_canonical_person_id(conn, row["person_id"]) != canonical:
+                    continue
                 origins[str(row["embedding_id"])].append({
                     "face_origin": "STANDALONE_ENROLLMENT",
                     "observation_id": None,
@@ -1852,10 +1879,20 @@ class SQLiteIdentityStore:
 
     def plan_init_session_encounters(self, session_id: str, media_groups: list[list[str]], *, target_observation_id: str | None = None, expected_revision: str | None = None) -> list[dict]:
         """Partition a scanned Queue session into serial, non-authoritative reviews."""
+        # Ownership is admission intent, not the result of successful planning.
+        # Commit it independently so a rejected precondition cannot return these
+        # photos to ordinary new-Encounter work (including compatibility callers).
+        if target_observation_id:
+            self.bind_init_session_attachment(session_id, target_observation_id, expected_revision)
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            if conn.execute("SELECT 1 FROM init_sessions WHERE session_id = ?", (session_id,)).fetchone() is None:
+            session = conn.execute("SELECT * FROM init_sessions WHERE session_id = ?", (session_id,)).fetchone()
+            if session is None:
                 raise KeyError(f"Unknown init session: {session_id}")
+            if session["status"] == "closed":
+                raise ValueError("This draft is closed")
+            if session["target_observation_id"] and target_observation_id != session["target_observation_id"]:
+                raise ValueError("These photos belong to a targeted Attach Media draft; Retry or Cancel it")
             if target_observation_id:
                 if len(media_groups) != 1:
                     raise ValueError("Attach Media requires one existing Encounter")
@@ -2184,6 +2221,8 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown photo review: {review_id}")
             if review["status"] != "IN_PROGRESS":
                 raise ValueError("Only an in-progress review can be completed")
+            if review["source"] == "reference-only":
+                raise ValueError("Confirm Reference Only without creating an Encounter")
             target_observation_id = review["target_observation_id"]
             original_participant_ids = []
             if target_observation_id:
@@ -2198,6 +2237,10 @@ class SQLiteIdentityStore:
             encounter_review = review["review_phase"] == "RELATIONS"
             if review["review_phase"] not in {"LEGACY", "RELATIONS"}:
                 raise ValueError("Complete Event details, identity review, and Relations first")
+            for media in conn.execute("SELECT media_id, media_path FROM photo_review_media WHERE review_id=?", (review_id,)).fetchall():
+                _require_encounter_media_role(conn, media_content_identity(media["media_path"]))
+            if review["media_path"]:
+                _require_encounter_media_role(conn, media_content_identity(review["media_path"]))
             if encounter_review:
                 for media_row in conn.execute(
                     "SELECT media_id, media_path FROM photo_review_media WHERE review_id = ?", (review_id,),
@@ -2426,6 +2469,9 @@ class SQLiteIdentityStore:
                 ).fetchone()
                 detail = json.loads(decision[0] or "{}")
                 detail["encounter_media_id"] = str(media[0])
+                staged_face = next(r for r in face_rows if str(r["face_id"]) == face_id)
+                detail["source_recognition_state"] = _review_face_recognition_state(
+                    _staged_review_face_row(conn, staged_face["staged_face_type"], staged_face["staged_face_id"]), detail)
                 conn.execute(
                     "UPDATE photo_review_faces SET recognition_detail = ? WHERE review_id = ? AND face_id = ?",
                     (json.dumps(detail), review_id, face_id),
@@ -2604,6 +2650,7 @@ class SQLiteIdentityStore:
                 "graph_evidence_count": len(evidence_ids),
                 "face_assignments": assigned_by_face,
             }
+            _refresh_source_biometric_status(conn)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
@@ -2721,6 +2768,7 @@ class SQLiteIdentityStore:
                 "graph_evidence_ids": evidence_ids,
                 "graph_evidence_count": len(evidence_ids),
             }
+            _refresh_source_biometric_status(conn)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
@@ -2755,6 +2803,8 @@ class SQLiteIdentityStore:
             ).fetchone()
             if embedding is None:
                 raise KeyError(f"Unknown active embedding: {embedding_id}")
+            if conn.execute("SELECT 1 FROM biometric_enrollment_history WHERE embedding_id=?", (embedding_id,)).fetchone():
+                raise ValueError("Reference Only ownership cannot be moved; correct the Encounter or retire and deliberately add a Reference")
             raw_from_person_id = _raw_embedding_owner_person_id(conn, embedding)
             from_person_id = _effective_embedding_owner_person_id(conn, embedding)
             if from_person_id == target_person_id:
@@ -2876,6 +2926,7 @@ class SQLiteIdentityStore:
                 "graph_evidence_ids": graph_evidence_ids,
                 "graph_evidence_count": len(graph_evidence_ids),
             }
+            _refresh_source_biometric_status(conn)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
@@ -2887,18 +2938,24 @@ class SQLiteIdentityStore:
         *,
         actor: dict | None = None,
         source: str | None = None,
+        no_context_acknowledged: bool = False,
     ) -> dict:
         with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             existing = _existing_committed_operation_result(
                 conn, operation_id, "identity.face.add",
             )
             if existing is not None:
-                if existing.get("review_id") != review_id or existing.get("person_id") != person_id:
+                if existing.get("review_id") != review_id or existing.get("person_id") != person_id or no_context_acknowledged is not True:
                     raise KeyError(f"Operation ID already exists: {operation_id}")
                 return existing
+            _require_reference_mutation_person(conn, person_id)
             person_id = _require_active_review_person(
                 conn, _resolve_canonical_person_id(conn, person_id),
             )
+            _require_reference_mutation_person(conn, person_id)
+            if no_context_acknowledged is not True:
+                raise ValueError("Confirm that no reliable Encounter context is available")
             review = conn.execute(
                 "SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,),
             ).fetchone()
@@ -2906,10 +2963,14 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown photo review: {review_id}")
             if review["status"] != "IN_PROGRESS":
                 raise ValueError("Only an in-progress review can add a face")
+            if review["source"] != "reference-only":
+                raise ValueError("Use the cropped single-face Reference Only admission flow")
             faces = conn.execute(
                 "SELECT * FROM photo_review_faces WHERE review_id = ? ORDER BY face_id",
                 (review_id,),
             ).fetchall()
+            if len(faces) != 1:
+                raise ValueError("Reference Only requires exactly one detected face; crop the image and upload again")
             if not faces or any(row["decision"] in {None, "SKIP"} for row in faces):
                 raise ValueError("Every detected face requires a final decision before completion")
             accepted = [row for row in faces if row["decision"] == "ACCEPT_EXISTING_PERSON"]
@@ -2940,6 +3001,7 @@ class SQLiteIdentityStore:
             )
             embedding_ids: list[str] = []
             created_embedding_ids: list[str] = []
+            created_reference_ids: list[str] = []
             for row in accepted:
                 staged = _staged_review_face_row(
                     conn, row["staged_face_type"], row["staged_face_id"],
@@ -2947,6 +3009,26 @@ class SQLiteIdentityStore:
                 recognition_state = _review_face_recognition_state(
                     staged, json.loads(row["recognition_detail"] or "{}"),
                 )
+                media_id = media_content_identity(staged["source_image"])
+                _require_reference_media_role(conn, media_id, person_id, self.database_key)
+                references = _reference_records(conn, person_id)
+                duplicate_reference = next((r for r in references if r["media_id"] == media_id), None)
+                if duplicate_reference is None:
+                    duplicate_reference = next((r for r in references if r["active"] and conn.execute(
+                        "SELECT vector FROM embeddings WHERE embedding_id = ?", (r["embedding_id"],)
+                    ).fetchone()[0] == staged["vector"]), None)
+                if duplicate_reference is not None:
+                    if not duplicate_reference["active"]:
+                        raise ValueError("This Reference is retired; restore the existing Reference instead")
+                    embedding_ids.append(duplicate_reference["embedding_id"])
+                    continue
+                if _active_reference_count(conn, person_id) >= 4:
+                    raise ValueError("Four active Recognition References are already present; retire one before adding another")
+                for reference in _reference_records(conn):
+                    if reference["active"] and reference["canonical_person_id"] != person_id and conn.execute(
+                        "SELECT vector FROM embeddings WHERE embedding_id = ?", (reference["embedding_id"],)
+                    ).fetchone()[0] == staged["vector"]:
+                        raise ValueError("This exact biometric sample is already an active Reference for another Person")
                 duplicate = conn.execute(
                     """
                     SELECT embedding_id, recognition_state FROM embeddings
@@ -2978,18 +3060,25 @@ class SQLiteIdentityStore:
                             (embedding_id,),
                         )
                 embedding_ids.append(embedding_id)
+                reference_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:enrollment:{operation_id}:{embedding_id}"))
                 conn.execute(
                     """
                     INSERT OR IGNORE INTO biometric_enrollment_history(
-                        enrollment_id, embedding_id, person_id, review_id, operation_id, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                        enrollment_id, embedding_id, person_id, review_id, operation_id, created_at,
+                        source_media_id, source_image, crop_path, recognition_state, no_context_declared
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        str(uuid.uuid5(uuid.NAMESPACE_URL, f"sentriface:enrollment:{operation_id}:{embedding_id}")),
+                        reference_id,
                         embedding_id, person_id, review_id, operation_id, utc_now(),
+                        media_id, staged["source_image"], staged["crop_path"], recognition_state, 1,
                     ),
                 )
+                created_reference_ids.append(reference_id)
             _mark_person_enrolled(conn, person_id)
+            if not created_reference_ids:
+                conn.execute("DELETE FROM photo_review_media WHERE review_id=?", (review_id,))
+                conn.execute("UPDATE photo_reviews SET media_path=NULL WHERE review_id=?", (review_id,))
             completed_at = utc_now()
             conn.execute(
                 """
@@ -3005,13 +3094,91 @@ class SQLiteIdentityStore:
                 "person_id": person_id,
                 "embedding_ids": embedding_ids,
                 "created_embedding_ids": created_embedding_ids,
+                "created_reference_ids": created_reference_ids,
                 "created_person_ids": [],
                 "observation_id": None,
                 "graph_evidence_ids": [],
                 "graph_evidence_count": 0,
             }
+            _refresh_source_biometric_status(conn)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
+
+    def list_recognition_references(self, person_id: str) -> dict:
+        with self._connect() as conn:
+            records = _reference_records(conn, person_id)
+            authority = _source_sample_authority(conn)
+            for record in records:
+                sample = authority[record["embedding_id"]]
+                record["recognition_conflict"] = sample["conflict"]
+                person = conn.execute("SELECT lifecycle_status FROM persons WHERE person_id = ?", (record["canonical_person_id"],)).fetchone()
+                available = conn.execute("SELECT deleted_at FROM embeddings WHERE embedding_id=?", (record["embedding_id"],)).fetchone()[0] is None
+                record["recognition_eligible"] = bool(available and record["active"] and person[0] == "ACTIVE"
+                    and not sample["conflict"] and record["recognition_state"] != "PROOF_ONLY")
+            drafts = [dict(row) for row in conn.execute("""SELECT r.review_id, p.quality_status AS quality, r.media_path AS image_path
+                FROM photo_reviews r JOIN photo_review_faces f ON f.review_id=r.review_id
+                JOIN pending_additions p ON p.pending_id=f.staged_face_id
+                WHERE r.source='reference-only' AND r.status='IN_PROGRESS' AND f.person_id=? ORDER BY r.created_at""", (person_id,))]
+            canonical = _resolve_canonical_person_id(conn, person_id)
+            encounter_coverage = any(
+                authority[a["embedding_id"]]["owner"] == canonical
+                and authority[a["embedding_id"]]["state"] != "PROOF_ONLY"
+                for row in conn.execute("SELECT observation_id FROM observations WHERE status='FINALIZED'").fetchall()
+                for a in _effective_face_assignments(conn, row[0])
+                if _resolve_canonical_person_id(conn, a["current_person_id"]) == canonical)
+            return {"references": records, "drafts": drafts, "active_count": _active_reference_count(conn, person_id), "limit": 4,
+                    "has_encounter_coverage": encounter_coverage}
+
+    def set_reference_active(self, reference_id: str, person_id: str, active: bool, operation_id: str,
+                             *, actor: dict | None = None, failure_injector=None) -> dict:
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            existing = _existing_committed_operation_result(conn, operation_id, "identity.reference.lifecycle")
+            if existing is not None:
+                if existing.get("reference_id") != reference_id or existing.get("active") != active or existing.get("person_id") != person_id:
+                    raise ValueError("Operation ID already used with another Reference command")
+                return existing
+            _require_reference_mutation_person(conn, person_id)
+            reference = next((r for r in _reference_records(conn, person_id) if r["reference_id"] == reference_id), None)
+            if reference is None:
+                raise ValueError("Reference does not belong to this canonical Person")
+            if active and not reference["active"]:
+                already_counted = any(r["active"] and r["media_id"] == reference["media_id"]
+                                      for r in _reference_records(conn, person_id))
+                if not already_counted and _active_reference_count(conn, person_id) >= 4:
+                    raise ValueError("Retire a Reference before restoring: maximum four active sources")
+                if conn.execute("SELECT 1 FROM embeddings WHERE embedding_id=? AND deleted_at IS NULL", (reference["embedding_id"],)).fetchone() is None:
+                    raise ValueError("This Reference sample is unavailable")
+            _begin_journal_operation(conn, "identity.reference.lifecycle", operation_id=operation_id, actor=actor,
+                source="recognition-reference-management", affected_entities=[{"entity_type":"person","entity_id":person_id}],
+                details={"reference_id": reference_id, "active": active})
+            if reference["active"] != active:
+                conn.execute("INSERT INTO recognition_reference_revisions VALUES (?, ?, ?, ?, ?)",
+                             (str(uuid.uuid4()), reference_id, int(active), operation_id, utc_now()))
+            if failure_injector:
+                failure_injector("reference_lifecycle")
+            result = {"reference_id": reference_id, "active": active, "person_id": person_id}
+            _refresh_source_biometric_status(conn)
+            _transition_journal_operation(conn, operation_id, "COMMITTED", result)
+            return result
+
+    def validate_reference_media(self, media_path: str, person_id: str) -> None:
+        with self._connect() as conn:
+            _require_reference_mutation_person(conn, person_id)
+            _require_reference_media_role(conn, media_content_identity(media_path, self.database_key), person_id, self.database_key)
+
+    def validate_encounter_media(self, media_path: str) -> None:
+        with self._connect() as conn:
+            _require_encounter_media_role(conn, media_content_identity(media_path, self.database_key))
+
+    def cancel_reference_review(self, review_id: str) -> None:
+        with self._connect() as conn:
+            review = conn.execute("SELECT source, status FROM photo_reviews WHERE review_id=?", (review_id,)).fetchone()
+            if review is None or review["source"] != "reference-only" or review["status"] == "COMPLETED":
+                raise ValueError("Only an uncommitted Reference draft can be cancelled")
+            _remove_review_staging(conn, review_id)
+            conn.execute("DELETE FROM photo_review_media WHERE review_id=?", (review_id,))
+            conn.execute("UPDATE photo_reviews SET status='CANCELLED', media_path=NULL WHERE review_id=?", (review_id,))
 
     def list_corrections_for_observation(
         self, observation_id: str,
@@ -3335,12 +3502,6 @@ class SQLiteIdentityStore:
                         _insert_identity_correction(conn, correction_type="FACE_ASSIGNMENT", observation_id=observation_id,
                             face_assignment_id=assignment["assignment_id"], embedding_id=assignment["embedding_id"],
                             from_person_id=assignment["current_person_id"], to_person_id=target, operation_id=operation_id)
-                        embedding = conn.execute("SELECT embedding_id, person_id FROM embeddings WHERE embedding_id = ?", (assignment["embedding_id"],)).fetchone()
-                        owner = _effective_embedding_owner_person_id(conn, embedding)
-                        if owner == pid:
-                            _insert_identity_correction(conn, correction_type="FACE_OWNERSHIP", observation_id=None,
-                                face_assignment_id=None, embedding_id=assignment["embedding_id"], from_person_id=pid,
-                                to_person_id=target, operation_id=operation_id)
                     for raw in _corrected_observation_person_ids(conn, observation_id):
                         if _resolve_canonical_person_id(conn, raw) == pid:
                             _insert_identity_correction(conn, correction_type="OBSERVATION_IDENTITY", observation_id=observation_id,
@@ -3403,6 +3564,7 @@ class SQLiteIdentityStore:
                       "historical_relations": historical_relations,
                       "effective_relations": [{"first_person_id": pair[0], "second_person_id": pair[1], "disposition": row["disposition"], "support": row["support"]}
                           for pair, row in _effective_encounter_relations(conn, observation_id).items()]}
+            _refresh_source_biometric_status(conn)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
@@ -4566,6 +4728,12 @@ class SQLiteIdentityStore:
                 current = _get_journal_operation(conn, normalized_operation_id)
                 if current is None or current["status"] != "STARTED":
                     raise RuntimeError("Merge journal is not in STARTED state")
+                combined = {r["media_id"] or r["reference_id"] for r in _reference_records(conn)
+                            if r["active"] and r["canonical_person_id"] in {
+                                _resolve_canonical_person_id(conn, source_person_id),
+                                _resolve_canonical_person_id(conn, target_person_id)}}
+                if len(combined) > 4:
+                    raise ValueError("This merge would produce more than four active Recognition References; reduce the combined sources to four or fewer and retry")
                 preview = _preview_identity_merge(
                     conn, source_person_id, target_person_id,
                     exclude_operation_id=normalized_operation_id,
@@ -4627,6 +4795,7 @@ class SQLiteIdentityStore:
                     raise RuntimeError(
                         "Merge validation failed: " + "; ".join(validation["errors"])
                     )
+                _refresh_source_biometric_status(conn)
                 embeddings = _list_embeddings_in_transaction(conn)
                 if publish_index is not None:
                     publish_index(embeddings)
@@ -4714,6 +4883,7 @@ class SQLiteIdentityStore:
                 "changed": bool(cursor.rowcount),
             }
             _record_person_operation(conn, operation_id, "archive-person", result)
+            _refresh_source_biometric_status(conn)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
@@ -4753,6 +4923,7 @@ class SQLiteIdentityStore:
                 "changed": bool(cursor.rowcount),
             }
             _record_person_operation(conn, operation_id, "restore-person", result)
+            _refresh_source_biometric_status(conn)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
@@ -5546,6 +5717,8 @@ class SQLiteIdentityStore:
     ) -> dict:
         """Soft-delete a face for 30 days while retaining its linked sightings."""
         with self._connect() as conn:
+            if conn.execute("SELECT 1 FROM biometric_enrollment_history WHERE embedding_id=?", (embedding_id,)).fetchone():
+                raise ValueError("Reference Only history cannot enter timed Deleted Faces; retire the Reference instead")
             existing = _begin_person_operation(conn, operation_id, "soft-delete-embedding")
             if existing:
                 return existing
@@ -5616,6 +5789,7 @@ class SQLiteIdentityStore:
                 "crop_path": row["crop_path"],
             }
             _record_person_operation(conn, operation_id, "soft-delete-embedding", result)
+            _refresh_source_biometric_status(conn)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
@@ -5720,6 +5894,7 @@ class SQLiteIdentityStore:
                 "previously_deleted_at": row["deleted_at"],
             }
             _record_person_operation(conn, operation_id, "restore-deleted-embedding", result)
+            _refresh_source_biometric_status(conn)
             _transition_journal_operation(conn, operation_id, "COMMITTED", result)
             return result
 
@@ -5743,6 +5918,8 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown deleted face: {embedding_id}")
             if row["deleted_at"] is None:
                 raise KeyError("Move the face to Deleted Faces before deleting it permanently")
+            if conn.execute("SELECT 1 FROM biometric_enrollment_history WHERE embedding_id=?", (embedding_id,)).fetchone():
+                raise ValueError("Reference history is retained; retire the source instead of purging it")
             _begin_journal_operation(
                 conn, "biometric.face.purge", operation_id=operation_id,
                 actor=actor, source=_optional_text(source) or "identity-service",
@@ -5782,6 +5959,7 @@ class SQLiteIdentityStore:
                 WHERE deleted_at IS NOT NULL
                   AND purge_after IS NOT NULL
                   AND purge_after <= ?
+                  AND NOT EXISTS (SELECT 1 FROM biometric_enrollment_history h WHERE h.embedding_id=embeddings.embedding_id)
                 ORDER BY purge_after ASC
                 """,
                 (cutoff,),
@@ -5837,6 +6015,7 @@ class SQLiteIdentityStore:
                   AND deleted_at IS NOT NULL
                   AND purge_after IS NOT NULL
                   AND purge_after <= ?
+                  AND NOT EXISTS (SELECT 1 FROM biometric_enrollment_history h WHERE h.embedding_id=embeddings.embedding_id)
                 ORDER BY embedding_id
                 """,
                 (*unique_ids, now or utc_now()),
@@ -6557,80 +6736,16 @@ class SQLiteIdentityStore:
 
     def list_embeddings(self) -> list[EmbeddingRecord]:
         with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT e.embedding_id, e.person_id, e.vector, e.quality_score,
-                       e.source_image, e.crop_path, e.created_at, e.recognition_state
-                FROM embeddings e
-                WHERE e.deleted_at IS NULL
-                """
-            ).fetchall()
-            records: list[EmbeddingRecord] = []
-            for row in rows:
-                canonical_person_id = _effective_embedding_owner_person_id(conn, row)
-                canonical = conn.execute(
-                    "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
-                    (canonical_person_id,),
-                ).fetchone()
-                if (
-                    canonical is not None
-                    and canonical["lifecycle_status"] == "ACTIVE"
-                    and canonical["deleted_at"] is None
-                ):
-                    records.append(_embedding_from_row(
-                        row,
-                        raw_person_id=_raw_embedding_owner_person_id(conn, row),
-                        canonical_person_id=canonical_person_id,
-                    ))
-            return records
+            return _eligible_source_samples(conn)
 
-    def current_embedding_person_ids(
-        self, embedding_ids: list[str], *, quality_only: bool = True,
-    ) -> dict[str, str]:
-        normalized_ids = list(dict.fromkeys(
-            str(embedding_id).strip() for embedding_id in embedding_ids
-            if str(embedding_id).strip()
-        ))
-        if not normalized_ids:
-            return {}
-        placeholders = ", ".join("?" for _ in normalized_ids)
+    def current_embedding_person_ids(self, embedding_ids: list[str], *, quality_only: bool = True) -> dict[str, str]:
+        selected = set(embedding_ids)
         with self._connect() as conn:
-            rows = conn.execute(
-                f"""
-                SELECT e.embedding_id, e.person_id, e.recognition_state
-                FROM embeddings e
-                WHERE e.embedding_id IN ({placeholders})
-                  AND e.deleted_at IS NULL
-                """,
-                normalized_ids,
-            ).fetchall()
-            good_reference_people: set[str] = set()
-            if quality_only:
-                for good_row in conn.execute(
-                    "SELECT embedding_id, person_id FROM embeddings "
-                    "WHERE recognition_state = 'GOOD' AND deleted_at IS NULL"
-                ):
-                    good_reference_people.add(
-                        _effective_embedding_owner_person_id(conn, good_row)
-                    )
-            result: dict[str, str] = {}
-            for row in rows:
-                if row["recognition_state"] == "PROOF_ONLY":
-                    continue
-                canonical_person_id = _effective_embedding_owner_person_id(conn, row)
-                if quality_only and row["recognition_state"] != "GOOD" and canonical_person_id in good_reference_people:
-                    continue
-                canonical = conn.execute(
-                    "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
-                    (canonical_person_id,),
-                ).fetchone()
-                if (
-                    canonical is not None
-                    and canonical["lifecycle_status"] == "ACTIVE"
-                    and canonical["deleted_at"] is None
-                ):
-                    result[str(row["embedding_id"])] = canonical_person_id
-            return result
+            samples = _eligible_source_samples(conn)
+            good_people = {r.person_id for r in samples if r.recognition_state == "GOOD"}
+            return {r.embedding_id: r.person_id for r in samples if r.embedding_id in selected
+                    and r.recognition_state != "PROOF_ONLY"
+                    and (not quality_only or r.recognition_state == "GOOD" or r.person_id not in good_people)}
 
     def save_pending_addition(self, pending: PendingAddition) -> None:
         if len(pending.vector) != self.embedding_dim:
@@ -6711,6 +6826,8 @@ class SQLiteIdentityStore:
         queries = (
             "SELECT source_image AS path FROM embeddings WHERE source_image IS NOT NULL",
             "SELECT crop_path AS path FROM embeddings WHERE crop_path IS NOT NULL",
+            "SELECT source_image AS path FROM biometric_enrollment_history WHERE source_image IS NOT NULL",
+            "SELECT crop_path AS path FROM biometric_enrollment_history WHERE crop_path IS NOT NULL",
             "SELECT image_path AS path FROM recognition_details WHERE image_path IS NOT NULL",
             "SELECT source_image AS path FROM pending_additions WHERE source_image IS NOT NULL",
             "SELECT crop_path AS path FROM pending_additions WHERE crop_path IS NOT NULL",
@@ -6869,22 +6986,86 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             conn.execute("DELETE FROM pending_additions WHERE pending_id = ?", (pending_id,))
 
-    def create_init_session(self, source_path: str, *, quality_only: bool = True) -> InitSession:
+    def bind_init_session_attachment(self, session_id: str, observation_id: str,
+                                     expected_revision: str | None) -> None:
+        """Retain workflow ownership even when subsequent planning is rejected."""
+        if not isinstance(expected_revision, str) or not expected_revision.strip():
+            raise ValueError("Attach Media requires an Encounter revision")
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            session = conn.execute("SELECT * FROM init_sessions WHERE session_id = ?", (session_id,)).fetchone()
+            if session is None:
+                raise KeyError(f"Unknown init session: {session_id}")
+            if session["status"] == "closed":
+                raise ValueError("This draft is closed")
+            observation = _require_observation(conn, observation_id)
+            if observation["status"] != "FINALIZED":
+                raise ValueError("Attach Media requires a finalized Encounter")
+            if session["target_observation_id"] not in (None, observation_id):
+                raise ValueError("An Attach Media draft cannot change its target Encounter")
+            reviews = conn.execute("SELECT target_observation_id FROM photo_reviews WHERE session_id = ?", (session_id,)).fetchall()
+            if any(row["target_observation_id"] != observation_id for row in reviews):
+                raise ValueError("Encounter grouping has already been confirmed for this session")
+            # A materialized review owns its original revision precondition. A
+            # pre-plan Retry may explicitly admit a fresh revision of this target.
+            if not reviews:
+                conn.execute("UPDATE init_sessions SET target_observation_id = ?, expected_encounter_revision = ? WHERE session_id = ?",
+                             (observation_id, expected_revision, session_id))
+
+    def create_init_session(self, source_path: str, *, quality_only: bool = True,
+                            target_observation_id: str | None = None,
+                            expected_revision: str | None = None) -> InitSession:
+        if target_observation_id and (not isinstance(expected_revision, str) or not expected_revision.strip()):
+            raise ValueError("Attach Media requires an Encounter revision")
         session = InitSession(
             session_id=str(uuid.uuid4()),
             source_path=source_path,
             status="pending",
             quality_only=quality_only,
+            target_observation_id=target_observation_id,
+            expected_encounter_revision=expected_revision,
         )
         with self._connect() as conn:
+            if target_observation_id:
+                observation = _require_observation(conn, target_observation_id)
+                if observation["status"] != "FINALIZED":
+                    raise ValueError("Attach Media requires a finalized Encounter")
             conn.execute(
                 """
-                INSERT INTO init_sessions(session_id, source_path, status, created_at, quality_only)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO init_sessions(session_id, source_path, status, created_at, quality_only,
+                                         target_observation_id, expected_encounter_revision)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (session.session_id, session.source_path, session.status, session.created_at, int(quality_only)),
+                (session.session_id, session.source_path, session.status, session.created_at, int(quality_only),
+                 target_observation_id, expected_revision),
             )
         return session
+
+    def retry_targeted_scan(self, session_id: str) -> InitSession:
+        """Retry processing in the same unplanned, targeted staging authority."""
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            session = conn.execute("SELECT * FROM init_sessions WHERE session_id = ?", (session_id,)).fetchone()
+            if session is None or not session["target_observation_id"] or session["status"] != "processing_failed":
+                raise ValueError("Only a failed targeted scan can be retried")
+            if conn.execute("SELECT 1 FROM photo_reviews WHERE session_id = ?", (session_id,)).fetchone():
+                raise ValueError("A planned review cannot be rescanned")
+            conn.execute("DELETE FROM init_face_person_exclusions WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM init_groups WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM init_faces WHERE session_id = ?", (session_id,))
+            conn.execute("UPDATE init_sessions SET status = 'pending' WHERE session_id = ?", (session_id,))
+        return self.get_init_session(session_id)
+
+    def finish_targeted_scan(self, session_id: str, media_paths: list[str]) -> None:
+        with self._connect() as conn:
+            retained = set(media_paths)
+            for row in conn.execute("SELECT media_id, media_path FROM init_session_media WHERE session_id = ?", (session_id,)):
+                if row["media_path"] not in retained:
+                    conn.execute("DELETE FROM init_session_media WHERE session_id = ? AND media_id = ?", (session_id, row["media_id"]))
+
+    def mark_targeted_scan_failed(self, session_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute("UPDATE init_sessions SET status = 'processing_failed' WHERE session_id = ? AND target_observation_id IS NOT NULL", (session_id,))
 
     def save_init_faces(self, faces: list[InitFace]) -> None:
         if not faces:
@@ -6934,6 +7115,7 @@ class SQLiteIdentityStore:
                 if not normalized_path:
                     raise ValueError("Queue media path is required")
                 media_id = media_content_identity(normalized_path)
+                _require_encounter_media_role(conn, media_id)
                 conn.execute(
                     "INSERT OR IGNORE INTO init_session_media(session_id, media_id, media_path, created_at) "
                     "VALUES (?, ?, ?, ?)",
@@ -6995,7 +7177,8 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT session_id, source_path, status, created_at, quality_only
+                SELECT session_id, source_path, status, created_at, quality_only,
+                       target_observation_id, expected_encounter_revision
                 FROM init_sessions
                 WHERE session_id = ?
                 """,
@@ -7009,13 +7192,16 @@ class SQLiteIdentityStore:
             status=row["status"],
             created_at=row["created_at"],
             quality_only=bool(row["quality_only"]),
+            target_observation_id=row["target_observation_id"],
+            expected_encounter_revision=row["expected_encounter_revision"],
         )
 
     def list_init_sessions(self) -> list[InitSession]:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT session_id, source_path, status, created_at, quality_only
+                SELECT session_id, source_path, status, created_at, quality_only,
+                       target_observation_id, expected_encounter_revision
                 FROM init_sessions
                 WHERE status <> 'closed'
                 ORDER BY created_at DESC
@@ -7028,6 +7214,8 @@ class SQLiteIdentityStore:
                 status=row["status"],
                 created_at=row["created_at"],
                 quality_only=bool(row["quality_only"]),
+                target_observation_id=row["target_observation_id"],
+                expected_encounter_revision=row["expected_encounter_revision"],
             )
             for row in rows
         ]
@@ -9298,6 +9486,79 @@ def _migrate_31_to_32(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_32_to_33(conn: sqlite3.Connection) -> None:
+    """Extend existing scan drafts with ownership retained before planning."""
+    _execute_migration_script(conn, """
+        ALTER TABLE init_sessions ADD COLUMN target_observation_id TEXT REFERENCES observations(observation_id);
+        ALTER TABLE init_sessions ADD COLUMN expected_encounter_revision TEXT;
+        UPDATE init_sessions SET
+            target_observation_id = (SELECT target_observation_id FROM photo_reviews r
+                WHERE r.session_id = init_sessions.session_id AND r.target_observation_id IS NOT NULL LIMIT 1),
+            expected_encounter_revision = (SELECT expected_encounter_revision FROM photo_reviews r
+                WHERE r.session_id = init_sessions.session_id AND r.target_observation_id IS NOT NULL LIMIT 1);
+        CREATE TRIGGER init_session_attachment_target_immutable
+        BEFORE UPDATE OF target_observation_id ON init_sessions
+        WHEN OLD.target_observation_id IS NOT NULL
+             AND NEW.target_observation_id IS NOT OLD.target_observation_id
+        BEGIN
+            SELECT RAISE(ABORT, 'Attach Media target is immutable');
+        END;
+        PRAGMA user_version = 33;
+    """)
+
+
+def _migrate_33_to_34(conn: sqlite3.Connection) -> None:
+    """Reference source authority extends immutable enrollment provenance."""
+    _execute_migration_script(conn, """
+        ALTER TABLE biometric_enrollment_history ADD COLUMN source_media_id TEXT;
+        ALTER TABLE biometric_enrollment_history ADD COLUMN source_image TEXT;
+        ALTER TABLE biometric_enrollment_history ADD COLUMN crop_path TEXT;
+        ALTER TABLE biometric_enrollment_history ADD COLUMN recognition_state TEXT
+            CHECK(recognition_state IN ('GOOD','POOR_ACCEPTED','PROOF_ONLY'));
+        ALTER TABLE biometric_enrollment_history ADD COLUMN no_context_declared INTEGER NOT NULL DEFAULT 0
+            CHECK(no_context_declared IN (0,1));
+        DROP TRIGGER biometric_enrollment_history_no_update;
+        UPDATE biometric_enrollment_history SET
+            source_image = COALESCE((SELECT media_path FROM photo_reviews r WHERE r.review_id = biometric_enrollment_history.review_id),
+                (SELECT source_image FROM embeddings e WHERE e.embedding_id = biometric_enrollment_history.embedding_id)),
+            crop_path = (SELECT crop_path FROM embeddings e WHERE e.embedding_id = biometric_enrollment_history.embedding_id),
+            recognition_state = (SELECT recognition_state FROM embeddings e WHERE e.embedding_id = biometric_enrollment_history.embedding_id);
+        CREATE TABLE recognition_reference_revisions (
+            revision_id TEXT PRIMARY KEY,
+            enrollment_id TEXT NOT NULL REFERENCES biometric_enrollment_history(enrollment_id) ON DELETE RESTRICT,
+            active INTEGER NOT NULL CHECK(active IN (0,1)),
+            operation_id TEXT NOT NULL REFERENCES operation_journal(operation_id) ON DELETE RESTRICT,
+            created_at TEXT NOT NULL,
+            UNIQUE(enrollment_id, operation_id)
+        );
+        CREATE INDEX reference_revision_source ON recognition_reference_revisions(enrollment_id, created_at);
+        CREATE TRIGGER reference_revision_no_update BEFORE UPDATE ON recognition_reference_revisions
+            BEGIN SELECT RAISE(ABORT, 'Reference lifecycle revisions are immutable'); END;
+        CREATE TRIGGER reference_revision_no_delete BEFORE DELETE ON recognition_reference_revisions
+            BEGIN SELECT RAISE(ABORT, 'Reference lifecycle history cannot be deleted'); END;
+    """)
+    for row in conn.execute("SELECT enrollment_id, source_image FROM biometric_enrollment_history").fetchall():
+        if row["source_image"]:
+            conn.execute("UPDATE biometric_enrollment_history SET source_media_id = ? WHERE enrollment_id = ?",
+                         (media_content_identity(row["source_image"]), row["enrollment_id"]))
+    _execute_migration_script(conn, """
+        CREATE TRIGGER biometric_enrollment_history_no_update BEFORE UPDATE ON biometric_enrollment_history
+            BEGIN SELECT RAISE(ABORT, 'Enrollment history is immutable'); END;
+        PRAGMA user_version = 34;
+    """)
+    _refresh_source_biometric_status(conn)
+    # Physical relocation is not an Encounter change. Translate only still-valid
+    # legacy draft fingerprints; genuinely stale preconditions remain stale.
+    for row in conn.execute("SELECT observation_id FROM observations WHERE status='FINALIZED'").fetchall():
+        oid = row[0]
+        previous = _encounter_revision(conn, oid, include_media_locations=True)
+        current = _encounter_revision(conn, oid)
+        conn.execute("UPDATE init_sessions SET expected_encounter_revision=? WHERE target_observation_id=? AND expected_encounter_revision=?",
+                     (current, oid, previous))
+        conn.execute("UPDATE photo_reviews SET expected_encounter_revision=? WHERE target_observation_id=? AND status='IN_PROGRESS' AND expected_encounter_revision=?",
+                     (current, oid, previous))
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     """Return the ordered migration registry.
 
@@ -9338,6 +9599,8 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(29, 30, _migrate_29_to_30),
         SchemaMigration(30, 31, _migrate_30_to_31),
         SchemaMigration(31, 32, _migrate_31_to_32),
+        SchemaMigration(32, 33, _migrate_32_to_33),
+        SchemaMigration(33, 34, _migrate_33_to_34),
     )
 
 
@@ -9461,6 +9724,12 @@ def _validate_current_domain_state(
         raise SchemaMigrationError(
             "Database domain validation failed: dangling foreign-key references"
         )
+    attachment_errors = _attachment_ownership_errors(conn)
+    if attachment_errors:
+        raise SchemaMigrationError("Invalid Attach Media ownership: " + "; ".join(attachment_errors))
+    reference_errors = _reference_integrity_errors(conn)
+    if reference_errors:
+        raise SchemaMigrationError("Invalid Reference source authority: " + "; ".join(reference_errors))
 
     lifecycle_errors: list[str] = []
     people = conn.execute(
@@ -9710,6 +9979,152 @@ def _require_active_review_person(
     if row is None:
         raise KeyError(f"Unknown active person: {normalized_id}")
     return normalized_id
+
+
+def _reference_records(conn: sqlite3.Connection, person_id: str | None = None) -> list[dict]:
+    records = []
+    canonical = _resolve_canonical_person_id(conn, person_id) if person_id else None
+    for row in conn.execute("""SELECT h.*, COALESCE((SELECT active FROM recognition_reference_revisions v
+        WHERE v.enrollment_id = h.enrollment_id ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1), 1) AS active
+        FROM biometric_enrollment_history h ORDER BY h.created_at, h.enrollment_id""").fetchall():
+        owner = _resolve_canonical_person_id(conn, row["person_id"])
+        if canonical is not None and owner != canonical:
+            continue
+        records.append({**dict(row), "reference_id": row["enrollment_id"], "canonical_person_id": owner,
+                        "media_id": row["source_media_id"], "active": bool(row["active"]),
+                        "origin": "STANDALONE_ENROLLMENT"})
+    return records
+
+
+def _active_reference_count(conn: sqlite3.Connection, person_id: str) -> int:
+    return len({r["media_id"] or r["reference_id"] for r in _reference_records(conn, person_id) if r["active"]})
+
+
+def _require_reference_mutation_person(conn: sqlite3.Connection, person_id: str) -> None:
+    row = conn.execute("SELECT lifecycle_status FROM persons WHERE person_id = ?", (person_id,)).fetchone()
+    if row is None or row[0] != "ACTIVE":
+        raise ValueError("Restore the active canonical Person before managing References")
+
+
+def _require_reference_media_role(conn: sqlite3.Connection, media_id: str, person_id: str, key: bytes | None = None) -> None:
+    if conn.execute("SELECT 1 FROM observation_media WHERE media_id = ?", (media_id,)).fetchone():
+        raise ValueError("Encounter media cannot become Reference Only; use its Encounter-derived sample")
+    # Legacy single-photo review APIs used a name/opaque media ID. Exact role
+    # protection also compares their authenticated source bytes after relocation.
+    for row in conn.execute("SELECT media_id, media_path FROM observation_media WHERE media_path IS NOT NULL"):
+        identity = str(row["media_id"])
+        if len(identity) == 64 and all(c in "0123456789abcdef" for c in identity):
+            continue
+        if media_content_identity(row["media_path"], key) == media_id:
+            raise ValueError("Encounter media cannot become Reference Only; use its Encounter-derived sample")
+    for reference in _reference_records(conn):
+        if reference["media_id"] == media_id and reference["canonical_person_id"] != person_id:
+            raise ValueError("This Reference Only image already belongs to another Person")
+
+
+def _require_encounter_media_role(conn: sqlite3.Connection, media_id: str) -> None:
+    if conn.execute("SELECT 1 FROM biometric_enrollment_history WHERE source_media_id = ?", (media_id,)).fetchone():
+        raise ValueError("This image is Reference Only biometric material; upload the original occurrence/scene photograph")
+
+
+def _source_sample_authority(conn: sqlite3.Connection) -> dict[str, dict]:
+    """Derive one sample's eligible source identities; never rewrite its sources."""
+    sources: dict[str, list[tuple[str, str]]] = {}
+    known: set[str] = set()
+    for reference in _reference_records(conn):
+        eid = reference["embedding_id"]
+        known.add(eid)
+        if reference["active"]:
+            sources.setdefault(eid, []).append((reference["canonical_person_id"], reference["recognition_state"]))
+    for observation in conn.execute("SELECT observation_id FROM observations WHERE status = 'FINALIZED'").fetchall():
+        oid = observation[0]
+        participants = set(_effective_observation_person_ids(conn, oid))
+        for assignment in _effective_face_assignments(conn, oid):
+            eid = assignment["embedding_id"]
+            known.add(eid)
+            owner = _resolve_canonical_person_id(conn, assignment["current_person_id"])
+            if owner not in participants:
+                continue
+            row = conn.execute("""SELECT e.recognition_state, f.recognition_detail FROM embeddings e
+                JOIN observation_face_assignments a ON a.embedding_id=e.embedding_id
+                JOIN photo_review_faces f ON f.review_id=a.review_id AND f.face_id=a.face_id
+                WHERE a.assignment_id=?""", (assignment["assignment_id"],)).fetchone()
+            if row is None:
+                row = conn.execute("SELECT recognition_state FROM embeddings WHERE embedding_id=?", (eid,)).fetchone()
+                state = row[0]
+            else:
+                state = json.loads(row["recognition_detail"] or "{}").get("source_recognition_state", row["recognition_state"])
+            sources.setdefault(eid, []).append((owner, state))
+    result = {}
+    for embedding in conn.execute("SELECT embedding_id, person_id, recognition_state FROM embeddings").fetchall():
+        eid = embedding["embedding_id"]
+        entries = sources.get(eid, [])
+        if eid not in known:
+            entries = [(_effective_embedding_owner_person_id(conn, embedding), embedding["recognition_state"])]
+        owners = {owner for owner, _ in entries}
+        state = next((s for s in ("GOOD", "POOR_ACCEPTED", "PROOF_ONLY") if any(v == s for _, v in entries)), "PROOF_ONLY")
+        result[eid] = {"owners": owners, "conflict": len(owners) > 1,
+                       "owner": next(iter(owners)) if len(owners) == 1 else None, "state": state}
+    return result
+
+
+def _eligible_source_samples(conn: sqlite3.Connection) -> list[EmbeddingRecord]:
+    authority = _source_sample_authority(conn)
+    result, seen = [], {}
+    for row in conn.execute("SELECT * FROM embeddings WHERE deleted_at IS NULL ORDER BY created_at, embedding_id").fetchall():
+        sample = authority[row["embedding_id"]]
+        owner = sample["owner"]
+        if owner is None:
+            continue
+        person = conn.execute("SELECT lifecycle_status FROM persons WHERE person_id = ?", (owner,)).fetchone()
+        if person is None or person[0] != "ACTIVE":
+            continue
+        key = (owner, row["vector"])
+        if key in seen:
+            index = seen[key]
+            rank = {"GOOD": 0, "POOR_ACCEPTED": 1, "PROOF_ONLY": 2}
+            if rank[sample["state"]] < rank[result[index].recognition_state]:
+                result[index] = replace(result[index], recognition_state=sample["state"])
+            continue
+        seen[key] = len(result)
+        record = _embedding_from_row(row, raw_person_id=_raw_embedding_owner_person_id(conn, row), canonical_person_id=owner)
+        result.append(replace(record, person_id=owner, recognition_state=sample["state"]))
+    return result
+
+
+def _refresh_source_biometric_status(conn: sqlite3.Connection) -> None:
+    eligible = {r.person_id for r in _eligible_source_samples(conn) if r.recognition_state != "PROOF_ONLY"}
+    for person in conn.execute("SELECT person_id, lifecycle_status FROM persons").fetchall():
+        if person["lifecycle_status"] == "ACTIVE":
+            enrolled = person["person_id"] in eligible
+            conn.execute("UPDATE persons SET biometric_status = ?, enrollment_status = ? WHERE person_id = ?",
+                         ("ENROLLED" if enrolled else "NO_FACE", "enrolled" if enrolled else "placeholder", person["person_id"]))
+
+
+def _reference_integrity_errors(conn: sqlite3.Connection) -> list[str]:
+    errors = [str(row[0]) for row in conn.execute("""SELECT h.enrollment_id FROM biometric_enrollment_history h
+        JOIN embeddings e ON e.embedding_id=h.embedding_id JOIN photo_reviews r ON r.review_id=h.review_id
+        WHERE h.recognition_state NOT IN ('GOOD','POOR_ACCEPTED','PROOF_ONLY')
+        OR (h.no_context_declared=1 AND (h.source_image IS NULL OR h.source_media_id IS NULL
+            OR length(h.source_media_id)<>64 OR h.source_media_id GLOB '*[^0-9a-f]*'
+            OR r.source<>'reference-only' OR r.status<>'COMPLETED' OR r.observation_id IS NOT NULL))""").fetchall()]
+    errors.extend(str(row[0]) for row in conn.execute("""SELECT v.enrollment_id
+        FROM recognition_reference_revisions v JOIN operation_journal j ON j.operation_id=v.operation_id
+        WHERE j.status<>'COMMITTED' OR j.operation_type<>'identity.reference.lifecycle'""").fetchall())
+    return sorted(set(errors))
+
+
+def _attachment_ownership_errors(conn: sqlite3.Connection) -> list[str]:
+    """Shared live/migration/restore integrity contract for existing scan drafts."""
+    return [str(row[0]) for row in conn.execute("""
+        SELECT s.session_id FROM init_sessions s
+        LEFT JOIN observations o ON o.observation_id = s.target_observation_id
+        WHERE s.target_observation_id IS NOT NULL AND (
+            o.status IS NOT 'FINALIZED' OR trim(coalesce(s.expected_encounter_revision, '')) = ''
+            OR EXISTS (SELECT 1 FROM photo_reviews r WHERE r.session_id = s.session_id
+                       AND r.target_observation_id IS NOT s.target_observation_id))
+        ORDER BY s.session_id
+    """)]
 
 
 def _photo_review_from_conn(conn: sqlite3.Connection, review_id: str) -> PhotoReview:
@@ -13904,7 +14319,7 @@ def _encounter_event_details(row):
             "event_mentioned_person_ids": context.get("event_mentioned_person_ids", [])}
 
 
-def _encounter_revision(conn, observation_id):
+def _encounter_revision(conn, observation_id, *, include_media_locations=False):
     # Bind the complete reviewed authority, including lifecycle/canonical interpretation.
     snapshot = {"observation": dict(_require_observation(conn, observation_id)),
                 "participants": _effective_observation_person_ids(conn, observation_id),
@@ -13912,6 +14327,9 @@ def _encounter_revision(conn, observation_id):
                 "relations": [dict(row) for row in conn.execute("SELECT * FROM encounter_relation_decisions WHERE observation_id = ? ORDER BY decision_id", (observation_id,))],
                 "corrections": [dict(row) for row in conn.execute("SELECT * FROM identity_corrections WHERE observation_id = ? ORDER BY correction_id", (observation_id,))],
                 "participant_revisions": [dict(row) for row in conn.execute("SELECT * FROM encounter_participant_revisions WHERE observation_id = ? ORDER BY revision_id", (observation_id,))]}
+    if not include_media_locations:
+        for media in snapshot["media"]:
+            media.pop("media_path", None)
     return hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
 
 
@@ -15256,26 +15674,7 @@ def _synchronize_survivor_biometric_state(
 
 
 def _list_embeddings_in_transaction(conn: sqlite3.Connection) -> list[EmbeddingRecord]:
-    records: list[EmbeddingRecord] = []
-    for row in conn.execute(
-        """
-        SELECT embedding_id, person_id, vector, quality_score,
-               source_image, crop_path, created_at, recognition_state
-        FROM embeddings WHERE deleted_at IS NULL ORDER BY embedding_id
-        """
-    ).fetchall():
-        canonical_person_id = _effective_embedding_owner_person_id(conn, row)
-        canonical = conn.execute(
-            "SELECT lifecycle_status, deleted_at FROM persons WHERE person_id = ?",
-            (canonical_person_id,),
-        ).fetchone()
-        if canonical and canonical["lifecycle_status"] == "ACTIVE" and canonical["deleted_at"] is None:
-            records.append(_embedding_from_row(
-                row,
-                raw_person_id=_raw_embedding_owner_person_id(conn, row),
-                canonical_person_id=canonical_person_id,
-            ))
-    return records
+    return _eligible_source_samples(conn)
 
 
 def _validate_merge_state(

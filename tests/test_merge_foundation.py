@@ -623,7 +623,9 @@ class MergeFoundationTest(unittest.TestCase):
             )
             self.assertEqual(survivor_candidate.match.person_id, survivor.person_id)
             self.assertEqual(survivor_candidate.match.embedding_ids, (embedding.embedding_id,))
-            self.assertEqual(survivor_candidate.embeddings[0].person_id, source.person_id)
+            self.assertEqual(survivor_candidate.embeddings[0].person_id, survivor.person_id)
+            with store._connect() as conn:
+                self.assertEqual(conn.execute("SELECT person_id FROM embeddings WHERE embedding_id=?", (embedding.embedding_id,)).fetchone()[0], source.person_id)
             exclusions = store.list_init_face_person_exclusions(
                 session.session_id, [face.init_face_id],
             )

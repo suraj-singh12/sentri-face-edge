@@ -81,11 +81,6 @@ function SentriFaceShell({ user, logout, changePassword }) {
     setNewPassword("");
     setConfirmPassword("");
   });
-  const beginPhotoEnrollment = (person) => {
-    actions.startExistingPersonEnrollment(person);
-    actions.setActiveView("recognize");
-    window.setTimeout(() => refs.recognizeFileRef.current?.click(), 0);
-  };
 
   return (
     <AppShell header={{ height: 72 }} padding="sm" className="sentriface-shell">
@@ -252,6 +247,9 @@ function SentriFaceShell({ user, logout, changePassword }) {
               queueGroups={state.queueGroups}
               encounterMedia={state.queueEncounterMedia}
               encounterReviews={state.queueEncounterReviews}
+              attachment={state.queueAttachment}
+              onRetryAttachment={guarded(actions.retryQueueAttachment)}
+              onCancelAttachment={guarded(actions.cancelQueueAttachment)}
               activeEncounter={state.queueActiveEncounter}
               visibleQueueGroups={state.queueVisibleGroups}
               queueSessionId={state.queueSessionId}
@@ -336,7 +334,8 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onOpenEncounter={guarded(async (id) => { await actions.loadEncounterDetail(id); actions.setActiveView("encounters"); })}
               onCreateAssociation={actions.createManualAssociation}
               onRetireAssociation={actions.retireManualAssociation}
-              onAddPhoto={beginPhotoEnrollment}
+              referenceActions={{prepare: actions.referencePrepare, confirm: actions.referenceConfirm,
+                cancel: actions.referenceCancel, lifecycle: actions.referenceLifecycle}}
               onFavorite={guarded(actions.setPeopleFavorite)}
               onSetRepresentative={guarded(actions.setRepresentativePhoto)}
               onArchive={actions.archivePerson}

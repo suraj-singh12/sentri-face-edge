@@ -1,5 +1,15 @@
 # SentriFace Edge contributor guidance
 
+## Reference Only source authority (Batch 3.7, schema v34)
+
+An embedding is a biometric sample, not identity authority. Different genuine photos independently run inference; Person identity never borrows an earlier vector. Exact-equal serialized vectors may share a stored sample, but each Reference source and Encounter face assignment retains its own identity. Encounter corrections change only their assignments. A sample whose active sources resolve to different canonical Persons is excluded from ordinary recognition; this conflict is derived, not a persisted lifecycle. Reference ownership, active state and cap remain unchanged.
+
+NO_FACE **Add Face** and ENROLLED **Manage Recognition References → Add Reference Only** are two entry points into one operation. Require a cropped image, exactly one detected face and explicit no-reliable-Encounter-context acknowledgment. Preserve GOOD/POOR_ACCEPTED/PROOF_ONLY; proof is not ordinary recognition. Four active source assignments per canonical Person prevent a contextless gallery; retired sources and Encounter samples do not count. Retire/restore append immutable source lifecycle history and never purge media. Archive/delete gate Person eligibility without retiring references. Merge must block above four and preserve raw history. Exact Reference media and Encounter media cannot acquire the opposite role. Reference changes have no occurrence, relationship, recurrence, graph or World meaning. Preserve source authority and lifecycle through the existing encrypted backup/restore; recompute eligibility/conflicts after restore.
+
+## Attach Media draft ownership (Batch 3.7)
+
+Attach uploads belong to their finalized Encounter from scan-session admission, before review planning can succeed or fail. Rejected planning retains that target durably; only targeted Retry or explicit Cancel may continue it. Never turn the failed attachment into general new-Encounter grouping. Retry checks the current Encounter revision; materialized review completion retains its original revision/idempotency contract. Cancel uses existing reference-aware cleanup. Source ownership and P11/live validation share the same contract.
+
 ## Product invariants
 
 SentriFace Edge is completely offline. Preserve the loopback-only API, in-process socket guard, OS network policy checks, local model onboarding, encrypted SQLite storage, and local filesystem media model.

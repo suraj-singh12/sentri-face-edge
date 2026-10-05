@@ -209,6 +209,11 @@ export function RecognizeView({
     requestFaceAction("new", faceIndex);
   };
 
+  if (targetPerson) return <Alert color="orange" title="Use Recognition References">
+    <Text>This older Add Face draft cannot be confirmed through Check a photo. Cancel it, then open {targetPerson.name}'s Recognition References to upload a cropped single-face image and acknowledge that no reliable Encounter context is available.</Text>
+    <Button mt="sm" variant="default" onClick={onCancelTarget}>Cancel older enrollment draft</Button>
+  </Alert>;
+
   return (
     <>
       <EncounterDetailsModal opened={Boolean(recognition?.faces?.length && !recognition?.encounterMetadata && !targetPerson)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} />

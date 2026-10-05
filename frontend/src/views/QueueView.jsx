@@ -64,6 +64,9 @@ export function QueueView({
   queueGroups,
   encounterMedia = [],
   encounterReviews = [],
+  attachment = null,
+  onRetryAttachment,
+  onCancelAttachment,
   activeEncounter = null,
   visibleQueueGroups = [],
   queueSessionId,
@@ -164,7 +167,13 @@ export function QueueView({
           </Grid.Col>
         )}
         <Grid.Col span={queueSelectedGroup ? 12 : "auto"} className="queue-main-col">
-          {encounterMedia.length > 0 && encounterReviews.length === 0 && !["running", "cancelling"].includes(queueProgress?.status) ? (
+          {attachment && encounterReviews.length === 0 && !["running", "cancelling"].includes(queueProgress?.status) ? (
+            <Paper withBorder p="md" radius="md">
+              <Title order={2} size="h3">Attach Media draft</Title>
+              <Text size="sm" mt="xs">These photos remain reserved for the selected Encounter. Retry revalidates its current state; Cancel abandons this attachment without creating Review Photos work.</Text>
+              <Group mt="md"><Button onClick={onRetryAttachment}>Retry Attach Media</Button><Button variant="default" onClick={onCancelAttachment}>Cancel Attach Media</Button></Group>
+            </Paper>
+          ) : encounterMedia.length > 0 && encounterReviews.length === 0 && !["running", "cancelling"].includes(queueProgress?.status) ? (
             <EncounterGrouping key={queueSessionId} media={encounterMedia} onConfirm={onPlanEncounters} onExclude={onMediaExcluded} />
           ) : activeEncounter?.phase === "RELATIONS" ? (
             <EncounterRelations review={activeEncounter} onDecide={onDecideRelation} onComplete={onCompleteEncounter} onDiscard={onDiscardEncounter} />

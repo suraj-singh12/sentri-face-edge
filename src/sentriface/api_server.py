@@ -146,6 +146,7 @@ BACKUP_IMPORT_LIMIT_BYTES = 20_000_000_000
 MODEL_UPLOAD_LIMIT_BYTES = 2_000_000_000
 DUPLICATE_MATCH_SCORE = 0.9999
 INFERENCE_ENDPOINTS = {
+    "/api/reference-prepare",
     "/api/recognize",
     "/api/recognize-batch",
     "/api/recognition-person-candidates",
@@ -310,6 +311,7 @@ def _required_capability(method: str, path: str) -> str | None:
         "/api/recognition-followup", "/api/queue-add", "/api/queue-cancel",
         "/api/photo-review", "/api/photo-review-decision",
         "/api/photo-review-complete", "/api/photo-review-cancel",
+        "/api/reference-prepare", "/api/reference-confirm", "/api/reference-lifecycle", "/api/reference-cancel",
         "/api/queue-scan", "/api/queue-confirm-new", "/api/queue-confirm-existing",
         "/api/queue-encounters-plan", "/api/queue-encounter-event",
         "/api/queue-encounter-decision", "/api/queue-encounter-identities-complete",
@@ -1286,7 +1288,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     raw=raw_view,
                 )
                 face_origins = self.server.engine.face_origins_for_embeddings(
-                    [record.embedding_id for record in embeddings]
+                    [record.embedding_id for record in embeddings],
+                    person_id=None if raw_view else person.person_id,
                 )
                 details = self.server.engine.list_recognition_details_for_person(
                     person_id,
@@ -1341,6 +1344,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         "requested_person_id": person_id,
                         "view": "raw" if raw_view else "effective",
                         "encounter_media": self.server.engine.list_person_encounter_media(person_id),
+                        "recognition_references": self.server.engine.store.list_recognition_references(person_id),
                         "embeddings": [
                             {**_embedding(record), "face_origins": face_origins[record.embedding_id]}
                             for record in embeddings
@@ -1506,15 +1510,21 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     groups = self.server.engine.list_init_groups(session.session_id)
                     media = self.server.engine.list_init_session_media(session.session_id)
                     reviews = self.server.engine.list_init_session_encounter_reviews(session.session_id)
-                    if groups or media or reviews:
+                    if groups or media or reviews or session.target_observation_id:
                         sessions.append(_init_session_summary(session, groups))
                 self._json({"sessions": sessions})
                 return
             if parsed.path == "/api/queue-encounters":
                 session_id = _query_value(parsed.query, "session_id")
+                session = self.server.engine.store.get_init_session(session_id)
                 self._json({
                     "media": self.server.engine.list_init_session_media(session_id),
                     "reviews": self.server.engine.list_init_session_encounter_reviews(session_id),
+                    "attachment": {"observation_id": session.target_observation_id,
+                                   "expected_revision": session.expected_encounter_revision,
+                                   "processing_failed": session.status == "processing_failed",
+                                   "source_path": session.source_path}
+                                  if session and session.target_observation_id else None,
                 })
                 return
             if parsed.path == "/api/queue-groups":
@@ -1843,6 +1853,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"restore": result})
                 return
             if parsed.path == "/api/photo-review":
+                if payload.get("source") == "reference-only":
+                    raise ValueError("Reference Only requires the single-face admission endpoint")
                 faces = payload.get("faces")
                 if not isinstance(faces, list):
                     raise KeyError("faces must be a list")
@@ -1879,6 +1891,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         _operation_id(payload),
                         actor=self._operation_actor(),
                         source=str(payload.get("source") or "add-face-review"),
+                        no_context_acknowledged=payload.get("no_context_acknowledged") is True,
                     )
                 else:
                     result = self.server.engine.complete_photo_review(
@@ -1893,6 +1906,26 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/photo-review-cancel":
                 review = self.server.engine.cancel_photo_review(_required(payload, "review_id"))
                 self._json(_photo_review(review))
+                return
+            if parsed.path == "/api/reference-prepare":
+                self._json(self.server.engine.prepare_reference_review(
+                    require_local_path(Path(_required(payload, "path"))), _required(payload, "person_id")))
+                return
+            if parsed.path == "/api/reference-confirm":
+                self._json(self.server.engine.confirm_reference(_required(payload, "review_id"),
+                    _required(payload, "person_id"), _operation_id(payload),
+                    no_context_acknowledged=payload.get("no_context_acknowledged") is True,
+                    recognition_state=_required(payload, "recognition_state"), actor=self._operation_actor()))
+                return
+            if parsed.path == "/api/reference-lifecycle":
+                if not isinstance(payload.get("active"), bool):
+                    raise ValueError("Reference active must be a boolean")
+                self._json(self.server.engine.set_reference_active(_required(payload, "reference_id"),
+                    _required(payload, "person_id"), payload["active"], _operation_id(payload), actor=self._operation_actor()))
+                return
+            if parsed.path == "/api/reference-cancel":
+                self.server.engine.cancel_reference_review(_required(payload, "review_id"))
+                self._json({"cancelled": True})
                 return
             if parsed.path in {
                 "/api/recognition-accept-existing", "/api/recognition-new",
@@ -2608,6 +2641,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                             progress_callback=lambda update: self.server.update_queue_progress(job_id, **update),
                             cancel_check=cancellation.is_set,
                             quality_only=quality_only,
+                            target_observation_id=payload.get("target_observation_id"),
+                            expected_revision=payload.get("expected_revision"),
+                            session_id=payload.get("session_id"),
                         )
                     except QueueCancellationError as exc:
                         self.server.finish_queue_job(
@@ -5184,6 +5220,8 @@ def _init_session_summary(session: InitSession, groups: list[InitGroup]) -> dict
         "session_id": session.session_id,
         "source_path": session.source_path,
         "status": session.status,
+        "target_observation_id": session.target_observation_id,
+        "expected_encounter_revision": session.expected_encounter_revision,
         "created_at": session.created_at,
         "group_count": len(groups),
         "face_count": sum(len(group.faces) for group in groups),

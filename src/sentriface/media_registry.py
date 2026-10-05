@@ -31,6 +31,8 @@ class MediaReferenceSpec:
 MEDIA_AUTHORITY_REGISTRY: tuple[MediaReferenceSpec, ...] = (
     MediaReferenceSpec("embeddings", ("embedding_id",), "source_image", "FACE_SOURCE"),
     MediaReferenceSpec("embeddings", ("embedding_id",), "crop_path", "FACE_CROP"),
+    MediaReferenceSpec("biometric_enrollment_history", ("enrollment_id",), "source_image", "REFERENCE_SOURCE"),
+    MediaReferenceSpec("biometric_enrollment_history", ("enrollment_id",), "crop_path", "REFERENCE_CROP"),
     MediaReferenceSpec("pending_additions", ("pending_id",), "source_image", "ENROLLMENT_SOURCE"),
     MediaReferenceSpec("pending_additions", ("pending_id",), "crop_path", "ENROLLMENT_CROP"),
     MediaReferenceSpec("init_faces", ("init_face_id",), "source_image", "INITIALIZATION_SOURCE"),
@@ -50,7 +52,7 @@ MEDIA_AUTHORITY_REGISTRY: tuple[MediaReferenceSpec, ...] = (
 MEDIA_REGISTRY_BY_ID = {item.registry_id: item for item in MEDIA_AUTHORITY_REGISTRY}
 
 
-def media_content_identity(path: str | Path) -> str:
+def media_content_identity(path: str | Path, key: bytes | None = None) -> str:
     """Identify the retained media bytes; managed object names encode plaintext digest."""
     media_path = Path(path)
     stem = media_path.stem.lower()
@@ -62,6 +64,9 @@ def media_content_identity(path: str | Path) -> str:
     ):
         return stem
     if media_path.is_file():
+        if key is not None:
+            from sentriface.secure_files import read_protected_bytes
+            return hashlib.sha256(read_protected_bytes(media_path, key)).hexdigest()
         digest = hashlib.sha256()
         with media_path.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):

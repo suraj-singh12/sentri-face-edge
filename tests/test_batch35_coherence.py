@@ -108,12 +108,12 @@ def test_no_face_standalone_enrollment_keeps_origin_and_restart(tmp_path, qualit
     assert store.get_person(person.person_id).biometric_status=='NO_FACE'
     quality=QualityStatus.GOOD if quality_state=='GOOD' else QualityStatus.BAD
     helper._pending(store,'incoming','/managed/enrollment.jpg',(.3,.7),quality)
-    store.create_photo_review('enrollment','enrollment.jpg',[{'face_id':'face-1','staged_face_type':'PENDING_ADDITION','staged_face_id':'incoming'}],media_path='/managed/enrollment.jpg')
+    store.create_photo_review('enrollment','enrollment.jpg',[{'face_id':'face-1','staged_face_type':'PENDING_ADDITION','staged_face_id':'incoming'}],media_path='/managed/enrollment.jpg', source='reference-only')
     store.set_photo_review_face_decision('enrollment','face-1','ACCEPT_EXISTING_PERSON',person_id=person.person_id, recognition_detail={'embedding_state':quality_state})
-    result=store.add_face_to_person('enrollment',person.person_id,'enroll')
-    assert result==store.add_face_to_person('enrollment',person.person_id,'enroll')
+    result=store.add_face_to_person('enrollment',person.person_id,'enroll',no_context_acknowledged=True)
+    assert result==store.add_face_to_person('enrollment',person.person_id,'enroll',no_context_acknowledged=True)
     reopened=helper._store(tmp_path)
-    assert reopened.get_person(person.person_id).biometric_status=='ENROLLED'
+    assert reopened.get_person(person.person_id).biometric_status==('NO_FACE' if quality_state=='PROOF_ONLY' else 'ENROLLED')
     records=reopened.list_embeddings_for_person(person.person_id)
     assert len(records)==1 and records[0].recognition_state==quality_state
     origin=reopened.face_origins_for_embeddings([records[0].embedding_id])[records[0].embedding_id]

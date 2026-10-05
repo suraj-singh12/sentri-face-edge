@@ -167,13 +167,13 @@ class IdentityCorrectionTest(unittest.TestCase):
             store.create_photo_review("add-raj", "raj.jpg", [{
                 "face_id": "face-0", "staged_face_type": "PENDING_ADDITION",
                 "staged_face_id": "raj-face",
-            }], media_path="/managed/raj-face.jpg", source="add-face-review")
+            }], media_path="/managed/raj-face.jpg", source="reference-only")
             store.set_photo_review_face_decision(
                 "add-raj", "face-0", "ACCEPT_EXISTING_PERSON", person_id=person.person_id,
             )
 
-            result = store.add_face_to_person("add-raj", person.person_id, "add-raj-op")
-            retry = store.add_face_to_person("add-raj", person.person_id, "add-raj-op")
+            result = store.add_face_to_person("add-raj", person.person_id, "add-raj-op", no_context_acknowledged=True)
+            retry = store.add_face_to_person("add-raj", person.person_id, "add-raj-op", no_context_acknowledged=True)
 
             self.assertEqual(result, retry)
             self.assertEqual(result["person_id"], person.person_id)
@@ -197,7 +197,7 @@ class IdentityCorrectionTest(unittest.TestCase):
                 "STANDALONE_ENROLLMENT",
             )
 
-    def test_add_face_proof_only_is_enrolled_without_encounter_or_search(self):
+    def test_add_face_proof_only_stays_no_face_without_encounter_or_search(self):
         with tempfile.TemporaryDirectory() as temp:
             store = self._store(Path(temp))
             person = store.create_person("Known without a photo")
@@ -210,13 +210,13 @@ class IdentityCorrectionTest(unittest.TestCase):
             store.create_photo_review("proof-review", "proof.jpg", [{
                 "face_id": "proof-face", "staged_face_type": "PENDING_ADDITION",
                 "staged_face_id": "proof-face",
-            }], media_path="/managed/proof.jpg")
+            }], media_path="/managed/proof.jpg", source="reference-only")
             store.set_photo_review_face_decision(
                 "proof-review", "proof-face", "ACCEPT_EXISTING_PERSON",
                 person_id=person.person_id, recognition_detail={"embedding_state": "PROOF_ONLY"},
             )
-            result = store.add_face_to_person("proof-review", person.person_id, "proof-add-op")
-            self.assertEqual(store.get_person(person.person_id).biometric_status, "ENROLLED")
+            result = store.add_face_to_person("proof-review", person.person_id, "proof-add-op", no_context_acknowledged=True)
+            self.assertEqual(store.get_person(person.person_id).biometric_status, "NO_FACE")
             record = store.list_embeddings_for_person(person.person_id)[0]
             self.assertEqual(record.recognition_state, "PROOF_ONLY")
             self.assertEqual(store.current_embedding_person_ids([record.embedding_id], quality_only=False), {})
@@ -231,7 +231,7 @@ class IdentityCorrectionTest(unittest.TestCase):
             store.create_photo_review("add-raj", "raj.jpg", [{
                 "face_id": "face-0", "staged_face_type": "PENDING_ADDITION",
                 "staged_face_id": "raj-face",
-            }], media_path="/managed/raj-face.jpg", source="add-face-review")
+            }], media_path="/managed/raj-face.jpg", source="reference-only")
             store.set_photo_review_face_decision(
                 "add-raj", "face-0", "ACCEPT_EXISTING_PERSON", person_id=person.person_id,
             )
@@ -241,7 +241,7 @@ class IdentityCorrectionTest(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(RuntimeError, "forced enrollment failure"):
                     IdentityCorrectionService(GlobalIdentityGraphService(store)).add_face_to_person(
-                        "add-raj", person.person_id, "add-fail",
+                        "add-raj", person.person_id, "add-fail", no_context_acknowledged=True,
                     )
 
             self.assertEqual(store.list_embeddings_for_person(person.person_id), [])
@@ -256,13 +256,13 @@ class IdentityCorrectionTest(unittest.TestCase):
             store.create_photo_review("add-archived", "archived.jpg", [{
                 "face_id": "face-0", "staged_face_type": "PENDING_ADDITION",
                 "staged_face_id": "archived-face",
-            }], media_path="/managed/archived-face.jpg", source="add-face-review")
+            }], media_path="/managed/archived-face.jpg", source="reference-only")
             store.set_photo_review_face_decision(
                 "add-archived", "face-0", "ACCEPT_EXISTING_PERSON", person_id=person.person_id,
             )
             store.archive_person(person.person_id, "archive-before-add")
 
-            with self.assertRaisesRegex(KeyError, "Unknown active person"):
+            with self.assertRaisesRegex(ValueError, "active canonical Person"):
                 store.add_face_to_person("add-archived", person.person_id, "add-archived-op")
 
             self.assertIsNone(store.get_operation("add-archived-op"))

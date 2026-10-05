@@ -5,11 +5,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MantineProvider } from '@mantine/core';
 import { createServer } from 'vite';
 import { recognitionReviewReady } from '../src/reviewState.js';
-let server, RecognizeView, MachineProfilePanel;
+let server, RecognizeView, MachineProfilePanel, QueueView;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' });
   ({ RecognizeView } = await server.ssrLoadModule('/src/views/RecognizeView.jsx'));
   ({ MachineProfilePanel } = await server.ssrLoadModule('/src/views/MachineProfilePanel.jsx'));
+  ({ QueueView } = await server.ssrLoadModule('/src/views/QueueView.jsx'));
 });
 after(async () => { await server?.close(); });
 const render = (component, props) => renderToStaticMarkup(React.createElement(MantineProvider, {}, React.createElement(component, props)));
@@ -21,18 +22,41 @@ function recognitionProps(decisions, targetPerson = null) {
     recognitionFaceDecisions:decisions, recognitionReviewReady:recognitionReviewReady(faces,decisions), targetPerson };
 }
 const namedButton = (html, text) => [...html.matchAll(/<button\b[^]*?<\/button>/g)].map((m)=>m[0]).find((m)=>m.includes(text));
+test('targeted pre-plan Attach drafts expose Retry/Cancel instead of ordinary Encounter grouping', () => {
+  const props={queueSessions:[],queueGroups:[],queueSessionId:'staged',queueReviewStats:{},
+    encounterMedia:[{media_id:'media',media_path:'',face_count:1}]};
+  const owned=render(QueueView,{...props,attachment:{observation_id:'existing'}});
+  assert.match(owned,/Retry Attach Media/);
+  assert.match(owned,/Cancel Attach Media/);
+  assert.doesNotMatch(owned,/Confirm Encounter grouping/);
+  // Queue thumbnails obtain the session meta tag in the browser. Supply only
+  // that DOM lookup while rendering the ordinary branch on the server.
+  const originalDocument=globalThis.document;
+  let ordinary;
+  try {
+    globalThis.document={querySelector:()=>null};
+    ordinary=render(QueueView,props);
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document=originalDocument;
+  }
+  assert.match(ordinary,/Confirm Encounter grouping/);
+  assert.doesNotMatch(ordinary,/Retry Attach Media/);
+});
 test('rendered deferred badge and completion distinguish Skip from accepted/discarded decisions', () => {
   const deferred=render(RecognizeView,recognitionProps({1:'SKIP',2:'ACCEPT_EXISTING_PERSON'}));
   assert.match(deferred,/>Deferred</);assert.match(namedButton(deferred,'Complete Review'),/disabled=""/);
   const discarded=render(RecognizeView,recognitionProps({1:'EXCLUDE',2:'ACCEPT_NEW_PERSON'}));
   assert.match(discarded,/>Discarded</);assert.doesNotMatch(namedButton(discarded,'Complete Review'),/disabled=""/);
 });
-test('explicit Person enrollment needs no recognition-proposal fields and staged enrollment can retry', () => {
+test('old cached Person enrollment cannot bypass shared Reference Only admission', () => {
   const person={person_id:'target',name:'Explicit target',biometric_status:'NO_FACE'};
   const initial=render(RecognizeView,recognitionProps({},person));
-  assert.doesNotMatch(namedButton(initial,'Add Face 01 to'),/disabled=""/);
+  assert.match(initial,/Use Recognition References/);
+  assert.equal(namedButton(initial,'Add Face 01 to'),undefined);
   const staged=render(RecognizeView,recognitionProps({1:'ACCEPT_EXISTING_PERSON',2:'EXCLUDE'},person));
-  assert.doesNotMatch(namedButton(staged,'Finish enrollment'),/disabled=""/);
+  assert.equal(namedButton(staged,'Finish enrollment'),undefined);
+  assert.ok(namedButton(staged,'Cancel older enrollment draft'));
   assert.equal(namedButton(staged,'Complete Review'),undefined);
 });
 test('source real-model status remains distinct from packaged network-boundary verification', () => {

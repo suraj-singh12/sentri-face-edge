@@ -21,6 +21,7 @@ export function usePeopleController({
   activeView,
   apiGet,
   apiPost,
+  uploadFile,
   loadPeople,
   loadDeletedFaces,
   showToast,
@@ -410,6 +411,33 @@ export function usePeopleController({
   return {
     state: { peopleGallery, peopleGalleryImage, personGraph },
     actions: {
+      referencePrepare: async (personId, file) => {
+        const upload = await uploadFile(file);
+        try {
+          const result = await apiPost("/api/reference-prepare", { person_id: personId, path: upload.path });
+          await refreshPeopleProfile(personId);
+          return result;
+        } catch (error) {
+          await apiPost("/api/upload-file-discard", { path: upload.path }, { silent: true }).catch(() => {});
+          throw error;
+        }
+      },
+      referenceConfirm: async (personId, draft, state, acknowledged, commandId) => {
+        const result = await apiPost("/api/reference-confirm", {person_id: personId, review_id: draft.review_id,
+          recognition_state: state, no_context_acknowledged: acknowledged, operation_id: commandId});
+        await loadPeople({ dedupe: false });
+        await refreshPeopleProfile(personId);
+        return result;
+      },
+      referenceCancel: async (personId, reviewId) => {
+        await apiPost("/api/reference-cancel", {review_id: reviewId});
+        await refreshPeopleProfile(personId);
+      },
+      referenceLifecycle: async (personId, referenceId, active, commandId) => {
+        await apiPost("/api/reference-lifecycle", {person_id: personId, reference_id: referenceId, active, operation_id: commandId});
+        await loadPeople({ dedupe: false });
+        await refreshPeopleProfile(personId);
+      },
       peopleOpen,
       refreshPeopleProfile,
       openPersonGraph,

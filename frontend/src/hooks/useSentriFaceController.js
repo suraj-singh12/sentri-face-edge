@@ -18,6 +18,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
   const people = usePeopleController({
     activeView,
     ...api,
+    uploadFile: uploads.uploadFile,
     loadPeople: appData.loadPeople,
     loadDeletedFaces: appData.loadDeletedFaces,
     onWorldMutation: async (mutation) => {

@@ -1,5 +1,13 @@
 # SentriFace Edge architecture explanation
 
+## Why Reference identity is source-specific (Batch 3.7)
+
+Normal distinct photos independently infer different embeddings and provide useful pose/lighting/expression diversity. Identity never causes reuse of an earlier vector. The earlier ownership fixture manually supplied equal synthetic vectors; it did not demonstrate normal distinct-photo reuse. Exact equal model outputs can legitimately deduplicate (for example, different encodings of identical pixels). Vector storage identity therefore cannot own every source's semantic identity.
+
+Existing immutable enrollment history already records standalone owner/provenance; extending it with explicit source media/quality is smaller than another enrollment subsystem. A single append-only lifecycle table is necessary because creation history cannot be mutated and timed Deleted Faces can purge sources or affect Encounter samples. Both UI routes share the same operation/journal/transaction/media/index/backup. Encounter correction remains source-scoped. The narrow conflicting-shared-row safeguard is a derived eligibility calculation, not a new conflict lifecycle or notification subsystem.
+
+Four active sources control contextless media accumulation, including PROOF_ONLY, rather than counting embeddings. Encounter-first friction protects occurrence history. Exactly-one-face admission prevents scene/group misuse. Exact cross-role media guards preserve the distinction between Person-specific biometric crops and occurrence evidence; no image-forensics crop matching is introduced. Archive/delete gate Person recognition without rewriting source history. Restore faithfully relocates protected assets and preserves source authority; graph rebuild has no Reference lifecycle role. World vNext must remain outside Reference biometric management semantics; no Batch 4 implementation is included.
+
 ## Batch 3.6: reuse provenance authority across safety operations
 
 The post-Batch-3.5 reaudit found a mismatch before restore: P11's hand-maintained query checked primary review/enrollment image paths, while normal queue writes and backup closure retained every image in the existing media registry. Reused sample vectors made the current occurrence's secondary image absent from the older query. Writers legitimately preserved both enrollment and occurrence provenance; the validator's narrower vocabulary was wrong. The registry now supplies shared independent source admission/validation, with legacy recognition identifiers retained for compatibility. No observation can prove itself merely by being registered as observation media. An additional scoped check prevents a saved face's occurrence-media pointer from borrowing an image in another observation. Physical file authentication/closure stays in its existing owner, not a second provenance service.
@@ -44,7 +52,7 @@ Merge preview refuses contradictory INCLUDE/EXCLUDE collapse, names the affected
 
 **Implemented now.** E17 initially records A and B at one Delhi meeting, supported by P1 and P2. A–B is INCLUDE with SAME_ENCOUNTER_ONLY support because the accepted faces are in separate photographs.
 
-The operator attaches P3, which shows A, B and C. The existing content-addressed managed image is reused if already stored by standalone Add Face; otherwise the existing compression/storage policy stores it once. If P3 already belongs to E17, the UI explains that it is already attached. If it belongs to another finalized Encounter, it is excluded with an explicit conflict; it cannot become evidence of another independent occurrence. The accepted face decision records P3's media ID, even if a matching embedding vector is reused from a reference image.
+The operator attaches P3, which shows A, B and C. Exact Reference Only media is refused: upload the original occurrence/scene photograph instead. Otherwise the existing content-addressed compression/storage policy stores the occurrence image once. If P3 already belongs to E17, the UI explains that it is already attached. If it belongs to another finalized Encounter, it is excluded with an explicit conflict; it cannot become evidence of another independent occurrence. The accepted face decision records P3's media ID, even if a matching embedding vector is reused from a reference image.
 
 The operator resolves C and explicitly chooses A–C INCLUDE and B–C EXCLUDE. A–B remains INCLUDE without another decision. Its support improves to SHARED_FRAME. E17 still contributes one independent occurrence to A–B; three photographs are not three meetings.
 
@@ -235,7 +243,7 @@ Recognition search is defensive even when an index is stale: candidate embedding
 
 #### Example scenario
 
-Priya is created as a known person with background context but no usable image. She is `ACTIVE`, `IDENTIFIED`, and `NO_FACE`. She may be mentioned in notes and accepted as a participant through an operator workflow. Later, Add Face enrolls a biometric embedding and changes only her biometric state to `ENROLLED`. It does not create a second identity or invent an observation.
+Priya is created as a known person with background context but no usable image. She is `ACTIVE`, `IDENTIFIED`, and `NO_FACE`. She may be mentioned in notes and accepted as a participant through an operator workflow. Later, shared Reference Only Add Face admits a cropped single-face portrait; a usable sample can change her biometric state to `ENROLLED`. It does not create a second identity or invent an observation.
 
 #### Edge cases
 
@@ -498,15 +506,15 @@ The same staged face machinery is useful both for reviewing an encounter and for
 
 #### Design decision
 
-Add Face is a distinct atomic enrollment command. It may create one or more embeddings and immutable enrollment-history rows for one active existing person. It does not create a person, observation, participant, sighting, or graph evidence.
+Add Face is the prominent NO_FACE entry into the same atomic Reference Only command used by ENROLLED Reference management. One cropped upload must contain exactly one detected face and requires acknowledgment that no reliable Encounter context exists. It creates one independently owned source; a differing inferred vector creates a sample while exact-vector storage dedup remains allowed. It does not create a person, observation, participant, sighting, or graph evidence.
 
 #### How it works internally
 
-Every staged face must have a final decision, every accepted face must target the same active canonical person, and no accepted-new-person decision is allowed. Duplicate vectors for the same raw target reuse the embedding rather than creating another. The review completes, enrollment history is journaled, biometric state becomes `ENROLLED`, and staging is removed in one transaction.
+The server-created Reference draft contains exactly one face targeting an active canonical Person. Generic review callers cannot claim this admission contract. Exact media duplicates and active exact-vector References for the same canonical Person add no new source/slot. Confirmation journals immutable source ownership and source quality in the existing transaction and recomputes biometric eligibility. Retire/restore append source lifecycle revisions; they do not mutate Encounter assignments or use timed Deleted Faces. Four active source items is the canonical cap, including PROOF_ONLY.
 
 #### Example scenario
 
-Raj already exists as a `NO_FACE` identity with notes and relationships. An operator opens Add Face and accepts two crops as Raj. The operation enrolls those references and changes Raj to `ENROLLED`. His observation count and graph remain exactly as before.
+Raj already exists as a `NO_FACE` identity with notes and relationships. An operator opens Add Face, acknowledges unavailable Encounter context and supplies one cropped, single-face portrait. A usable GOOD/POOR_ACCEPTED source may change Raj to `ENROLLED`; a PROOF_ONLY source still counts toward the cap but does not provide ordinary recognition. His observation count and graph remain exactly as before.
 
 #### Edge cases
 

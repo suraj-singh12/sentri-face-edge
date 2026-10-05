@@ -169,14 +169,6 @@ export function useRecognizeController({
     setEventDraft(null);
   };
 
-  const startExistingPersonEnrollment = (person) => {
-    recognitionClear();
-    setRecognitionTargetPerson({
-      person_id: person.person_id,
-      name: person.name,
-      representative_image: person.representative_image || "",
-    });
-  };
 
   const cancelExistingPersonEnrollment = () => {
     recognitionClear();
@@ -451,7 +443,6 @@ export function useRecognizeController({
       recognitionNew,
       recognitionSelectExisting,
       recognitionClear,
-      startExistingPersonEnrollment,
       cancelExistingPersonEnrollment,
       selectRecognitionFace,
       loadRecognitionPeopleCandidates,

@@ -1,5 +1,17 @@
 # SentriFace Edge architecture state
 
+## Batch 3.7 source authority — schema v34
+
+`biometric_enrollment_history` remains immutable creation/source authority: raw Person assignment, embedding ID, review/operation IDs, source media ID/path/crop, source quality and no-context declaration. `recognition_reference_revisions` is append-only active/retired history using the existing journal and SQL transaction. Absence of a revision preserves the original active source. Legacy backfill copies existing recorded source/quality and never invents a declaration or normalizes over-cap truth.
+
+Recognition derives eligibility from active Reference sources and effective finalized Encounter face assignments, then canonical identity, quality and Person lifecycle. Equal vector storage dedup remains; one exact vector contributes once. A shared embedding with conflicting current canonical source owners contributes to neither Person's ordinary recognition. Retirement removes only its Reference source contribution. Source quality stays independent even when one embedding serves several histories. Biometric status derives from usable samples, not Reference count.
+
+Encounter correction appends FACE_ASSIGNMENT/participant revisions without changing Reference identity. Global Move Face/Deleted Faces are guarded for Reference-backed rows. Reference source media and crops participate in the existing media registry, reference-aware cleanup, P11/live provenance checks and encrypted backup closure. Disposable restore candidates relocate physical paths while asserting all non-path history unchanged and reinstalling exact immutable guards; pre-v34 backfilled bindings can use only already authenticated source assets. No security bypass or parallel backup format exists.
+
+Schema-v33 immutable scan-session Attach target/revision and Retry/Cancel remain unchanged. Graph/World project occurrence/relationship authority, never Reference lifecycle. No Batch 4.
+
+Encounter revision fingerprints version semantic media identities, not physical locations. Restore relocation therefore preserves valid Attach preconditions; v34 migration converts only preconditions that matched the old authority. Source-scoped profile reads retain raw embedding ownership but select media/quality/origin from the requested Person's semantic source.
+
 ## Batch 3.6 current integrity boundary — schema v32
 
 Write admission and read-only P11 provenance checks now share the existing media registry's independent source references, including durable multi-photo review/session membership. Observation membership cannot prove itself; saved face occurrence-media IDs must bind to their own observation. Historical sample enrollment paths are not substitutes for later occurrence media. Backup physical closure/authentication and staged relocation protections remain mandatory; rebuild and restore use the same checker.

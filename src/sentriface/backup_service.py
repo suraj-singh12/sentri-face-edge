@@ -823,6 +823,14 @@ class BackupService:
                 _binding_key(item["registry_id"], item["row_identity"])
                 for item in actual
             }
+            # v34 adds only source/crop aliases backfilled from existing,
+            # authenticated enrollment assets. Older manifests cannot name
+            # these new bindings; all other binding identities remain exact.
+            if int(metadata.get("database_version", 0)) < 34:
+                expected |= { _binding_key(item["registry_id"], item["row_identity"])
+                    for item in actual if item["registry_id"] in {
+                        "biometric_enrollment_history.source_image",
+                        "biometric_enrollment_history.crop_path"}}
             if expected != actual_keys:
                 raise BackupError("Staged database media bindings changed during restore")
         for item in actual:
@@ -1734,6 +1742,25 @@ class BackupService:
             review_authority = conn.execute(review_select).fetchall() if review_select else []
             if guard:
                 conn.execute('DROP TRIGGER completed_photo_reviews_immutable')
+            reference_guard = conn.execute("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='biometric_enrollment_history_no_update'").fetchone()
+            reference_columns = [row[1] for row in conn.execute('PRAGMA table_info(biometric_enrollment_history)') if row[1] not in {'source_image', 'crop_path'}]
+            reference_select = 'SELECT ' + ', '.join(f'"{column}"' for column in reference_columns) + ' FROM biometric_enrollment_history ORDER BY enrollment_id' if reference_columns else None
+            reference_authority = conn.execute(reference_select).fetchall() if reference_select else []
+            if reference_guard:
+                conn.execute('DROP TRIGGER biometric_enrollment_history_no_update')
+            if int(metadata.get("database_version", 0)) < 34:
+                # The migration may introduce these bindings, but may never
+                # introduce an asset. Relocate only from an already verified
+                # old manifest path; fail closed when no such asset exists.
+                old_assets = {str(r.get("path_fingerprint") or _text_sha256(str(r.get("original_path") or ""))): str(r.get("archive_path") or "")
+                              for r in metadata.get("path_references", [])}
+                for spec, identity, original_path in list(iter_media_references(conn)):
+                    if spec.table != "biometric_enrollment_history":
+                        continue
+                    restored_path = restored_paths.get(old_assets.get(_text_sha256(original_path), ""))
+                    if not restored_path:
+                        raise BackupError("Migrated Reference binding has no authenticated source asset")
+                    update_media_reference(conn, spec, identity, restored_path)
             if int(metadata.get("format_version", 0)) == PORTABLE_BACKUP_FORMAT_VERSION:
                 for reference in metadata.get("path_references", []):
                     registry_id = str(reference.get("registry_id") or "")
@@ -1792,6 +1819,10 @@ class BackupService:
                 raise BackupError("Media relocation changed review authority")
             if guard:
                 conn.execute(guard[0])
+            if reference_select and conn.execute(reference_select).fetchall() != reference_authority:
+                raise BackupError("Media relocation changed Reference source authority")
+            if reference_guard:
+                conn.execute(reference_guard[0])
             conn.commit()
 
     def _replace_live_database(self, replacement: Path) -> None:

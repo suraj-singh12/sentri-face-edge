@@ -1,5 +1,23 @@
 # Global identity graph implementation plan
 
+## Current work — Batch 3.7 (uncommitted implementation)
+
+Starting branch/remote: `release-v2.0.0-hardening` / `30b89cb7af2ef35316db321457264f7aabb8b2c8`. Preserve earlier Attach ownership/Retry/Cancel, cleanup and backup-button work. No commit/tag/push or Batch 4.
+
+The source-ownership decision is resolved: Reference identity remains independent of Encounter correction. The earlier blocker fixture supplied identical synthetic vectors; real distinct photos independently produced E1/E2 (cosine about 0.709). Production exact-vector dedup remains allowed for equal model outputs. The bounded shared-row issue is handled by source-specific authority and derived recognition exclusion when current canonical source identities disagree.
+
+Migration 33→34 extends `biometric_enrollment_history` with source media/path/crop, source quality and explicit no-context declaration; existing enrollment owner/ID/history are preserved and legacy declaration remains false. The small append-only `recognition_reference_revisions` table represents retire/restore because immutable creation history cannot itself change lifecycle and timed Deleted Faces may purge provenance. This reuses the existing SQL transaction, operation journal, media registry and encrypted snapshot format. Migration rollback, repeat startup and old-backup asset relocation are tested.
+
+Shared single-face admission, four-source cap, source retirement/restore, quality/status/canonical recognition, exact cross-role media guards, cap-safe merge and management UI are integrated. Neither Reference entry point creates occurrence/evidence/World semantics. Encounter REASSIGN writes assignment correction only; global Move Face and Deleted Faces reject independently owned Reference samples and direct operators to Encounter correction or Reference retirement. No Transfer Reference shortcut or new recognition index is introduced.
+
+Existing scan-session target/revision ownership remains schema-v33's smallest extension. Rejected Attach is durable until Retry or explicit Cancel; retry processes only owned media and revalidates the same target. Restored shared-directory cleanup never recursively owns unrelated uploads. The backup-card-specific sizing fix retains pointer and keyboard access without a Settings redesign.
+
+Exact test/live results and preserved earlier evidence are in `/workspace/scratch/sentriface-batch37/REPORT.md`; implementation readiness requires full regression, real ONNX/Chromium, fresh encrypted restore/restart and supported rebuild, rather than unit tests alone.
+
+**Final Batch 3.7 qualification (uncommitted):** backend 736 passed / 47 skipped / 137 subtests; frontend 124 passed; production build, Python compile and diff checks passed. Real CPU ONNX/Chromium exercised both shared Reference entry points, admission rejection, cap/lifecycle, canonical merge, cross-role guards, permissions and retained Attach ownership. A supported encrypted backup restored into a completely fresh authority and normal restart preserved domain truth. Supported graph rebuild passed with unchanged Reference state and occurrence projection. Exact evidence, first failures and scope limits remain in the external Batch 3.7 report.
+
+Encounter revision fingerprints exclude physical media locations, which legitimately relocate during restore; media IDs and semantic provenance remain versioned. Migration translates only still-valid pre-v34 Attach preconditions to the new fingerprint. Genuinely stale revisions remain stale. Source-scoped profile reads show the requested Person's own Reference/Encounter media instead of a shared embedding row's original image. Historical raw embedding ownership remains preserved. Cached legacy Add Face UI drafts can only be cancelled and reopened through the shared Reference route; there is no old admission bypass.
+
 ## Current work — Batch 3.6 Provenance & Canonical Integrity Repair
 
 Starting branch/commit: `release-v2.0.0-hardening` / `1ea2a38d10be0da4c00fea4a3f53053b9eaef998`, clean. Changes remain uncommitted; no tag and no Batch 4.

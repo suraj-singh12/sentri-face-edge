@@ -1,5 +1,13 @@
 # SentriFace Edge features by tab
 
+## Batch 3.7 operator flows
+
+**People:** NO_FACE exposes prominent Add Face. ENROLLED exposes secondary Manage Recognition References, without prominent generic Add Face. Both open the same Recognition References modal and backend mutation. Management shows active/retired sources, quality, Reference Only labels, count /4, Retire/Restore and shared-sample warnings. Upload explains cropped single-person and Encounter-first rules; explicit no-context acknowledgment and exactly-one-face detection precede confirmation. Zero/multiple faces reject without a picker. Proof-only can leave Add Face visible while still consuming a slot. Photos visibly identify Reference Only origin; timed Deleted Faces/global transfer controls are disabled for Reference-backed samples.
+
+**Review Photos / Events:** exact Reference media is rejected with instruction to upload the original occurrence/scene image. Independent Encounter photos retain normal participants/evidence. Attach uploads remain targeted until success or explicit Cancel; rejection exposes Retry/Cancel and survives restart without general queue leakage.
+
+**Settings:** existing encrypted recovery/export/import restores Reference source ownership, quality and lifecycle along with normal authority. Compact backup-card sizing preserves pointer access without redesign. World remains an occurrence/relationship read model, with no Reference Only lifecycle inputs; Batch 4 is not implemented.
+
 ## Batch 3.6 current user-facing integrity
 
 Check a photo displays the saved accepted Person or staged new identity, including after refresh/restart. The model's candidate list remains a proposal; an accepted new Person cannot open a committed profile before completion. Deferred faces remain Deferred. Browse People during an active Encounter now correctly includes committed profiles alongside draft candidates.
@@ -45,7 +53,7 @@ The 2026-10-01 correction persists Remove/Restore selection across restart befor
 
 ## People (`people`)
 
-**Meaning and purpose:** manage real Persons, including people who have no enrolled face. **Implemented:** browse/search, create without photo, metadata edit, canonical/lifecycle views, selected-ID Person Notes, Add Face, correction/merge controls as permitted, and Person Profile. `NO_FACE` means no enrolled face, not unknown/deleted and not a Person with only `PROOF_ONLY` embeddings. Standalone **Add Face** enrolls an existing Person and records `STANDALONE_ENROLLMENT`; it creates no Encounter, sighting, participant, or co-observation.
+**Meaning and purpose:** manage real Persons, including people who have no enrolled face. **Implemented:** browse/search, create without photo, metadata edit, canonical/lifecycle views, selected-ID Person Notes, Add Face, correction/merge controls as permitted, and Person Profile. `NO_FACE` means no usable ordinary-recognition sample; it does not mean unknown/deleted. A Person with only PROOF_ONLY or conflicted samples may remain NO_FACE. Standalone **Add Face** uses the shared Reference Only operation for an existing Person and records `STANDALONE_ENROLLMENT`; it creates no Encounter, sighting, participant, or co-observation.
 
 Person Profile sub-tabs are:
 
@@ -95,7 +103,7 @@ Associations explains independent evidence and opens Person Graph. Add Associati
 | `EVENT_NOTE` / `SIGHTING_NOTE` / `PERSON_NOTE` | Encounter context / Person in one Encounter / general editable Person information. All support selected-ID mentions, but only Person-owned Sighting/Person Notes produce Person→Person `NOTE_REFERENCE`. |
 | `CO_OBSERVED` / `NOTE_REFERENCE` / `MANUAL_ASSOCIATION` | Distinct co-presence / selected Person-owned note reference / explicit standing association evidence. Coexistence does not create extra Encounters. |
 | `GOOD` / `POOR_ACCEPTED` / `PROOF_ONLY` | Embedding search eligibility, independent of face origin and Person biometric state. Proof-only is never an ordinary recognition reference. |
-| `NO_FACE` / `ENROLLED` | Person has zero / at least one stored face, regardless of eligibility. |
+| `NO_FACE` / `ENROLLED` | Person has no / at least one usable ordinary-recognition sample, according to current source authority and quality. |
 | Recognition / proof-only duplicate check | Ordinary candidate proposal / exceptional pre-creation hint for profiles with only proof-only faces. Neither is identity authority. |
 | Recurrence / Activity / Cluster | Distinct independent Encounter support / recent ongoing behavior / derived group of evidence-connected people. Current World does not implement the locked future recurrence tiers. |
 | Add Face / Review photos | Standalone biometric enrollment of an existing Person / staged multi-photo Encounter review. Add Face creates no Event; Review photos can finalize one. |

@@ -1,5 +1,17 @@
 # SentriFace Edge agent handoff
 
+## Batch 3.7 resumed handoff
+
+Original pushed baseline `30b89cb7af2ef35316db321457264f7aabb8b2c8` on `release-v2.0.0-hardening`; all Batch 3.7 changes remain uncommitted. Preserve schema-v33 Attach target ownership/Retry/Cancel/cleanup and backup-card sizing. The ownership decision is resolved; Reference Only now extends immutable enrollment provenance and source-specific lifecycle under schema v34, with one shared NO_FACE/ENROLLED operation. No commit/tag/push or Batch 4.
+
+Normal different photos independently infer E1/E2; the earlier fixture manually reused `(1,0)`. Exact-vector dedup remains legitimate but cannot collapse source identity. Encounter reassignment never transfers Reference ownership. Conflicting shared-row current canonical owners derive recognition exclusion; source active state/count/history remain intact. Do not restore the old global-embedding interpretation or serialize a mutable conflict flag.
+
+Canonical reading order remains README → IMPLEMENTATION_PLAN → PROJECT_OVERVIEW → ARCHITECTURE_STATE → DOMAIN_MODEL → FEATURES_BY_TAB → ARCHITECTURE_EXPLANATION → this handoff. Exact final verification/qualification and first failures are recorded in `/workspace/scratch/sentriface-batch37/REPORT.md`; prior partial evidence is preserved separately there. Future work must retain encryption, immutable source history, registry-owned authenticated closure and protected Linux source recovery custody.
+
+**Final Batch 3.7 qualification (uncommitted):** backend 736 passed / 47 skipped / 137 subtests; frontend 124 passed; production build, Python compile and diff checks passed. Real CPU ONNX/Chromium exercised both shared Reference entry points, admission rejection, cap/lifecycle, canonical merge, cross-role guards, permissions and retained Attach ownership. A supported encrypted backup restored into a completely fresh authority and normal restart preserved domain truth. Supported graph rebuild passed with unchanged Reference state and occurrence projection. Exact evidence, first failures and scope limits remain in the external Batch 3.7 report.
+
+Encounter revision fingerprints exclude physical media locations, which legitimately relocate during restore; media IDs and semantic provenance remain versioned. Migration translates only still-valid pre-v34 Attach preconditions to the new fingerprint. Genuinely stale revisions remain stale. Source-scoped profile reads show the requested Person's own Reference/Encounter media instead of a shared embedding row's original image. Historical raw embedding ownership remains preserved. Cached legacy Add Face UI drafts can only be cancelled and reopened through the shared Reference route; there is no old admission bypass.
+
 ## Batch 3.6 handoff
 
 Baseline verified clean on `release-v2.0.0-hardening` at `1ea2a38d10be0da4c00fea4a3f53053b9eaef998`. Current repairs are uncommitted; do not commit/tag or start Batch 4. Reuse media_registry source provenance for writer admission and P11; preserve its exclusion of self-proving observation membership and scoped accepted-face media bindings. Preserve registry-owned authenticated backup closure and staged-only relocation guards.
@@ -32,7 +44,7 @@ Batch 3 gates: 577 backend passed, 47 skipped, 115 subtests passed; 112 frontend
 ## Current checkpoint
 
 - Application version: `2.0.0` (`src/sentriface/_version.py`).
-- Database schema: v32 in the current Batch 3 source (`SQLiteIdentityStore`); v30 is the Batch 2 staging foundation and v28 remains the frozen P11/P14 release baseline.
+- Database schema: v33 in the current partial Batch 3.7 source (`SQLiteIdentityStore`), extending v32 with targeted scan ownership; v30 is the Batch 2 staging foundation and v28 remains the frozen P11/P14 release baseline.
 - Current correction: durable pre-grouping media exclusion/restore, automatic finalized-media exclusion, reconciled group IDs/selected faces, combined canonical committed+active-draft recognition and proof-only duplicate prevention, atomic selected-face draft decisions, current-value form validation, 4.5-second default notifications, 250×250 Peek In and left-aligned recognition preference. Drafted means draft-created Person only. This is the historical Batch 2 stabilization checkpoint. Batch 3 now implements Encounter Management/Attach/Correct, profile/manual association integration and the deleted-Person historical-read fix; World vNext and Encounter Split/Merge remain deferred.
 - Final correctness gates: 561 backend tests passed, 47 skipped, 114 subtests; 112 frontend tests passed; production build/diff check passed. Authenticated synthetic-media development UI verified removal/reload, Event→Person flow, Peek In, filled forms, proof-only draft reuse, quality preference, final completion and Person Profile persistence. This is not production-model, full-role or release acceptance.
 - P0 through P14 source implementation is complete.
