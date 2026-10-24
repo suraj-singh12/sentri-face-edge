@@ -154,9 +154,16 @@ if ($VersionSource -notmatch 'APP_VERSION\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"') {
 $Version = $Matches[1]
 $VersionQuad = "$Version.0"
 $ExpectedTags = @("rc-v$Version", "release-v$Version")
-$Branch = (git branch --show-current).Trim()
+# GitHub Actions checks out a detached HEAD. PowerShell returns $null for
+# a native command with no output; never call .Trim() on that result.
+# Candidate builds can run detached, but production tags/signatures remain strict.
+$BranchOutput = @(git branch --show-current)
 if ($LASTEXITCODE -ne 0) {
     throw "Git branch inspection failed."
+}
+$Branch = ""
+if ($BranchOutput.Count -gt 0 -and $null -ne $BranchOutput[0]) {
+    $Branch = ([string]$BranchOutput[0]).Trim()
 }
 
 if ($ProductionRelease) {
@@ -187,15 +194,31 @@ if (-not $InnoCompiler) {
 if (-not (Test-Path -LiteralPath $InnoCompiler -PathType Leaf)) {
     throw "The Inno Setup 7 compiler was not found. Install the x64 edition or set SENTRIFACE_ISCC."
 }
-$InnoVersionText = (& $InnoCompiler --version).Trim()
+# ISCC's executable resource is 0.0.0.0 even in Inno Setup 7.1.0.
+# The supported /? command reports the compiler's major version in its banner
+# (including Inno Setup 7.0, which does not support --version).
+# Help is written to stderr; only the identifying banner on stdout is needed.
+$InnoQueryErrorPreference = $ErrorActionPreference
 try {
-    $InnoVersion = [Version]$InnoVersionText
-} catch {
-    throw "The configured Inno compiler did not report a valid version."
+    # Windows PowerShell 5.1 turns native stderr into ErrorRecords even when
+    # redirected. Judge this query by its exit code and banner, not help text.
+    $ErrorActionPreference = "Continue"
+    $InnoBannerOutput = @(& $InnoCompiler /? 2>$null)
+    $InnoHelpExitCode = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $InnoQueryErrorPreference
 }
-if ($LASTEXITCODE -ne 0 -or $InnoVersion.Major -lt 7) {
+$InnoBanners = @($InnoBannerOutput | Where-Object {
+    [string]$_ -match '^Inno Setup [0-9]+(?:\.[0-9]+)*(?: \(32-bit\))? Command-Line Compiler$'
+})
+if ($InnoHelpExitCode -ne 0 -or $InnoBanners.Count -ne 1) {
+    throw "The configured Inno compiler did not report a valid compiler banner."
+}
+$InnoBanner = [string]$InnoBanners[0]
+if ($InnoBanner -notmatch '^Inno Setup (?<Major>[0-9]+)' -or [int]$Matches.Major -lt 7) {
     throw "Inno Setup 7 or later is required for a native AMD64 setup executable."
 }
+Write-Host "Validated compiler: $InnoBanner"
 if ($SigningAvailable -and -not (Test-Path -LiteralPath $SignToolPath -PathType Leaf)) {
     throw "Configured SignTool was not found."
 }
@@ -266,6 +289,7 @@ try {
 
     $NuitkaArgs = @(
         "--mode=standalone",
+        "--assume-yes-for-downloads",
         "--output-dir=$BuildRoot",
         "--output-filename=SentriFaceEdge.exe",
         "--windows-console-mode=disable",

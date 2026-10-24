@@ -9,6 +9,9 @@ from sentriface.storage.sqlite_store import SQLiteIdentityStore
 from sentriface.backup_service import BackupService
 
 
+pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux source recovery only")
+
+
 def service(root):
     key = load_linux_source_master_key(root, explicit_source_onnx=True)
     store = SQLiteIdentityStore(root/'sentriface.db', database_key=key); store.initialize()

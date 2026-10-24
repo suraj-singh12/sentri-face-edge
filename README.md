@@ -139,7 +139,7 @@ the UI responsive while recognition happens in the background.
 See the concise [development-mode guide](docs/DEVELOPMENT_MODE.md) for the
 complete macOS source workflow and the current Windows status.
 
-Install Python 3.11 or 3.12. The repository launcher creates a local
+Install Python 3.12. Python 3.11 support is intentionally inactive; do not use it for this source checkout. The repository launcher creates a local
 `.venv312`, installs or updates the development dependencies only when
 `pyproject.toml` changes, and uses the already-built React assets. Node.js is
 needed only to test or rebuild the frontend.
@@ -216,7 +216,7 @@ the same recognition behavior; the Profile view reports the active backend.
 
 ## Windows source development
 
-On Windows 11 AMD64 with 64-bit Python 3.11 or 3.12, the equivalent isolated
+On Windows 11 AMD64 with 64-bit Python 3.12, the equivalent isolated
 source workflow is:
 
 ```powershell

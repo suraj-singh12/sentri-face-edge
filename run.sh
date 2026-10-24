@@ -60,7 +60,11 @@ if [[ "$MODE" == "reset" ]]; then
   fi
   RESET_PYTHON="$PYTHON"
   if [[ ! -x "$RESET_PYTHON" ]]; then
-    RESET_PYTHON="$(command -v python3.12 || command -v python3.11 || command -v python3)"
+    RESET_PYTHON="$(command -v python3.12 || command -v python3 || true)"
+  fi
+  if [[ -z "$RESET_PYTHON" ]] || ! "$RESET_PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)' >/dev/null 2>&1; then
+    print -u2 "SentriFace source development/reset currently requires Python 3.12."
+    exit 2
   fi
   if [[ "$OSTYPE" == linux* ]]; then
     "$RESET_PYTHON" "$PROJECT_DIR/scripts/reset_macos_dev_authority.py" "$DEV_DATA_DIR" --linux-source
@@ -80,9 +84,9 @@ if [[ -e "$VENV_DIR" && ! -x "$PYTHON" ]]; then
 fi
 
 if [[ ! -x "$PYTHON" ]]; then
-  for candidate in python3.12 python3.11; do
+  for candidate in python3.12 python3; do
     if command -v "$candidate" >/dev/null 2>&1; then
-      if "$candidate" -c 'import sys; raise SystemExit(0 if (3, 11) <= sys.version_info[:2] <= (3, 12) else 1)' >/dev/null 2>&1; then
+      if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)' >/dev/null 2>&1; then
         "$candidate" -m venv "$VENV_DIR"
         break
       fi
@@ -91,12 +95,12 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 if [[ ! -x "$PYTHON" ]]; then
-  print -u2 "SentriFace source development requires Python 3.11 or 3.12. Install one, then run ./run.sh again."
+  print -u2 "SentriFace source development requires Python 3.12. Install one, then run ./run.sh again."
   exit 1
 fi
 
-if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if (3, 11) <= sys.version_info[:2] <= (3, 12) else 1)' >/dev/null 2>&1; then
-  print -u2 "The repository virtual environment must use Python 3.11 or 3.12: $PYTHON"
+if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)' >/dev/null 2>&1; then
+  print -u2 "The repository virtual environment must use Python 3.12: $PYTHON"
   exit 2
 fi
 
