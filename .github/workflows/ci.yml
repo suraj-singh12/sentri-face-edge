@@ -41,6 +41,13 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+      # Temporary Issue #1 diagnostic: capture the exact clean Linux build
+      # when the tracked bundle freshness check differs across machines.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue-1-frontend-generated-static
+          path: src/sentriface/ui_static/
+          retention-days: 3
       - run: git diff --exit-code -- src/sentriface/ui_static
 
   windows-package:
