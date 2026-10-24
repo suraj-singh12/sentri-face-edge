@@ -190,13 +190,11 @@ if (-not $InnoCompiler) {
 if (-not (Test-Path -LiteralPath $InnoCompiler -PathType Leaf)) {
     throw "The Inno Setup 7 compiler was not found. Install the x64 edition or set SENTRIFACE_ISCC."
 }
-$InnoVersionText = (& $InnoCompiler --version).Trim()
-try {
-    $InnoVersion = [Version]$InnoVersionText
-} catch {
-    throw "The configured Inno compiler did not report a valid version."
-}
-if ($LASTEXITCODE -ne 0 -or $InnoVersion.Major -lt 7) {
+# ISCC.exe does not promise GNU-style --version stdout; on Actions this
+# returned no text and .Trim() aborted the unsigned candidate before testing.
+# Check the Windows executable's authoritative numeric file version instead.
+$InnoFileVersion = (Get-Item -LiteralPath $InnoCompiler -ErrorAction Stop).VersionInfo
+if (-not $InnoFileVersion -or $InnoFileVersion.FileMajorPart -lt 7) {
     throw "Inno Setup 7 or later is required for a native AMD64 setup executable."
 }
 if ($SigningAvailable -and -not (Test-Path -LiteralPath $SignToolPath -PathType Leaf)) {
