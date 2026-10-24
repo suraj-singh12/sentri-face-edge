@@ -1,27 +1,34 @@
 # SentriFace Edge documentation map
 
-## Current Batch 3.7 work
+## Current committed baseline — Batch 3.7
 
-Schema v34 extends existing immutable enrollment history with Reference source identity/provenance and append-only lifecycle revisions. NO_FACE Add Face and ENROLLED Recognition References management share admission, cap, lifecycle, authorization and recognition. Encounter correction is source-scoped; equal-vector dedup cannot transfer Reference identity. Existing schema-v33 Attach ownership/Retry/Cancel and compact backup-card fix are preserved. IMPLEMENTATION_PLAN owns implementation/verification status; DOMAIN_MODEL owns the source contract, ARCHITECTURE_STATE its representation, FEATURES_BY_TAB operator entry points, and ARCHITECTURE_EXPLANATION the rationale. No Batch 4.
+Batch 3.7 was committed at `555433f082dc39112bd815dddf3a8f35791f2f4b`. The verified `release-v2.0.0-hardening` baseline is `683f3641e3532f08e180fe6c4c4386ac0f798917`, including merged PR #8. Schema v34 extends existing immutable enrollment history with Reference source identity/provenance and append-only lifecycle revisions. NO_FACE Add Face and ENROLLED Recognition References management share admission, cap, lifecycle, authorization and recognition. Encounter correction is source-scoped; equal-vector dedup cannot transfer Reference identity. Existing schema-v33 Attach ownership/Retry/Cancel and compact backup-card fix are preserved. IMPLEMENTATION_PLAN owns implementation/verification status; DOMAIN_MODEL owns the source contract, ARCHITECTURE_STATE its representation, FEATURES_BY_TAB operator entry points, and ARCHITECTURE_EXPLANATION the rationale. No Batch 4.
 
-## Current status
+## Next priorities and current qualification
+
+- **P0 complete:** [#1 CI repair](https://github.com/suraj-singh12/sentri-face-edge/issues/1) merged through [PR #8](https://github.com/suraj-singh12/sentri-face-edge/pull/8). [Hardening CI #40071662474](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40071662474) passed Linux/macOS/Windows backend, frontend and unsigned Windows packaging. Python 3.12 is the only active target; 3.11 is disabled. Production signatures and current-artifact installer/model lifecycle acceptance remain pending.
+- **P1 documentation:** [#2 status reconciliation](https://github.com/suraj-singh12/sentri-face-edge/issues/2) tracks this commit's source-of-truth update.
+- **Remaining work, not yet completed:** [#3 World vNext](https://github.com/suraj-singh12/sentri-face-edge/issues/3), [#4 Encounter Split/Merge](https://github.com/suraj-singh12/sentri-face-edge/issues/4), [#6 Figma-first operator workflow](https://github.com/suraj-singh12/sentri-face-edge/issues/6) and [#5 release acceptance](https://github.com/suraj-singh12/sentri-face-edge/issues/5). Every issue must undergo a bounded review and operator approval before coding; material UI changes are design-first, followed by issue branch, PR, checks and merge.
+- Roadmap priority prefixes P0–P4 are **not** the historical engineering phases P0–P14 described below.
+
+## Historical implementation checkpoints
 
 - Batch 3.6 repairs shared registered provenance, canonical standing-manual collisions and accepted recognition display. Complex real rebuild and fresh supported restore/restart are qualified; IMPLEMENTATION_PLAN owns exact results and limits. Batch 4 remains unimplemented.
 
-- Batch 3.5 converges effective pair support, enrollment/decision contracts, mutation read reconciliation and operational completion/custody. `IMPLEMENTATION_PLAN.md` owns targeted qualification and final gates; the next three-phase clean-room reaudit remains separate.
+- Batch 3.5 converges effective pair support, enrollment/decision contracts, mutation read reconciliation and operational completion/custody. `IMPLEMENTATION_PLAN.md` owns targeted qualification and final gates; the next three-phase clean-room reaudit was separate from that historical checkpoint.
 
 - The 2026-10-01 correctness pass extends existing staging to schema v31 for durable pre-grouping media exclusion, unifies committed/active-draft recognition and duplicate prevention, and fixes stale group/form state. `IMPLEMENTATION_PLAN.md` owns current verification and remaining work. No new Encounter, media, note or recognition-index system is introduced.
 
 - P0 through P14 source implementation is complete.
 - P10 through P13 are complete and frozen, including all of P11-A through P11-E.
 - Historical P14 unsigned Windows 11 x64 installer lifecycle acceptance passed
-  for an earlier artifact. The current 2.0.0 unsigned pre-tag candidate passed
-  source, build, inspection, and packaged runtime checks.
+  for an earlier artifact. Its source, build, inspection and packaged runtime
+  results remain historical; the latest unsigned CI result is linked above.
 - Production P14 acceptance remains pending verified signatures, the current
   artifact's disposable-Windows installer and packaged model lifecycle, and a
   clean exact `rc-v2.0.0` or `release-v2.0.0` rebuild.
 - The 2026-09-27 stabilization and pre-Batch-2 integration extend finalized observations with shared Encounter metadata, add embedding eligibility to schema v29, preserve no-face selection and face-origin provenance, and expose bounded read-only Events. The reduced managed upload is historical media. See `IMPLEMENTATION_PLAN.md` for verification and remaining risks.
-- Batch 2 established serial durable Encounter drafts and explicit Relations decisions in schema v30; the current correction extends that staging to v31. Final completion remains the existing atomic observation/person/evidence/journal command. The canonical tracker records automated gates and the authenticated synthetic-media development walkthrough; production-model and full role walkthroughs remain separate. Do not treat this source checkpoint as release acceptance.
+- Batch 2 established serial durable Encounter drafts and explicit Relations decisions in schema v30; a later historical correction extended that staging to v31. Final completion remains the existing atomic observation/person/evidence/journal command. The canonical tracker records automated gates and the authenticated synthetic-media development walkthrough; production-model and full role walkthroughs remain separate. Do not treat this source checkpoint as release acceptance.
 
 ## Start here
 

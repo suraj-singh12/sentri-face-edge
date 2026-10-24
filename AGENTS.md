@@ -1,5 +1,13 @@
 # SentriFace Edge contributor guidance
 
+## Current baseline and implementation workflow
+
+Batch 3.7 is committed as `555433f082dc39112bd815dddf3a8f35791f2f4b` (schema v34). The verified hardening baseline is `683f3641e3532f08e180fe6c4c4386ac0f798917`, after [Issue #1](https://github.com/suraj-singh12/sentri-face-edge/issues/1) / [PR #8](https://github.com/suraj-singh12/sentri-face-edge/pull/8) completed CI repair. [Hardening CI #40071662474](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40071662474) passed all five jobs, including unsigned Windows AMD64 packaging. Python 3.12 is the only active target; Python 3.11 is disabled. Batch 4 / World vNext remains planned, not implemented. Green CI and unsigned packaging do not establish production signing or current-artifact installer/model lifecycle acceptance.
+
+GitHub Issues are the durable source for approved implementation work ([roadmap](https://github.com/suraj-singh12/sentri-face-edge/issues/3)); issue priority labels in titles P0/P1/P2/etc. are roadmap priorities, not the repository's historical P0–P14 engineering phases. Before **each feature**, inspect the current code and docs, present a bounded issue review of exact scope, reuse opportunities, tests and material unanswered decisions, then obtain operator agreement. Recommend defaults and resolve the important decisions in one focused review round when practical; do not endlessly reopen trivial implementation choices. If product truth/authority cannot safely be inferred, ask rather than invent.
+
+Once an issue is approved, create a dedicated issue-linked branch (`fix/issue-N-...`, `feature/issue-N-...`, `docs/issue-N-...`), and open a PR targeting **only** `release-v2.0.0-hardening`. Implement a coherent batch with tests, self-review and updates to existing canonical documentation; run relevant automated checks before merging, and do not call red CI green. **Do not merge a PR into the hardening branch until the operator explicitly approves that exact merge.** Never modify, commit, push, merge, cherry-pick or retarget to `main` unless the operator gives separate **explicit permission for that action**. Neither feature completion nor release readiness implies permission to touch `main`. Do not install unattended auto-merge policies. Present a Figma-first design for any substantial UI/interaction refinement **before coding**. Do not silently implement other open issues or commit/tag/push unless authorized.
+
 ## Reference Only source authority (Batch 3.7, schema v34)
 
 An embedding is a biometric sample, not identity authority. Different genuine photos independently run inference; Person identity never borrows an earlier vector. Exact-equal serialized vectors may share a stored sample, but each Reference source and Encounter face assignment retains its own identity. Encounter corrections change only their assignments. A sample whose active sources resolve to different canonical Persons is excluded from ordinary recognition; this conflict is derived, not a persisted lifecycle. Reference ownership, active state and cap remain unchanged.
@@ -41,9 +49,9 @@ Archive and delete are identity states, not historical erasure. Archived people 
 
 Keep SQL writes behind the storage/service boundary. Do not let React components directly maintain durable association state. Prefer additive, versioned migrations and compatibility reads over broad rewrites.
 
-## Implementation sequence
+## Historical engineering sequence
 
-Follow `docs/IMPLEMENTATION_PLAN.md` in order. Do not build later-phase UI projections on temporary association state. P0 must establish the migration/version foundation before domain feature work; P1 journaling must precede new graph-affecting writes.
+Follow `docs/IMPLEMENTATION_PLAN.md` for original P0–P14 architectural prerequisites and current batch status, and GitHub Issues for newly planned work. Do not build later-phase UI projections on temporary association state. The original phase P0 migration/version foundation and P1 journaling prerequisite remain important historical dependencies, separate from the roadmap priority P0 CI repair completed in Issue #1.
 
 ## Transaction and journal rules
 
