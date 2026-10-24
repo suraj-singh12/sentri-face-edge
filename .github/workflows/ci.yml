@@ -1,5 +1,11 @@
 name: CI and Windows packaging
 
+# A new commit supersedes queued/running checks for the same PR/branch.
+# Keep push and pull_request conclusions separate to preserve PR checks.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
   pull_request:
