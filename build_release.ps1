@@ -289,6 +289,7 @@ try {
 
     $NuitkaArgs = @(
         "--mode=standalone",
+        "--assume-yes-for-downloads",
         "--output-dir=$BuildRoot",
         "--output-filename=SentriFaceEdge.exe",
         "--windows-console-mode=disable",
