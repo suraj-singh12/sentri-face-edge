@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import sys
 import types
 
@@ -35,6 +36,7 @@ def test_source_launcher_bootstraps_only_when_needed_and_has_safe_reset() -> Non
     assert 'reset_macos_dev_authority.py" "$DEV_DATA_DIR"' in launcher
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX UID/ownership reset behavior")
 def test_reset_removes_readonly_dev_bundle_and_only_dev_keys(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     support = tmp_path / "Library" / "Application Support"
@@ -89,6 +91,7 @@ def test_reset_refuses_symlinked_parent(tmp_path, monkeypatch) -> None:
     assert (real_library / "Application Support" / "SentriFace-Dev").exists()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX UID/ownership reset behavior")
 def test_reset_keeps_database_key_if_file_removal_fails(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     dev = tmp_path / "Library" / "Application Support" / "SentriFace-Dev"
