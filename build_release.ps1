@@ -154,12 +154,16 @@ if ($VersionSource -notmatch 'APP_VERSION\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"') {
 $Version = $Matches[1]
 $VersionQuad = "$Version.0"
 $ExpectedTags = @("rc-v$Version", "release-v$Version")
-# GitHub Actions checks out a detached HEAD; no branch name is returned.
-# A candidate build may proceed there, while tagged release checks below stay strict.
-$Branch = [string](git branch --show-current)
-$Branch = $Branch.Trim()
+# GitHub Actions checks out a detached HEAD. PowerShell returns $null for
+# a native command with no output; never call .Trim() on that result.
+# Candidate builds can run detached, but production tags/signatures remain strict.
+$BranchOutput = @(git branch --show-current)
 if ($LASTEXITCODE -ne 0) {
     throw "Git branch inspection failed."
+}
+$Branch = ""
+if ($BranchOutput.Count -gt 0 -and $null -ne $BranchOutput[0]) {
+    $Branch = ([string]$BranchOutput[0]).Trim()
 }
 
 if ($ProductionRelease) {
