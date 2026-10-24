@@ -32,7 +32,10 @@ def main() -> int:
     production = _resolved(Path(local_app_data) / "SentriFace")
     supplied = _resolved(args.data_dir)
     if supplied != expected or supplied == production:
-        parser.error("refusing a non-default or production development credential target")
+        parser.error(
+            "refusing a non-default or production development credential target"
+            f" (expected {expected!s}; supplied {supplied!s})"
+        )
 
     try:
         import keyring
