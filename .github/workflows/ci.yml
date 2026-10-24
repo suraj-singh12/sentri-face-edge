@@ -1,7 +1,7 @@
 name: CI and Windows packaging
 
 # One workflow per PR revision. Direct pushes only run on protected
-# integration branches; feature/bug-fix/docs branches run through PRs to hardening.
+# integration branches; feature/bug-fix/docs branches run through PRs only.
 # All jobs are read-only except artifact upload. No workflow merges or pushes code.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -14,6 +14,7 @@ on:
       - release-v2.0.0-hardening
   pull_request:
     branches:
+      - main
       - release-v2.0.0-hardening
 
 permissions:
