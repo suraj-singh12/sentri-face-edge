@@ -6,6 +6,10 @@ on:
     branches:
       - fix/issue-1-cross-platform-ci
 
+concurrency:
+  group: issue-1-ui-refresh-branch
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
