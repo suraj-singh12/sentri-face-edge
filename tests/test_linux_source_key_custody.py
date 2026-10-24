@@ -9,6 +9,11 @@ from sentriface.secure_files import write_protected_bytes, read_protected_bytes
 from sentriface.storage.sqlite_store import SQLiteIdentityStore
 
 
+# Linux's POSIX ownership and local source-key custody are not available on
+# Windows/macOS. Portable OS-vault behavior has its own cross-platform tests.
+pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux source-key custody only")
+
+
 @pytest.fixture
 def source_authority(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
