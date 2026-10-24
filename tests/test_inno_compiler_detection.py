@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,7 +9,9 @@ import pytest
 
 
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
-pytestmark = pytest.mark.skipif(not POWERSHELL, reason="PowerShell is required")
+pytestmark = pytest.mark.skipif(
+    os.name != "nt" or not POWERSHELL, reason="Windows PowerShell is required"
+)
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -24,27 +27,35 @@ ROOT = Path(__file__).resolve().parents[1]
         ("Inno Setup 7 Command-Line Compiler", 1, False),
     ],
 )
-def test_compiler_banner_validation(banner: str, exit_code: int, accepted: bool) -> None:
+def test_compiler_banner_validation(
+    tmp_path: Path, banner: str, exit_code: int, accepted: bool
+) -> None:
     build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
-    start = build.index("$InnoBannerOutput =")
+    start = build.index("$InnoQueryErrorPreference =")
     end = build.index("if ($SigningAvailable -and", start)
-    # Execute the production validation without building or changing the machine.
-    # The fake command supplies ISCC's stdout and native exit code contract.
+    # A native command is essential: Windows PowerShell 5.1 treats native stderr
+    # as ErrorRecords under Stop, even with redirection. ISCC /? writes help there.
+    compiler = tmp_path / "fake-iscc.cmd"
+    compiler.write_text(
+        '@echo off\n'
+        'if not "%~1"=="/?" exit /b 99\n'
+        + (f"echo {banner}\n" if banner else "")
+        + "echo Copyright (C) Jordan Russell\n"
+        + "echo Usage: iscc [options] scriptfile.iss 1>&2\n"
+        + f"exit /b {exit_code}\n",
+        encoding="ascii",
+    )
+    compiler_literal = str(compiler).replace("'", "''")
     script = f"""
 $ErrorActionPreference = 'Stop'
-function Invoke-FakeCompiler {{
-    if ($args.Count -ne 1 -or $args[0] -ne '/?') {{ throw 'Expected /?' }}
-    $global:LASTEXITCODE = {exit_code}
-    if ('{banner}') {{ '{banner}' }}
-    'Copyright (C) Jordan Russell'
-}}
-$InnoCompiler = 'Invoke-FakeCompiler'
+$InnoCompiler = '{compiler_literal}'
 try {{
 {build[start:end]}
 }} catch {{
     Write-Output $_.Exception.Message
     exit 1
 }}
+if ($ErrorActionPreference -ne 'Stop') {{ throw 'Error preference was not restored' }}
 """
     result = subprocess.run(
         [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", script],

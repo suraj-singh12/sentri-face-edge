@@ -198,8 +198,16 @@ if (-not (Test-Path -LiteralPath $InnoCompiler -PathType Leaf)) {
 # The supported /? command reports the compiler's major version in its banner
 # (including Inno Setup 7.0, which does not support --version).
 # Help is written to stderr; only the identifying banner on stdout is needed.
-$InnoBannerOutput = @(& $InnoCompiler /? 2>$null)
-$InnoHelpExitCode = $LASTEXITCODE
+$InnoQueryErrorPreference = $ErrorActionPreference
+try {
+    # Windows PowerShell 5.1 turns native stderr into ErrorRecords even when
+    # redirected. Judge this query by its exit code and banner, not help text.
+    $ErrorActionPreference = "Continue"
+    $InnoBannerOutput = @(& $InnoCompiler /? 2>$null)
+    $InnoHelpExitCode = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $InnoQueryErrorPreference
+}
 $InnoBanners = @($InnoBannerOutput | Where-Object {
     [string]$_ -match '^Inno Setup [0-9]+(?:\.[0-9]+)*(?: \(32-bit\))? Command-Line Compiler$'
 })
