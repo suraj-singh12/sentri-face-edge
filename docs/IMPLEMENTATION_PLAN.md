@@ -1,8 +1,8 @@
 # Global identity graph implementation plan
 
-## Current work — Batch 3.7 (uncommitted implementation)
+## Completed baseline — Batch 3.7 (committed; schema v34)
 
-Starting branch/remote: `release-v2.0.0-hardening` / `30b89cb7af2ef35316db321457264f7aabb8b2c8`. Preserve earlier Attach ownership/Retry/Cancel, cleanup and backup-button work. No commit/tag/push or Batch 4.
+Committed and pushed on `release-v2.0.0-hardening` as `555433f082dc39112bd815dddf3a8f35791f2f4b` (parent/original starting baseline `30b89cb7af2ef35316db321457264f7aabb8b2c8`). Attach ownership/Retry/Cancel, cleanup and backup-button work is included. Batch 4 has not started. This is source implementation qualification, not signed 2.0.0 release acceptance.
 
 The source-ownership decision is resolved: Reference identity remains independent of Encounter correction. The earlier blocker fixture supplied identical synthetic vectors; real distinct photos independently produced E1/E2 (cosine about 0.709). Production exact-vector dedup remains allowed for equal model outputs. The bounded shared-row issue is handled by source-specific authority and derived recognition exclusion when current canonical source identities disagree.
 
@@ -14,11 +14,19 @@ Existing scan-session target/revision ownership remains schema-v33's smallest ex
 
 Exact test/live results and preserved earlier evidence are in `/workspace/scratch/sentriface-batch37/REPORT.md`; implementation readiness requires full regression, real ONNX/Chromium, fresh encrypted restore/restart and supported rebuild, rather than unit tests alone.
 
-**Final Batch 3.7 qualification (uncommitted):** backend 736 passed / 47 skipped / 137 subtests; frontend 124 passed; production build, Python compile and diff checks passed. Real CPU ONNX/Chromium exercised both shared Reference entry points, admission rejection, cap/lifecycle, canonical merge, cross-role guards, permissions and retained Attach ownership. A supported encrypted backup restored into a completely fresh authority and normal restart preserved domain truth. Supported graph rebuild passed with unchanged Reference state and occurrence projection. Exact evidence, first failures and scope limits remain in the external Batch 3.7 report.
+**Final Batch 3.7 qualification (completed before commit `555433f`):** backend 736 passed / 47 skipped / 137 subtests; frontend 124 passed; production build, Python compile and diff checks passed. Real CPU ONNX/Chromium exercised both shared Reference entry points, admission rejection, cap/lifecycle, canonical merge, cross-role guards, permissions and retained Attach ownership. A supported encrypted backup restored into a completely fresh authority and normal restart preserved domain truth. Supported graph rebuild passed with unchanged Reference state and occurrence projection. Exact evidence, first failures and scope limits remain in the external Batch 3.7 report.
 
 Encounter revision fingerprints exclude physical media locations, which legitimately relocate during restore; media IDs and semantic provenance remain versioned. Migration translates only still-valid pre-v34 Attach preconditions to the new fingerprint. Genuinely stale revisions remain stale. Source-scoped profile reads show the requested Person's own Reference/Encounter media instead of a shared embedding row's original image. Historical raw embedding ownership remains preserved. Cached legacy Add Face UI drafts can only be cancelled and reopened through the shared Reference route; there is no old admission bypass.
 
-## Current work — Batch 3.6 Provenance & Canonical Integrity Repair
+## Next priorities — GitHub Issues (not yet implemented)
+
+Priority P0 is to restore CI on the committed baseline: [#1 — multi-OS tests, frontend generated bundle, Windows packaging](https://github.com/suraj-singh12/sentri-face-edge/issues/1). On the pushed SHA, Linux Python 3.11/3.12 passed, while macOS ran Linux-only security tests, Windows ran Linux-only plus launcher tests, and the rebuilt frontend bundle did not match tracked assets. Windows packaging stopped at its backend test gate. Track actual root-cause fixes and cross-platform reruns in #1; do not bypass security or accept CI skips as the fix.
+
+Current documentation reconciliation is [#2](https://github.com/suraj-singh12/sentri-face-edge/issues/2). Feature roadmap, all requiring **bounded operator issue review before implementation**: [#3 Batch 4 World vNext](https://github.com/suraj-singh12/sentri-face-edge/issues/3) (Person-only recurrence, relationship explanation, visible/group-forming edges, deterministic grouping and correctness under correction/merge/rebuild/backup), [#4 Encounter Split/Merge](https://github.com/suraj-singh12/sentri-face-edge/issues/4) (semantics not yet approved), [#6 Figma-first operator UI/acceptance](https://github.com/suraj-singh12/sentri-face-edge/issues/6), and [#5 signed 2.0.0 release acceptance](https://github.com/suraj-singh12/sentri-face-edge/issues/5). No feature issue authorizes implementation until reviewed. Resolve consequential product decisions in one concise review round where possible; preserve the reuse-first architecture and canonical docs; use feature branches/PRs and green CI before merging.
+
+Earlier P0–P14 in this document are historical engineering phase names, distinct from the new P0–P4 **priority** labels in GitHub issue titles. Old batch sections below are historical checkpoints, not the present repository state.
+
+## Historical checkpoint — Batch 3.6 Provenance & Canonical Integrity Repair
 
 Starting branch/commit: `release-v2.0.0-hardening` / `1ea2a38d10be0da4c00fea4a3f53053b9eaef998`, clean. Changes remain uncommitted; no tag and no Batch 4.
 
