@@ -2,7 +2,7 @@
 
 ## Current baseline and implementation workflow
 
-The last committed Batch 3.7 product baseline on `release-v2.0.0-hardening` is `555433f082dc39112bd815dddf3a8f35791f2f4b` (schema v34). Batch 4 is not implemented. The pushed baseline's CI is red; [P0 CI repair](https://github.com/suraj-singh12/sentri-face-edge/issues/1) is a required gate before normal feature merges. Source-level Linux ONNX and encrypted restore qualification do not equal signed cross-platform release acceptance.
+Batch 3.7 is committed as `555433f082dc39112bd815dddf3a8f35791f2f4b` (schema v34). The verified hardening baseline is `683f3641e3532f08e180fe6c4c4386ac0f798917`, after [Issue #1](https://github.com/suraj-singh12/sentri-face-edge/issues/1) / [PR #8](https://github.com/suraj-singh12/sentri-face-edge/pull/8) completed CI repair. [Hardening CI #40071662474](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40071662474) passed all five jobs, including unsigned Windows AMD64 packaging. Python 3.12 is the only active target; Python 3.11 is disabled. Batch 4 / World vNext remains planned, not implemented. Green CI and unsigned packaging do not establish production signing or current-artifact installer/model lifecycle acceptance.
 
 GitHub Issues are the durable source for approved implementation work ([roadmap](https://github.com/suraj-singh12/sentri-face-edge/issues/3)); issue priority labels in titles P0/P1/P2/etc. are roadmap priorities, not the repository's historical P0–P14 engineering phases. Before **each feature**, inspect the current code and docs, present a bounded issue review of exact scope, reuse opportunities, tests and material unanswered decisions, then obtain operator agreement. Recommend defaults and resolve the important decisions in one focused review round when practical; do not endlessly reopen trivial implementation choices. If product truth/authority cannot safely be inferred, ask rather than invent.
 
@@ -51,7 +51,7 @@ Keep SQL writes behind the storage/service boundary. Do not let React components
 
 ## Historical engineering sequence
 
-Follow `docs/IMPLEMENTATION_PLAN.md` for original P0–P14 architectural prerequisites and current batch status, and GitHub Issues for newly planned work. Do not build later-phase UI projections on temporary association state. The original phase P0 migration/version foundation and P1 journaling prerequisite remain important historical dependencies, separate from current priority P0 CI repair.
+Follow `docs/IMPLEMENTATION_PLAN.md` for original P0–P14 architectural prerequisites and current batch status, and GitHub Issues for newly planned work. Do not build later-phase UI projections on temporary association state. The original phase P0 migration/version foundation and P1 journaling prerequisite remain important historical dependencies, separate from the roadmap priority P0 CI repair completed in Issue #1.
 
 ## Transaction and journal rules
 

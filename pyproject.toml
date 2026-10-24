@@ -9,7 +9,7 @@ description = "CPU-first, fully offline face identification engine for Windows, 
 readme = "README.md"
 license = "LicenseRef-Proprietary"
 license-files = ["LICENSE"]
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.12,<3.13"
 dependencies = [
   "argon2-cffi>=25.1,<26",
   "cryptography>=42,<51",

@@ -31,7 +31,9 @@ class WindowsSourceLauncherTest(unittest.TestCase):
             env=env,
             text=True,
             capture_output=True,
-            timeout=30,
+            # A cold PowerShell process competes with parallel CI packaging jobs.
+            # Bound launcher smoke tests without treating runner load as a hang.
+            timeout=120,
             check=False,
         )
 

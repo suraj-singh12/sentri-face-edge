@@ -1,12 +1,14 @@
 # SentriFace Edge agent handoff
 
-## Current handoff — Batch 3.7 committed; P0 CI next
+## Current handoff — schema v34; CI repair complete
 
-Committed/pushed Batch 3.7 baseline: `release-v2.0.0-hardening` at `555433f082dc39112bd815dddf3a8f35791f2f4b` (parent `30b89cb7af2ef35316db321457264f7aabb8b2c8`), schema v34. Preserve schema-v33 Attach target ownership/Retry/Cancel/cleanup and backup-card sizing. Reference Only extends immutable enrollment provenance and source-specific lifecycle, with one shared NO_FACE/ENROLLED operation. No Batch 4 implementation yet. The push's multi-OS CI failed and is tracked in [P0 issue #1](https://github.com/suraj-singh12/sentri-face-edge/issues/1); prior local/live gates do not establish platform CI or signed release readiness.
+Committed/pushed Batch 3.7 baseline: `release-v2.0.0-hardening` at `555433f082dc39112bd815dddf3a8f35791f2f4b` (parent `30b89cb7af2ef35316db321457264f7aabb8b2c8`), schema v34. Preserve schema-v33 Attach target ownership/Retry/Cancel/cleanup and backup-card sizing. Reference Only extends immutable enrollment provenance and source-specific lifecycle, with one shared NO_FACE/ENROLLED operation. No Batch 4 implementation yet. That initial push's CI failures were resolved by [Issue #1](https://github.com/suraj-singh12/sentri-face-edge/issues/1) / merged [PR #8](https://github.com/suraj-singh12/sentri-face-edge/pull/8).
+
+Verified hardening baseline: `683f3641e3532f08e180fe6c4c4386ac0f798917`. [Workflow #40071662474](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40071662474) passed all five jobs, including unsigned Windows AMD64 packaging, packaged-runtime checks and installer inspection. Application version is `2.0.0`; database schema is v34. Python 3.12 is the only active target; 3.11 is disabled. Batch 4 / World vNext remains planned, not implemented. The CI installer is an unsigned engineering candidate; production signing, exact-tag rebuild and its disposable-Windows installer/model lifecycle acceptance remain pending. Historical P14 acceptance does not qualify this artifact.
 
 Normal different photos independently infer E1/E2; the earlier fixture manually reused `(1,0)`. Exact-vector dedup remains legitimate but cannot collapse source identity. Encounter reassignment never transfers Reference ownership. Conflicting shared-row current canonical owners derive recognition exclusion; source active state/count/history remain intact. Do not restore the old global-embedding interpretation or serialize a mutable conflict flag.
 
-Canonical reading order remains README → IMPLEMENTATION_PLAN → PROJECT_OVERVIEW → ARCHITECTURE_STATE → DOMAIN_MODEL → FEATURES_BY_TAB → ARCHITECTURE_EXPLANATION → this handoff. Exact final verification/qualification and first failures are recorded in `/workspace/scratch/sentriface-batch37/REPORT.md`; prior partial evidence is preserved separately there. Future work must retain encryption, immutable source history, registry-owned authenticated closure and protected Linux source recovery custody.
+Canonical contributor reading order remains AGENTS → docs/README → IMPLEMENTATION_PLAN → PROJECT_OVERVIEW → ARCHITECTURE_STATE → DOMAIN_MODEL → FEATURES_BY_TAB → ARCHITECTURE_EXPLANATION → this handoff. Exact final verification/qualification and first failures are recorded in `/workspace/scratch/sentriface-batch37/REPORT.md`; prior partial evidence is preserved separately there. Future work must retain encryption, immutable source history, registry-owned authenticated closure and protected Linux source recovery custody.
 
 **Final Batch 3.7 pre-commit qualification (code now pushed):** backend 736 passed / 47 skipped / 137 subtests; frontend 124 passed; production build, Python compile and diff checks passed. Real CPU ONNX/Chromium exercised both shared Reference entry points, admission rejection, cap/lifecycle, canonical merge, cross-role guards, permissions and retained Attach ownership. A supported encrypted backup restored into a completely fresh authority and normal restart preserved domain truth. Supported graph rebuild passed with unchanged Reference state and occurrence projection. Exact evidence, first failures and scope limits remain in the external Batch 3.7 report.
 
@@ -16,18 +18,18 @@ Next planned features are captured in [World vNext #3](https://github.com/suraj-
 
 ## Historical checkpoint — Batch 3.6 handoff
 
-Baseline verified clean on `release-v2.0.0-hardening` at `1ea2a38d10be0da4c00fea4a3f53053b9eaef998`. Current repairs are uncommitted; do not commit/tag or start Batch 4. Reuse media_registry source provenance for writer admission and P11; preserve its exclusion of self-proving observation membership and scoped accepted-face media bindings. Preserve registry-owned authenticated backup closure and staged-only relocation guards.
+Baseline verified clean on `release-v2.0.0-hardening` at `1ea2a38d10be0da4c00fea4a3f53053b9eaef998`. At that checkpoint repairs were uncommitted; commit/tag/Batch 4 work was not authorized. Reuse media_registry source provenance for writer admission and P11; preserve its exclusion of self-proving observation membership and scoped accepted-face media bindings. Preserve registry-owned authenticated backup closure and staged-only relocation guards.
 
 Merge retires affected canonical standing-manual collisions deterministically inside its transaction, retaining raw history and IDs. Recognition displays full server-staged operator decisions rather than stale proposals; candidate browsing fixes nested PersonSummary access. No schema, World algorithm, recognition model/threshold or packaged custody change.
 
 Verification: 694 backend passed / 47 skipped / 135 subtests; 120 frontend passed; production build passed. Earlier focused setup failures and browser action/response-capture limitations are preserved in `/workspace/scratch/sentriface-batch36/`. Real complex rebuild succeeded; fresh supported recovery-kit import/Restore Safely, original administrator login and ordinary restored restart succeeded. Domain/assets/current reads match after declared physical-path, precondition-token and photo tie-order normalization; supported journals are the only durable authority additions. Secrets/kit/export remain in separate private directories.
 
-The next gate is a separately frozen clean-room reaudit; current uncommitted qualification is not Windows packaged release acceptance. Previous batch sections below are historical checkpoints.
+At that checkpoint the next gate was a separately frozen clean-room reaudit; its uncommitted qualification was not Windows packaged release acceptance. Previous batch sections below are historical checkpoints.
 
 
 ## Historical Batch 3.5 handoff
 
-Starting branch/baseline: `release-v2.0.0-hardening`, `cf8c847337735dc7d1acc4b185f9d0e1f01a732d`. Batch 3.5 changes are uncommitted; do not auto-commit/tag. Final gates are 676 backend passed / 47 skipped / 135 subtests, 118 frontend passed, production build and diff check passed. Targeted real ONNX/SQLCipher browser qualification and fresh recovery→restore→restart equivalence are complete; consult the tracker for evidence and bounded uncertainty. The next step after acceptance is a separately frozen three-phase clean-room reaudit, not Batch 4.
+Starting branch/baseline: `release-v2.0.0-hardening`, `cf8c847337735dc7d1acc4b185f9d0e1f01a732d`. At that checkpoint Batch 3.5 changes were uncommitted and auto-commit/tag was not authorized. Final gates are 676 backend passed / 47 skipped / 135 subtests, 118 frontend passed, production build and diff check passed. Targeted real ONNX/SQLCipher browser qualification and fresh recovery→restore→restart equivalence are complete; consult the tracker for evidence and bounded uncertainty. The next step after acceptance is a separately frozen three-phase clean-room reaudit, not Batch 4.
 
 Preserve the canonical effective frame-support helper, durable face decision distinctions, explicit Person enrollment contract, common read reconciliation, archived historical profile capability, cancellation cleanup ordering and lifecycle preflight/revalidation. Do not replace active/effective evidence reads with historical generations or compact provenance. Linux source recovery uses the same source eligibility/storage boundary, a private encrypted recovery-code record, and validated recovery-kit key admission. Normal OS custody/packaged enforcement is unchanged. Select source recovery at construction before background workers, never as a late replacement. Preserve the staged-only completed-review media-relocation transaction and reinstated live guard. Standalone completion retries retain the original operation ID.
 
@@ -43,16 +45,18 @@ The committed Batch 3 baseline and current verification follow-up contain schema
 
 Batch 3 gates: 577 backend passed, 47 skipped, 115 subtests passed; 112 frontend passed; production build and diff check passed. Authenticated synthetic-data UI exercised corrections, profile integration, manual add/retire and same-occurrence attachment. Follow-up gates: 583 backend passed, 47 skipped, 115 subtests; 112 frontend passed; build/diff check passed. A real Linux Secret Service vault enabled authenticated tests. Chromium exercised same-occurrence attachment, corrections, profile/manual controls, a small window and tombstone historical reads on isolated synthetic data. The canonical tracker owns exact coverage and manual limits. Older gate counts below are historical. Preserve World vNext, Encounter Split/Merge, signing/current-artifact Windows acceptance and P14 update delivery as deferred. No auto-commit or tag. Reading order/README ownership is unchanged.
 
-## Current checkpoint
+## Historical checkpoints — post-P14 through partial Batch 3.7
+
+The records below preserve earlier source and release milestones. Their schema versions, test counts, working-tree status, artifacts and pending walkthroughs describe those checkpoints, not the current v34/green-CI baseline above. The dated P14 acceptance record owns the older artifact's checksum; it does not identify or accept the latest CI installer.
 
 - Application version: `2.0.0` (`src/sentriface/_version.py`).
-- Database schema: v33 in the current partial Batch 3.7 source (`SQLiteIdentityStore`), extending v32 with targeted scan ownership; v30 is the Batch 2 staging foundation and v28 remains the frozen P11/P14 release baseline.
-- Current correction: durable pre-grouping media exclusion/restore, automatic finalized-media exclusion, reconciled group IDs/selected faces, combined canonical committed+active-draft recognition and proof-only duplicate prevention, atomic selected-face draft decisions, current-value form validation, 4.5-second default notifications, 250×250 Peek In and left-aligned recognition preference. Drafted means draft-created Person only. This is the historical Batch 2 stabilization checkpoint. Batch 3 now implements Encounter Management/Attach/Correct, profile/manual association integration and the deleted-Person historical-read fix; World vNext and Encounter Split/Merge remain deferred.
+- Database schema at the earlier partial Batch 3.7 checkpoint: v33 (`SQLiteIdentityStore`), extending v32 with targeted scan ownership; v30 is the Batch 2 staging foundation and v28 remains the frozen P11/P14 release baseline.
+- Batch 2/3 correction: durable pre-grouping media exclusion/restore, automatic finalized-media exclusion, reconciled group IDs/selected faces, combined canonical committed+active-draft recognition and proof-only duplicate prevention, atomic selected-face draft decisions, current-value form validation, 4.5-second default notifications, 250×250 Peek In and left-aligned recognition preference. Drafted means draft-created Person only. This is the historical Batch 2 stabilization checkpoint. Batch 3 now implements Encounter Management/Attach/Correct, profile/manual association integration and the deleted-Person historical-read fix; World vNext and Encounter Split/Merge remain deferred.
 - Final correctness gates: 561 backend tests passed, 47 skipped, 114 subtests; 112 frontend tests passed; production build/diff check passed. Authenticated synthetic-media development UI verified removal/reload, Event→Person flow, Peek In, filled forms, proof-only draft reuse, quality preference, final completion and Person Profile persistence. This is not production-model, full-role or release acceptance.
 - P0 through P14 source implementation is complete.
 - P10 through P13 are frozen.
 - Windows source mode and the unsigned pre-tag Windows 11 AMD64 build gates pass.
-  The current engineering installer and evidence are under
+  That checkpoint's engineering installer and evidence were under
   `dist/windows-x64/2.0.0/`; see `docs/p14/P14_RELEASE_ACCEPTANCE.md` for its
   checksum and exact acceptance boundary.
 - A controlled non-exportable signing identity exists, but installing its public
@@ -61,7 +65,7 @@ Batch 3 gates: 577 backend passed, 47 skipped, 115 subtests passed; 112 frontend
   approval, a verified signed candidate, the disposable-machine installer/model
   lifecycle, and a final clean build from exact tag `rc-v2.0.0` or
   `release-v2.0.0`.
-- The current artifact has not passed installed model onboarding, activation,
+- That checkpoint's artifact had not passed installed model onboarding, activation,
   restart persistence, rollback, or recognition with representative face images.
   Source-mode model lifecycle and packaged external ONNX sessions passed; the
   earlier installer lifecycle in the P14 record applies to a different artifact.
@@ -77,7 +81,7 @@ Batch 3 gates: 577 backend passed, 47 skipped, 115 subtests passed; 112 frontend
   transitions still need live UI verification. Do not treat those manual flows
   as release acceptance.
 - The 2026-09-27 Encounter batch places shared Event metadata and selected Event Note IDs on finalized observations, separates Event and Person forms, repairs Queue metadata/mentions, and uses the existing sighting note subject. Event Note IDs are Encounter→Person references, never Person relationship evidence. Pre-Batch-2 integration adds explicit NO_FACE Browse, durable face-origin reads, accepted-poor recognition fallback, a proof-only pre-creation duplicate check, and bounded read-only Global/Person Events. Schema v29 carries embedding eligibility and Queue search preference. Historical >~1 MB upload media is reduced before persistence; CPU detector preparation is transient. Current feature/role inventory is `docs/FEATURES_BY_TAB.md`; exact status and risks are in `docs/IMPLEMENTATION_PLAN.md`.
-- The current uncommitted Batch 2 working tree extends existing Queue staging and atomic review completion with serial Encounter drafts and durable Relations decisions. Schema v30 adds staging links and the minimal negative decision authority; positive evidence and graph projection remain separate. Exact retained media dedup, draft recognition overlay, lifecycle guards and relation-aware correction are implemented in source. Full backend/frontend/build gates pass; the canonical tracker records exact results and the outstanding live authenticated UI walkthrough. Do not treat this as a signed release or Windows acceptance.
+- At the Batch 2 checkpoint, the then-uncommitted working tree extended existing Queue staging and atomic review completion with serial Encounter drafts and durable Relations decisions. Schema v30 adds staging links and the minimal negative decision authority; positive evidence and graph projection remain separate. Exact retained media dedup, draft recognition overlay, lifecycle guards and relation-aware correction are implemented in source. Full backend/frontend/build gates pass; the canonical tracker records exact results and the outstanding live authenticated UI walkthrough. Do not treat this as a signed release or Windows acceptance.
 - The 2026-09-29 post-Batch-2 stabilization refines this same working tree. Review Photos now identifies finalized-media conflicts per photo and can continue with valid siblings; grouping is Encounter-first, asks for a count, and can suggest existing uploaded-subfolder boundaries. Skip is temporary group deferral and never a final identity decision; all deferred groups return automatically. Long queue reviews use page scroll, the current face is boxed, Relations choices show pressed state, and Person Graph hover explains distinct canonical shared Encounters and directed note references. No new schema, authority, or World scoring was added. The tracker owns exact verification status and deferred manual walkthrough.
 
 ## Read in this order
@@ -136,7 +140,7 @@ must not be edited by hand.
 
 ## Local development
 
-Use Python 3.11 or 3.12. On macOS, use the source launcher for a fast,
+Use Python 3.12 only; Python 3.11 support is disabled. On macOS, use the source launcher for a fast,
 product-isolated synthetic development run:
 
 ```bash

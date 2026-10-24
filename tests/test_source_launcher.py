@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import sys
 import types
 
@@ -25,7 +26,8 @@ def test_macos_source_launcher_has_an_explicit_non_product_authority() -> None:
 def test_source_launcher_bootstraps_only_when_needed_and_has_safe_reset() -> None:
     launcher = (Path(__file__).resolve().parents[1] / "run.sh").read_text(encoding="utf-8")
 
-    assert "python3.12 python3.11" in launcher
+    assert "for candidate in python3.12 python3; do" in launcher
+    assert "python3.11" not in launcher
     assert ".sentriface-dependencies.sha256" in launcher
     assert 'pip install -e ".[test]"' in launcher
     assert "Type RESET-DEV to continue" in launcher
@@ -35,6 +37,7 @@ def test_source_launcher_bootstraps_only_when_needed_and_has_safe_reset() -> Non
     assert 'reset_macos_dev_authority.py" "$DEV_DATA_DIR"' in launcher
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX UID/ownership reset behavior")
 def test_reset_removes_readonly_dev_bundle_and_only_dev_keys(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     support = tmp_path / "Library" / "Application Support"
@@ -89,6 +92,7 @@ def test_reset_refuses_symlinked_parent(tmp_path, monkeypatch) -> None:
     assert (real_library / "Application Support" / "SentriFace-Dev").exists()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX UID/ownership reset behavior")
 def test_reset_keeps_database_key_if_file_removal_fails(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     dev = tmp_path / "Library" / "Application Support" / "SentriFace-Dev"

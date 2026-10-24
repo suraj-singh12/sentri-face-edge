@@ -2,13 +2,13 @@
 
 ## Current committed baseline — Batch 3.7
 
-Committed and pushed at `555433f082dc39112bd815dddf3a8f35791f2f4b` on `release-v2.0.0-hardening`. Schema v34 extends existing immutable enrollment history with Reference source identity/provenance and append-only lifecycle revisions. NO_FACE Add Face and ENROLLED Recognition References management share admission, cap, lifecycle, authorization and recognition. Encounter correction is source-scoped; equal-vector dedup cannot transfer Reference identity. Existing schema-v33 Attach ownership/Retry/Cancel and compact backup-card fix are preserved. IMPLEMENTATION_PLAN owns implementation/verification status; DOMAIN_MODEL owns the source contract, ARCHITECTURE_STATE its representation, FEATURES_BY_TAB operator entry points, and ARCHITECTURE_EXPLANATION the rationale. No Batch 4.
+Batch 3.7 was committed at `555433f082dc39112bd815dddf3a8f35791f2f4b`. The verified `release-v2.0.0-hardening` baseline is `683f3641e3532f08e180fe6c4c4386ac0f798917`, including merged PR #8. Schema v34 extends existing immutable enrollment history with Reference source identity/provenance and append-only lifecycle revisions. NO_FACE Add Face and ENROLLED Recognition References management share admission, cap, lifecycle, authorization and recognition. Encounter correction is source-scoped; equal-vector dedup cannot transfer Reference identity. Existing schema-v33 Attach ownership/Retry/Cancel and compact backup-card fix are preserved. IMPLEMENTATION_PLAN owns implementation/verification status; DOMAIN_MODEL owns the source contract, ARCHITECTURE_STATE its representation, FEATURES_BY_TAB operator entry points, and ARCHITECTURE_EXPLANATION the rationale. No Batch 4.
 
 ## Next priorities and current qualification
 
-- **P0:** [#1 restore green CI](https://github.com/suraj-singh12/sentri-face-edge/issues/1). The pushed Batch 3.7 SHA passes Linux backend on both configured Python versions; macOS/Windows test selection/launcher checks and frontend generated-asset drift make the overall workflow red. Signed/packaged release acceptance is still pending.
-- **Documentation:** [#2 status reconciliation](https://github.com/suraj-singh12/sentri-face-edge/issues/2) tracks this commit's source-of-truth update.
-- **Feature issues, not yet implemented:** [#3 World vNext](https://github.com/suraj-singh12/sentri-face-edge/issues/3), [#4 Encounter Split/Merge](https://github.com/suraj-singh12/sentri-face-edge/issues/4), [#6 Figma-first operator workflow](https://github.com/suraj-singh12/sentri-face-edge/issues/6) and [#5 release acceptance](https://github.com/suraj-singh12/sentri-face-edge/issues/5). Every issue must undergo a bounded review and operator approval before coding; material UI changes are design-first, followed by issue branch, PR, checks and merge.
+- **P0 complete:** [#1 CI repair](https://github.com/suraj-singh12/sentri-face-edge/issues/1) merged through [PR #8](https://github.com/suraj-singh12/sentri-face-edge/pull/8). [Hardening CI #40071662474](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40071662474) passed Linux/macOS/Windows backend, frontend and unsigned Windows packaging. Python 3.12 is the only active target; 3.11 is disabled. Production signatures and current-artifact installer/model lifecycle acceptance remain pending.
+- **P1 documentation:** [#2 status reconciliation](https://github.com/suraj-singh12/sentri-face-edge/issues/2) tracks this commit's source-of-truth update.
+- **Remaining work, not yet completed:** [#3 World vNext](https://github.com/suraj-singh12/sentri-face-edge/issues/3), [#4 Encounter Split/Merge](https://github.com/suraj-singh12/sentri-face-edge/issues/4), [#6 Figma-first operator workflow](https://github.com/suraj-singh12/sentri-face-edge/issues/6) and [#5 release acceptance](https://github.com/suraj-singh12/sentri-face-edge/issues/5). Every issue must undergo a bounded review and operator approval before coding; material UI changes are design-first, followed by issue branch, PR, checks and merge.
 - Roadmap priority prefixes P0–P4 are **not** the historical engineering phases P0–P14 described below.
 
 ## Historical implementation checkpoints
@@ -22,8 +22,8 @@ Committed and pushed at `555433f082dc39112bd815dddf3a8f35791f2f4b` on `release-v
 - P0 through P14 source implementation is complete.
 - P10 through P13 are complete and frozen, including all of P11-A through P11-E.
 - Historical P14 unsigned Windows 11 x64 installer lifecycle acceptance passed
-  for an earlier artifact. The current 2.0.0 unsigned pre-tag candidate passed
-  source, build, inspection, and packaged runtime checks.
+  for an earlier artifact. Its source, build, inspection and packaged runtime
+  results remain historical; the latest unsigned CI result is linked above.
 - Production P14 acceptance remains pending verified signatures, the current
   artifact's disposable-Windows installer and packaged model lifecycle, and a
   clean exact `rc-v2.0.0` or `release-v2.0.0` rebuild.

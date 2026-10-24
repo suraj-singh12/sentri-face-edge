@@ -141,7 +141,7 @@ function Test-SupportedPython([string]$Command, [string[]]$PrefixArguments) {
     try {
         & $Command @PrefixArguments -c (
             "import platform,struct,sys; " +
-            "ok=(3,11)<=sys.version_info[:2]<=(3,12) and struct.calcsize('P')==8 " +
+            "ok=sys.version_info[:2]==(3,12) and struct.calcsize('P')==8 " +
             "and platform.machine().lower() in {'amd64','x86_64'}; " +
             "raise SystemExit(0 if ok else 1)"
         ) *> $null
@@ -155,9 +155,8 @@ if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
     $Candidates = @()
     if (Get-Command py -ErrorAction SilentlyContinue) {
         $Candidates += [pscustomobject]@{ Command = "py"; Prefix = @("-3.12") }
-        $Candidates += [pscustomobject]@{ Command = "py"; Prefix = @("-3.11") }
     }
-    foreach ($name in @("python3.12", "python3.11", "python")) {
+    foreach ($name in @("python3.12", "python")) {
         if (Get-Command $name -ErrorAction SilentlyContinue) {
             $Candidates += [pscustomobject]@{ Command = $name; Prefix = @() }
         }
@@ -176,11 +175,11 @@ if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
     throw (
         "SentriFace Windows source development requires a 64-bit AMD64 Python " +
-        "3.11 or 3.12 installation. Install one, then run .\run.ps1 again."
+        "3.12 installation. Install one, then run .\run.ps1 again."
     )
 }
 if (-not (Test-SupportedPython $Python @())) {
-    throw "The repository virtual environment must use 64-bit AMD64 Python 3.11 or 3.12: $Python"
+    throw "The repository virtual environment must use 64-bit AMD64 Python 3.12: $Python"
 }
 
 $DependencyFiles = @(

@@ -14,7 +14,12 @@ SERVICES = (
 
 
 def _resolved(path: Path) -> Path:
-    return Path(os.path.abspath(os.path.expandvars(os.path.expanduser(str(path)))))
+    # Windows may supply LOCALAPPDATA using an 8.3 short-name alias
+    # (RUNNER~1) while PowerShell passes the same directory by its long name
+    # (runneradmin). Compare canonical locations, not differently spelled
+    # aliases. Realpath also resolves junctions before the product-path guard.
+    expanded = Path(os.path.abspath(os.path.expandvars(os.path.expanduser(str(path)))))
+    return expanded.resolve(strict=False)
 
 
 def main() -> int:
@@ -32,7 +37,10 @@ def main() -> int:
     production = _resolved(Path(local_app_data) / "SentriFace")
     supplied = _resolved(args.data_dir)
     if supplied != expected or supplied == production:
-        parser.error("refusing a non-default or production development credential target")
+        parser.error(
+            "refusing a non-default or production development credential target"
+            f" (expected {expected!s}; supplied {supplied!s})"
+        )
 
     try:
         import keyring
