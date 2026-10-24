@@ -154,7 +154,10 @@ if ($VersionSource -notmatch 'APP_VERSION\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"') {
 $Version = $Matches[1]
 $VersionQuad = "$Version.0"
 $ExpectedTags = @("rc-v$Version", "release-v$Version")
-$Branch = (git branch --show-current).Trim()
+# GitHub Actions checks out a detached HEAD; no branch name is returned.
+# A candidate build may proceed there, while tagged release checks below stay strict.
+$Branch = [string](git branch --show-current)
+$Branch = $Branch.Trim()
 if ($LASTEXITCODE -ne 0) {
     throw "Git branch inspection failed."
 }
