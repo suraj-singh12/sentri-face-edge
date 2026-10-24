@@ -1,5 +1,13 @@
 # SentriFace Edge contributor guidance
 
+## Current baseline and implementation workflow
+
+The last committed Batch 3.7 product baseline on `release-v2.0.0-hardening` is `555433f082dc39112bd815dddf3a8f35791f2f4b` (schema v34). Batch 4 is not implemented. The pushed baseline's CI is red; [P0 CI repair](https://github.com/suraj-singh12/sentri-face-edge/issues/1) is a required gate before normal feature merges. Source-level Linux ONNX and encrypted restore qualification do not equal signed cross-platform release acceptance.
+
+GitHub Issues are the durable source for approved implementation work ([roadmap](https://github.com/suraj-singh12/sentri-face-edge/issues/3)); issue priority labels in titles P0/P1/P2/etc. are roadmap priorities, not the repository's historical P0–P14 engineering phases. Before **each feature**, inspect the current code and docs, present a bounded issue review of exact scope, reuse opportunities, tests and material unanswered decisions, then obtain operator agreement. Recommend defaults and resolve the important decisions in one focused review round when practical; do not endlessly reopen trivial implementation choices. If product truth/authority cannot safely be inferred, ask rather than invent.
+
+Once an issue is approved, use a focused branch and Pull Request. Implement a coherent batch with tests, self-review and updates to existing canonical documentation; run relevant automated checks before merging, and do not call red CI green. Present a Figma-first design for any substantial UI/interaction refinement **before coding**. Do not silently implement other open issues or commit/tag/push unless authorized.
+
 ## Reference Only source authority (Batch 3.7, schema v34)
 
 An embedding is a biometric sample, not identity authority. Different genuine photos independently run inference; Person identity never borrows an earlier vector. Exact-equal serialized vectors may share a stored sample, but each Reference source and Encounter face assignment retains its own identity. Encounter corrections change only their assignments. A sample whose active sources resolve to different canonical Persons is excluded from ordinary recognition; this conflict is derived, not a persisted lifecycle. Reference ownership, active state and cap remain unchanged.
@@ -41,9 +49,9 @@ Archive and delete are identity states, not historical erasure. Archived people 
 
 Keep SQL writes behind the storage/service boundary. Do not let React components directly maintain durable association state. Prefer additive, versioned migrations and compatibility reads over broad rewrites.
 
-## Implementation sequence
+## Historical engineering sequence
 
-Follow `docs/IMPLEMENTATION_PLAN.md` in order. Do not build later-phase UI projections on temporary association state. P0 must establish the migration/version foundation before domain feature work; P1 journaling must precede new graph-affecting writes.
+Follow `docs/IMPLEMENTATION_PLAN.md` for original P0–P14 architectural prerequisites and current batch status, and GitHub Issues for newly planned work. Do not build later-phase UI projections on temporary association state. The original phase P0 migration/version foundation and P1 journaling prerequisite remain important historical dependencies, separate from current priority P0 CI repair.
 
 ## Transaction and journal rules
 
