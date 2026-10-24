@@ -1,15 +1,20 @@
 name: CI and Windows packaging
 
-# A new commit supersedes queued/running checks for the same PR/branch.
-# Keep push and pull_request conclusions separate to preserve PR checks.
+# One workflow per PR revision. Direct pushes only run on protected
+# integration branches; feature/bug-fix/docs branches run through PRs to hardening.
+# All jobs are read-only except artifact upload. No workflow merges or pushes code.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 on:
   push:
+    branches:
+      - main
+      - release-v2.0.0-hardening
   pull_request:
-  workflow_dispatch:
+    branches:
+      - release-v2.0.0-hardening
 
 permissions:
   contents: read
@@ -47,13 +52,6 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
-      # Temporary Issue #1 diagnostic: capture the exact clean Linux build
-      # when the tracked bundle freshness check differs across machines.
-      - uses: actions/upload-artifact@v4
-        with:
-          name: issue-1-frontend-generated-static
-          path: src/sentriface/ui_static/
-          retention-days: 3
       - run: git diff --exit-code -- src/sentriface/ui_static
 
   windows-package:
