@@ -462,3 +462,10 @@ def test_activity_scoped_discovery_person_and_cluster_navigation_agree(store,vie
     assert {p.canonical_person_id for p in frequent.discoveries}=={a.person_id,b.person_id}
     with pytest.raises(KeyError):
         store.get_world_graph_v2_read(replace(request,detail_level=L.PERSON,focus_type='PERSON',focus_id=c.person_id))
+
+
+def test_location_query_length_precedes_unicode_casefold_expansion(store):
+    person=store.create_person('A')
+    observe(store,'unicode-location',[person],location='SSEN city')
+    assert read(store,C.LOCATION_SUGGESTIONS,location_query='ße').available_facets['locations']==[]
+    assert read(store,C.LOCATION_SUGGESTIONS,location_query='ßen').available_facets['locations']==[{'value':'SSEN city','count':1}]

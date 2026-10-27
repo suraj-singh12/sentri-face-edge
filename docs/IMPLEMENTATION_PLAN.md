@@ -56,11 +56,11 @@ endpoints after removal; qualifying/weak bridges and no indirect edges; last-day
 scope with repeated people across several Encounters; period boundaries and UTC day
 handling; normalized locations without geocoding; cancelled/failed/corrected location
 writes; stale cursor/filter/revision rejection; concurrent writes; encrypted restore
-and restart. Local final verification: **767 backend passed, 54 skipped, 137 subtests passed**;
+and restart. Local final verification: **768 backend passed, 54 skipped, 137 subtests passed**;
 **124 frontend passed**, zero frontend skips/failures; production build and generated
 asset equality passed; dependency, compile and whitespace checks passed. The 54
 backend skips are 42 obsolete compatibility tests and 12 requiring Windows
-PowerShell, not passes. Focused World regression: 62 passed / 15 subtests. All 31
+PowerShell, not passes. Focused World regression: 63 passed / 15 subtests. All 32
 Issue #3 tests pass within the full suite. CI platform/packaging results accompany
 the draft PR; independent testing and operator acceptance remain outstanding.
 

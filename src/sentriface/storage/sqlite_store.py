@@ -11955,10 +11955,11 @@ def _world_recurrence_for_pairs(
 def _world_location_suggestions_read(
     conn: sqlite3.Connection, context: _WorldReadContext,
 ) -> WorldGraphV2ReadModel:
-    query = _world_location_text(context.request.location_query).casefold()
+    query_text = _world_location_text(context.request.location_query)
+    query = query_text.casefold()
     rows = []
     total = 0
-    if len(query) >= 3:
+    if len(query_text) >= 3:
         conn.create_function("world_location_text", 1, _world_location_text, deterministic=True)
         conn.create_function("world_location_key", 1, lambda value: _world_location_text(value).casefold(), deterministic=True)
         rows = conn.execute(

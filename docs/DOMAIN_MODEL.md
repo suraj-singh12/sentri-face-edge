@@ -49,7 +49,7 @@ supporting Encounter references; `discovery_context` specifies measurement/time.
 | `MOST_FREQUENTLY_SEEN` | Distinct finalized Person–Encounter appearances in a rolling 7/30/90-day window ending at `as_of`; `discovery_period_days` defaults to 30. Inclusive endpoints, highest count first, canonical Person ID tie-break. |
 | `MOST_RECENTLY_SEEN` | Every distinct Person in all finalized Encounters on the latest observed UTC calendar day in effective scope, even if that day was several days ago; the actual day is returned, or null with an empty result. |
 | `MULTIPLE_LOCATIONS` | At least two distinct known recorded location names over the preceding 30 days. Counts/names compare Unicode casefolded text after whitespace collapse; Delhi and New Delhi remain distinct. Unknown/blank values do not count, and missing-location Encounter counts are separate. |
-| `LOCATION_SUGGESTIONS` | `location_query` starts matching after three normalized characters. Case-insensitive normalized substring search over effective successfully finalized Encounter locations, deterministic normalized-name order. Suggestions are in `available_facets.locations`; `facet_limit` and the collection cursor page all matches. |
+| `LOCATION_SUGGESTIONS` | `location_query` starts matching after three normalized typed characters (length checked before Unicode case folding). Case-insensitive normalized substring search over effective successfully finalized Encounter locations, deterministic normalized-name order. Suggestions are in `available_facets.locations`; `facet_limit` and the collection cursor page all matches. |
 
 Discovery windows intersect the requested World dates/locations; Person filters and
 activity eligibility use the existing effective scope. Presence ignores relationship
