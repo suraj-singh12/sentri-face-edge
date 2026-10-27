@@ -1,5 +1,69 @@
 # Global identity graph implementation plan
 
+## Issue #3 — World intelligence implementation (independent acceptance pending)
+
+Issue branch starts at refreshed `release-v2.0.0-hardening` commit
+`9b02eba72b155421f06cb7a4b590047380dd59eb`. Implementation extends World v2 and
+connected components, evidence and Encounter reads; there is no graphical UI,
+migration, extra graph/location authority or background-job system. Current World
+keeps its existing defaults and generated assets. See DOMAIN_MODEL for the additive
+request/response contract and Issue #13's honest-loading constraint.
+
+Impact/verification checklist: Current/Explore defaults; all seven nonempty evidence
+combinations and thresholds 1/2/4/large; star/chain/components/bridge and weaker-edge
+exclusion; separate recurrence/direction/provenance; correction/removal/merge/history;
+latest day and 7/30/90 boundaries; location comparison, successful-save-only suggestions;
+revision/cursor/snapshot/auth boundaries; rebuild/restart/encrypted restore equivalence;
+100/10k-person bounds; full backend/frontend tests and production asset equality.
+
+An adversarial reassignment-then-removal test found that graph validation demanded
+current participation from a valid retired corrected endpoint. Validation now admits
+that endpoint only with immutable correction-target proof; evidence/history writes
+remain unchanged and active-participant validation remains in place. Activity-scoped
+Person/Cluster expansion now applies the same eligibility as the overview, so
+discovery navigation does not lose its scoped cluster identity.
+
+Reproduce using Python 3.12 and a disposable checkout/data directory:
+
+```bash
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e '.[test]'
+python -m pip check
+python -m pytest -q tests/test_world_intelligence.py tests/test_world_graph_v2.py tests/test_world_graph_v2_freeze.py
+python -m pytest -q
+python -m pytest -q -s tests/test_world_intelligence.py::test_discovery_scale_bounds_and_determinism
+npm --prefix frontend ci
+npm --prefix frontend test
+npm --prefix frontend run build
+git diff --exit-code -- src/sentriface/ui_static
+```
+
+All new fixtures use temporary databases; the scale fixture reuses
+`scripts/benchmark_world_v2.py::_seed`, whose authority shortcuts are restricted to
+disposable benchmark databases. Do not run fixture seeding on operator data.
+The new scale gate covers 100 people/1,000 Encounters and 10,000 people/100,000
+Encounters (two participants each), bounded repeatable discovery/relationship/cluster
+reads and constant statement-count caps. Recorded single-read development timings
+were 0.002–0.025s and 0.134–3.439s respectively, 4–11 traced statements; payloads stayed
+under 31 KB with 10-person/relationship, 3-support and 2-location preview limits.
+These are local smoke measurements, not replacements for the frozen P10 million-
+Encounter p50/p95 record, nor independent acceptance results.
+
+Highest-risk independent challenges: identical canonical pairs from many photos and
+merged raw identities; mixed selected strength versus recurrence; retired corrected
+endpoints after removal; qualifying/weak bridges and no indirect edges; last-day
+scope with repeated people across several Encounters; period boundaries and UTC day
+handling; normalized locations without geocoding; cancelled/failed/corrected location
+writes; stale cursor/filter/revision rejection; concurrent writes; encrypted restore
+and restart. Local final verification: **767 backend passed, 54 skipped, 137 subtests passed**;
+**124 frontend passed**, zero frontend skips/failures; production build and generated
+asset equality passed; dependency, compile and whitespace checks passed. The 54
+backend skips are 42 obsolete compatibility tests and 12 requiring Windows
+PowerShell, not passes. Focused World regression: 62 passed / 15 subtests. All 31
+Issue #3 tests pass within the full suite. CI platform/packaging results accompany
+the draft PR; independent testing and operator acceptance remain outstanding.
+
 ## Completed baseline — Batch 3.7 (committed; schema v34)
 
 Committed and pushed on `release-v2.0.0-hardening` as `555433f082dc39112bd815dddf3a8f35791f2f4b` (parent/original starting baseline `30b89cb7af2ef35316db321457264f7aabb8b2c8`). Attach ownership/Retry/Cancel, cleanup and backup-button work is included. Batch 4 has not started. This is source implementation qualification, not signed 2.0.0 release acceptance.

@@ -1,5 +1,88 @@
 # SentriFace global identity domain model
 
+## Issue #3 — additive World intelligence contract
+
+This extension uses the existing `/api/world-graph?version=2`, `WorldGraphRequest`,
+`IdentityStore`, `GraphReadService`, and `FaceEngine` boundaries. It adds no schema,
+World authority, graph store, background job, dependency, or frontend change.
+Current World remains the default (`view=CURRENT`): all evidence types when no
+selector is supplied, effective minimum strength 1. Existing controls and reads
+remain valid. Issue #13 owns the optional graphical Explore interface.
+
+Explore sends `view=EXPLORE`, a nonempty `evidence_type` list drawn independently
+from `CO_OBSERVED`, `NOTE_REFERENCE`, and `MANUAL_ASSOCIATION`, and a positive integer
+`min_relationship_strength` (2 when omitted). Its initial UI request must explicitly
+select `CO_OBSERVED`. An empty/blank selection rejects rather than meaning all types.
+Example: `version=2&view=EXPLORE&evidence_type=CO_OBSERVED&min_relationship_strength=2&collection=RELATIONSHIPS&include_below_threshold=true`.
+
+Strength sums selected active, scoped evidence records per corrected, canonical,
+unordered pair. Connected components still require two or more people and only
+qualifying direct edges; a qualifying bridge joins components. There is no inferred
+edge between two indirectly connected members. `include_below_threshold=true`
+adds real selected-evidence relationships to bounded relationship pages, marked by
+`qualifies_for_cluster=false`; they never enter membership or ranking degree.
+`selected_evidence_strength`, `evidence_type_counts`, `direction_counts`, and
+`note_reference_direction_counts` preserve the selected count and directed provenance.
+The weaker-edge display toggle does not alter cluster identity.
+
+`encounter_recurrence` is independent of mixed strength and of the evidence checkboxes:
+one distinct finalized Encounter/canonical unordered pair, using active scoped
+co-observation evidence. A note/manual-only relationship can thus report actual
+Encounter recurrence without counting those notes/assertions as Encounters. It
+returns count, first/latest occurrence, bounded supporting Encounter IDs/dates/
+locations and truncation state. Previews use `event_limit` (default 25, maximum
+100). Further proof uses the existing relationship EVIDENCE collection with
+`evidence_type=CO_OBSERVED` and the same date/location scope, revision and `as_of`.
+Explore EVIDENCE/EVENT evidence pages additionally return the current exact
+`encounter_support` (`SHARED_FRAME` or `SAME_ENCOUNTER_ONLY`) from existing effective
+face/media authority. Raw endpoints, source/revision/operation IDs, and retired
+source history remain intact. Event Note mentions and Reference Only media never
+contribute presence or pair evidence. Strength and recurrence are descriptive
+counts, never identity confidence, probability, risk or inferred intent.
+
+Four additional WORLD_SCOPE collections share authorization, hard caps and cursor
+validation. `discoveries` contains canonical Person references, counts and bounded
+supporting Encounter references; `discovery_context` specifies measurement/time.
+
+| Collection | Meaning / request |
+| --- | --- |
+| `MOST_FREQUENTLY_SEEN` | Distinct finalized Person–Encounter appearances in a rolling 7/30/90-day window ending at `as_of`; `discovery_period_days` defaults to 30. Inclusive endpoints, highest count first, canonical Person ID tie-break. |
+| `MOST_RECENTLY_SEEN` | Every distinct Person in all finalized Encounters on the latest observed UTC calendar day in effective scope, even if that day was several days ago; the actual day is returned, or null with an empty result. |
+| `MULTIPLE_LOCATIONS` | At least two distinct known recorded location names over the preceding 30 days. Counts/names compare Unicode casefolded text after whitespace collapse; Delhi and New Delhi remain distinct. Unknown/blank values do not count, and missing-location Encounter counts are separate. |
+| `LOCATION_SUGGESTIONS` | `location_query` starts matching after three normalized characters. Case-insensitive normalized substring search over effective successfully finalized Encounter locations, deterministic normalized-name order. Suggestions are in `available_facets.locations`; `facet_limit` and the collection cursor page all matches. |
+
+Discovery windows intersect the requested World dates/locations; Person filters and
+activity eligibility use the existing effective scope. Presence ignores relationship
+checkboxes/thresholds because those cannot change whether a Person appeared.
+Discovery results use `people_limit` (25/default, 100/max); each support preview uses
+`event_limit` and each location-name preview `facet_limit` (100/default, 200/max).
+Exact totals and truncation are explicit. To continue supporting records use bounded
+PERSON/EVENTS with the returned discovery date bounds (and the latest day as both
+date bounds for most-recent), original scope, revision and `as_of`. To focus a result,
+use its canonical ID in PERSON with the original clustering criteria, revision and
+`as_of`; its existing `cluster_memberships` identify the authoritative clusters.
+Discoveries do not define another cluster model. All top-level discovery pages have
+revision-bound cursors; view, weaker-edge flag, period, query, limits and ordinary
+scope participate in cursor validation.
+
+Location suggestions intentionally read the full saved effective Encounter location
+source independently of investigative Person/time filters. Draft/cancelled/failed
+writes register nothing. A successful correction replaces the effective suggestion
+value, while immutable original metadata remains historical. There is no separate
+location registry and no normalization write-back to free text.
+
+World calculation remains synchronous inside one revision-bound SQLite read
+snapshot. SQLite aggregation has no known total work denominator, and the response
+cannot publish intermediate updates before it completes. A truthful cancellable
+percentage therefore cannot be added safely within this request contract without
+an independently designed transport/job lifecycle. Issue #13 must use an honest
+indeterminate loading state; no percentage or background-job system is introduced.
+
+Retired co-observation generations may name a formerly corrected participant who
+was later removed. Immutable Encounter/face correction targets prove that historical
+endpoint in graph validation; current active evidence still undergoes current
+participant validation. No evidence or journal history is edited for World reads.
+
 ## Reference Only biometric source contract (Batch 3.7)
 
 An embedding is a sample, not a Person identity. Independently inferred unequal vectors remain independent samples; the same Person never causes vector borrowing. Equal serialized vectors may deduplicate, while source assignments remain independent: Reference R→Alice and Encounter F→Alice can share E; correcting F→Bob leaves R→Alice. E is excluded from ordinary recognition while active canonical source owners disagree. Resolving the assignment, retiring R or canonical merging the identities naturally recomputes eligibility. R remains active/countable until explicitly retired.

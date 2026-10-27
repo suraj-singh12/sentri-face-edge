@@ -4795,6 +4795,9 @@ def _world_graph_v2_request_from_query(query: str) -> WorldGraphRequest:
             raise ValueError(f"Invalid World limit: {key}") from exc
 
     level_text = (one("level") or "WORLD_SCOPE").upper()
+    below = one("include_below_threshold") or "false"
+    if below.lower() not in {"true", "false"}:
+        raise ValueError("include_below_threshold must be true or false")
     try:
         level = WorldDetailLevel(level_text)
     except ValueError as exc:
@@ -4824,6 +4827,10 @@ def _world_graph_v2_request_from_query(query: str) -> WorldGraphRequest:
             facets=integer("facet_limit", 100),
         ),
         cursor=one("cursor"), revision=one("revision"), as_of=one("as_of"),
+        view=one("view") or "CURRENT",
+        include_below_threshold=below.lower() == "true",
+        discovery_period_days=integer("discovery_period_days", 30),
+        location_query=one("location_query"),
     )
 
 

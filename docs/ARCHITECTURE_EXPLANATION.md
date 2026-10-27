@@ -1,5 +1,34 @@
 # SentriFace Edge architecture explanation
 
+## Issue #3 — preserve one World calculation and independent measurements
+
+Current and Explore use the same bounded World v2 projection. An opt-in request view
+validates Explore's explicit checkbox intent and strength-2 fallback while leaving
+Current's strength-1/all-evidence defaults intact. The existing component engine
+ignores marked below-threshold relationships; no second grouping engine, edge,
+cluster authority, schema or frontend calculation is introduced.
+
+Independent recurrence deduplicates Encounter IDs after correction and canonical
+pair resolution. Mixed evidence strength deliberately continues counting selected
+active records, even where canonical collapse leaves several records from one
+Encounter. Recurrence aggregates co-observation support in SQL
+only for the bounded returned relationship pairs, preserving the selective global
+clustering path and avoiding a new global in-memory Encounter collection. Exact shared-frame support is resolved lazily on bounded Explore
+proof pages through the existing Encounter media interpretation.
+
+Discoveries aggregate effective participants in request-local SQL CTEs and return
+bounded Person/support/location previews. Latest-day discovery selects the maximum
+UTC day across the whole effective requested presence scope, then all appearances
+on that day; individual last-seen sorting would answer a different question.
+Location normalization belongs to these read comparisons; durable free text remains
+unchanged. Suggestions query saved effective Encounter metadata directly so a
+cancelled or rolled-back save cannot create an orphan suggestion authority.
+
+The snapshot/request model has no intermediate response channel or reliable work
+denominator for SQLite aggregation. Fabricated elapsed-time percentages and a new
+job subsystem would undermine that model. Issue #13 should display indeterminate
+loading. Independent acceptance remains pending after implementation verification.
+
 ## Why Reference identity is source-specific (Batch 3.7)
 
 Normal distinct photos independently infer different embeddings and provide useful pose/lighting/expression diversity. Identity never causes reuse of an earlier vector. The earlier ownership fixture manually supplied equal synthetic vectors; it did not demonstrate normal distinct-photo reuse. Exact equal model outputs can legitimately deduplicate (for example, different encodings of identical pixels). Vector storage identity therefore cannot own every source's semantic identity.
