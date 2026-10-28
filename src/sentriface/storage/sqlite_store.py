@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 import base64
 import hashlib
 import json
@@ -73,6 +75,7 @@ from sentriface.models import (
     WorldCluster,
     WorldCollection,
     WorldDetailLevel,
+    WorldDiscovery,
     WorldEvent,
     WorldEvidence,
     WorldExplanation,
@@ -10755,6 +10758,15 @@ def _expected_graph_connections(
         )
     )
     errors.extend(participant_errors)
+    # A retired generation can name a corrected participant subsequently removed
+    # from current presence. Immutable corrections prove that historical endpoint;
+    # never rewrite it or require it to remain a current participant.
+    historical_correction_targets: dict[str, set[str]] = {}
+    for row in conn.execute(
+        "SELECT observation_id, to_person_id FROM identity_corrections "
+        "WHERE correction_type IN ('OBSERVATION_IDENTITY', 'FACE_ASSIGNMENT')"
+    ):
+        historical_correction_targets.setdefault(str(row[0]), set()).add(str(row[1]))
     note_mentions = {
         str(row["mention_id"]): row
         for row in conn.execute(
@@ -10803,6 +10815,8 @@ def _expected_graph_connections(
             for endpoint in (row["source_person_id"], row["target_person_id"]):
                 endpoint_id = str(endpoint)
                 if endpoint_id in raw_participant_ids:
+                    continue
+                if retired_shape and endpoint_id in historical_correction_targets.get(observation_id, set()):
                     continue
                 try:
                     effective_endpoint = resolve_canonical(endpoint_id)
@@ -11535,6 +11549,28 @@ def _world_graph_v2_read(
 def _world_graph_v2_read_snapshot(
     conn: sqlite3.Connection, request: WorldGraphRequest,
 ) -> WorldGraphV2ReadModel:
+    # Request-local, bounded memoization: repeated evidence/participant joins and
+    # subsequent collection queries reuse parsed instants without retaining a DB cache.
+    instant = lru_cache(maxsize=4096)(_world_stored_datetime)
+    @lru_cache(maxsize=4096)
+    def time_key(value):
+        dt = instant(value)
+        if dt is None:
+            return None
+        return ((dt.toordinal() * 86400 + dt.hour * 3600 + dt.minute * 60 + dt.second)
+                * 1000000 + dt.microsecond)
+    conn.create_function("world_time", 1, time_key, deterministic=True)
+    # NULL instants fail date predicates and sort after known instants in DESC
+    # pages. Extrema ignore unknowns while retaining raw source strings.
+    conn.create_function("world_occurrence", 1, lambda value: value if instant(value) is not None else None, deterministic=True)
+    def compare_instants(first, second):
+        first_key, second_key = time_key(first), time_key(second)
+        # Exact keys are positive ordinal microseconds. Unknowns compare equal
+        # here; paginated collections use their stable source ID as the tie-break.
+        first_key = first_key if first_key is not None else -1
+        second_key = second_key if second_key is not None else -1
+        return (first_key > second_key) - (first_key < second_key)
+    conn.create_collation("world_instant", compare_instants)
     revision = _graph_revision_token(conn)
     if request.revision is not None and request.revision != revision:
         raise ValueError("World revision is stale; request a new snapshot")
@@ -11543,7 +11579,22 @@ def _world_graph_v2_read_snapshot(
         raise ValueError("World cursor does not match the requested as_of")
     as_of_dt = _world_datetime(request.as_of or cursor_as_of or utc_now(), "as_of")
     as_of = as_of_dt.isoformat()
-    filters = _normalize_world_filters(request.filters, as_of_dt)
+    view = str(request.view).strip().upper()
+    if view not in {"CURRENT", "EXPLORE"}:
+        raise ValueError("Unsupported World view")
+    filter_intent = request.filters
+    if view == "EXPLORE":
+        if not filter_intent.evidence_type:
+            raise ValueError("Explore requires at least one evidence type")
+        if filter_intent.min_relationship_strength is None:
+            filter_intent = replace(filter_intent, min_relationship_strength=2)
+    filters = _normalize_world_filters(filter_intent, as_of_dt)
+    if view == "EXPLORE" and not filters.evidence_type:
+        raise ValueError("Explore requires at least one evidence type")
+    if type(request.include_below_threshold) is not bool:
+        raise ValueError("World include_below_threshold must be a boolean")
+    if type(request.discovery_period_days) is not int or request.discovery_period_days not in {7, 30, 90}:
+        raise ValueError("World discovery period must be 7, 30 or 90 days")
     limits = _normalize_world_limits(request.limits)
     level = WorldDetailLevel(request.detail_level)
     focus_type, focus_id = _normalize_world_focus(level, request.focus_type, request.focus_id)
@@ -11554,6 +11605,10 @@ def _world_graph_v2_read_snapshot(
         raise ValueError("RECENT_ACTIVITY ranking requires an explicit recent or date scope")
     collection = _normalize_world_collection(level, request.collection)
     scope_fingerprint = _world_scope_fingerprint(filters, ranking, limits)
+    scope_fingerprint = hashlib.sha256(json.dumps([
+        scope_fingerprint, view, request.include_below_threshold,
+        request.discovery_period_days, _world_location_text(request.location_query),
+    ]).encode()).hexdigest()[:24]
     offset = _world_decode_cursor(
         request.cursor, revision, level, focus_type, focus_id, collection,
         as_of, scope_fingerprint,
@@ -11604,6 +11659,8 @@ def _normalize_world_collection(
             WorldCollection.PEOPLE, WorldCollection.CLUSTERS,
             WorldCollection.RELATIONSHIPS, WorldCollection.PATTERNS,
             WorldCollection.LOCATION_FACETS,
+            WorldCollection.MOST_FREQUENTLY_SEEN, WorldCollection.MOST_RECENTLY_SEEN,
+            WorldCollection.MULTIPLE_LOCATIONS, WorldCollection.LOCATION_SUGGESTIONS,
         },
         WorldDetailLevel.CLUSTER: {WorldCollection.MEMBERS, WorldCollection.RELATIONSHIPS},
         WorldDetailLevel.PERSON: {WorldCollection.RELATIONSHIPS, WorldCollection.EVENTS},
@@ -11673,18 +11730,22 @@ def _world_result(
     relationships: tuple[WorldRelationship, ...] = (),
     patterns: tuple[WorldPattern, ...] = (),
     media: tuple[WorldMediaReference, ...] = (),
+    discoveries: tuple[WorldDiscovery, ...] = (),
+    discovery_context: dict[str, object] | None = None,
 ) -> WorldGraphV2ReadModel:
     primary = pagination.get(context.collection.value)
     returned_counts = {
         "people": len(people), "clusters": len(clusters), "events": len(events),
         "evidence": len(evidence), "relationships": len(relationships),
         "patterns": len(patterns), "media": len(media),
+        "discoveries": len(discoveries),
     }
     facets = {
         "filter_semantics_version": _WORLD_FILTERS_VERSION,
         "ranking_version": _WORLD_RANKING_VERSION,
         "clustering_version": _WORLD_CLUSTER_VERSION,
         "calculation_version": _WORLD_CALCULATION_VERSION,
+        "intelligence_extension_version": "world-intelligence-v1",
         **(available_facets or {}),
     }
     return WorldGraphV2ReadModel(
@@ -11711,6 +11772,7 @@ def _world_result(
         expansion_tokens=(),
         people=people, clusters=clusters, events=events, evidence=evidence,
         relationships=relationships, patterns=patterns, media=media,
+        discoveries=discoveries, discovery_context=discovery_context or {},
     )
 
 
@@ -11719,10 +11781,18 @@ def _world_scope_read(
 ) -> WorldGraphV2ReadModel:
     if context.collection == WorldCollection.LOCATION_FACETS:
         return _world_location_facets_read(conn, context)
+    if context.collection == WorldCollection.LOCATION_SUGGESTIONS:
+        return _world_location_suggestions_read(conn, context)
+    if context.collection in {
+        WorldCollection.MOST_FREQUENTLY_SEEN, WorldCollection.MOST_RECENTLY_SEEN,
+        WorldCollection.MULTIPLE_LOCATIONS,
+    }:
+        return _world_discoveries_read(conn, context)
     facet_offset = context.offset if context.collection == WorldCollection.LOCATION_FACETS else 0
     people_rows, aliases, canonical_map = _world_people_scope(conn, context.filters)
     relationships = _world_relationship_scope(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
+        include_below_threshold=context.request.include_below_threshold,
     )
     statistics = _world_event_statistics(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
@@ -11786,10 +11856,9 @@ def _world_scope_read(
         ])
     relationship_offset = context.offset if context.collection == WorldCollection.RELATIONSHIPS else 0
     if context.collection == WorldCollection.RELATIONSHIPS:
-        relationship_models = tuple(
-            _world_relationship(item, context) for item in relationships[
-                relationship_offset:relationship_offset + context.limits.relationships
-            ]
+        relationship_models = _world_relationship_models(
+            conn, relationships[relationship_offset:relationship_offset + context.limits.relationships],
+            context, canonical_map,
         )
     pagination = {
         WorldCollection.PEOPLE.value: _world_page_state(
@@ -11841,6 +11910,239 @@ def _world_scope_read(
         available_facets=facets,
         people=people, clusters=clusters, patterns=patterns,
         relationships=relationship_models,
+    )
+
+
+def _world_location_text(value: object) -> str:
+    return " ".join(str(value or "").split())
+
+
+def _world_bounded_state(total: int, returned: int, retrieval: str) -> dict[str, object]:
+    return {
+        "total_count": total, "returned_count": returned,
+        "has_more": returned < total, "truncated": returned < total,
+        "retrieval": retrieval,
+    }
+
+
+def _world_recurrence_for_pairs(
+    conn: sqlite3.Connection, rows: list[dict], context: _WorldReadContext,
+    canonical_map: dict[str, str],
+) -> dict[str, dict[str, object]]:
+    """Aggregate distinct Encounter support in SQL for a bounded relationship page."""
+    pairs = {tuple(sorted((row["source_person_id"], row["target_person_id"]))) for row in rows}
+    if not pairs:
+        return {}
+    _world_register_effective_evidence_function(conn, canonical_map)
+    conn.create_function(
+        "world_recurrence_pair", 2,
+        lambda first, second: int(tuple(sorted((first, second))) in pairs), deterministic=True,
+    )
+    scope_sql, params = _world_scope_sql(context.filters, evidence=False)
+    if context.filters.relationship_type:
+        scope_sql += " AND e.relationship_type IN (%s)" % ",".join("?" for _ in context.filters.relationship_type)
+        params.extend(context.filters.relationship_type)
+    source = "world_effective_evidence_person(e.evidence_type,e.source_entity_type,e.source_entity_id,e.source_person_id)"
+    target = "world_effective_evidence_person(e.evidence_type,e.source_entity_type,e.source_entity_id,e.target_person_id)"
+    support = conn.execute(
+        f"""WITH encounters AS (
+            SELECT DISTINCT MIN({source}, {target}) AS first_person,
+                   MAX({source}, {target}) AS second_person,
+                   o.observation_id AS event_id,
+                   COALESCE(o.observed_at, o.created_at) AS occurred_at, o.location
+            FROM relationship_evidence e JOIN effective_observations o ON o.observation_id = e.source_entity_id
+            WHERE e.active = 1 AND e.evidence_type = 'CO_OBSERVED'
+              AND e.source_entity_type = 'OBSERVATION' AND {scope_sql}
+              AND world_recurrence_pair({source}, {target}) = 1
+        ), numbered AS (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY first_person, second_person ORDER BY world_time(occurred_at) DESC, event_id) AS position,
+                   COUNT(*) OVER (PARTITION BY first_person, second_person) AS total,
+                   MIN(world_occurrence(occurred_at) COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS first_at,
+                   MAX(world_occurrence(occurred_at) COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS latest_at
+            FROM encounters
+        ) SELECT * FROM numbered WHERE position <= ? ORDER BY first_person, second_person, position""",
+        [*params, context.limits.events],
+    ).fetchall()
+    result = {}
+    for row in support:
+        relationship_id = f"relationship:{row['first_person']}:{row['second_person']}"
+        item = result.setdefault(relationship_id, {
+            "count": int(row["total"]), "first_occurrence_at": row["first_at"],
+            "latest_occurrence_at": row["latest_at"], "supporting_encounters": [],
+        })
+        item["supporting_encounters"].append({
+            "event_id": str(row["event_id"]), "occurred_at": str(row["occurred_at"]), "location": row["location"],
+        })
+    return result
+
+
+def _world_location_suggestions_read(
+    conn: sqlite3.Connection, context: _WorldReadContext,
+) -> WorldGraphV2ReadModel:
+    query_text = _world_location_text(context.request.location_query)
+    query = query_text.casefold()
+    rows = []
+    total = 0
+    if len(query_text) >= 3:
+        conn.create_function("world_location_text", 1, _world_location_text, deterministic=True)
+        conn.create_function("world_location_key", 1, lambda value: _world_location_text(value).casefold(), deterministic=True)
+        rows = conn.execute(
+            """WITH locations AS (
+                SELECT world_location_key(location) AS key,
+                       MIN(world_location_text(location)) AS value,
+                       COUNT(*) AS event_count
+                FROM effective_observations
+                WHERE status = 'FINALIZED' AND world_location_key(location) <> ''
+                  AND INSTR(world_location_key(location), ?) > 0
+                GROUP BY world_location_key(location)
+            ) SELECT *, COUNT(*) OVER () AS total FROM locations
+              ORDER BY key, value LIMIT ? OFFSET ?""",
+            (query, context.limits.facets, context.offset),
+        ).fetchall()
+        total = int(rows[0]["total"]) if rows else 0
+    values = [{"value": str(row["value"]), "count": int(row["event_count"])} for row in rows]
+    return _world_result(
+        context, scope_totals={"locations": total},
+        pagination={context.collection.value: _world_page_state(
+            context, context.collection, total, len(values), context.limits.facets,
+        )},
+        available_facets={"locations": values, "minimum_query_characters": 3},
+    )
+
+
+def _world_discoveries_read(
+    conn: sqlite3.Connection, context: _WorldReadContext,
+) -> WorldGraphV2ReadModel:
+    """Bounded discoveries over the same corrected/canonical Encounter presence."""
+    people, _, canonical_map = _world_people_scope(conn, context.filters)
+    if context.filters.activity:
+        activity = _world_event_statistics(
+            conn, context.filters, set(people), canonical_map=canonical_map,
+            location_limit=1,
+        )["activity"]
+        people = {pid: row for pid, row in people.items()
+                  if _world_activity_bucket(activity.get(pid, 0)) in context.filters.activity}
+    _world_register_effective_person_function(conn, canonical_map)
+    conn.create_function("world_discovery_eligible", 1, lambda pid: int(pid in people), deterministic=True)
+    conn.create_function("world_location_text", 1, _world_location_text, deterministic=True)
+    conn.create_function("world_location_key", 1, lambda value: _world_location_text(value).casefold(), deterministic=True)
+    filters = context.filters
+    end = _world_datetime(context.as_of, "as_of")
+    period = None if context.collection == WorldCollection.MOST_RECENTLY_SEEN else (
+        30 if context.collection == WorldCollection.MULTIPLE_LOCATIONS else context.request.discovery_period_days
+    )
+    start = (end - timedelta(days=period)).isoformat() if period else None
+    scoped = replace(
+        filters, date_from=max(filter(None, (filters.date_from, start)), default=None),
+        date_to=min(filter(None, (filters.date_to, context.as_of))),
+    )
+    # Normalize once per Encounter before participant joins. Keep location/status
+    # predicates ahead of normalization; SQL integer division gives the exact UTC
+    # ordinal day, including the final microsecond before midnight.
+    event_scope, event_params = _world_scope_sql(
+        replace(scoped, date_from=None, date_to=None), evidence=False,
+    )
+    scope_sql, time_params = _world_scope_sql(
+        replace(scoped, locations=(), missing_location="INCLUDE"), evidence=False,
+    )
+    scope_sql = scope_sql.replace("world_time(COALESCE(o.observed_at, o.created_at))", "o.instant_key")
+    params = [*event_params, *time_params]
+    cte = f"""WITH normalized_events AS MATERIALIZED (
+        SELECT o.observation_id, o.observed_at, o.created_at, o.location, o.status,
+               world_time(COALESCE(o.observed_at, o.created_at)) AS instant_key
+        FROM effective_observations o WHERE {event_scope}
+    ), appearances AS MATERIALIZED (
+        SELECT DISTINCT o.observation_id AS event_id,
+               world_effective_person(p.observation_id, p.person_id) AS person_id,
+               COALESCE(o.observed_at, o.created_at) AS occurred_at,
+               o.instant_key AS time_key,
+               o.instant_key / 86400000000 AS day,
+               world_location_text(o.location) AS location,
+               world_location_key(o.location) AS location_key
+        FROM normalized_events o JOIN observation_participants p USING(observation_id)
+        WHERE {scope_sql} AND o.instant_key IS NOT NULL
+          AND world_discovery_eligible(world_effective_person(p.observation_id, p.person_id)) = 1
+    )"""
+    latest_day = None
+    if context.collection == WorldCollection.MOST_RECENTLY_SEEN:
+        latest_day = conn.execute(f"{cte} SELECT MAX(day) FROM appearances", params).fetchone()[0]
+    selection = "day = ?" if context.collection == WorldCollection.MOST_RECENTLY_SEEN else "1 = 1"
+    selected_params = [*params, latest_day] if context.collection == WorldCollection.MOST_RECENTLY_SEEN else params
+    cte += f", selected AS MATERIALIZED (SELECT * FROM appearances WHERE {selection})"
+    multiple = context.collection == WorldCollection.MULTIPLE_LOCATIONS
+    measure = "COUNT(DISTINCT NULLIF(location_key, ''))" if multiple else "COUNT(*)"
+    having = f"HAVING {measure} >= 2" if multiple else ""
+    aggregate = f""", results AS (
+        SELECT person_id, {measure} AS value, COUNT(*) AS event_count,
+               SUM(CASE WHEN location_key = '' THEN 1 ELSE 0 END) AS missing
+        FROM selected GROUP BY person_id {having}
+    )"""
+    total = int(conn.execute(f"{cte}{aggregate} SELECT COUNT(*) FROM results", selected_params).fetchone()[0])
+    rows = conn.execute(
+        f"{cte}{aggregate} SELECT * FROM results ORDER BY value DESC, person_id LIMIT ? OFFSET ?",
+        [*selected_params, context.limits.people, context.offset],
+    ).fetchall()
+    ids = [str(row["person_id"]) for row in rows]
+    supports: dict[str, list[dict]] = {pid: [] for pid in ids}
+    locations: dict[str, list[str]] = {pid: [] for pid in ids}
+    location_totals: dict[str, int] = {}
+    if ids:
+        placeholders = ",".join("?" for _ in ids)
+        support_rows = conn.execute(
+            f"""{cte}, numbered AS (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY time_key DESC, event_id) AS position
+                FROM selected WHERE person_id IN ({placeholders})
+            ) SELECT * FROM numbered WHERE position <= ? ORDER BY person_id, position""",
+            [*selected_params, *ids, context.limits.events],
+        ).fetchall()
+        for row in support_rows:
+            supports[str(row["person_id"])].append({
+                "event_id": str(row["event_id"]), "occurred_at": str(row["occurred_at"]),
+                "location": row["location"] or None,
+            })
+        if multiple:
+            location_rows = conn.execute(
+                f"""{cte}, places AS (
+                    SELECT person_id, location_key, MIN(location) AS location FROM selected
+                    WHERE person_id IN ({placeholders}) AND location_key <> '' GROUP BY person_id, location_key
+                ), numbered AS (
+                    SELECT *, ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY location_key) AS position,
+                           COUNT(*) OVER (PARTITION BY person_id) AS total FROM places
+                ) SELECT * FROM numbered WHERE position <= ? ORDER BY person_id, position""",
+                [*selected_params, *ids, context.limits.facets],
+            ).fetchall()
+            for row in location_rows:
+                pid = str(row["person_id"])
+                locations[pid].append(str(row["location"]))
+                location_totals[pid] = int(row["total"])
+    discoveries = tuple(WorldDiscovery(
+        canonical_person_id=str(row["person_id"]), display_name=str(people[str(row["person_id"])]["name"]),
+        discovery_type=context.collection.value, count=int(row["value"]),
+        supporting_encounters=tuple(supports[str(row["person_id"])]),
+        supporting_encounters_state=_world_bounded_state(
+            int(row["event_count"]), len(supports[str(row["person_id"])]), "PERSON_EVENTS_COLLECTION",
+        ),
+        locations=tuple(locations[str(row["person_id"])]),
+        locations_state=_world_bounded_state(
+            location_totals.get(str(row["person_id"]), 0), len(locations[str(row["person_id"])]),
+            "PERSON_EVENTS_COLLECTION",
+        ),
+        missing_location_count=int(row["missing"]),
+    ) for row in rows)
+    return _world_result(
+        context, scope_totals={"discoveries": total}, discoveries=discoveries,
+        discovery_context={
+            "type": context.collection.value, "period_days": period,
+            "date_from": scoped.date_from, "date_to": scoped.date_to,
+            "latest_observed_day": datetime.fromordinal(int(latest_day)).date().isoformat() if latest_day is not None else None, "calendar_timezone": "UTC",
+            "measurement": ("distinct_normalized_known_locations" if multiple
+                            else "distinct_finalized_person_encounter_appearances"),
+            "cluster_navigation": "PERSON.cluster_memberships_with_same_filters_and_revision",
+            "missing_locations": "Excluded from distinct known location counts; reported separately.",
+        },
+        pagination={context.collection.value: _world_page_state(
+            context, context.collection, total, len(discoveries), context.limits.people,
+        )},
     )
 
 
@@ -11946,11 +12248,17 @@ def _world_cluster_read(
     people_rows, aliases, canonical_map = _world_people_scope(conn, context.filters)
     relationships = _world_relationship_scope(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
+        include_below_threshold=context.request.include_below_threshold,
     )
     activity = _world_event_statistics(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
         location_limit=1,
     )["activity"]
+    if context.filters.activity:
+        people_rows = {pid: row for pid, row in people_rows.items()
+                       if _world_activity_bucket(activity.get(pid, 0)) in context.filters.activity}
+        relationships = [item for item in relationships
+                         if item["source_person_id"] in people_rows and item["target_person_id"] in people_rows]
     clusters = _world_clusters(
         context.revision, _world_filter_fingerprint(context.filters), relationships,
         people_rows, activity, min(context.limits.people, 10), context,
@@ -11987,7 +12295,7 @@ def _world_cluster_read(
         rows = member_relationships[
             context.offset:context.offset + context.limits.relationships
         ]
-        relationship_models = tuple(_world_relationship(item, context) for item in rows)
+        relationship_models = _world_relationship_models(conn, rows, context, canonical_map)
         cluster_out = replace(cluster, member_ids=())
     pagination = {
         WorldCollection.MEMBERS.value: _world_page_state(
@@ -12019,15 +12327,24 @@ def _world_person_read(
     conn: sqlite3.Connection, context: _WorldReadContext,
 ) -> WorldGraphV2ReadModel:
     people_rows, aliases, canonical_map = _world_people_scope(conn, context.filters)
+    if context.filters.activity:
+        activity = _world_event_statistics(
+            conn, context.filters, set(people_rows), canonical_map=canonical_map,
+            location_limit=1,
+        )["activity"]
+        people_rows = {pid: row for pid, row in people_rows.items()
+                       if _world_activity_bucket(activity.get(pid, 0)) in context.filters.activity}
     canonical_id = canonical_map.get(str(context.focus_id))
     if canonical_id not in people_rows:
         raise KeyError("World person is unavailable in the effective scope")
     relationships = _world_relationship_scope(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
         focus_person_id=canonical_id,
+        include_below_threshold=context.request.include_below_threshold,
     )
     all_relationships = _world_relationship_scope(
         conn, context.filters, set(people_rows), canonical_map=canonical_map,
+        include_below_threshold=context.request.include_below_threshold,
     )
     memberships = tuple({
         "cluster_id": cluster.cluster_id,
@@ -12057,7 +12374,7 @@ def _world_person_read(
         page_rows = relationships[
             context.offset:context.offset + context.limits.relationships
         ]
-        relationship_models = tuple(_world_relationship(item, context) for item in page_rows)
+        relationship_models = _world_relationship_models(conn, page_rows, context, canonical_map)
         neighbor_ids = {
             item["target_person_id"] if item["source_person_id"] == canonical_id
             else item["source_person_id"] for item in page_rows
@@ -12130,6 +12447,8 @@ def _world_event_read(
             conn, context.filters, "EVENT", context.focus_id,
             context.offset, context.limits.evidence,
         )
+        if context.request.view.strip().upper() == "EXPLORE":
+            items = _world_evidence_encounter_support(conn, items)
         evidence = tuple(items)
     elif context.collection == WorldCollection.MEDIA:
         _, media = _world_event_media_page(
@@ -12196,6 +12515,8 @@ def _world_evidence_read(
             conn, context.filters, context.focus_type, context.focus_id,
             context.offset, context.limits.evidence,
         )
+        if context.request.view.strip().upper() == "EXPLORE":
+            items = _world_evidence_encounter_support(conn, items)
         evidence = tuple(items)
         media_total = 0
     pagination = {
@@ -12230,6 +12551,8 @@ def _world_degree(
         person_id: {"relationships": 0, "evidence": 0} for person_id in people_rows
     }
     for item in relationships:
+        if not item.get("qualifies_for_cluster", True):
+            continue
         for person_id in (item["source_person_id"], item["target_person_id"]):
             if person_id in degree:
                 degree[person_id]["relationships"] += 1
@@ -12262,11 +12585,23 @@ def _normalize_world_limits(value: WorldReadLimits) -> WorldReadLimits:
 def _world_datetime(value: str, label: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError as exc:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError) as exc:
         raise ValueError(f"Invalid World {label}: {value}") from exc
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+
+
+def _world_stored_datetime(value: str) -> datetime | None:
+    """Legacy storage accepts arbitrary text; unknown time is not creation time.
+
+    Only malformed/out-of-range source dates are tolerated. Request validation
+    continues to call the strict parser directly.
+    """
+    try:
+        return _world_datetime(value, "occurrence")
+    except ValueError:
+        return None
 
 
 def _normalize_world_filters(value: WorldReadFilter, as_of: datetime) -> WorldReadFilter:
@@ -12311,8 +12646,10 @@ def _normalize_world_filters(value: WorldReadFilter, as_of: datetime) -> WorldRe
         raise ValueError("Unsupported World biometric-state filter")
     if set(evidence) - RELATIONSHIP_EVIDENCE_TYPES:
         raise ValueError("Unsupported World evidence-type filter")
-    if value.min_relationship_strength is not None and int(value.min_relationship_strength) < 1:
-        raise ValueError("World minimum relationship strength must be at least 1")
+    if value.min_relationship_strength is not None and (
+        type(value.min_relationship_strength) is not int or value.min_relationship_strength < 1
+    ):
+        raise ValueError("World minimum relationship strength must be a positive integer")
     activity = choices(value.activity, upper=True)
     if set(activity) - {"NONE", "LOW", "MEDIUM", "HIGH"}:
         raise ValueError("Unsupported World activity filter")
@@ -12423,10 +12760,10 @@ def _world_scope_sql(filters: WorldReadFilter, *, evidence: bool) -> tuple[str, 
     params: list[object] = []
     occurrence = "COALESCE(o.observed_at, o.created_at)"
     if filters.date_from:
-        clauses.append(f"{occurrence} >= ?")
+        clauses.append(f"world_time({occurrence}) >= world_time(?)")
         params.append(filters.date_from)
     if filters.date_to:
-        clauses.append(f"{occurrence} <= ?")
+        clauses.append(f"world_time({occurrence}) <= world_time(?)")
         params.append(filters.date_to)
     if filters.locations:
         clauses.append("LOWER(TRIM(COALESCE(o.location, ''))) IN (%s)" % ",".join("?" for _ in filters.locations))
@@ -12491,6 +12828,7 @@ def _world_relationship_scope(
     *,
     canonical_map: dict[str, str] | None = None,
     focus_person_id: str | None = None,
+    include_below_threshold: bool = False,
 ) -> list[dict]:
     resolved = canonical_map or _world_canonical_map(conn)
     evidence_person = _world_register_effective_evidence_function(conn, resolved)
@@ -12514,10 +12852,10 @@ def _world_relationship_scope(
     non_observation_clauses = ["e.evidence_type <> 'CO_OBSERVED'"]
     non_observation_params: list[object] = []
     if filters.date_from:
-        non_observation_clauses.append("e.created_at >= ?")
+        non_observation_clauses.append("world_time(e.created_at) >= world_time(?)")
         non_observation_params.append(filters.date_from)
     if filters.date_to:
-        non_observation_clauses.append("e.created_at <= ?")
+        non_observation_clauses.append("world_time(e.created_at) <= world_time(?)")
         non_observation_params.append(filters.date_to)
     non_observation_allowed = not filters.locations and filters.missing_location != "EXCLUDE"
     evidence_prefix = (" AND " + " AND ".join(evidence_clauses)) if evidence_clauses else ""
@@ -12525,9 +12863,10 @@ def _world_relationship_scope(
         f"""
         SELECT e.source_person_id, e.target_person_id, e.evidence_type,
                e.source_entity_type, e.source_entity_id,
-               e.relationship_type, e.directionality, COUNT(*) AS evidence_count,
-               MIN(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) AS first_at,
-               MAX(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) AS last_at
+               e.relationship_type, e.directionality, o.location,
+               COUNT(*) AS evidence_count,
+               MIN(world_occurrence(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) COLLATE world_instant) AS first_at,
+               MAX(world_occurrence(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) COLLATE world_instant) AS last_at
         FROM relationship_evidence e
         LEFT JOIN effective_observations o ON e.evidence_type = 'CO_OBSERVED'
              AND e.source_entity_type = 'OBSERVATION' AND o.observation_id = e.source_entity_id
@@ -12558,8 +12897,9 @@ def _world_relationship_scope(
             "relationship_id": f"relationship:{pair[0]}:{pair[1]}",
             "source_person_id": pair[0], "target_person_id": pair[1],
             "directionality": "UNDIRECTED", "directions": {}, "relationship_types": set(),
+            "note_directions": {},
             "evidence_type_counts": {}, "evidence_count": 0,
-            "first_occurrence_at": str(row["first_at"]), "last_occurrence_at": str(row["last_at"]),
+            "first_occurrence_at": None, "last_occurrence_at": None,
         })
         count = int(row["evidence_count"])
         item["evidence_count"] += count
@@ -12572,11 +12912,18 @@ def _world_relationship_scope(
         item["directions"][direction_key] = (
             item["directions"].get(direction_key, 0) + count
         )
-        item["first_occurrence_at"] = min(item["first_occurrence_at"], str(row["first_at"]))
-        item["last_occurrence_at"] = max(item["last_occurrence_at"], str(row["last_at"]))
+        if row["evidence_type"] == "NOTE_REFERENCE":
+            item["note_directions"][direction_key] = item["note_directions"].get(direction_key, 0) + count
+        if row["first_at"] is not None:
+            item["first_occurrence_at"] = min(item["first_occurrence_at"] or row["first_at"], row["first_at"], key=lambda value: _world_datetime(value, "occurrence"))
+        if row["last_at"] is not None:
+            item["last_occurrence_at"] = max(item["last_occurrence_at"] or row["last_at"], row["last_at"], key=lambda value: _world_datetime(value, "occurrence"))
     result = []
     for item in aggregates.values():
-        if filters.min_relationship_strength and item["evidence_count"] < filters.min_relationship_strength:
+        if not item["evidence_count"]:
+            continue
+        item["qualifies_for_cluster"] = item["evidence_count"] >= (filters.min_relationship_strength or 1)
+        if not item["qualifies_for_cluster"] and not include_below_threshold:
             continue
         item["relationship_types"] = tuple(sorted(item["relationship_types"]))
         directions = item.pop("directions")
@@ -13040,6 +13387,8 @@ def _world_clusters(
     adjacency: dict[str, set[str]] = {}
     by_pair = {}
     for item in relationships:
+        if not item.get("qualifies_for_cluster", True):
+            continue
         source, target = item["source_person_id"], item["target_person_id"]
         adjacency.setdefault(source, set()).add(target)
         adjacency.setdefault(target, set()).add(source)
@@ -13108,8 +13457,8 @@ def _world_clusters(
             calculation_version=_WORLD_CLUSTER_VERSION,
             evidence_types=tuple(sorted(type_counts)),
             evidence_count=evidence_count,
-            first_occurrence_at=min((item["first_occurrence_at"] for item in member_edges), default=None),
-            last_occurrence_at=max((item["last_occurrence_at"] for item in member_edges), default=None),
+            first_occurrence_at=min((item["first_occurrence_at"] for item in member_edges if item["first_occurrence_at"] is not None), default=None, key=lambda value: _world_datetime(value, "occurrence")),
+            last_occurrence_at=max((item["last_occurrence_at"] for item in member_edges if item["last_occurrence_at"] is not None), default=None, key=lambda value: _world_datetime(value, "occurrence")),
             evidence_expansion_token=None,
             calculation_scope=_world_explanation_scope(context),
             strongest_factors=strongest,
@@ -13181,6 +13530,25 @@ def _world_clusters(
     }) for index, item in enumerate(ordered_result)]
 
 
+def _world_relationship_models(
+    conn: sqlite3.Connection, rows: list[dict], context: _WorldReadContext,
+    canonical_map: dict[str, str],
+) -> tuple[WorldRelationship, ...]:
+    recurrence = _world_recurrence_for_pairs(conn, rows, context, canonical_map)
+    models = []
+    for row in rows:
+        summary = recurrence.get(row["relationship_id"], {
+            "count": 0, "first_occurrence_at": None, "latest_occurrence_at": None,
+            "supporting_encounters": [],
+        })
+        summary["supporting_encounters_state"] = _world_bounded_state(
+            int(summary["count"]), len(summary["supporting_encounters"]), "RELATIONSHIP_EVIDENCE_COLLECTION",
+        )
+        summary["measurement"] = "distinct_finalized_encounter_canonical_unordered_pair"
+        models.append(_world_relationship({**row, "encounter_recurrence": summary}, context))
+    return tuple(models)
+
+
 def _world_relationship(
     item: dict, context: _WorldReadContext,
 ) -> WorldRelationship:
@@ -13214,6 +13582,11 @@ def _world_relationship(
         first_occurrence_at=item["first_occurrence_at"], last_occurrence_at=item["last_occurrence_at"],
         strength_basis="EVIDENCE_COUNT_IN_SCOPE", explanation=explanation,
         evidence_expansion_token=None,
+        selected_evidence_strength=int(item["evidence_count"]),
+        qualifies_for_cluster=item.get("qualifies_for_cluster", True),
+        direction_counts=item["direction_counts"],
+        note_reference_direction_counts=dict(sorted(item["note_directions"].items())),
+        encounter_recurrence=item["encounter_recurrence"],
     )
 
 
@@ -13330,7 +13703,7 @@ def _world_person_events(
     )
     rows = conn.execute(
         f"""SELECT DISTINCT o.* {membership_sql}
-            ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
+            ORDER BY world_time(COALESCE(o.observed_at, o.created_at)) DESC, o.observation_id
             LIMIT ? OFFSET ?""",
         [*params, limit, offset],
     ).fetchall()
@@ -13656,7 +14029,8 @@ def _world_event_from_row(
     page_provenance = provenance[
         provenance_offset:provenance_offset + provenance_limit
     ]
-    occurred_at = str(row["observed_at"] or row["created_at"])
+    occurred_at = str(row["observed_at"] if row["observed_at"] is not None else row["created_at"])
+    known_occurrence = occurred_at if _world_stored_datetime(occurred_at) is not None else None
     return WorldEvent(
         event_id=event_id,
         finalized_at=str(row["finalized_at"]),
@@ -13689,8 +14063,8 @@ def _world_event_from_row(
             calculation_version=_WORLD_CALCULATION_VERSION,
             evidence_types=tuple(sorted(evidence_summary["evidence_type_counts"])),
             evidence_count=int(evidence_summary["total_count"]),
-            first_occurrence_at=occurred_at,
-            last_occurrence_at=occurred_at,
+            first_occurrence_at=known_occurrence,
+            last_occurrence_at=known_occurrence,
             calculation_scope=_world_explanation_scope(context),
             strongest_factors=(
                 {"factor": "participant_count", "value": len(all_participants)},
@@ -13701,6 +14075,27 @@ def _world_event_from_row(
             limitations=("Media and evidence details are retrieved through separate bounded collections.",),
         ),
     )
+
+
+def _world_evidence_encounter_support(
+    conn: sqlite3.Connection, items: list[WorldEvidence],
+) -> list[WorldEvidence]:
+    """Exact current frame support only on bounded Explore proof expansions."""
+    cache: dict[tuple[str, str], list[str]] = {}
+    result = []
+    for item in items:
+        if item.evidence_type != "CO_OBSERVED":
+            result.append(item)
+            continue
+        event_id = str(item.supporting_references[0]["source_entity_id"])
+        source, target = item.effective_endpoints
+        for person_id in (source, target):
+            key = (event_id, person_id)
+            if key not in cache:
+                cache[key] = _encounter_person_media(conn, event_id, person_id)
+        support = "SHARED_FRAME" if set(cache[event_id, source]) & set(cache[event_id, target]) else "SAME_ENCOUNTER_ONLY"
+        result.append(replace(item, provenance={**item.provenance, "encounter_support": support}))
+    return result
 
 
 def _world_evidence_page(
@@ -13758,10 +14153,10 @@ def _world_evidence_page(
         params.extend(filters.relationship_type)
     occurrence = "CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END"
     if filters.date_from:
-        clauses.append(f"{occurrence} >= ?")
+        clauses.append(f"world_time({occurrence}) >= world_time(?)")
         params.append(filters.date_from)
     if filters.date_to:
-        clauses.append(f"{occurrence} <= ?")
+        clauses.append(f"world_time({occurrence}) <= world_time(?)")
         params.append(filters.date_to)
     if filters.locations:
         clauses.append("e.evidence_type = 'CO_OBSERVED'")
@@ -13775,8 +14170,8 @@ def _world_evidence_page(
     joined = "relationship_evidence e LEFT JOIN effective_observations o ON e.evidence_type = 'CO_OBSERVED' AND o.observation_id = e.source_entity_id"
     total = int(conn.execute(f"SELECT COUNT(*) FROM {joined} WHERE {where}", params).fetchone()[0])
     rows = conn.execute(
-        f"SELECT e.*, {occurrence} AS effective_occurred_at FROM {joined} "
-        f"WHERE {where} ORDER BY {occurrence} DESC, e.evidence_id LIMIT ? OFFSET ?",
+        f"SELECT e.*, o.location AS encounter_location, {occurrence} AS effective_occurred_at FROM {joined} "
+        f"WHERE {where} ORDER BY world_time({occurrence}) DESC, e.evidence_id LIMIT ? OFFSET ?",
         [*params, limit, offset],
     ).fetchall()
     observation_ids = sorted({
@@ -13806,6 +14201,7 @@ def _world_evidence_page(
             row["source_entity_id"], row["target_person_id"],
         )
         occurred_at = str(row["effective_occurred_at"])
+        known_occurrence = occurred_at if _world_stored_datetime(occurred_at) is not None else None
         supporting = ({
             "source_entity_type": str(row["source_entity_type"]),
             "source_entity_id": str(row["source_entity_id"]),
@@ -13836,7 +14232,7 @@ def _world_evidence_page(
             ),
             calculation_version=_WORLD_CALCULATION_VERSION,
             evidence_types=(str(row["evidence_type"]),), evidence_count=1,
-            first_occurrence_at=occurred_at, last_occurrence_at=occurred_at,
+            first_occurrence_at=known_occurrence, last_occurrence_at=known_occurrence,
             method="correction_before_terminal_canonical_resolution",
             sample={"evidence_items": 1},
             limitations=(
@@ -13850,6 +14246,7 @@ def _world_evidence_page(
                 "source": row["source"],
                 "canonical_endpoints": [source, target],
                 "raw_endpoints": list(raw_endpoints),
+                "encounter_location": row["encounter_location"],
             },
             evidence_type=str(row["evidence_type"]), supporting_references=supporting,
             occurred_at=occurred_at,
@@ -13860,7 +14257,7 @@ def _world_evidence_page(
             active=bool(row["active"]),
             directionality=directionality,
             effective_endpoints=effective_endpoints, raw_endpoints=raw_endpoints,
-            occurrence_bounds={"first": occurred_at, "last": occurred_at},
+            occurrence_bounds={"first": known_occurrence, "last": known_occurrence},
             explanation=explanation,
             media_summary={
                 "total_count": media_count,
@@ -14057,7 +14454,8 @@ def _world_scope_fingerprint(
     filters: WorldReadFilter, ranking: str, limits: WorldReadLimits,
 ) -> str:
     payload = json.dumps(
-        {"filters": asdict(filters), "ranking": ranking, "limits": asdict(limits)},
+        {"filters": asdict(filters), "ranking": ranking, "limits": asdict(limits),
+         "chronology": "utc-microseconds-unknown-v2"},
         sort_keys=True, separators=(",", ":"),
     ).encode()
     return hashlib.sha256(payload).hexdigest()[:24]

@@ -1,5 +1,21 @@
 # SentriFace Edge architecture state
 
+## Issue #3 — World intelligence extension (review pending)
+
+Based on refreshed hardening commit `9b02eba72b155421f06cb7a4b590047380dd59eb`.
+World v2 now supports opt-in Explore evidence criteria, explicitly marked weaker
+direct relationships, distinct Encounter recurrence and directed Note counts,
+latest-day/frequency/multiple-location discovery collections, and saved-location
+suggestions. Current World retains strength 1/all-type defaults and its existing
+frontend. The schema remains v34; all reads use existing corrected/canonical
+Encounter and evidence authority, bounded collections and revision snapshots.
+
+The domain contract documents request examples, scope, bounds, proof navigation,
+and the precise synchronous-progress limitation. Issue #13 must use indeterminate
+loading until a separately justified progress transport exists. Independent testing
+and operator approval are still required; this implementation does not claim final
+acceptance or change Issue #13's UI.
+
 ## Batch 3.7 source authority — schema v34
 
 `biometric_enrollment_history` remains immutable creation/source authority: raw Person assignment, embedding ID, review/operation IDs, source media ID/path/crop, source quality and no-context declaration. `recognition_reference_revisions` is append-only active/retired history using the existing journal and SQL transaction. Absence of a revision preserves the original active source. Legacy backfill copies existing recorded source/quality and never invents a declaration or normalizes over-cap truth.

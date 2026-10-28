@@ -536,6 +536,10 @@ class WorldCollection(str, Enum):
     EVIDENCE = "EVIDENCE"
     MEDIA = "MEDIA"
     LOCATION_FACETS = "LOCATION_FACETS"
+    MOST_FREQUENTLY_SEEN = "MOST_FREQUENTLY_SEEN"
+    MOST_RECENTLY_SEEN = "MOST_RECENTLY_SEEN"
+    MULTIPLE_LOCATIONS = "MULTIPLE_LOCATIONS"
+    LOCATION_SUGGESTIONS = "LOCATION_SUGGESTIONS"
 
 
 @dataclass(frozen=True)
@@ -585,6 +589,10 @@ class WorldGraphRequest:
     cursor: str | None = None
     revision: str | None = None
     as_of: str | None = None
+    view: str = "CURRENT"
+    include_below_threshold: bool = False
+    discovery_period_days: int = 30
+    location_query: str | None = None
 
 
 @dataclass(frozen=True)
@@ -672,7 +680,7 @@ class WorldEvidence:
     directionality: str = "UNDIRECTED"
     effective_endpoints: tuple[str, str] = ()
     raw_endpoints: tuple[str, str] = ()
-    occurrence_bounds: dict[str, str] = field(default_factory=dict)
+    occurrence_bounds: dict[str, str | None] = field(default_factory=dict)
     explanation: WorldExplanation | None = None
     media_summary: dict[str, Any] = field(default_factory=dict)
 
@@ -691,6 +699,24 @@ class WorldRelationship:
     strength_basis: str
     explanation: WorldExplanation
     evidence_expansion_token: str | None = None
+    selected_evidence_strength: int = 0
+    qualifies_for_cluster: bool = True
+    direction_counts: dict[str, int] = field(default_factory=dict)
+    note_reference_direction_counts: dict[str, int] = field(default_factory=dict)
+    encounter_recurrence: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class WorldDiscovery:
+    canonical_person_id: str
+    display_name: str
+    discovery_type: str
+    count: int
+    supporting_encounters: tuple[dict[str, Any], ...]
+    supporting_encounters_state: dict[str, Any]
+    locations: tuple[str, ...] = ()
+    locations_state: dict[str, Any] = field(default_factory=dict)
+    missing_location_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -752,6 +778,8 @@ class WorldGraphV2ReadModel:
     relationships: tuple[WorldRelationship, ...] = ()
     patterns: tuple[WorldPattern, ...] = ()
     media: tuple[WorldMediaReference, ...] = ()
+    discoveries: tuple[WorldDiscovery, ...] = ()
+    discovery_context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

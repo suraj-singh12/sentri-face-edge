@@ -1,5 +1,69 @@
 # Global identity graph implementation plan
 
+## Issue #3 — World intelligence implementation (independent acceptance pending)
+
+Issue branch starts at refreshed `release-v2.0.0-hardening` commit
+`9b02eba72b155421f06cb7a4b590047380dd59eb`. Implementation extends World v2 and
+connected components, evidence and Encounter reads; there is no graphical UI,
+migration, extra graph/location authority or background-job system. Current World
+keeps its existing defaults and generated assets. See DOMAIN_MODEL for the additive
+request/response contract and Issue #13's honest-loading constraint.
+
+Impact/verification checklist: Current/Explore defaults; all seven nonempty evidence
+combinations and thresholds 1/2/4/large; star/chain/components/bridge and weaker-edge
+exclusion; separate recurrence/direction/provenance; correction/removal/merge/history;
+latest day and 7/30/90 boundaries; location comparison, successful-save-only suggestions;
+revision/cursor/snapshot/auth boundaries; rebuild/restart/encrypted restore equivalence;
+100/10k-person bounds; full backend/frontend tests and production asset equality.
+
+An adversarial reassignment-then-removal test found that graph validation demanded
+current participation from a valid retired corrected endpoint. Validation now admits
+that endpoint only with immutable correction-target proof; evidence/history writes
+remain unchanged and active-participant validation remains in place. Activity-scoped
+Person/Cluster expansion now applies the same eligibility as the overview, so
+discovery navigation does not lose its scoped cluster identity.
+
+Reproduce using Python 3.12 and a disposable checkout/data directory:
+
+```bash
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e '.[test]'
+python -m pip check
+python -m pytest -q tests/test_world_intelligence.py tests/test_world_graph_v2.py tests/test_world_graph_v2_freeze.py
+python -m pytest -q
+python -m pytest -q -s tests/test_world_intelligence.py::test_discovery_scale_bounds_and_determinism
+npm --prefix frontend ci
+npm --prefix frontend test
+npm --prefix frontend run build
+git diff --exit-code -- src/sentriface/ui_static
+```
+
+All new fixtures use temporary databases; the scale fixture reuses
+`scripts/benchmark_world_v2.py::_seed`, whose authority shortcuts are restricted to
+disposable benchmark databases. Do not run fixture seeding on operator data.
+The new scale gate covers 100 people/1,000 Encounters and 10,000 people/100,000
+Encounters (two participants each), bounded repeatable discovery/relationship/cluster
+reads and constant statement-count caps. Recorded single-read development timings
+were 0.002–0.025s and 0.134–3.439s respectively, 4–11 traced statements; payloads stayed
+under 31 KB with 10-person/relationship, 3-support and 2-location preview limits.
+These are local smoke measurements, not replacements for the frozen P10 million-
+Encounter p50/p95 record, nor independent acceptance results.
+
+Highest-risk independent challenges: identical canonical pairs from many photos and
+merged raw identities; mixed selected strength versus recurrence; retired corrected
+endpoints after removal; qualifying/weak bridges and no indirect edges; last-day
+scope with repeated people across several Encounters; period boundaries and UTC day
+handling; normalized locations without geocoding; cancelled/failed/corrected location
+writes; stale cursor/filter/revision rejection; concurrent writes; encrypted restore
+and restart. Local final verification: **768 backend passed, 54 skipped, 137 subtests passed**;
+**124 frontend passed**, zero frontend skips/failures; production build and generated
+asset equality passed; dependency, compile and whitespace checks passed. The 54
+backend skips are 42 obsolete compatibility tests and 12 requiring Windows
+PowerShell, not passes. Focused World regression: 63 passed / 15 subtests. All 32
+Issue #3 tests pass within the full suite. CI platform/packaging results accompany
+the draft PR; independent testing and operator acceptance remain outstanding.
+
 ## Completed baseline — Batch 3.7 (committed; schema v34)
 
 Committed and pushed on `release-v2.0.0-hardening` as `555433f082dc39112bd815dddf3a8f35791f2f4b` (parent/original starting baseline `30b89cb7af2ef35316db321457264f7aabb8b2c8`). Attach ownership/Retry/Cancel, cleanup and backup-button work is included. Batch 4 has not started. This is source implementation qualification, not signed 2.0.0 release acceptance.
@@ -286,3 +350,130 @@ Exit status: the historical Windows 11 x64 development acceptance matrix in `doc
 - Do not use recognition proposals, temporary queue groups, or frontend graph objects as authoritative inputs.
 - Every graph-affecting change and its journal entry share one transaction.
 - Add tests for failure rollback, idempotent retries, canonical merge chains, evidence independence, participant deduplication, no self-links, archived/tombstoned rendering data, rebuild equivalence, and zero non-loopback network access.
+
+## Issue #3 independent QA timestamp repair
+
+Original f3faa7582692cd4f8e20d8804da884c5d39a14c3 reproduced the A/B/C
+offset failure. Shared World predicates, proof/event ordering, recurrence and cluster
+occurrence extrema now use exact UTC instants while returning original source text.
+Naive values retain UTC semantics. Calendar days use the same parser to avoid
+SQLite fractional rounding at midnight. Cursor fingerprints include chronology.
+No schema, journal, source timestamp, UI, bounds or index definition changes.
+
+Native SQLite floating date conversions were rejected because microsecond boundaries
+can round; rewriting timestamps would destroy original offset/precision provenance.
+Instead SQL invokes the existing Python UTC parser through bounded request-local
+4,096-entry parsing and integer-key memoization. Discovery SQL materializes one
+key per effective Encounter after status/location filtering and before participant
+joins, then reuses it for range predicates, exact integer UTC ordinal days and
+support ordering. This avoids repeated normalization when timestamp cardinality
+exceeds the memoization bound. Integer microseconds fit SQLite
+64-bit integers over Python's full datetime range. SQL still owns joins, grouping,
+ordering and pagination; no complete dataset is returned to Python for sorting.
+
+Verification: 773 backend passed / 54 skipped / 137 subtests; 124 frontend passed;
+production build, committed asset equality, dependency and compile checks passed.
+Additional offset/proof/midnight/restart assertions passed. Skips remain existing
+obsolete compatibility and platform requirements. Final CI evidence accompanies PR #14.
+
+Matched sequential single-read smoke measurements (same fixture/parameters, separate
+detached original checkout and corrected checkout, no competing full-suite run):
+
+| Dataset / discovery | Original seconds | Corrected seconds | SQL statements | Payload bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 100 people / 1,000 Encounters: frequent | .014 | .014 | 9 | 10,985 |
+| same: recent | .028 | .028 | 10 | 10,940 |
+| same: locations | .017 | .017 | 10 | 11,063 |
+| 10,000 people / 100,000 Encounters: frequent | 1.305 | 1.373 | 9 | 10,989 |
+| same: recent | 3.436 | 3.228 | 10 | 10,944 |
+| same: locations | 1.933 | 1.907 | 10 | 11,067 |
+
+Statement counts/payloads were identical; existing participant-first index protections
+and bounded page regressions pass. On this existing fixture the corrected reads remain close to the original; these
+single samples vary by -.208 to +.068 seconds. These
+are development smoke samples, not universal latency estimates or p50/p95 claims.
+Reproduce with the existing test_discovery_scale_bounds_and_determinism test in
+tests/test_world_intelligence.py on the original and corrected source separately.
+Independent QA must retest offset boundaries, same UTC day across offsets, fractional
+midnight, proof extrema/order, stable cursor walks, and representative timestamp
+cardinality beyond the 4,096-entry memoization bound. Acceptance remains pending.
+
+A matched stress workload additionally assigns 100,000 distinct microsecond
+instants across UTC/+02:00/-02:00 representations to the same 10,000-person /
+100,000-Encounter fixture (all within one valid UTC day). Original→corrected
+seconds: frequent 2.356→2.841; recent 2.891→3.563; locations 3.349→3.743.
+Returned subject IDs/counts and the 10-person/3-support/2-location caps agree.
+The remaining .394–.672s overhead (12–23%) is exact instant parsing/key creation
+for unique source values; it is not hidden by an unbounded cache. The first
+memoization-only candidate was rejected after this workload showed ~50% overhead.
+Query-local Encounter normalization reduced that overhead without a migration or
+source rewrite. Fixture generation and scope are identical between revisions, and
+latencies exclude seeding; these remain single-read development smoke samples.
+
+### Issue #3 historical timestamp compatibility repair (2026-10-28)
+
+Independent QA found a compatibility regression on `136332610eb27e89dae69c8e65e21a604638b353`:
+the storage interface accepts non-date observed-time text, but strict UTC parsing
+made unscoped World relationships, scoped reads and discoveries throw instead of
+returning valid coexisting records. Reproduced independently through
+`GraphReadService` with `bad-date` plus a valid finalized Encounter for one pair.
+The submitted source raises `ValueError: Invalid World occurrence: bad-date`.
+
+The correction keeps strict request parsing and adds a historical-source parser
+returning unknown for malformed or UTC-out-of-range dates. Request-local bounded
+memoization includes unknown results. SQL time keys are NULL for unknowns; date
+predicates exclude them, while unscoped evidence/recurrence counts retain them.
+A source-preserving SQL function supplies NULL to extrema without losing the raw
+record; SQL collation, Python edge/cluster extrema, event/evidence explanations
+and recurrence bounds consistently handle unknowns. Raw `occurred_at` remains
+unchanged. Chronological SQL pages place valid instants first, then unknowns, with
+stable source-ID ties. The chronology fingerprint changes to reject older cursors.
+Discovery normalization/CTE reuse, exact integer microseconds and UTC calendar-day
+grouping remain intact; no schema, migration, historical rewrite or durable cache.
+
+Regression coverage exercises Current and Explore through the service boundary:
+one invalid plus valid, several/all invalid, invalid-only corrected relationships,
+valid extrema, recurrence counts, proof and Encounter cursor walks, unknown ties,
+7/30/90-day frequency, latest UTC day, locations, offsets and midnight microseconds,
+strict malformed/out-of-range request rejection, revision consistency, corrections,
+rebuild/restart and encrypted backup/restore with invalid history. Original A/B/C
+and all previous UTC precision tests remain unchanged.
+
+Matched sequential performance smoke samples against failed SHA `1363326`, same
+fixtures/parameters/limits as above, seeding excluded, no concurrent test workloads:
+
+| Dataset/read | Failed SHA seconds | Compatibility fix seconds | Statements | Payload bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 100 people / 1k Encounters: frequent | .016 | .014 | 9 | 10,985 |
+| same: latest day | .028 | .028 | 10 | 10,940 |
+| same: locations | .018 | .018 | 10 | 11,063 |
+| 10k people / 100k Encounters: frequent | 1.481 | 1.350 | 9 | 10,989 |
+| same: latest day | 3.924 | 3.072 | 10 | 10,944 |
+| same: locations | 1.936 | 1.777 | 10 | 11,067 |
+| same: relationships | .716 | .676 | 11 | 29,770 |
+| same: clusters | .655 | .646 | 9 | 10,077 |
+
+The existing scale test passes bounded response, deterministic results, statement
+count and latency assertions on both sources. A separate matched stress fixture
+with 100k distinct microsecond instants across UTC/+02/-02 gives failed→corrected
+seconds: frequent 2.885→2.726, latest day 3.743→3.737, locations 3.731→3.588.
+Returned Person IDs/counts and caps match. No material regression appears; timing
+variation is not evidence of an intrinsic speed improvement. These are single-read
+development samples, not universal estimates or p50/p95. The standard test is
+`test_discovery_scale_bounds_and_determinism`; the stress fixture uses the same
+`_seed(10000,100000,participants_per_event=2)` then assigns event i the instant
+2026-08-01T12:00:00Z + i microseconds, cycling +02/-02/UTC representations, with
+as_of 2026-08-02T00:00:00Z and limits people=10/events=3/facets=2. Failed-source
+malformed-data workloads cannot produce a successful comparison: their exception
+is the independently reproduced defect.
+
+Final local verification: Python 3.12 full suite **784 passed, 54 skipped,
+137 subtests passed** (121.67s). The 54 skips retain 42 obsolete compatibility tests
+and 12 Windows PowerShell requirements on Linux. Focused new compatibility,
+strict-date, UTC and restore tests: **17 passed**. World suites before the three
+additional strict UTC-overflow parameter cases: **76 passed, 15 subtests passed**;
+the final full suite includes all cases. Frontend **124 passed**; production build,
+committed-asset equality, dependency, compile and whitespace checks passed. Final
+self-review found no unrelated UI, identity, authority or historical-data writes.
+Exact-source five-job CI evidence is recorded on draft PR #14. Independent QA and
+operator approval remain required; no merge, release or Issue #3 closure.
