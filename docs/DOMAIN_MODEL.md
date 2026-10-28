@@ -412,6 +412,7 @@ request-local 4,096-entry memoization per parser/key avoids repeated parsing in
 participant/evidence joins and collection queries; it is discarded with the read
 connection. No schema or historical timestamps change. SQL keeps bounded filtering,
 pagination and aggregation; chronological MIN/MAX retain the original timestamp
-text using an instant collation. UTC calendar days use the same parser, including
-microseconds immediately before midnight. Chronology participates in cursor
+text using an instant collation. Discovery queries normalize once per effective Encounter before participant joins
+and reuse the exact integer key for filtering, ordering and UTC ordinal-day grouping,
+including microseconds immediately before midnight. Chronology participates in cursor
 fingerprints so pre-correction pages cannot be mixed with corrected ordering.

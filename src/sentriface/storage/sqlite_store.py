@@ -11558,8 +11558,6 @@ def _world_graph_v2_read_snapshot(
         return ((dt.toordinal() * 86400 + dt.hour * 3600 + dt.minute * 60 + dt.second)
                 * 1000000 + dt.microsecond)
     conn.create_function("world_time", 1, time_key, deterministic=True)
-    conn.create_function("world_day", 1, lru_cache(maxsize=4096)(
-        lambda value: instant(value).date().isoformat()), deterministic=True)
     conn.create_collation("world_instant", lambda a, b: (instant(a) > instant(b)) - (instant(a) < instant(b)))
     revision = _graph_revision_token(conn)
     if request.revision is not None and request.revision != revision:
@@ -12026,15 +12024,30 @@ def _world_discoveries_read(
         filters, date_from=max(filter(None, (filters.date_from, start)), default=None),
         date_to=min(filter(None, (filters.date_to, context.as_of))),
     )
-    scope_sql, params = _world_scope_sql(scoped, evidence=False)
-    cte = f"""WITH appearances AS MATERIALIZED (
+    # Normalize once per Encounter before participant joins. Keep location/status
+    # predicates ahead of normalization; SQL integer division gives the exact UTC
+    # ordinal day, including the final microsecond before midnight.
+    event_scope, event_params = _world_scope_sql(
+        replace(scoped, date_from=None, date_to=None), evidence=False,
+    )
+    scope_sql, time_params = _world_scope_sql(
+        replace(scoped, locations=(), missing_location="INCLUDE"), evidence=False,
+    )
+    scope_sql = scope_sql.replace("world_time(COALESCE(o.observed_at, o.created_at))", "o.instant_key")
+    params = [*event_params, *time_params]
+    cte = f"""WITH normalized_events AS MATERIALIZED (
+        SELECT o.observation_id, o.observed_at, o.created_at, o.location, o.status,
+               world_time(COALESCE(o.observed_at, o.created_at)) AS instant_key
+        FROM effective_observations o WHERE {event_scope}
+    ), appearances AS MATERIALIZED (
         SELECT DISTINCT o.observation_id AS event_id,
                world_effective_person(p.observation_id, p.person_id) AS person_id,
                COALESCE(o.observed_at, o.created_at) AS occurred_at,
-               world_day(COALESCE(o.observed_at, o.created_at)) AS day,
+               o.instant_key AS time_key,
+               o.instant_key / 86400000000 AS day,
                world_location_text(o.location) AS location,
                world_location_key(o.location) AS location_key
-        FROM effective_observations o JOIN observation_participants p USING(observation_id)
+        FROM normalized_events o JOIN observation_participants p USING(observation_id)
         WHERE {scope_sql}
           AND world_discovery_eligible(world_effective_person(p.observation_id, p.person_id)) = 1
     )"""
@@ -12065,7 +12078,7 @@ def _world_discoveries_read(
         placeholders = ",".join("?" for _ in ids)
         support_rows = conn.execute(
             f"""{cte}, numbered AS (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY world_time(occurred_at) DESC, event_id) AS position
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY time_key DESC, event_id) AS position
                 FROM selected WHERE person_id IN ({placeholders})
             ) SELECT * FROM numbered WHERE position <= ? ORDER BY person_id, position""",
             [*selected_params, *ids, context.limits.events],
@@ -12109,7 +12122,7 @@ def _world_discoveries_read(
         discovery_context={
             "type": context.collection.value, "period_days": period,
             "date_from": scoped.date_from, "date_to": scoped.date_to,
-            "latest_observed_day": latest_day, "calendar_timezone": "UTC",
+            "latest_observed_day": datetime.fromordinal(int(latest_day)).date().isoformat() if latest_day is not None else None, "calendar_timezone": "UTC",
             "measurement": ("distinct_normalized_known_locations" if multiple
                             else "distinct_finalized_person_encounter_appearances"),
             "cluster_navigation": "PERSON.cluster_memberships_with_same_filters_and_revision",
