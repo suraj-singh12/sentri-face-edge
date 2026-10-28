@@ -469,3 +469,59 @@ def test_location_query_length_precedes_unicode_casefold_expansion(store):
     observe(store,'unicode-location',[person],location='SSEN city')
     assert read(store,C.LOCATION_SUGGESTIONS,location_query='ße').available_facets['locations']==[]
     assert read(store,C.LOCATION_SUGGESTIONS,location_query='ßen').available_facets['locations']==[{'value':'SSEN city','count':1}]
+
+
+def test_discovery_offset_qa_reproduction(store):
+    people = [store.create_person(name) for name in 'ABC']
+    for person, stamp in zip(people, ('2026-09-27T13:00:00+02:00', '2026-09-27T11:30:00-02:00', '2026-10-27T11:30:00-02:00')):
+        observe(store, 'offset-'+person.name, [person], date=stamp)
+    for collection in (C.MOST_FREQUENTLY_SEEN, C.MOST_RECENTLY_SEEN):
+        result = read(store, collection)
+        assert {row.canonical_person_id for row in result.discoveries} == ({people[1].person_id} if collection == C.MOST_FREQUENTLY_SEEN else {people[0].person_id, people[1].person_id})
+    recent = read(store, C.MOST_RECENTLY_SEEN, filters=Filter(date_from='2026-09-27T12:00:00Z'))
+    assert [row.canonical_person_id for row in recent.discoveries] == [people[1].person_id]
+
+
+@pytest.mark.parametrize('days', [7, 30, 90])
+def test_timestamp_instants_boundaries_and_order(store, days):
+    from sentriface.graph_read_service import GraphReadService
+    end = datetime.fromisoformat(AS_OF)
+    start = end - timedelta(days=days)
+    person = store.create_person('Boundary')
+    stamps = [(start-timedelta(microseconds=1)).isoformat(), start.isoformat().replace('+00:00','Z'), start.astimezone(timezone(timedelta(hours=-2))).isoformat(), end.replace(tzinfo=None).isoformat(), end.astimezone(timezone(timedelta(hours=2))).isoformat(), (end+timedelta(microseconds=1)).isoformat()]
+    ids = [observe(store, 'instant-'+str(i), [person], date=stamp, location='Delhi' if i%2 else 'Agra') for i,stamp in enumerate(stamps)]
+    request = Request(collection=C.MOST_FREQUENTLY_SEEN, as_of=AS_OF, discovery_period_days=days)
+    service = GraphReadService(store)
+    result = service.world_graph_v2(request)
+    assert result.discoveries[0].count == 4
+    assert {e['event_id'] for e in result.discoveries[0].supporting_encounters} == set(ids[1:5])
+    assert result.discoveries == service.world_graph_v2(request).discoveries
+    filters = Filter(date_from=start.isoformat(), date_to=AS_OF)
+    recent = service.world_graph_v2(replace(request, collection=C.MOST_RECENTLY_SEEN, filters=filters))
+    assert recent.discovery_context['latest_observed_day'] == '2026-10-27'
+    assert {e['event_id'] for e in recent.discoveries[0].supporting_encounters} == set(ids[3:5])
+    events = service.world_graph_v2(Request(detail_level=L.PERSON, focus_type='PERSON', focus_id=person.person_id, collection=C.EVENTS, as_of=AS_OF, filters=filters))
+    assert {e.event_id for e in events.events} == set(ids[1:5])
+    assert [datetime.fromisoformat(e.occurred_at.replace('Z','+00:00')).replace(tzinfo=timezone.utc) if '+' not in e.occurred_at and '-' not in e.occurred_at[10:] else datetime.fromisoformat(e.occurred_at.replace('Z','+00:00')).astimezone(timezone.utc) for e in events.events][:2] == [end,end]
+
+
+def test_offset_relationship_proof_and_multiple_places(store):
+    a,b = [store.create_person(name) for name in 'AB']
+    stamps = ['2026-10-26T23:59:59.999999Z','2026-10-27T02:00:00+02:00','2026-10-27T11:59:59.999999Z','2026-10-27T10:00:00-02:00','2026-10-27T12:00:00.000001Z']
+    ids = [observe(store,'proof-'+str(i),[a,b],date=stamp,location='Delhi' if i%2 else 'Agra') for i,stamp in enumerate(stamps)]
+    scoped = Filter(date_to=AS_OF)
+    edge = read(store,filters=scoped).relationships[0]
+    assert edge.first_occurrence_at == stamps[0]
+    assert edge.last_occurrence_at == stamps[3]
+    assert edge.encounter_recurrence['count'] == 4
+    assert [r['event_id'] for r in edge.encounter_recurrence['supporting_encounters']] == list(reversed(ids[:4]))
+    proof = read(store,C.EVIDENCE,detail_level=L.EVIDENCE,focus_type='RELATIONSHIP',focus_id=edge.relationship_id,filters=scoped)
+    assert [r.occurred_at for r in proof.evidence] == list(reversed(stamps[:4]))
+    places = read(store,C.MULTIPLE_LOCATIONS)
+    assert all(r.count==2 and len(r.supporting_encounters)==4 for r in places.discoveries)
+    recent = read(store,C.MOST_RECENTLY_SEEN)
+    assert recent.discovery_context['latest_observed_day']=='2026-10-27'
+    assert all({e['event_id'] for e in r.supporting_encounters}==set(ids[1:4]) for r in recent.discoveries)
+    restarted=SQLiteIdentityStore(store.db_path,embedding_dim=2)
+    restarted.initialize()
+    assert read(restarted,filters=scoped).relationships==read(store,filters=scoped).relationships

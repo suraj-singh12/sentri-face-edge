@@ -403,3 +403,15 @@ P10-E and P10-F are complete and frozen. The final consolidated sparse/dense col
 ## Projection rules
 
 Graph rebuild reads only authoritative durable records, resolves endpoints through canonical identity, groups active evidence by unordered canonical pair, drops self-links, and retains evidence details for explanation. Archived/tombstoned persons remain nodes with inactive presentation state. Recognition scores, temporary queue grouping, frontend state, and vector-index contents are never graph inputs.
+
+## Issue #3 timestamp QA correction
+
+World compares instants using exact integer microseconds derived through the existing
+UTC parser (naive timestamps retain the established UTC interpretation). A bounded
+request-local 4,096-entry memoization per parser/key avoids repeated parsing in
+participant/evidence joins and collection queries; it is discarded with the read
+connection. No schema or historical timestamps change. SQL keeps bounded filtering,
+pagination and aggregation; chronological MIN/MAX retain the original timestamp
+text using an instant collation. UTC calendar days use the same parser, including
+microseconds immediately before midnight. Chronology participates in cursor
+fingerprints so pre-correction pages cannot be mixed with corrected ordering.

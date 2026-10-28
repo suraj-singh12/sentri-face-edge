@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 import base64
 import hashlib
 import json
@@ -11547,6 +11549,18 @@ def _world_graph_v2_read(
 def _world_graph_v2_read_snapshot(
     conn: sqlite3.Connection, request: WorldGraphRequest,
 ) -> WorldGraphV2ReadModel:
+    # Request-local, bounded memoization: repeated evidence/participant joins and
+    # subsequent collection queries reuse parsed instants without retaining a DB cache.
+    instant = lru_cache(maxsize=4096)(lambda value: _world_datetime(value, "occurrence"))
+    @lru_cache(maxsize=4096)
+    def time_key(value):
+        dt = instant(value)
+        return ((dt.toordinal() * 86400 + dt.hour * 3600 + dt.minute * 60 + dt.second)
+                * 1000000 + dt.microsecond)
+    conn.create_function("world_time", 1, time_key, deterministic=True)
+    conn.create_function("world_day", 1, lru_cache(maxsize=4096)(
+        lambda value: instant(value).date().isoformat()), deterministic=True)
+    conn.create_collation("world_instant", lambda a, b: (instant(a) > instant(b)) - (instant(a) < instant(b)))
     revision = _graph_revision_token(conn)
     if request.revision is not None and request.revision != revision:
         raise ValueError("World revision is stale; request a new snapshot")
@@ -11931,10 +11945,10 @@ def _world_recurrence_for_pairs(
               AND e.source_entity_type = 'OBSERVATION' AND {scope_sql}
               AND world_recurrence_pair({source}, {target}) = 1
         ), numbered AS (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY first_person, second_person ORDER BY occurred_at DESC, event_id) AS position,
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY first_person, second_person ORDER BY world_time(occurred_at) DESC, event_id) AS position,
                    COUNT(*) OVER (PARTITION BY first_person, second_person) AS total,
-                   MIN(occurred_at) OVER (PARTITION BY first_person, second_person) AS first_at,
-                   MAX(occurred_at) OVER (PARTITION BY first_person, second_person) AS latest_at
+                   MIN(occurred_at COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS first_at,
+                   MAX(occurred_at COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS latest_at
             FROM encounters
         ) SELECT * FROM numbered WHERE position <= ? ORDER BY first_person, second_person, position""",
         [*params, context.limits.events],
@@ -12017,7 +12031,7 @@ def _world_discoveries_read(
         SELECT DISTINCT o.observation_id AS event_id,
                world_effective_person(p.observation_id, p.person_id) AS person_id,
                COALESCE(o.observed_at, o.created_at) AS occurred_at,
-               DATE(COALESCE(o.observed_at, o.created_at)) AS day,
+               world_day(COALESCE(o.observed_at, o.created_at)) AS day,
                world_location_text(o.location) AS location,
                world_location_key(o.location) AS location_key
         FROM effective_observations o JOIN observation_participants p USING(observation_id)
@@ -12051,7 +12065,7 @@ def _world_discoveries_read(
         placeholders = ",".join("?" for _ in ids)
         support_rows = conn.execute(
             f"""{cte}, numbered AS (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY occurred_at DESC, event_id) AS position
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY world_time(occurred_at) DESC, event_id) AS position
                 FROM selected WHERE person_id IN ({placeholders})
             ) SELECT * FROM numbered WHERE position <= ? ORDER BY person_id, position""",
             [*selected_params, *ids, context.limits.events],
@@ -12709,10 +12723,10 @@ def _world_scope_sql(filters: WorldReadFilter, *, evidence: bool) -> tuple[str, 
     params: list[object] = []
     occurrence = "COALESCE(o.observed_at, o.created_at)"
     if filters.date_from:
-        clauses.append(f"{occurrence} >= ?")
+        clauses.append(f"world_time({occurrence}) >= world_time(?)")
         params.append(filters.date_from)
     if filters.date_to:
-        clauses.append(f"{occurrence} <= ?")
+        clauses.append(f"world_time({occurrence}) <= world_time(?)")
         params.append(filters.date_to)
     if filters.locations:
         clauses.append("LOWER(TRIM(COALESCE(o.location, ''))) IN (%s)" % ",".join("?" for _ in filters.locations))
@@ -12801,10 +12815,10 @@ def _world_relationship_scope(
     non_observation_clauses = ["e.evidence_type <> 'CO_OBSERVED'"]
     non_observation_params: list[object] = []
     if filters.date_from:
-        non_observation_clauses.append("e.created_at >= ?")
+        non_observation_clauses.append("world_time(e.created_at) >= world_time(?)")
         non_observation_params.append(filters.date_from)
     if filters.date_to:
-        non_observation_clauses.append("e.created_at <= ?")
+        non_observation_clauses.append("world_time(e.created_at) <= world_time(?)")
         non_observation_params.append(filters.date_to)
     non_observation_allowed = not filters.locations and filters.missing_location != "EXCLUDE"
     evidence_prefix = (" AND " + " AND ".join(evidence_clauses)) if evidence_clauses else ""
@@ -12814,8 +12828,8 @@ def _world_relationship_scope(
                e.source_entity_type, e.source_entity_id,
                e.relationship_type, e.directionality, o.location,
                COUNT(*) AS evidence_count,
-               MIN(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) AS first_at,
-               MAX(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) AS last_at
+               MIN(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END COLLATE world_instant) AS first_at,
+               MAX(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END COLLATE world_instant) AS last_at
         FROM relationship_evidence e
         LEFT JOIN effective_observations o ON e.evidence_type = 'CO_OBSERVED'
              AND e.source_entity_type = 'OBSERVATION' AND o.observation_id = e.source_entity_id
@@ -12863,8 +12877,8 @@ def _world_relationship_scope(
         )
         if row["evidence_type"] == "NOTE_REFERENCE":
             item["note_directions"][direction_key] = item["note_directions"].get(direction_key, 0) + count
-        item["first_occurrence_at"] = min(item["first_occurrence_at"] or str(row["first_at"]), str(row["first_at"]))
-        item["last_occurrence_at"] = max(item["last_occurrence_at"] or str(row["last_at"]), str(row["last_at"]))
+        item["first_occurrence_at"] = min(item["first_occurrence_at"] or str(row["first_at"]), str(row["first_at"]), key=lambda value: _world_datetime(value, "occurrence"))
+        item["last_occurrence_at"] = max(item["last_occurrence_at"] or str(row["last_at"]), str(row["last_at"]), key=lambda value: _world_datetime(value, "occurrence"))
     result = []
     for item in aggregates.values():
         if not item["evidence_count"]:
@@ -13404,8 +13418,8 @@ def _world_clusters(
             calculation_version=_WORLD_CLUSTER_VERSION,
             evidence_types=tuple(sorted(type_counts)),
             evidence_count=evidence_count,
-            first_occurrence_at=min((item["first_occurrence_at"] for item in member_edges), default=None),
-            last_occurrence_at=max((item["last_occurrence_at"] for item in member_edges), default=None),
+            first_occurrence_at=min((item["first_occurrence_at"] for item in member_edges), default=None, key=lambda value: _world_datetime(value, "occurrence")),
+            last_occurrence_at=max((item["last_occurrence_at"] for item in member_edges), default=None, key=lambda value: _world_datetime(value, "occurrence")),
             evidence_expansion_token=None,
             calculation_scope=_world_explanation_scope(context),
             strongest_factors=strongest,
@@ -13650,7 +13664,7 @@ def _world_person_events(
     )
     rows = conn.execute(
         f"""SELECT DISTINCT o.* {membership_sql}
-            ORDER BY COALESCE(o.observed_at, o.created_at) DESC, o.observation_id
+            ORDER BY world_time(COALESCE(o.observed_at, o.created_at)) DESC, o.observation_id
             LIMIT ? OFFSET ?""",
         [*params, limit, offset],
     ).fetchall()
@@ -14099,10 +14113,10 @@ def _world_evidence_page(
         params.extend(filters.relationship_type)
     occurrence = "CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END"
     if filters.date_from:
-        clauses.append(f"{occurrence} >= ?")
+        clauses.append(f"world_time({occurrence}) >= world_time(?)")
         params.append(filters.date_from)
     if filters.date_to:
-        clauses.append(f"{occurrence} <= ?")
+        clauses.append(f"world_time({occurrence}) <= world_time(?)")
         params.append(filters.date_to)
     if filters.locations:
         clauses.append("e.evidence_type = 'CO_OBSERVED'")
@@ -14117,7 +14131,7 @@ def _world_evidence_page(
     total = int(conn.execute(f"SELECT COUNT(*) FROM {joined} WHERE {where}", params).fetchone()[0])
     rows = conn.execute(
         f"SELECT e.*, o.location AS encounter_location, {occurrence} AS effective_occurred_at FROM {joined} "
-        f"WHERE {where} ORDER BY {occurrence} DESC, e.evidence_id LIMIT ? OFFSET ?",
+        f"WHERE {where} ORDER BY world_time({occurrence}) DESC, e.evidence_id LIMIT ? OFFSET ?",
         [*params, limit, offset],
     ).fetchall()
     observation_ids = sorted({
@@ -14399,7 +14413,8 @@ def _world_scope_fingerprint(
     filters: WorldReadFilter, ranking: str, limits: WorldReadLimits,
 ) -> str:
     payload = json.dumps(
-        {"filters": asdict(filters), "ranking": ranking, "limits": asdict(limits)},
+        {"filters": asdict(filters), "ranking": ranking, "limits": asdict(limits),
+         "chronology": "utc-microseconds-v1"},
         sort_keys=True, separators=(",", ":"),
     ).encode()
     return hashlib.sha256(payload).hexdigest()[:24]

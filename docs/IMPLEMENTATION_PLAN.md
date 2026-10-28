@@ -350,3 +350,46 @@ Exit status: the historical Windows 11 x64 development acceptance matrix in `doc
 - Do not use recognition proposals, temporary queue groups, or frontend graph objects as authoritative inputs.
 - Every graph-affecting change and its journal entry share one transaction.
 - Add tests for failure rollback, idempotent retries, canonical merge chains, evidence independence, participant deduplication, no self-links, archived/tombstoned rendering data, rebuild equivalence, and zero non-loopback network access.
+
+## Issue #3 independent QA timestamp repair
+
+Original f3faa7582692cd4f8e20d8804da884c5d39a14c3 reproduced the A/B/C
+offset failure. Shared World predicates, proof/event ordering, recurrence and cluster
+occurrence extrema now use exact UTC instants while returning original source text.
+Naive values retain UTC semantics. Calendar days use the same parser to avoid
+SQLite fractional rounding at midnight. Cursor fingerprints include chronology.
+No schema, journal, source timestamp, UI, bounds or index definition changes.
+
+Native SQLite floating date conversions were rejected because microsecond boundaries
+can round; rewriting timestamps would destroy original offset/precision provenance.
+Instead SQL invokes the existing Python UTC parser through bounded request-local
+4,096-entry parsing, integer-key and day memoization. Integer microseconds fit SQLite
+64-bit integers over Python's full datetime range. SQL still owns joins, grouping,
+ordering and pagination; no complete dataset is returned to Python for sorting.
+
+Verification: 773 backend passed / 54 skipped / 137 subtests; 124 frontend passed;
+production build, committed asset equality, dependency and compile checks passed.
+Additional offset/proof/midnight/restart assertions passed. Skips remain existing
+obsolete compatibility and platform requirements. Final CI evidence accompanies PR #14.
+
+Matched sequential single-read smoke measurements (same fixture/parameters, separate
+detached original checkout and corrected checkout, no competing full-suite run):
+
+| Dataset / discovery | Original seconds | Corrected seconds | SQL statements | Payload bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 100 people / 1,000 Encounters: frequent | .018 | .014 | 9 | 10,985 |
+| same: recent | .027 | .029 | 10 | 10,940 |
+| same: locations | .018 | .018 | 10 | 11,063 |
+| 10,000 people / 100,000 Encounters: frequent | 1.353 | 1.510 | 9 | 10,989 |
+| same: recent | 2.907 | 3.354 | 10 | 10,944 |
+| same: locations | 1.705 | 2.202 | 10 | 11,067 |
+
+Statement counts/payloads were identical; existing participant-first index protections
+and bounded page regressions pass. Native text comparisons are faster; the measured
+.157/.447/.497-second discovery overhead pays for exact instant callbacks. These
+are development smoke samples, not universal latency estimates or p50/p95 claims.
+Reproduce with the existing test_discovery_scale_bounds_and_determinism test in
+tests/test_world_intelligence.py on the original and corrected source separately.
+Independent QA must retest offset boundaries, same UTC day across offsets, fractional
+midnight, proof extrema/order, stable cursor walks, and representative timestamp
+cardinality beyond the 4,096-entry memoization bound. Acceptance remains pending.
