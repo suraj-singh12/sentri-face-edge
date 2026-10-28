@@ -409,3 +409,71 @@ memoization-only candidate was rejected after this workload showed ~50% overhead
 Query-local Encounter normalization reduced that overhead without a migration or
 source rewrite. Fixture generation and scope are identical between revisions, and
 latencies exclude seeding; these remain single-read development smoke samples.
+
+### Issue #3 historical timestamp compatibility repair (2026-10-28)
+
+Independent QA found a compatibility regression on `136332610eb27e89dae69c8e65e21a604638b353`:
+the storage interface accepts non-date observed-time text, but strict UTC parsing
+made unscoped World relationships, scoped reads and discoveries throw instead of
+returning valid coexisting records. Reproduced independently through
+`GraphReadService` with `bad-date` plus a valid finalized Encounter for one pair.
+The submitted source raises `ValueError: Invalid World occurrence: bad-date`.
+
+The correction keeps strict request parsing and adds a historical-source parser
+returning unknown for malformed or UTC-out-of-range dates. Request-local bounded
+memoization includes unknown results. SQL time keys are NULL for unknowns; date
+predicates exclude them, while unscoped evidence/recurrence counts retain them.
+A source-preserving SQL function supplies NULL to extrema without losing the raw
+record; SQL collation, Python edge/cluster extrema, event/evidence explanations
+and recurrence bounds consistently handle unknowns. Raw `occurred_at` remains
+unchanged. Chronological SQL pages place valid instants first, then unknowns, with
+stable source-ID ties. The chronology fingerprint changes to reject older cursors.
+Discovery normalization/CTE reuse, exact integer microseconds and UTC calendar-day
+grouping remain intact; no schema, migration, historical rewrite or durable cache.
+
+Regression coverage exercises Current and Explore through the service boundary:
+one invalid plus valid, several/all invalid, invalid-only corrected relationships,
+valid extrema, recurrence counts, proof and Encounter cursor walks, unknown ties,
+7/30/90-day frequency, latest UTC day, locations, offsets and midnight microseconds,
+strict malformed/out-of-range request rejection, revision consistency, corrections,
+rebuild/restart and encrypted backup/restore with invalid history. Original A/B/C
+and all previous UTC precision tests remain unchanged.
+
+Matched sequential performance smoke samples against failed SHA `1363326`, same
+fixtures/parameters/limits as above, seeding excluded, no concurrent test workloads:
+
+| Dataset/read | Failed SHA seconds | Compatibility fix seconds | Statements | Payload bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 100 people / 1k Encounters: frequent | .016 | .014 | 9 | 10,985 |
+| same: latest day | .028 | .028 | 10 | 10,940 |
+| same: locations | .018 | .018 | 10 | 11,063 |
+| 10k people / 100k Encounters: frequent | 1.481 | 1.350 | 9 | 10,989 |
+| same: latest day | 3.924 | 3.072 | 10 | 10,944 |
+| same: locations | 1.936 | 1.777 | 10 | 11,067 |
+| same: relationships | .716 | .676 | 11 | 29,770 |
+| same: clusters | .655 | .646 | 9 | 10,077 |
+
+The existing scale test passes bounded response, deterministic results, statement
+count and latency assertions on both sources. A separate matched stress fixture
+with 100k distinct microsecond instants across UTC/+02/-02 gives failed→corrected
+seconds: frequent 2.885→2.726, latest day 3.743→3.737, locations 3.731→3.588.
+Returned Person IDs/counts and caps match. No material regression appears; timing
+variation is not evidence of an intrinsic speed improvement. These are single-read
+development samples, not universal estimates or p50/p95. The standard test is
+`test_discovery_scale_bounds_and_determinism`; the stress fixture uses the same
+`_seed(10000,100000,participants_per_event=2)` then assigns event i the instant
+2026-08-01T12:00:00Z + i microseconds, cycling +02/-02/UTC representations, with
+as_of 2026-08-02T00:00:00Z and limits people=10/events=3/facets=2. Failed-source
+malformed-data workloads cannot produce a successful comparison: their exception
+is the independently reproduced defect.
+
+Final local verification: Python 3.12 full suite **784 passed, 54 skipped,
+137 subtests passed** (121.67s). The 54 skips retain 42 obsolete compatibility tests
+and 12 Windows PowerShell requirements on Linux. Focused new compatibility,
+strict-date, UTC and restore tests: **17 passed**. World suites before the three
+additional strict UTC-overflow parameter cases: **76 passed, 15 subtests passed**;
+the final full suite includes all cases. Frontend **124 passed**; production build,
+committed-asset equality, dependency, compile and whitespace checks passed. Final
+self-review found no unrelated UI, identity, authority or historical-data writes.
+Exact-source five-job CI evidence is recorded on draft PR #14. Independent QA and
+operator approval remain required; no merge, release or Issue #3 closure.

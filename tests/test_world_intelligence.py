@@ -289,6 +289,7 @@ def test_rebuild_restart_encrypted_backup_restore_equivalence(tmp_path):
     a,b = [store.create_person(n) for n in 'AB']
     observe(store,'first',[a,b])
     observe(store,'second',[a,b],location='Agra')
+    observe(store,'historical-unknown',[a,b],date='bad-date')
     note(store,a,b,'saved-note')
     store.create_manual_association(a.person_id,b.person_id,'manual')
     requests = [Request(collection=c,as_of=AS_OF,view='EXPLORE',filters=Filter(evidence_type=TYPES)) for c in (C.RELATIONSHIPS,C.CLUSTERS,C.MOST_FREQUENTLY_SEEN,C.MOST_RECENTLY_SEEN,C.MULTIPLE_LOCATIONS)]
@@ -525,3 +526,122 @@ def test_offset_relationship_proof_and_multiple_places(store):
     restarted=SQLiteIdentityStore(store.db_path,embedding_dim=2)
     restarted.initialize()
     assert read(restarted,filters=scoped).relationships==read(store,filters=scoped).relationships
+
+
+@pytest.mark.parametrize('view', ['CURRENT', 'EXPLORE'])
+@pytest.mark.parametrize('valid', [False, True])
+def test_historical_unknown_time_contract(store, view, valid):
+    from sentriface.graph_read_service import GraphReadService
+    service = GraphReadService(store)
+    a, b = [store.create_person(n) for n in 'AB']
+    invalid = ['bad-date', 'not-a-time', '2026-99-99', '0001-01-01T00:00:00+02:00']
+    ids = [observe(store, 'unknown-'+str(i), [a,b], date=stamp, location='Unknown '+str(i)) for i,stamp in enumerate(invalid)]
+    stamps = ['2026-10-26T23:59:59.999999Z', '2026-10-27T02:00:00+02:00', '2026-10-26T22:00:00-02:00'] if valid else []
+    known_ids = [observe(store, 'known-'+str(i), [a,b], date=stamp, location='Delhi' if i else 'Agra') for i,stamp in enumerate(stamps)]
+    filters = Filter(evidence_type=('CO_OBSERVED',), min_relationship_strength=1) if view == 'EXPLORE' else Filter()
+    request = Request(collection=C.RELATIONSHIPS, as_of=AS_OF, view=view, filters=filters)
+    def query(**values):
+        return service.world_graph_v2(replace(request, **values))
+    edge = query().relationships[0]
+    assert edge.evidence_count == len(ids)+len(known_ids)
+    assert edge.encounter_recurrence['count'] == len(ids)+len(known_ids)
+    assert edge.first_occurrence_at == (stamps[0] if valid else None)
+    assert edge.last_occurrence_at in (stamps[1:] if valid else [None])
+    assert edge.encounter_recurrence['first_occurrence_at'] == (stamps[0] if valid else None)
+    assert edge.encounter_recurrence['latest_occurrence_at'] in (stamps[1:] if valid else [None])
+    supports = edge.encounter_recurrence['supporting_encounters']
+    assert [s['event_id'] for s in supports] == sorted(known_ids[1:]) + known_ids[:1] + sorted(ids)
+    assert {s['occurred_at'] for s in supports} == set(invalid+stamps)
+    assert query().relationships == query().relationships
+    # Walk single-record pages: valid instants descending, unknowns last, stable IDs.
+    event_request = dict(collection=C.EVENTS, detail_level=L.PERSON, focus_type='PERSON', focus_id=a.person_id, limits=Limits(events=1))
+    events, cursor = [], None
+    while True:
+        page = query(**event_request, cursor=cursor)
+        events.extend(page.events)
+        if not page.has_more:
+            break
+        cursor = page.next_cursor
+    assert [e.event_id for e in events] == [s['event_id'] for s in supports]
+    for e in events:
+        if e.event_id in ids:
+            assert e.occurred_at == invalid[ids.index(e.event_id)]
+            assert e.explanation.first_occurrence_at is None
+            assert e.explanation.last_occurrence_at is None
+    proof_args = dict(collection=C.EVIDENCE, detail_level=L.EVIDENCE, focus_type='RELATIONSHIP', focus_id=edge.relationship_id)
+    proof = query(**proof_args).evidence
+    assert len(proof) == len(ids)+len(known_ids)
+    proof_ids, cursor = [], None
+    while True:
+        page = query(**proof_args, limits=Limits(evidence=1), cursor=cursor)
+        proof_ids.extend(e.evidence_id for e in page.evidence)
+        if not page.has_more:
+            break
+        cursor = page.next_cursor
+    assert proof_ids == [e.evidence_id for e in proof]
+    assert {e.occurred_at for e in proof} == set(invalid+stamps)
+    assert [e.evidence_id for e in proof] == [e.evidence_id for e in query(**proof_args).evidence]
+    for e in proof:
+        if e.occurred_at in invalid:
+            assert e.occurrence_bounds == {'first': None, 'last': None}
+            assert e.explanation.first_occurrence_at is None
+    scoped = replace(filters, date_from='2026-10-26T00:00:00Z', date_to=AS_OF)
+    edges = query(filters=scoped).relationships
+    assert len(edges) == int(valid)
+    if valid:
+        assert edges[0].evidence_count == 3
+        assert len(query(**proof_args, filters=scoped).evidence) == 3
+    assert {e.event_id for e in query(**{**event_request, 'limits': Limits(events=20)}, filters=scoped).events} == set(known_ids)
+    for days in (7,30,90):
+        frequent = query(collection=C.MOST_FREQUENTLY_SEEN, discovery_period_days=days).discoveries
+        assert {d.canonical_person_id:d.count for d in frequent} == ({a.person_id:3,b.person_id:3} if valid else {})
+    recent = query(collection=C.MOST_RECENTLY_SEEN)
+    assert recent.discovery_context['latest_observed_day'] == ('2026-10-27' if valid else None)
+    assert {e['event_id'] for d in recent.discoveries for e in d.supporting_encounters} == set(known_ids[1:])
+    places = query(collection=C.MULTIPLE_LOCATIONS).discoveries
+    assert {d.canonical_person_id:d.count for d in places} == ({a.person_id:2,b.person_id:2} if valid else {})
+    clusters = query(collection=C.CLUSTERS).clusters
+    assert clusters[0].explanation.first_occurrence_at == (stamps[0] if valid else None)
+    frozen = query()
+    before = frozen.relationships
+    store.rebuild_graph_projection('unknown-time-rebuild')
+    restarted = SQLiteIdentityStore(store.db_path, embedding_dim=2)
+    restarted.initialize()
+    assert restarted.get_world_graph_v2_read(request).relationships == before
+    # Correct canonical identity without changing historical timestamp provenance.
+    c = store.create_person('C')
+    store.correct_observation_identity(ids[0], b.person_id, c.person_id, 'unknown-correction')
+    with pytest.raises(ValueError, match='stale'):
+        query(revision=frozen.graph_revision)
+    corrected = query().relationships
+    assert sum(e.evidence_count for e in corrected) == len(ids)+len(known_ids)
+    unknown_edge = next(e for e in corrected if c.person_id in (e.source_person_id,e.target_person_id))
+    assert unknown_edge.first_occurrence_at is None and unknown_edge.last_occurrence_at is None
+
+
+@pytest.mark.parametrize('field', ['as_of', 'date_from', 'date_to'])
+@pytest.mark.parametrize('invalid_date', ['bad-date', '0001-01-01T00:00:00+02:00'])
+def test_unknown_history_does_not_relax_request_dates(store, field, invalid_date):
+    from sentriface.graph_read_service import GraphReadService
+    a,b = [store.create_person(n) for n in 'AB']
+    observe(store,'invalid-request-fixture',[a,b],date='bad-date')
+    request = Request(as_of=invalid_date) if field == 'as_of' else Request(as_of=AS_OF, filters=Filter(**{field:invalid_date}))
+    with pytest.raises(ValueError, match='Invalid World '+field):
+        GraphReadService(store).world_graph_v2(request)
+
+
+def test_historical_bad_date_and_valid_qa_reproduction(store):
+    from sentriface.graph_read_service import GraphReadService
+    a,b = [store.create_person(n) for n in 'AB']
+    observe(store,'qa-bad',[a,b],date='bad-date')
+    valid = observe(store,'qa-valid',[a,b])
+    service = GraphReadService(store)
+    edge = service.world_graph_v2(Request(collection=C.RELATIONSHIPS, as_of=AS_OF)).relationships[0]
+    assert edge.evidence_count == edge.encounter_recurrence['count'] == 2
+    assert edge.first_occurrence_at == edge.last_occurrence_at == '2026-10-22T10:00:00+00:00'
+    scoped = service.world_graph_v2(Request(collection=C.RELATIONSHIPS, as_of=AS_OF, filters=Filter(date_to=AS_OF))).relationships[0]
+    assert scoped.evidence_count == scoped.encounter_recurrence['count'] == 1
+    for collection in (C.MOST_FREQUENTLY_SEEN,C.MOST_RECENTLY_SEEN):
+        result = service.world_graph_v2(Request(as_of=AS_OF, collection=collection))
+        assert {d.canonical_person_id:d.count for d in result.discoveries} == {a.person_id:1,b.person_id:1}
+        assert {e['event_id'] for d in result.discoveries for e in d.supporting_encounters} == {valid}

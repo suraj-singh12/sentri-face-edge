@@ -416,3 +416,18 @@ text using an instant collation. Discovery queries normalize once per effective 
 and reuse the exact integer key for filtering, ordering and UTC ordinal-day grouping,
 including microseconds immediately before midnight. Chronology participates in cursor
 fingerprints so pre-correction pages cannot be mixed with corrected ordering.
+
+Historical Encounter timestamps are storage-compatible text, not validated query
+boundaries. Unparseable or UTC-out-of-range stored values have an unknown instant:
+unscoped Current/Explore retain their evidence, recurrence, identities and raw
+source values. Date-scoped reads and time-based discoveries exclude unknown-time
+occurrences; valid coexisting Encounters remain eligible. First/latest aggregates
+ignore unknowns and return null if none are known. Event/evidence `occurred_at`
+retains the raw value; occurrence bounds and explanation extrema are null for
+unknown times. Chronological pages list known instants descending, then unknowns,
+with source IDs breaking ties. The existing absent (`NULL`) observed-time fallback
+to creation time is unchanged; malformed non-null text never triggers a fallback.
+Request `as_of`, date filters and cursor dates still use strict validation. Tolerant
+source parsing catches only malformed/out-of-range date errors, with unknown
+results included in the same bounded request-local memoization. No source rewrite,
+migration, persistent cache or additional authority is introduced.

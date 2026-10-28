@@ -680,7 +680,7 @@ class WorldEvidence:
     directionality: str = "UNDIRECTED"
     effective_endpoints: tuple[str, str] = ()
     raw_endpoints: tuple[str, str] = ()
-    occurrence_bounds: dict[str, str] = field(default_factory=dict)
+    occurrence_bounds: dict[str, str | None] = field(default_factory=dict)
     explanation: WorldExplanation | None = None
     media_summary: dict[str, Any] = field(default_factory=dict)
 

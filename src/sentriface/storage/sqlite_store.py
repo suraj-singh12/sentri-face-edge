@@ -11551,14 +11551,26 @@ def _world_graph_v2_read_snapshot(
 ) -> WorldGraphV2ReadModel:
     # Request-local, bounded memoization: repeated evidence/participant joins and
     # subsequent collection queries reuse parsed instants without retaining a DB cache.
-    instant = lru_cache(maxsize=4096)(lambda value: _world_datetime(value, "occurrence"))
+    instant = lru_cache(maxsize=4096)(_world_stored_datetime)
     @lru_cache(maxsize=4096)
     def time_key(value):
         dt = instant(value)
+        if dt is None:
+            return None
         return ((dt.toordinal() * 86400 + dt.hour * 3600 + dt.minute * 60 + dt.second)
                 * 1000000 + dt.microsecond)
     conn.create_function("world_time", 1, time_key, deterministic=True)
-    conn.create_collation("world_instant", lambda a, b: (instant(a) > instant(b)) - (instant(a) < instant(b)))
+    # NULL instants fail date predicates and sort after known instants in DESC
+    # pages. Extrema ignore unknowns while retaining raw source strings.
+    conn.create_function("world_occurrence", 1, lambda value: value if instant(value) is not None else None, deterministic=True)
+    def compare_instants(first, second):
+        first_key, second_key = time_key(first), time_key(second)
+        # Exact keys are positive ordinal microseconds. Unknowns compare equal
+        # here; paginated collections use their stable source ID as the tie-break.
+        first_key = first_key if first_key is not None else -1
+        second_key = second_key if second_key is not None else -1
+        return (first_key > second_key) - (first_key < second_key)
+    conn.create_collation("world_instant", compare_instants)
     revision = _graph_revision_token(conn)
     if request.revision is not None and request.revision != revision:
         raise ValueError("World revision is stale; request a new snapshot")
@@ -11945,8 +11957,8 @@ def _world_recurrence_for_pairs(
         ), numbered AS (
             SELECT *, ROW_NUMBER() OVER (PARTITION BY first_person, second_person ORDER BY world_time(occurred_at) DESC, event_id) AS position,
                    COUNT(*) OVER (PARTITION BY first_person, second_person) AS total,
-                   MIN(occurred_at COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS first_at,
-                   MAX(occurred_at COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS latest_at
+                   MIN(world_occurrence(occurred_at) COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS first_at,
+                   MAX(world_occurrence(occurred_at) COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS latest_at
             FROM encounters
         ) SELECT * FROM numbered WHERE position <= ? ORDER BY first_person, second_person, position""",
         [*params, context.limits.events],
@@ -11955,8 +11967,8 @@ def _world_recurrence_for_pairs(
     for row in support:
         relationship_id = f"relationship:{row['first_person']}:{row['second_person']}"
         item = result.setdefault(relationship_id, {
-            "count": int(row["total"]), "first_occurrence_at": str(row["first_at"]),
-            "latest_occurrence_at": str(row["latest_at"]), "supporting_encounters": [],
+            "count": int(row["total"]), "first_occurrence_at": row["first_at"],
+            "latest_occurrence_at": row["latest_at"], "supporting_encounters": [],
         })
         item["supporting_encounters"].append({
             "event_id": str(row["event_id"]), "occurred_at": str(row["occurred_at"]), "location": row["location"],
@@ -12048,7 +12060,7 @@ def _world_discoveries_read(
                world_location_text(o.location) AS location,
                world_location_key(o.location) AS location_key
         FROM normalized_events o JOIN observation_participants p USING(observation_id)
-        WHERE {scope_sql}
+        WHERE {scope_sql} AND o.instant_key IS NOT NULL
           AND world_discovery_eligible(world_effective_person(p.observation_id, p.person_id)) = 1
     )"""
     latest_day = None
@@ -12573,11 +12585,23 @@ def _normalize_world_limits(value: WorldReadLimits) -> WorldReadLimits:
 def _world_datetime(value: str, label: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError as exc:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError) as exc:
         raise ValueError(f"Invalid World {label}: {value}") from exc
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+
+
+def _world_stored_datetime(value: str) -> datetime | None:
+    """Legacy storage accepts arbitrary text; unknown time is not creation time.
+
+    Only malformed/out-of-range source dates are tolerated. Request validation
+    continues to call the strict parser directly.
+    """
+    try:
+        return _world_datetime(value, "occurrence")
+    except ValueError:
+        return None
 
 
 def _normalize_world_filters(value: WorldReadFilter, as_of: datetime) -> WorldReadFilter:
@@ -12841,8 +12865,8 @@ def _world_relationship_scope(
                e.source_entity_type, e.source_entity_id,
                e.relationship_type, e.directionality, o.location,
                COUNT(*) AS evidence_count,
-               MIN(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END COLLATE world_instant) AS first_at,
-               MAX(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END COLLATE world_instant) AS last_at
+               MIN(world_occurrence(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) COLLATE world_instant) AS first_at,
+               MAX(world_occurrence(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) COLLATE world_instant) AS last_at
         FROM relationship_evidence e
         LEFT JOIN effective_observations o ON e.evidence_type = 'CO_OBSERVED'
              AND e.source_entity_type = 'OBSERVATION' AND o.observation_id = e.source_entity_id
@@ -12890,8 +12914,10 @@ def _world_relationship_scope(
         )
         if row["evidence_type"] == "NOTE_REFERENCE":
             item["note_directions"][direction_key] = item["note_directions"].get(direction_key, 0) + count
-        item["first_occurrence_at"] = min(item["first_occurrence_at"] or str(row["first_at"]), str(row["first_at"]), key=lambda value: _world_datetime(value, "occurrence"))
-        item["last_occurrence_at"] = max(item["last_occurrence_at"] or str(row["last_at"]), str(row["last_at"]), key=lambda value: _world_datetime(value, "occurrence"))
+        if row["first_at"] is not None:
+            item["first_occurrence_at"] = min(item["first_occurrence_at"] or row["first_at"], row["first_at"], key=lambda value: _world_datetime(value, "occurrence"))
+        if row["last_at"] is not None:
+            item["last_occurrence_at"] = max(item["last_occurrence_at"] or row["last_at"], row["last_at"], key=lambda value: _world_datetime(value, "occurrence"))
     result = []
     for item in aggregates.values():
         if not item["evidence_count"]:
@@ -13431,8 +13457,8 @@ def _world_clusters(
             calculation_version=_WORLD_CLUSTER_VERSION,
             evidence_types=tuple(sorted(type_counts)),
             evidence_count=evidence_count,
-            first_occurrence_at=min((item["first_occurrence_at"] for item in member_edges), default=None, key=lambda value: _world_datetime(value, "occurrence")),
-            last_occurrence_at=max((item["last_occurrence_at"] for item in member_edges), default=None, key=lambda value: _world_datetime(value, "occurrence")),
+            first_occurrence_at=min((item["first_occurrence_at"] for item in member_edges if item["first_occurrence_at"] is not None), default=None, key=lambda value: _world_datetime(value, "occurrence")),
+            last_occurrence_at=max((item["last_occurrence_at"] for item in member_edges if item["last_occurrence_at"] is not None), default=None, key=lambda value: _world_datetime(value, "occurrence")),
             evidence_expansion_token=None,
             calculation_scope=_world_explanation_scope(context),
             strongest_factors=strongest,
@@ -14003,7 +14029,8 @@ def _world_event_from_row(
     page_provenance = provenance[
         provenance_offset:provenance_offset + provenance_limit
     ]
-    occurred_at = str(row["observed_at"] or row["created_at"])
+    occurred_at = str(row["observed_at"] if row["observed_at"] is not None else row["created_at"])
+    known_occurrence = occurred_at if _world_stored_datetime(occurred_at) is not None else None
     return WorldEvent(
         event_id=event_id,
         finalized_at=str(row["finalized_at"]),
@@ -14036,8 +14063,8 @@ def _world_event_from_row(
             calculation_version=_WORLD_CALCULATION_VERSION,
             evidence_types=tuple(sorted(evidence_summary["evidence_type_counts"])),
             evidence_count=int(evidence_summary["total_count"]),
-            first_occurrence_at=occurred_at,
-            last_occurrence_at=occurred_at,
+            first_occurrence_at=known_occurrence,
+            last_occurrence_at=known_occurrence,
             calculation_scope=_world_explanation_scope(context),
             strongest_factors=(
                 {"factor": "participant_count", "value": len(all_participants)},
@@ -14174,6 +14201,7 @@ def _world_evidence_page(
             row["source_entity_id"], row["target_person_id"],
         )
         occurred_at = str(row["effective_occurred_at"])
+        known_occurrence = occurred_at if _world_stored_datetime(occurred_at) is not None else None
         supporting = ({
             "source_entity_type": str(row["source_entity_type"]),
             "source_entity_id": str(row["source_entity_id"]),
@@ -14204,7 +14232,7 @@ def _world_evidence_page(
             ),
             calculation_version=_WORLD_CALCULATION_VERSION,
             evidence_types=(str(row["evidence_type"]),), evidence_count=1,
-            first_occurrence_at=occurred_at, last_occurrence_at=occurred_at,
+            first_occurrence_at=known_occurrence, last_occurrence_at=known_occurrence,
             method="correction_before_terminal_canonical_resolution",
             sample={"evidence_items": 1},
             limitations=(
@@ -14229,7 +14257,7 @@ def _world_evidence_page(
             active=bool(row["active"]),
             directionality=directionality,
             effective_endpoints=effective_endpoints, raw_endpoints=raw_endpoints,
-            occurrence_bounds={"first": occurred_at, "last": occurred_at},
+            occurrence_bounds={"first": known_occurrence, "last": known_occurrence},
             explanation=explanation,
             media_summary={
                 "total_count": media_count,
@@ -14427,7 +14455,7 @@ def _world_scope_fingerprint(
 ) -> str:
     payload = json.dumps(
         {"filters": asdict(filters), "ranking": ranking, "limits": asdict(limits),
-         "chronology": "utc-microseconds-v1"},
+         "chronology": "utc-microseconds-unknown-v2"},
         sort_keys=True, separators=(",", ":"),
     ).encode()
     return hashlib.sha256(payload).hexdigest()[:24]
