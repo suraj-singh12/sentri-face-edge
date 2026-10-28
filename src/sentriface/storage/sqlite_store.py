@@ -12029,7 +12029,7 @@ def _world_discoveries_read(
     filters = context.filters
     end = _world_datetime(context.as_of, "as_of")
     period = None if context.collection == WorldCollection.MOST_RECENTLY_SEEN else (
-        30 if context.collection == WorldCollection.MULTIPLE_LOCATIONS else context.request.discovery_period_days
+        context.request.discovery_period_days
     )
     start = (end - timedelta(days=period)).isoformat() if period else None
     scoped = replace(

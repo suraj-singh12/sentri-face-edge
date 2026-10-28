@@ -1,5 +1,28 @@
 # Global identity graph implementation plan
 
+## Issue #13 — bounded backend Period correction (review pending)
+
+Based on refreshed hardening `f907073edc3375dbfd15b8bb39cc6d32bc60f6b6`.
+Multiple Locations now shares Frequent’s validated `discovery_period_days`
+(7/30/90, default 30), replacing its fixed 30-day override. This supersedes the
+original Issue #3 fixed-window behavior; historical acceptance records remain intact.
+Recent and all graph/cluster/evidence/proof/inspector semantics remain independent.
+No UI, schema, storage authority, worker or API changes. Independent frozen-SHA
+adversarial QA and explicit merge authorization remain pending.
+
+Regression coverage extends existing World intelligence fixtures for distinct windows,
+default equivalence, UTC microsecond boundaries/offsets, normalization/support caps,
+corrections/merges, cursor/filter/revision binding, snapshot consistency, isolation,
+and rebuild/restart/encrypted restore across all three periods.
+
+Local verification (Python 3.12, Linux): focused World suite 88 passed / 15 subtests;
+full backend 793 passed / 54 skipped / 137 subtests; final timestamp/Period subset
+10 passed. Frontend clean-install tests 124 passed; production build reproduced
+committed assets. Dependency check, Python compilation and diff whitespace checks
+passed. No separate lint/type checker is configured. Skips cover obsolete APIs and
+platform-specific checks (Windows PowerShell/Inno and macOS); no World tests skipped.
+Exact-SHA CI and independent QA status belong to the draft PR.
+
 ## Issue #3 — World intelligence implementation (independent acceptance pending)
 
 Issue branch starts at refreshed `release-v2.0.0-hardening` commit
