@@ -271,8 +271,16 @@ installation are needed. The real QA command below uses the existing built UI.
 
 ### Journey and local assets
 
-The 21-area inventory remains `tests/qa_coverage.json`. Real biometric acceptance
-is still pending authorized local models and visually verified photographs.
+The 21-area inventory remains `tests/qa_coverage.json`. On 2026-10-29, the macOS
+26.0 arm64 VM passed two fresh real QA-J01 runs at clean revision `d962f82`, using
+operator-authorized InsightFace SCRFD-500MF/ArcFace R50 models and an
+operator-reviewed Scarlett Johansson enrollment/query pair from Commons.
+Both runs verified independent People/Events/World results, rejected deliberately
+incorrect location truth, verified persistence after source restart, and completed
+disposable data/vault cleanup. Private SHA-bound JSON/JUnit, traces, model hashes
+and photo hashes remain in local `qa-fixtures/runs/`; no biometric assets are
+published. The first real attempt exposed a QA modal-refresh race, fixed by waiting
+for the Reference UI to finish refreshing before closing it.
 QA-J01 now implements source launch, UI owner/Person creation, Reference enrollment,
 query inference, permitted operator confirmation, Encounter completion, independent
 People/Events/World reads, an intentional wrong-location negative control, and
@@ -288,7 +296,7 @@ python -m playwright install chromium
 The single journey command is:
 
 ```bash
-python scripts/qa_foundation.py --disposable --fixtures qa-fixtures/marvel-actors --actor "Chris Evans" --models-config qa-fixtures/models.json
+python scripts/qa_foundation.py --disposable --fixtures qa-fixtures/marvel-actors --actor "Scarlett Johansson" --models-config qa-fixtures/models.json
 ```
 
 Use `--chromium /path/to/chromium` for an already installed browser, `--headed`
@@ -354,8 +362,9 @@ content (no drawing/CGI), visible faces, pose, expression, lighting, age and qua
 The runner validates decoded images, provenance, reviewed status and distinct hashes;
 it cannot replace visual identity verification. Local images are restored from the
 operator's own archive; remote `--restore` is for saved downloadable sources only.
-Keep the complete manifest and asset archive together outside Git. No verified
-photos or genuine models were available during this implementation.
+Keep the complete manifest and asset archive together outside Git. The initial
+implementation lacked assets; the macOS acceptance run used the authorized local
+pair described above. Other downloaded candidates remain unreviewed.
 
 Exit codes are 0/PASS, 1/FAIL and 2/BLOCKED. Missing assets, rejected model admission,
 an unavailable browser, or unsuitable recognition fixtures cannot report PASS.
