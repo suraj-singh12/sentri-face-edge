@@ -456,7 +456,7 @@
       "id": "QA-J01",
       "feature": "Enrollment \u2192 recognition \u2192 confirmation \u2192 Encounter \u2192 People/Events/World \u2192 restart",
       "behavior": "Enrollment \u2192 recognition \u2192 confirmation \u2192 Encounter \u2192 People/Events/World \u2192 restart",
-      "risk": "Real ONNX/photographic journey not executed: supply authorized model declaration and verified local pair",
+      "risk": "Incorrect recognition or persisted People/Events/World results; lost state after source restart",
       "source": [
         "scripts/qa_foundation.py",
         "scripts/qa_browser.py"
@@ -464,7 +464,7 @@
       "tests": [
         "tests/test_qa_journey.py"
       ],
-      "status": "partial",
+      "status": "covered",
       "phases": [
         "Normal"
       ],
@@ -473,15 +473,16 @@
         "Regular",
         "Dense"
       ],
-      "missing": "Real ONNX/photographic journey not executed: supply authorized model declaration and verified local pair",
+      "missing": "Windows real browser/ONNX journey and full dataset profiles remain unqualified",
       "dependencies": [],
-      "command": "python scripts/qa_foundation.py --disposable --fixtures LOCAL_FIXTURES --models-config LOCAL_MODEL_DECLARATION"
+      "command": "python scripts/qa_foundation.py --disposable --fixtures LOCAL_FIXTURES --models-config LOCAL_MODEL_DECLARATION",
+      "verification": "macOS 26.0 arm64, clean 52fa785: two fresh real journeys passed; independent wrong-location controls rejected; restart and cleanup verified"
     },
     {
       "id": "QA-O01",
       "feature": "Independent expected-result comparison",
       "behavior": "Independent expected-result comparison",
-      "risk": "Real-journey negative control awaits photographic/model prerequisites",
+      "risk": "Incorrect expected outcome accepted by the independent persisted-read comparator",
       "source": [
         "scripts/qa_foundation.py",
         "scripts/qa_browser.py"
@@ -499,14 +500,15 @@
         "Regular",
         "Dense"
       ],
-      "missing": "Real-journey negative control awaits photographic/model prerequisites",
-      "dependencies": []
+      "missing": "",
+      "dependencies": [],
+      "verification": "Clean 52fa785: wrong location rejected against real persisted results in both fresh macOS runs"
     },
     {
       "id": "QA-D01",
       "feature": "Disposable repeatable data",
       "behavior": "Disposable repeatable data",
-      "risk": "macOS/Windows browser runner not executed in this Linux environment",
+      "risk": "Disposable data or vault entries leak; ordinary application authority is touched",
       "source": [
         "scripts/qa_foundation.py",
         "scripts/qa_browser.py"
@@ -525,14 +527,15 @@
         "Regular",
         "Dense"
       ],
-      "missing": "macOS/Windows browser runner not executed in this Linux environment",
-      "dependencies": []
+      "missing": "Windows browser-runner cleanup remains unexecuted",
+      "dependencies": [],
+      "verification": "Clean 52fa785: two fresh macOS authorities removed; exact storage/recovery Keychain entries independently confirmed absent"
     },
     {
       "id": "QA-F01",
       "feature": "Photographic fixture integrity",
       "behavior": "Photographic fixture integrity",
-      "risk": "Live collection, visual labels and achieved dataset sizes",
+      "risk": "Incorrect identity, alternate crops mistaken for distinct photographs, hash or provenance drift",
       "source": [],
       "tests": [
         "tests/test_marvel_photo_fetcher.py"
@@ -546,8 +549,9 @@
         "Regular",
         "Dense"
       ],
-      "missing": "Live collection, visual labels and achieved dataset sizes",
-      "dependencies": []
+      "missing": "Additional candidates need identity review; full Sparse/Regular/Dense dataset profiles remain unqualified",
+      "dependencies": [],
+      "verification": "Commons collection/hash/decode checks passed; one operator-reviewed distinct enrollment/query pair used for real macOS QA-J01"
     },
     {
       "id": "QA-FUTURE01",
