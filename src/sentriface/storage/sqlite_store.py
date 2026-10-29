@@ -10980,20 +10980,26 @@ def _batch_effective_observation_person_ids(
     observation_ids: set[str],
     raw_participants: dict[str, set[str]],
     resolve_canonical: Callable[[str], str],
+    *, selected_observations_only: bool = False,
 ) -> tuple[dict[str, set[str]], list[str]]:
     if not observation_ids:
         return {}, []
+    selection = (
+        "WHERE observation_id IN (SELECT value FROM json_each(?))"
+        if selected_observations_only else ""
+    )
+    selection_params = (json.dumps(sorted(observation_ids)),) if selected_observations_only else ()
     assignment_current: dict[str, str] = {}
     assignment_originals: dict[str, set[str]] = {
         observation_id: set() for observation_id in observation_ids
     }
     assignment_observation: dict[str, str] = {}
     for row in conn.execute(
-        """
+        f"""
         SELECT assignment_id, observation_id, original_person_id
-        FROM observation_face_assignments
+        FROM observation_face_assignments {selection}
         ORDER BY observation_id, assignment_id
-        """
+        """, selection_params,
     ):
         observation_id = str(row["observation_id"])
         if observation_id not in observation_ids:
@@ -11007,12 +11013,12 @@ def _batch_effective_observation_person_ids(
         observation_id: [] for observation_id in observation_ids
     }
     for row in conn.execute(
-        """
+        f"""
         SELECT correction_type, observation_id, face_assignment_id,
                from_person_id, to_person_id
-        FROM identity_corrections
+        FROM identity_corrections {selection}
         ORDER BY created_at, rowid, correction_id
-        """
+        """, selection_params,
     ):
         correction_type = str(row["correction_type"])
         if correction_type == "FACE_ASSIGNMENT" and row["face_assignment_id"]:
@@ -11058,7 +11064,7 @@ def _batch_effective_observation_person_ids(
                     f"cannot resolve: {exc}"
                 )
         result[observation_id] = effective
-    revision_rows = conn.execute("SELECT observation_id, person_id, disposition FROM encounter_participant_revisions ORDER BY created_at, rowid") if _table_exists(conn, "encounter_participant_revisions") else []
+    revision_rows = conn.execute(f"SELECT observation_id, person_id, disposition FROM encounter_participant_revisions {selection} ORDER BY created_at, rowid", selection_params) if _table_exists(conn, "encounter_participant_revisions") else []
     for revision in revision_rows:
         oid = str(revision["observation_id"])
         if oid in result:
@@ -13550,7 +13556,9 @@ def _world_participant_sources(conn: sqlite3.Connection) -> tuple[str, ...]:
         "WHERE observation_id IN (SELECT value FROM json_each(?))", (json.dumps(changed),),
     ):
         raw[str(row[0])].add(str(row[1]))
-    effective, _ = _batch_effective_observation_person_ids(conn, set(changed), raw, lambda pid: pid)
+    effective, _ = _batch_effective_observation_person_ids(
+        conn, set(changed), raw, lambda pid: pid, selected_observations_only=True,
+    )
     rows = [[oid, pid] for oid in changed for pid in sorted(effective[oid])]
     # SQL literals contain only encoded stored identifiers, escaped as SQL text.
     ids = json.dumps(changed).replace("'", "''")
