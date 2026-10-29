@@ -866,3 +866,39 @@ def test_multiple_location_corrections_change_effective_windows_and_canonical_id
     assert row.canonical_person_id == a.person_id and row.count == 2
     correct('same-place', place_seen=' DELHI ')
     assert not read(store, C.MULTIPLE_LOCATIONS, discovery_period_days=90).discoveries
+
+
+@pytest.mark.parametrize('period,expected', [(7, 2), (30, 3), (90, 4), (None, 3)])
+def test_combined_fixed_oct29_corrected_period_locations(store, period, expected):
+    a,b = [store.create_person(n) for n in 'AB']
+    end = datetime.fromisoformat('2026-10-29T12:00:00+00:00')
+    expected_events = set()
+    for n, (age, place) in enumerate(((1,'Delhi'), (2,'Agra'), (15,'Jaipur'), (60,'Mumbai'))):
+        oid = observe(store, f'combined-{n}', [b], date=(end-timedelta(days=age)).isoformat(), location=place)
+        if age <= (period or 30):
+            expected_events.add(oid)
+    request = Request(collection=C.MULTIPLE_LOCATIONS, as_of=end.isoformat(), **({'discovery_period_days':period} if period else {}))
+    plain = store.get_world_graph_v2_read(request)
+    assert len(plain.discoveries) == 1 and plain.discoveries[0].count == expected
+    # The corrected E2 supplies Agra independently; its raw participant never contains B.
+    # Use a second independent store fixture identity pair to avoid duplicate support.
+    c,d = [store.create_person(n) for n in 'CD']
+    oid = correction_helpers.IdentityCorrectionTest()._finalize(store, 'combined-corrected-e2', [c])['observation_id']
+    store.correct_encounter(oid, 'combined-e2-date', expected_revision=store.get_encounter_read(oid)['revision'],
+        event_details={'date':'2026-10-28','time':'12:00','time_precision':'exact','place_seen':'Agra'})
+    expected_corrected = {oid}
+    for n, (age, place) in enumerate(((2,'Delhi'), (15,'Jaipur'), (60,'Mumbai'))):
+        event = observe(store, f'combined-corrected-{n}', [d], date=(end-timedelta(days=age)).isoformat(), location=place)
+        if age <= (period or 30):
+            expected_corrected.add(event)
+    with store._connect() as conn:
+        embedding = conn.execute('SELECT embedding_id FROM observation_face_assignments WHERE observation_id = ?', (oid,)).fetchone()[0]
+    store.move_face(embedding, d.person_id, 'combined-e2-correction')
+    result = store.get_world_graph_v2_read(request)
+    rows = {r.canonical_person_id:r for r in result.discoveries}
+    assert c.person_id not in rows and rows[d.person_id].count == expected
+    assert {s['event_id'] for s in rows[d.person_id].supporting_encounters} == expected_corrected
+    assert {s['event_id'] for s in rows[b.person_id].supporting_encounters} == expected_events
+    assert result.discovery_context['period_days'] == (period or 30)
+    assert result.discovery_context['date_from'] == (end-timedelta(days=period or 30)).isoformat()
+    assert result.discovery_context['date_to'] == end.isoformat()
