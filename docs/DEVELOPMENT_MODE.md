@@ -1,4 +1,4 @@
-# macOS
+# SentriFace Edge — source development
 
 ## Linux explicit source ONNX and recovery
 
@@ -8,12 +8,14 @@ The Linux source master key and recovery code persist under that authority with 
 
 For fresh-authority recovery, prepare verified models without first starting a new encrypted authority, then run `./run.sh onnx --recover-kit /local/path/sentriface-recovery-kit.json` with the isolated root selected. Enter the supported recovery code at the prompt, authenticate through the normal product flow, import the encrypted backup and restore normally. An existing incompatible authority/key is never silently overwritten. macOS/Windows OS-vault recovery and packaged/hardened custody are unchanged. Development reset removes only its intended source authority, including these custody records; external kits/exports and unrelated authorities are unaffected.
 
+## macOS
+
 Use this workflow to run SentriFace Edge directly from a Git checkout. Install
-Python 3.11 or 3.12 first. Git is required to obtain the repository. The
+Python 3.12 first. Git is required to obtain the repository. The
 launcher creates and maintains the repository-local `.venv312`; it does not
 install Python or modify a global Python environment.
 
-## Synthetic development
+### Synthetic development
 
 Start the no-model synthetic runtime:
 
@@ -34,7 +36,7 @@ The zero-argument command starts the same mode as `./run.sh dev` without an
 argument-parsing warning. Use `./run.sh dev --port PORT` if the default port is
 already occupied.
 
-## Real ONNX development
+### Real ONNX development
 
 Use ONNX mode when validating the actual local detector and recognizer stack.
 On first use, either start `./run.sh onnx`, sign in, and complete Model Setup,
@@ -67,7 +69,7 @@ validation, calibration, or usage declarations. Source ONNX mode retains the
 loopback listener and application socket guard, but does not have the packaged
 macOS App Sandbox boundary.
 
-## Data, frontend, and reset
+### Data, frontend, and reset
 
 Development data lives at:
 
@@ -117,18 +119,18 @@ npm --prefix frontend run build
 ```
 
 If the launcher reports an incomplete `.venv312`, remove that virtual
-environment and rerun `./run.sh`. If Python 3.11 or 3.12 is unavailable,
-install one and rerun. A second process using the same development data root is
+environment and rerun `./run.sh`. If Python 3.12 is unavailable,
+install it and rerun. A second process using the same development data root is
 refused; stop the first process with `Control-C` before launching again.
 
-# Windows
+## Windows
 
 Use this workflow from a Windows 11 AMD64 checkout. Install 64-bit AMD64 Python
-3.11 or 3.12 first. The launcher creates and maintains repository-local
+3.12 first. The launcher creates and maintains repository-local
 `.venv312`; it neither installs Python nor modifies global Python packages. The
 normal source launch uses the already-built frontend and does not require Node.
 
-## Synthetic development
+### Synthetic development
 
 Start the no-model runtime from PowerShell:
 
@@ -150,7 +152,7 @@ fallback; it does not change machine or user execution policy:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1
 ```
 
-## Real ONNX development
+### Real ONNX development
 
 Onboard the operator-supplied local pair with exact SHA-256 declarations. This
 copies the files into development model authority and preserves P13 immutable
@@ -185,7 +187,7 @@ guard. It explicitly warns that a Git checkout does not have the packaged
 exact-executable Windows Firewall boundary; packaged ONNX mode remains
 fail-closed on that OS policy.
 
-## Data isolation and reset
+### Data isolation and reset
 
 Windows source data lives exactly at:
 
@@ -210,7 +212,7 @@ custom roots and reparse points, removes only the exact hashed development
 storage/recovery vault identities, verifies their deletion, and then removes
 the development files. `--yes` is reserved for controlled automation.
 
-## Frontend development
+### Frontend development
 
 Node is needed only for frontend dependency, test, and build work:
 
@@ -220,11 +222,11 @@ npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
-## Troubleshooting
+### Troubleshooting
 
 - An incomplete `.venv312` is refused. Remove only that repository-local
   directory, then launch again.
-- Install a supported 64-bit AMD64 Python if no Python 3.11/3.12 candidate is
+- Install a supported 64-bit AMD64 Python 3.12 if no Python 3.12 candidate is
   found; the launcher will not install Python automatically.
 - `Another SentriFace process already owns this data store` means the first
   source process is still running or did not finish shutting down. Stop it and
@@ -272,12 +274,12 @@ installation are needed. The real QA command below uses the existing built UI.
 ### Journey and local assets
 
 The 21-area inventory remains `tests/qa_coverage.json`. On 2026-10-29, the macOS
-26.0 arm64 VM passed two fresh real QA-J01 runs at clean revision `d962f82`, using
+26.0 arm64 VM passed two fresh real QA-J01 runs at final revision `b81d451`, using
 operator-authorized InsightFace SCRFD-500MF/ArcFace R50 models and an
 operator-reviewed Scarlett Johansson enrollment/query pair from Commons.
 Both runs verified independent People/Events/World results, rejected deliberately
 incorrect location truth, verified persistence after source restart, and completed
-disposable data/vault cleanup. Private SHA-bound JSON/JUnit, traces, model hashes
+disposable data/vault cleanup; [all five final-SHA CI jobs passed](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40905213311). This is [draft PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23), not yet merged. Private SHA-bound JSON/JUnit, traces, model hashes
 and photo hashes remain in local `qa-fixtures/runs/`; no biometric assets are
 published. The first real attempt exposed a QA modal-refresh race, fixed by waiting
 for the Reference UI to finish refreshing before closing it.

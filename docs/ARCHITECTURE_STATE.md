@@ -1,6 +1,10 @@
 # SentriFace Edge architecture state
 
-## Issue #3 — World intelligence extension (review pending)
+## Current World and QA qualification (2026-10-29)
+
+World intelligence backend [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) merged into hardening at `f907073` (schema v34). Current World UI is unchanged; optional Explore UI remains [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13). Correction-read defect [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) remains unresolved. QA Foundation #17's real macOS browser/ONNX journey passed twice at `b81d451` with independent People/Events/World and restart verification, but is still in unmerged [draft PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23). This is source-mode acceptance, not product release qualification.
+
+## Historical Issue #3 implementation checkpoint
 
 Based on refreshed hardening commit `9b02eba72b155421f06cb7a4b590047380dd59eb`.
 World v2 now supports opt-in Explore evidence criteria, explicitly marked weaker

@@ -1,5 +1,7 @@
 # SentriFace Edge: complete project guide
 
+For the latest implementation and QA qualification state, start with the [documentation map](README.md). This is the detailed product and architecture guide; GitHub Issues and linked PRs hold live work status. In particular, backend World intelligence #3 is merged, optional Explore UI #13 is pending, and QA Foundation #17 has real macOS acceptance on draft PR #23 but is not merged.
+
 ## Batch 3.7 — contextless biometric references
 
 Ordinary photographs belong in Encounters: their date/place, participants, relationships and recurrence form historical authority. A known Person lacking reliable occurrence context can instead receive a cropped, single-face **Reference Only** image after explicit acknowledgment. NO_FACE Add Face is the prominent bootstrap entry; once enrolled, the same capability moves into secondary Recognition References management. This avoids turning generic Add Face into a contextless photo library. Four active sources allow limited biometric diversity; replace weaker material by retiring then adding. Retired history is preserved. PROOF_ONLY counts toward the cap but remains excluded from ordinary recognition.
