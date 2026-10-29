@@ -926,6 +926,7 @@ def test_world_face_provenance_preserves_independent_assignment_origins(store):
     explicit = next(p for p in provenance if p.get('participant_revision_operation_ids') == ['origin-add-d'])
     assert explicit['raw_person_id'] == explicit['effective_person_id'] == d.person_id
     assert explicit['effective_participation'] is True
+    assert explicit['correction_operation_ids'] == ['origin-add-d']
 
 
 def test_explicit_identity_reversal_and_readdition_preserve_world_proof(store):

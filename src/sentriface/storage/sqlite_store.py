@@ -13797,6 +13797,8 @@ def _world_event_participant_mapping(
                 continue
             _, mapped = _world_participant_mapping([pid], [], canonical_map)
             revision_origins.append({**mapped[0],
+                "relationship_to_effective_identity": "CORRECTED_PARTICIPANT",
+                "correction_operation_ids": [str(revision["operation_id"])],
                 "participant_revision_operation_ids": [str(revision["operation_id"])]})
         provenance = (*provenance, *revision_origins)
         participants = tuple({"person_id": pid} for pid in _effective_observation_person_ids(conn, event_id))
