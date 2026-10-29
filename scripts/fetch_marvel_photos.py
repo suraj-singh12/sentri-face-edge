@@ -206,6 +206,8 @@ def download(row: dict, root: Path, max_mb: int) -> str:
         if not image_valid(content, path.suffix):
             raise ValueError("Existing image is invalid")
     else:
+        if not row.get("url"):
+            raise ValueError("Local photograph missing; restore it from the operator archive")
         content = request(row["url"], max_bytes=max_mb * 1_000_000)
         if not image_valid(content, path.suffix):
             raise ValueError("Invalid or empty image")

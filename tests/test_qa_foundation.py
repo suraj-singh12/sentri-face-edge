@@ -58,7 +58,7 @@ def test_verified_pair_rejects_same_photo(tmp_path, monkeypatch):
     blob = cv2.imencode(".jpg", np.zeros((120, 120, 3), dtype=np.uint8))[1].tobytes()
     (tmp_path / "actor").mkdir()
     (tmp_path / "actor/a.jpg").write_bytes(blob)
-    base = dict(actor="Chris Evans", reviewed=True, reviewer="local operator", review_notes="Visual review", file="actor/a.jpg", sha256=hashlib.sha256(blob).hexdigest())
+    base = dict(license="QA mechanism only", author="test", source_record="synthetic validation bytes, no identity claim", reference_no_context=True, actor="Chris Evans", reviewed=True, reviewer="local operator", review_notes="Visual review", file="actor/a.jpg", sha256=hashlib.sha256(blob).hexdigest())
     (tmp_path / "manifest.json").write_text(json.dumps({"version": 1, "photos": [dict(base, split="enrollment"), dict(base, split="query")]}))
     with pytest.raises(ValueError, match="distinct visually verified"):
         qa.verified_pair(tmp_path, "Chris Evans")

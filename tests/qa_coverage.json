@@ -456,10 +456,15 @@
       "id": "QA-J01",
       "feature": "Enrollment \u2192 recognition \u2192 confirmation \u2192 Encounter \u2192 People/Events/World \u2192 restart",
       "behavior": "Enrollment \u2192 recognition \u2192 confirmation \u2192 Encounter \u2192 People/Events/World \u2192 restart",
-      "risk": "No browser adapter, admitted models or verified photo pair",
-      "source": [],
-      "tests": [],
-      "status": "untested",
+      "risk": "Real ONNX/photographic journey not executed: supply authorized model declaration and verified local pair",
+      "source": [
+        "scripts/qa_foundation.py",
+        "scripts/qa_browser.py"
+      ],
+      "tests": [
+        "tests/test_qa_journey.py"
+      ],
+      "status": "partial",
       "phases": [
         "Normal"
       ],
@@ -468,17 +473,22 @@
         "Regular",
         "Dense"
       ],
-      "missing": "No browser adapter, admitted models or verified photo pair",
-      "dependencies": []
+      "missing": "Real ONNX/photographic journey not executed: supply authorized model declaration and verified local pair",
+      "dependencies": [],
+      "command": "python scripts/qa_foundation.py --disposable --fixtures LOCAL_FIXTURES --models-config LOCAL_MODEL_DECLARATION"
     },
     {
       "id": "QA-O01",
       "feature": "Independent expected-result comparison",
       "behavior": "Independent expected-result comparison",
-      "risk": "Domain response adapters still missing",
-      "source": [],
+      "risk": "Real-journey negative control awaits photographic/model prerequisites",
+      "source": [
+        "scripts/qa_foundation.py",
+        "scripts/qa_browser.py"
+      ],
       "tests": [
-        "tests/test_qa_foundation.py::test_qa_o01_correct_and_wrong_expectation"
+        "tests/test_qa_foundation.py::test_qa_o01_correct_and_wrong_expectation",
+        "tests/test_qa_journey.py::test_independent_reads_and_wrong_truth"
       ],
       "status": "covered",
       "phases": [
@@ -489,17 +499,22 @@
         "Regular",
         "Dense"
       ],
-      "missing": "Domain response adapters still missing",
+      "missing": "Real-journey negative control awaits photographic/model prerequisites",
       "dependencies": []
     },
     {
       "id": "QA-D01",
       "feature": "Disposable repeatable data",
       "behavior": "Disposable repeatable data",
-      "risk": "Application launch and model onboarding not yet integrated",
-      "source": [],
+      "risk": "macOS/Windows browser runner not executed in this Linux environment",
+      "source": [
+        "scripts/qa_foundation.py",
+        "scripts/qa_browser.py"
+      ],
       "tests": [
-        "tests/test_qa_foundation.py::test_qa_d01_disposable_repeat"
+        "tests/test_qa_foundation.py::test_qa_d01_disposable_repeat",
+        "tests/test_qa_journey.py::test_exception_cleans_disposable_data",
+        "tests/test_qa_journey.py::test_actual_source_launch_restart_missing_models_is_blocked"
       ],
       "status": "covered",
       "phases": [
@@ -510,7 +525,7 @@
         "Regular",
         "Dense"
       ],
-      "missing": "Application launch and model onboarding not yet integrated",
+      "missing": "macOS/Windows browser runner not executed in this Linux environment",
       "dependencies": []
     },
     {
