@@ -168,12 +168,13 @@ def test_frequency_rolling_boundaries_and_support_caps(store,period):
     assert result.discovery_context['period_days'] == period
 
 
-def test_locations_normalization_missing_values_and_suggestions(store):
+@pytest.mark.parametrize('period', [7, 30, 90])
+def test_locations_normalization_missing_values_and_suggestions(store, period):
     a,b = [store.create_person(n) for n in 'AB']
     for n,location in enumerate((' Delhi ', 'DELHI', 'New   Delhi', 'new delhi', None, '   ')):
         observe(store,f'loc-{n}',[a],location=location)
     observe(store,'single',[b],location='Delhi')
-    result = read(store,C.MULTIPLE_LOCATIONS)
+    result = read(store,C.MULTIPLE_LOCATIONS,discovery_period_days=period)
     assert len(result.discoveries) == 1
     row = result.discoveries[0]
     assert row.canonical_person_id == a.person_id
@@ -191,16 +192,18 @@ def test_locations_normalization_missing_values_and_suggestions(store):
     assert second.available_facets['locations'] != paged.available_facets['locations']
 
 
-def test_discovery_pagination_fingerprints_and_stale_revisions(store):
+@pytest.mark.parametrize('collection', [C.MOST_FREQUENTLY_SEEN, C.MULTIPLE_LOCATIONS])
+def test_discovery_pagination_fingerprints_and_stale_revisions(store, collection):
     people = [store.create_person(str(i)) for i in range(4)]
     observe(store,'all',people)
-    req = Request(collection=C.MOST_FREQUENTLY_SEEN,as_of=AS_OF,limits=Limits(people=2))
+    observe(store,'all-other',people,location='Agra')
+    req = Request(collection=collection,as_of=AS_OF,limits=Limits(people=2))
     first = store.get_world_graph_v2_read(req)
     again = store.get_world_graph_v2_read(req)
     assert first.discoveries == again.discoveries
     second = store.get_world_graph_v2_read(replace(req,cursor=first.next_cursor))
     assert not ({p.canonical_person_id for p in first.discoveries}&{p.canonical_person_id for p in second.discoveries})
-    for changes in ({'discovery_period_days':7},{'include_below_threshold':True},{'collection':C.MULTIPLE_LOCATIONS},{'location_query':'changed'}):
+    for changes in ({'discovery_period_days':7},{'include_below_threshold':True},{'collection':C.MOST_RECENTLY_SEEN},{'location_query':'changed'},{'filters':Filter(locations=('Delhi',))}):
         with pytest.raises(ValueError,match='cursor'):
             store.get_world_graph_v2_read(replace(req,cursor=first.next_cursor,**changes))
     observe(store,'new',people[:2])
@@ -292,7 +295,8 @@ def test_rebuild_restart_encrypted_backup_restore_equivalence(tmp_path):
     observe(store,'historical-unknown',[a,b],date='bad-date')
     note(store,a,b,'saved-note')
     store.create_manual_association(a.person_id,b.person_id,'manual')
-    requests = [Request(collection=c,as_of=AS_OF,view='EXPLORE',filters=Filter(evidence_type=TYPES)) for c in (C.RELATIONSHIPS,C.CLUSTERS,C.MOST_FREQUENTLY_SEEN,C.MOST_RECENTLY_SEEN,C.MULTIPLE_LOCATIONS)]
+    observe(store,'older-place',[a,b],date='2026-09-01T12:00:00Z',location='Jaipur')
+    requests = [Request(collection=c,as_of=AS_OF,view='EXPLORE',discovery_period_days=days,filters=Filter(evidence_type=TYPES)) for days in (7,30,90) for c in (C.RELATIONSHIPS,C.CLUSTERS,C.MOST_FREQUENTLY_SEEN,C.MOST_RECENTLY_SEEN,C.MULTIPLE_LOCATIONS)]
     def projection():
         result=[]
         for request in requests:
@@ -353,11 +357,13 @@ def test_shared_frame_support_reuses_corrected_encounter_media(store):
     assert evidence.evidence[0].provenance['encounter_support']=='SHARED_FRAME'
 
 
-def test_discovery_read_keeps_one_snapshot_during_correction(store,monkeypatch):
+@pytest.mark.parametrize('collection', [C.MOST_FREQUENTLY_SEEN, C.MULTIPLE_LOCATIONS])
+def test_discovery_read_keeps_one_snapshot_during_correction(store,monkeypatch,collection):
     from sentriface.storage import sqlite_store as module
     a=store.create_person('A')
     observe(store,'original',[a])
-    before=read(store,C.MOST_FREQUENTLY_SEEN)
+    observe(store,'second-place',[a],location='Agra')
+    before=read(store,collection,discovery_period_days=7)
     original=module._world_people_scope
     wrote=False
     def concurrent_write(conn,filters):
@@ -365,14 +371,14 @@ def test_discovery_read_keeps_one_snapshot_during_correction(store,monkeypatch):
         result=original(conn,filters)
         if not wrote:
             wrote=True
-            observe(store,'concurrent',[a])
+            observe(store,'concurrent',[a],location='Jaipur')
         return result
     with monkeypatch.context() as patch:
         patch.setattr(module,'_world_people_scope',concurrent_write)
-        during=read(store,C.MOST_FREQUENTLY_SEEN)
+        during=read(store,collection,discovery_period_days=7)
     assert during.graph_revision==before.graph_revision
-    assert during.discoveries[0].count==1
-    assert read(store,C.MOST_FREQUENTLY_SEEN).discoveries[0].count==2
+    assert during.discoveries[0].count==2
+    assert read(store,collection,discovery_period_days=7).discoveries[0].count==3
 
 
 def test_new_collections_use_existing_view_authorization_and_local_api(tmp_path):
@@ -484,18 +490,20 @@ def test_discovery_offset_qa_reproduction(store):
 
 
 @pytest.mark.parametrize('days', [7, 30, 90])
-def test_timestamp_instants_boundaries_and_order(store, days):
+@pytest.mark.parametrize('collection', [C.MOST_FREQUENTLY_SEEN, C.MULTIPLE_LOCATIONS])
+def test_timestamp_instants_boundaries_and_order(store, days, collection):
     from sentriface.graph_read_service import GraphReadService
     end = datetime.fromisoformat(AS_OF)
     start = end - timedelta(days=days)
     person = store.create_person('Boundary')
     stamps = [(start-timedelta(microseconds=1)).isoformat(), start.isoformat().replace('+00:00','Z'), start.astimezone(timezone(timedelta(hours=-2))).isoformat(), end.replace(tzinfo=None).isoformat(), end.astimezone(timezone(timedelta(hours=2))).isoformat(), (end+timedelta(microseconds=1)).isoformat()]
     ids = [observe(store, 'instant-'+str(i), [person], date=stamp, location='Delhi' if i%2 else 'Agra') for i,stamp in enumerate(stamps)]
-    request = Request(collection=C.MOST_FREQUENTLY_SEEN, as_of=AS_OF, discovery_period_days=days)
+    request = Request(collection=collection, as_of=AS_OF, discovery_period_days=days)
     service = GraphReadService(store)
     result = service.world_graph_v2(request)
-    assert result.discoveries[0].count == 4
+    assert result.discoveries[0].count == (2 if collection == C.MULTIPLE_LOCATIONS else 4)
     assert {e['event_id'] for e in result.discoveries[0].supporting_encounters} == set(ids[1:5])
+    assert {e['occurred_at'] for e in result.discoveries[0].supporting_encounters} == set(stamps[1:5])
     assert result.discoveries == service.world_graph_v2(request).discoveries
     filters = Filter(date_from=start.isoformat(), date_to=AS_OF)
     recent = service.world_graph_v2(replace(request, collection=C.MOST_RECENTLY_SEEN, filters=filters))
@@ -809,3 +817,52 @@ def test_corrected_identity_encrypted_restore_provenance_and_read_only(tmp_path)
     store = SQLiteIdentityStore(store.db_path, embedding_dim=2, database_key=key)
     store.initialize()
     assert snapshot() == before
+
+def test_multiple_location_period_windows_default_and_isolation(store):
+    a, b = [store.create_person(n) for n in 'AB']
+    end = datetime.fromisoformat(AS_OF)
+    for n, age in enumerate((1, 2, 15, 60)):
+        observe(store, f'window-{n}', [a, b],
+                date=(end-timedelta(days=age)).isoformat(), location=f'Place {n}')
+    observe(store, 'malformed-window', [a, b], date='bad-date', location='Unknown time')
+    assert read(store, C.MULTIPLE_LOCATIONS).discoveries == read(
+        store, C.MULTIPLE_LOCATIONS, discovery_period_days=30).discoveries
+    for days, expected in ((7, 2), (30, 3), (90, 4)):
+        request = _world_graph_v2_request_from_query(
+            f'collection=MULTIPLE_LOCATIONS&as_of={AS_OF.replace("+00:00", "Z")}&discovery_period_days={days}')
+        result = store.get_world_graph_v2_read(request)
+        assert {d.count for d in result.discoveries} == {expected}
+        assert result.discovery_context['period_days'] == days
+        capped = read(store, C.MULTIPLE_LOCATIONS, discovery_period_days=days,
+                      limits=Limits(events=1, facets=1))
+        assert all(d.supporting_encounters_state['truncated'] and d.locations_state['truncated']
+                   for d in capped.discoveries)
+    edge = read(store).relationships[0]
+    requests = [Request(collection=c, as_of=AS_OF) for c in
+                (C.MOST_RECENTLY_SEEN, C.CLUSTERS, C.RELATIONSHIPS, C.PEOPLE)]
+    requests += [Request(collection=C.EVIDENCE, detail_level=L.EVIDENCE,
+                         focus_type='RELATIONSHIP', focus_id=edge.relationship_id, as_of=AS_OF),
+                 Request(detail_level=L.PERSON, focus_type='PERSON', focus_id=a.person_id, as_of=AS_OF)]
+    for request in requests:
+        baseline = asdict(store.get_world_graph_v2_read(request)) | {'generated_at': ''}
+        for days in (7, 90):
+            assert asdict(store.get_world_graph_v2_read(
+                replace(request, discovery_period_days=days))) | {'generated_at': ''} == baseline
+
+
+def test_multiple_location_corrections_change_effective_windows_and_canonical_identity(store):
+    a, b = [store.create_person(n) for n in 'AB']
+    observe(store, 'current-place', [a], location='Delhi')
+    oid = correction_helpers.IdentityCorrectionTest()._finalize(store, 'editable-place', [b])['observation_id']
+    def correct(op, **details):
+        store.correct_encounter(oid, op, expected_revision=store.get_encounter_read(oid)['revision'],
+                                event_details=details)
+    correct('old-place', date='2026-09-01', place_seen='Agra')
+    IdentityMergeService(store).execute(b.person_id, a.person_id, 'period-merge')
+    assert not read(store, C.MULTIPLE_LOCATIONS, discovery_period_days=7).discoveries
+    assert read(store, C.MULTIPLE_LOCATIONS, discovery_period_days=90).discoveries[0].count == 2
+    correct('move-time', date='2026-10-22')
+    row = read(store, C.MULTIPLE_LOCATIONS, discovery_period_days=7).discoveries[0]
+    assert row.canonical_person_id == a.person_id and row.count == 2
+    correct('same-place', place_seen=' DELHI ')
+    assert not read(store, C.MULTIPLE_LOCATIONS, discovery_period_days=90).discoveries
