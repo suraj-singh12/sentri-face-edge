@@ -645,3 +645,167 @@ def test_historical_bad_date_and_valid_qa_reproduction(store):
         result = service.world_graph_v2(Request(as_of=AS_OF, collection=collection))
         assert {d.canonical_person_id:d.count for d in result.discoveries} == {a.person_id:1,b.person_id:1}
         assert {e['event_id'] for d in result.discoveries for e in d.supporting_encounters} == {valid}
+
+@pytest.mark.parametrize('collection', [C.MOST_FREQUENTLY_SEEN, C.MOST_RECENTLY_SEEN, C.MULTIPLE_LOCATIONS])
+@pytest.mark.parametrize('period', [7, 30, 90])
+def test_face_reassignment_independent_history(store, collection, period):
+    as_of = '2026-10-29T12:00:00+00:00'
+    a, b = [store.create_person(n) for n in 'AB']
+    helper = correction_helpers.IdentityCorrectionTest()
+    e1 = helper._finalize(store, 'integrity-e1', [b])['observation_id']
+    e2 = helper._finalize(store, 'integrity-e2', [a])['observation_id']
+    for oid, date, location in ((e1, '2026-10-27', 'Delhi'), (e2, '2026-10-28', 'Agra')):
+        store.correct_encounter(oid, 'date-' + oid, expected_revision=store.get_encounter_read(oid)['revision'],
+                                event_details={'date': date, 'time': '12:00', 'time_precision': 'exact', 'place_seen': location})
+    def rows():
+        return store.get_world_graph_v2_read(Request(collection=collection, as_of=as_of, discovery_period_days=period)).discoveries
+    assert store.get_encounter_read(e1)['participant_ids'] == [b.person_id]
+    assert store.get_encounter_read(e2)['participant_ids'] == [a.person_id]
+    if collection == C.MULTIPLE_LOCATIONS:
+        assert not rows()
+    elif collection == C.MOST_FREQUENTLY_SEEN:
+        assert {r.canonical_person_id: r.count for r in rows()} == {a.person_id: 1, b.person_id: 1}
+    with store._connect() as conn:
+        embedding_id = conn.execute('SELECT embedding_id FROM observation_face_assignments WHERE observation_id = ?', (e2,)).fetchone()[0]
+    store.move_face(embedding_id, b.person_id, 'integrity-reassign', actor={'username': 'operator'})
+    assert store.get_encounter_read(e2)['participant_ids'] == [b.person_id]
+    assert not store.list_observations_for_person(a.person_id)
+    assert not store.list_person_sightings(a.person_id)
+    assert {x.observation_id for x in store.list_person_sightings(b.person_id)} == {e1, e2}
+    assert {o.observation_id for o in store.list_observations_for_person(b.person_id)} == {e1, e2}
+    for phase in ('first', 'repeat', 'restart', 'rebuild'):
+        if phase == 'restart':
+            store.initialize()
+        if phase == 'rebuild':
+            store.rebuild_graph_projection('integrity-rebuild')
+        result = rows()
+        assert {r.canonical_person_id for r in result} == {b.person_id}, phase
+        expected_events = {e2} if collection == C.MOST_RECENTLY_SEEN else {e1, e2}
+        assert {s['event_id'] for s in result[0].supporting_encounters} == expected_events
+        assert result[0].count == (2 if collection != C.MOST_RECENTLY_SEEN else 1)
+
+@pytest.mark.parametrize('consumer', ['activity', 'scoped', 'overview', 'focused', 'inspector'])
+def test_face_assignment_world_consumers(store, consumer):
+    from sentriface.storage import sqlite_store as sql
+    a, b = [store.create_person(n) for n in 'AB']
+    finalized = correction_helpers.IdentityCorrectionTest()._finalize(store, 'audit-face', [a])
+    oid = finalized['observation_id']
+    store.move_face(finalized['embedding_assignments']['face-0'], b.person_id, 'audit-move')
+    with store._connect() as conn:
+        canonical = sql._world_canonical_map(conn)
+        if consumer == 'activity':
+            actual = {p for p, count in sql._world_activity_counts(conn, set(canonical), Filter()).items() if count}
+        elif consumer == 'scoped':
+            actual = sql._world_scoped_event_people(conn, Filter())
+        elif consumer == 'overview':
+            actual = {p for p, count in sql._world_event_statistics(conn, Filter(), set(canonical), canonical_map=canonical)['activity'].items() if count}
+        elif consumer == 'focused':
+            actual = {p for p in canonical if sql._world_person_event_count(conn, p, Filter(), canonical_map=canonical)}
+        else:
+            actual = {p['person_id'] for p in sql._world_event_participant_mapping(conn, oid)[0]}
+    assert actual == {b.person_id}
+
+@pytest.mark.parametrize('initial', ['single', 'multi', 'independent'])
+def test_face_chain_reversal_revision_merge_and_lifecycle(store, initial):
+    from sentriface.storage import sqlite_store as sql
+    a, b, c, d = [store.create_person(n) for n in 'ABCD']
+    people = {'single': [a], 'multi': [a, b], 'independent': [a, b, a]}[initial]
+    finalized = correction_helpers.IdentityCorrectionTest()._finalize(store, 'chain', people)
+    oid = finalized['observation_id']
+    def check(expected):
+        ids = {p.person_id for p in expected}
+        assert set(store.get_encounter_read(oid)['participant_ids']) == ids
+        assert {p.person_id for p in (a,b,c,d) if store.list_observations_for_person(p.person_id)} == ids
+        with store._connect() as conn:
+            canonical = sql._world_canonical_map(conn)
+            assert sql._world_scoped_event_people(conn, Filter()) == ids
+            assert {pid for pid, count in sql._world_activity_counts(conn, set(canonical), Filter()).items() if count} == ids
+            assert {pid for pid in canonical if sql._world_person_event_count(conn, pid, Filter(), canonical_map=canonical)} == ids
+            sql._world_graph_v2_read(conn, Request())
+            relationships = sql._world_relationship_scope(conn, Filter(), ids, canonical_map=canonical)
+            assert {frozenset((r['source_person_id'], r['target_person_id'])) for r in relationships} == {
+                frozenset(pair) for pair in itertools.combinations(ids, 2)}
+            for relationship in relationships:
+                evidence = store.get_connection_evidence(relationship['source_person_id'], relationship['target_person_id'])
+                assert len(evidence) == 1 and evidence[0].source_entity_id == oid
+        assert store.validate_graph_projection()['valid']
+    check(list({p.person_id: p for p in people}.values()))
+    embedding = finalized['embedding_assignments']['face-0']
+    store.move_face(embedding, c.person_id, 'chain-a-c')
+    expected = {'single': [c], 'multi': [b,c], 'independent': [a,b,c]}[initial]
+    check(expected)
+    store.move_face(embedding, d.person_id, 'chain-c-d')
+    check([d if p == c else p for p in expected])
+    store.move_face(embedding, a.person_id, 'chain-d-a')
+    check(list({p.person_id: p for p in people}.values()))
+    assert len(store.list_corrections_for_observation(oid)) >= 3
+    # Explicit PRESENT/REMOVED interpretation takes precedence over face assignment.
+    store.correct_encounter(oid, 'chain-add-c', expected_revision=store.get_encounter_read(oid)['revision'],
+        participant_correction={'action': 'ADD', 'person_id': c.person_id},
+        relations=[{'first_person_id': p.person_id, 'second_person_id': c.person_id, 'disposition': 'INCLUDE'} for p in list({p.person_id: p for p in people}.values())])
+    check([*list({p.person_id: p for p in people}.values()), c])
+    store.correct_encounter(oid, 'chain-remove-a', expected_revision=store.get_encounter_read(oid)['revision'],
+        participant_correction={'action': 'REMOVE', 'person_id': a.person_id})
+    remaining = [p for p in list({p.person_id: p for p in people}.values()) if p != a] + [c]
+    check(remaining)
+    store.rebuild_graph_projection('chain-rebuild')
+    reopened = SQLiteIdentityStore(store.db_path, embedding_dim=2)
+    reopened.initialize()
+    assert set(reopened.get_encounter_read(oid)['participant_ids']) == {p.person_id for p in remaining}
+    store.archive_person(c.person_id, 'chain-archive')
+    check(remaining)
+    store.permanently_delete_person(c.person_id, 'chain-delete')
+    check(remaining)
+
+
+def test_face_correction_canonical_merge_keeps_one_occurrence(store):
+    from sentriface.storage import sqlite_store as sql
+    a,b,c = [store.create_person(n) for n in 'ABC']
+    finalized = correction_helpers.IdentityCorrectionTest()._finalize(store, 'collapse', [a,b])
+    oid = finalized['observation_id']
+    store.move_face(finalized['embedding_assignments']['face-0'], c.person_id, 'collapse-move')
+    IdentityMergeService(store).execute(c.person_id, b.person_id, 'collapse-merge')
+    assert store.get_encounter_read(oid)['participant_ids'] == [b.person_id]
+    assert len(store.list_observations_for_person(b.person_id)) == 1
+    with store._connect() as conn:
+        canonical = sql._world_canonical_map(conn)
+        assert sql._world_person_event_count(conn, b.person_id, Filter(), canonical_map=canonical) == 1
+        assert sql._world_event_statistics(conn, Filter(), set(canonical.values()), canonical_map=canonical)['activity'].get(b.person_id) == 1
+    assert not store.get_connection_evidence(b.person_id, b.person_id)
+    assert store.validate_graph_projection()['valid']
+
+
+def test_corrected_identity_encrypted_restore_provenance_and_read_only(tmp_path):
+    from tests.test_batch35_coherence import encounter
+    key = bytes(range(32))
+    store = SQLiteIdentityStore(tmp_path/'data'/'identity.db', embedding_dim=2, database_key=key)
+    store.initialize()
+    a,b,c = [store.create_person(n) for n in 'ABC']
+    frame = tmp_path/'frame.jpg'
+    frame.write_bytes(b'private domain fixture media, no inference')
+    oid = encounter(store, [a,c], [str(frame), str(frame)])
+    store.correct_encounter(oid, 'restore-date', expected_revision=store.get_encounter_read(oid)['revision'],
+        event_details={'date': '2026-10-28', 'place_seen': 'Agra'})
+    store.correct_encounter(oid, 'restore-correction', expected_revision=store.get_encounter_read(oid)['revision'],
+        participant_correction={'action': 'REASSIGN', 'person_id': a.person_id, 'to_person_id': b.person_id})
+    def snapshot():
+        assert set(store.get_encounter_read(oid)['participant_ids']) == {b.person_id,c.person_id}
+        result = store.get_world_graph_v2_read(Request(collection=C.MOST_FREQUENTLY_SEEN, as_of='2026-10-29T12:00:00Z'))
+        assert {p.canonical_person_id for p in result.discoveries} == {b.person_id,c.person_id}
+        assert all(d.count == 1 and {e['event_id'] for e in d.supporting_encounters} == {oid} for d in result.discoveries)
+        with store._connect() as conn:
+            return ([dict(r) for r in conn.execute('SELECT * FROM identity_corrections ORDER BY correction_id')],
+                    [dict(r) for r in conn.execute('SELECT * FROM relationship_evidence ORDER BY evidence_id')])
+    before = snapshot()
+    assert snapshot() == before
+    store.rebuild_graph_projection('restore-rebuild')
+    store.initialize()
+    assert snapshot() == before
+    service = BackupService(store.db_path, store.backup_dir, database_key=key, data_dir=store.db_path.parent)
+    backup = service.create_backup(reason='Corrected identity regression')
+    exported = service.export_encrypted_backup(backup.backup_id, tmp_path/'corrected.sfbackup.enc', 'private fixture passphrase')
+    imported = service.import_encrypted_backup(exported, 'private fixture passphrase')
+    service.restore_backup(imported.backup_id, str(uuid.uuid4()))
+    store = SQLiteIdentityStore(store.db_path, embedding_dim=2, database_key=key)
+    store.initialize()
+    assert snapshot() == before

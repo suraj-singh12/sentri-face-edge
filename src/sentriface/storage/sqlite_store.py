@@ -12014,6 +12014,7 @@ def _world_discoveries_read(
     conn: sqlite3.Connection, context: _WorldReadContext,
 ) -> WorldGraphV2ReadModel:
     """Bounded discoveries over the same corrected/canonical Encounter presence."""
+    sources = _world_participant_sources(conn)
     people, _, canonical_map = _world_people_scope(conn, context.filters)
     if context.filters.activity:
         activity = _world_event_statistics(
@@ -12046,12 +12047,8 @@ def _world_discoveries_read(
         replace(scoped, locations=(), missing_location="INCLUDE"), evidence=False,
     )
     scope_sql = scope_sql.replace("world_time(COALESCE(o.observed_at, o.created_at))", "o.instant_key")
-    params = [*event_params, *time_params]
-    cte = f"""WITH normalized_events AS MATERIALIZED (
-        SELECT o.observation_id, o.observed_at, o.created_at, o.location, o.status,
-               world_time(COALESCE(o.observed_at, o.created_at)) AS instant_key
-        FROM effective_observations o WHERE {event_scope}
-    ), appearances AS MATERIALIZED (
+    params = [*event_params, *(time_params * len(sources))]
+    appearances = " UNION ALL ".join(f"""
         SELECT DISTINCT o.observation_id AS event_id,
                world_effective_person(p.observation_id, p.person_id) AS person_id,
                COALESCE(o.observed_at, o.created_at) AS occurred_at,
@@ -12059,9 +12056,15 @@ def _world_discoveries_read(
                o.instant_key / 86400000000 AS day,
                world_location_text(o.location) AS location,
                world_location_key(o.location) AS location_key
-        FROM normalized_events o JOIN observation_participants p USING(observation_id)
+        FROM normalized_events o JOIN {source} p USING(observation_id)
         WHERE {scope_sql} AND o.instant_key IS NOT NULL
           AND world_discovery_eligible(world_effective_person(p.observation_id, p.person_id)) = 1
+""" for source in sources)
+    cte = f"""WITH normalized_events AS MATERIALIZED (
+        SELECT o.observation_id, o.observed_at, o.created_at, o.location, o.status,
+               world_time(COALESCE(o.observed_at, o.created_at)) AS instant_key
+        FROM effective_observations o WHERE {event_scope}
+    ), appearances AS MATERIALIZED ({appearances}
     )"""
     latest_day = None
     if context.collection == WorldCollection.MOST_RECENTLY_SEEN:
@@ -12940,85 +12943,19 @@ def _world_relationship_scope(
 
 
 def _world_scoped_event_people(conn: sqlite3.Connection, filters: WorldReadFilter) -> set[str]:
-    scope_sql, params = _world_scope_sql(filters, evidence=False)
-    rows = conn.execute(
-        f"""
-        WITH RECURSIVE corrected(observation_id, person_id) AS (
-            SELECT p.observation_id, p.person_id
-            FROM effective_observations o JOIN observation_participants p USING(observation_id)
-            WHERE {scope_sql}
-            UNION
-            SELECT r.observation_id, c.to_person_id
-            FROM corrected r JOIN identity_corrections c
-              ON c.observation_id = r.observation_id
-             AND c.correction_type = 'OBSERVATION_IDENTITY'
-             AND c.from_person_id = r.person_id
-        ), correction_terminal(observation_id, person_id) AS (
-            SELECT r.observation_id, r.person_id FROM corrected r
-            WHERE NOT EXISTS (
-                SELECT 1 FROM identity_corrections c
-                WHERE c.observation_id = r.observation_id
-                  AND c.correction_type = 'OBSERVATION_IDENTITY'
-                  AND c.from_person_id = r.person_id
-            )
-        ), canonical(observation_id, person_id) AS (
-            SELECT observation_id, person_id FROM correction_terminal
-            UNION
-            SELECT c.observation_id, p.canonical_person_id
-            FROM canonical c JOIN persons p ON p.person_id = c.person_id
-            WHERE p.canonical_person_id IS NOT NULL
-        )
-        SELECT DISTINCT c.person_id FROM canonical c
-        JOIN persons p ON p.person_id = c.person_id
-        WHERE p.canonical_person_id IS NULL
-        """, params,
-    ).fetchall()
-    return {str(row["person_id"]) for row in rows}
+    scope, params = _world_scope_sql(filters, evidence=False)
+    cte = _world_effective_participant_cte(conn, scope)
+    return {str(row[0]) for row in conn.execute(f"{cte} SELECT DISTINCT person_id FROM effective", params)}
 
 
 def _world_activity_counts(
     conn: sqlite3.Connection, eligible_ids: set[str], filters: WorldReadFilter,
 ) -> dict[str, int]:
-    scope_sql, params = _world_scope_sql(filters, evidence=False)
-    rows = conn.execute(
-        f"""
-        WITH RECURSIVE corrected(observation_id, person_id) AS (
-            SELECT p.observation_id, p.person_id
-            FROM effective_observations o JOIN observation_participants p USING(observation_id)
-            WHERE {scope_sql}
-            UNION
-            SELECT r.observation_id, c.to_person_id
-            FROM corrected r JOIN identity_corrections c
-              ON c.observation_id = r.observation_id
-             AND c.correction_type = 'OBSERVATION_IDENTITY'
-             AND c.from_person_id = r.person_id
-        ), correction_terminal(observation_id, person_id) AS (
-            SELECT r.observation_id, r.person_id FROM corrected r
-            WHERE NOT EXISTS (
-                SELECT 1 FROM identity_corrections c
-                WHERE c.observation_id = r.observation_id
-                  AND c.correction_type = 'OBSERVATION_IDENTITY'
-                  AND c.from_person_id = r.person_id
-            )
-        ), canonical(observation_id, person_id) AS (
-            SELECT observation_id, person_id FROM correction_terminal
-            UNION
-            SELECT c.observation_id, p.canonical_person_id
-            FROM canonical c JOIN persons p ON p.person_id = c.person_id
-            WHERE p.canonical_person_id IS NOT NULL
-        ), effective(observation_id, person_id) AS (
-            SELECT DISTINCT c.observation_id, c.person_id FROM canonical c
-            JOIN persons p ON p.person_id = c.person_id
-            WHERE p.canonical_person_id IS NULL
-        )
-        SELECT person_id, COUNT(*) AS event_count
-        FROM effective GROUP BY person_id
-        """, params,
-    ).fetchall()
-    return {
-        str(row["person_id"]): int(row["event_count"])
-        for row in rows if str(row["person_id"]) in eligible_ids
-    }
+    scope, params = _world_scope_sql(filters, evidence=False)
+    cte = _world_effective_participant_cte(conn, scope)
+    return {str(row[0]): int(row[1]) for row in conn.execute(
+        f"{cte} SELECT person_id, COUNT(*) FROM effective GROUP BY person_id", params,
+    ) if str(row[0]) in eligible_ids}
 
 
 def _world_event_statistics(
@@ -13039,7 +12976,7 @@ def _world_event_statistics(
             location_offset=location_offset, location_limit=location_limit,
         )
     scope_sql, params = _world_scope_sql(filters, evidence=False)
-    cte = _world_effective_participant_cte(scope_sql)
+    cte = _world_effective_participant_cte(conn, scope_sql)
     placeholders = ",".join("?" for _ in eligible_ids)
     rows = conn.execute(
         f"""{cte}, eligible AS (
@@ -13142,7 +13079,7 @@ def _world_full_scope_event_statistics(
     correction_sources = {
         str(row[0]) for row in conn.execute(
             """SELECT DISTINCT from_person_id FROM identity_corrections
-               WHERE correction_type = 'OBSERVATION_IDENTITY'
+               WHERE correction_type IN ('OBSERVATION_IDENTITY', 'FACE_ASSIGNMENT')
                UNION SELECT person_id FROM encounter_participant_revisions"""
         ).fetchall()
     }
@@ -13165,6 +13102,13 @@ def _world_full_scope_event_statistics(
         lambda person_id: canonical_map[str(person_id)], deterministic=True,
     )
     placeholders = ",".join("?" for _ in affected_ids)
+    effective_adjustments = " UNION ALL ".join(
+        f"""SELECT 'EFFECTIVE', world_effective_person(p.observation_id, p.person_id),
+                   COUNT(DISTINCT p.observation_id)
+            FROM {source} p JOIN affected_events a USING(observation_id)
+            GROUP BY world_effective_person(p.observation_id, p.person_id)"""
+        for source in _world_participant_sources(conn)
+    )
     adjustments = conn.execute(
         f"""WITH affected_events AS MATERIALIZED (
                 SELECT DISTINCT p.observation_id
@@ -13180,10 +13124,7 @@ def _world_full_scope_event_statistics(
             FROM observation_participants p JOIN affected_events a USING(observation_id)
             GROUP BY world_canonical_person(p.person_id)
             UNION ALL
-            SELECT 'EFFECTIVE', world_effective_person(p.observation_id, p.person_id),
-                   COUNT(DISTINCT p.observation_id)
-            FROM observation_participants p JOIN affected_events a USING(observation_id)
-            GROUP BY world_effective_person(p.observation_id, p.person_id)""",
+            {effective_adjustments}""",
         [*sorted(affected_ids), *params],
     ).fetchall()
     for row in adjustments:
@@ -13590,42 +13531,59 @@ def _world_relationship(
     )
 
 
-def _world_effective_participant_cte(scope_sql: str) -> str:
+def _world_participant_sources(conn: sqlite3.Connection) -> tuple[str, ...]:
+    """Read-only corrected membership overlay; ordinary reads retain indexed SQL.
+
+    Only amended Encounters need the correction interpreter. No per-Encounter
+    callback, persisted projection, or recognition state participates in this read.
+    """
+    changed = [str(row[0]) for row in conn.execute(
+        "SELECT observation_id FROM identity_corrections WHERE observation_id IS NOT NULL "
+        "AND correction_type IN ('FACE_ASSIGNMENT', 'OBSERVATION_IDENTITY') "
+        "UNION SELECT observation_id FROM encounter_participant_revisions"
+    )]
+    if not changed:
+        return ("observation_participants",)
+    raw: dict[str, set[str]] = {oid: set() for oid in changed}
+    for row in conn.execute(
+        "SELECT observation_id, person_id FROM observation_participants "
+        "WHERE observation_id IN (SELECT value FROM json_each(?))", (json.dumps(changed),),
+    ):
+        raw[str(row[0])].add(str(row[1]))
+    effective, _ = _batch_effective_observation_person_ids(conn, set(changed), raw, lambda pid: pid)
+    rows = [[oid, pid] for oid in changed for pid in sorted(effective[oid])]
+    # SQL literals contain only encoded stored identifiers, escaped as SQL text.
+    ids = json.dumps(changed).replace("'", "''")
+    values = json.dumps(rows).replace("'", "''")
+    return (
+        f"(SELECT observation_id, person_id FROM observation_participants "
+        f"WHERE observation_id NOT IN (SELECT value FROM json_each('{ids}')))",
+        f"(SELECT json_extract(value, '$[0]') AS observation_id, "
+        f"json_extract(value, '$[1]') AS person_id FROM json_each('{values}'))",
+    )
+
+
+def _world_participant_source(conn: sqlite3.Connection) -> str:
+    sources = _world_participant_sources(conn)
+    return sources[0] if len(sources) == 1 else "(" + " UNION ALL ".join(
+        f"SELECT * FROM {source}" for source in sources
+    ) + ")"
+
+
+
+def _world_effective_participant_cte(conn: sqlite3.Connection, scope_sql: str) -> str:
+    source = _world_participant_source(conn)
     return f"""
         WITH RECURSIVE identity_map(person_id, canonical_person_id) AS (
             SELECT person_id, person_id FROM persons WHERE canonical_person_id IS NULL
             UNION ALL
             SELECT p.person_id, m.canonical_person_id
             FROM persons p JOIN identity_map m ON p.canonical_person_id = m.person_id
-        ), correction_chain(observation_id, raw_person_id, person_id) AS (
-            SELECT observation_id, from_person_id, to_person_id
-            FROM identity_corrections
-            WHERE correction_type = 'OBSERVATION_IDENTITY'
-            UNION ALL
-            SELECT r.observation_id, r.raw_person_id, c.to_person_id
-            FROM correction_chain r JOIN identity_corrections c
-              ON c.observation_id = r.observation_id
-             AND c.correction_type = 'OBSERVATION_IDENTITY'
-             AND c.from_person_id = r.person_id
-        ), correction_terminal(observation_id, raw_person_id, person_id) AS (
-            SELECT r.observation_id, r.raw_person_id, r.person_id FROM correction_chain r
-            WHERE NOT EXISTS (
-                SELECT 1 FROM identity_corrections c
-                WHERE c.observation_id = r.observation_id
-                  AND c.correction_type = 'OBSERVATION_IDENTITY'
-                  AND c.from_person_id = r.person_id
-            )
         ), effective(observation_id, person_id) AS (
             SELECT DISTINCT p.observation_id, m.canonical_person_id
-            FROM effective_observations o JOIN observation_participants p USING(observation_id)
-            LEFT JOIN correction_terminal c
-              ON c.observation_id = p.observation_id AND c.raw_person_id = p.person_id
-            JOIN identity_map m ON m.person_id = COALESCE(c.person_id, p.person_id)
-            WHERE {scope_sql} AND COALESCE((
-                SELECT r.disposition FROM encounter_participant_revisions r
-                WHERE r.observation_id = p.observation_id AND r.person_id = COALESCE(c.person_id, p.person_id)
-                ORDER BY r.created_at DESC, r.rowid DESC LIMIT 1
-            ), 'PRESENT') <> 'REMOVED'
+            FROM effective_observations o JOIN {source} p USING(observation_id)
+            JOIN identity_map m ON m.person_id = p.person_id
+            WHERE {scope_sql}
         )
     """
 
@@ -13645,12 +13603,14 @@ def _world_scoped_event_count(
     )
     if not candidates:
         return 0
+    source = _world_participant_source(conn)
+    participant_index = "INDEXED BY idx_observation_participants_person" if source == "observation_participants" else ""
     scope_sql, params = _world_scope_sql(filters, evidence=False)
     placeholders = ",".join("?" for _ in candidates)
     return int(conn.execute(
         f"""SELECT COUNT(DISTINCT p.observation_id)
-            FROM observation_participants p
-                 INDEXED BY idx_observation_participants_person
+            FROM {source} p
+                 {participant_index}
             CROSS JOIN effective_observations o
             WHERE p.person_id IN ({placeholders})
               AND o.observation_id = p.observation_id
@@ -13674,7 +13634,7 @@ def _world_person_event_count(
     if not candidates:
         return 0
     membership_sql, params = _world_person_event_membership_sql(
-        filters, candidates, person_id,
+        conn, filters, candidates, person_id,
     )
     return int(conn.execute(
         f"SELECT COUNT(DISTINCT p.observation_id) {membership_sql}", params,
@@ -13696,7 +13656,7 @@ def _world_person_events(
     if not candidates:
         return 0, []
     membership_sql, params = _world_person_event_membership_sql(
-        filters, candidates, person_id,
+        conn, filters, candidates, person_id,
     )
     total = known_total if known_total is not None else _world_person_event_count(
         conn, person_id, filters, canonical_map=resolved,
@@ -13711,16 +13671,19 @@ def _world_person_events(
 
 
 def _world_person_event_membership_sql(
+    conn: sqlite3.Connection,
     filters: WorldReadFilter,
     candidates: set[str],
     person_id: str,
 ) -> tuple[str, list[object]]:
     """Return the shared participant-first focused-event membership predicate."""
+    source = _world_participant_source(conn)
+    participant_index = "INDEXED BY idx_observation_participants_person" if source == "observation_participants" else ""
     scope_sql, scope_params = _world_scope_sql(filters, evidence=False)
     placeholders = ",".join("?" for _ in candidates)
     return (
-        f"""FROM observation_participants p
-               INDEXED BY idx_observation_participants_person
+        f"""FROM {source} p
+               {participant_index}
             CROSS JOIN effective_observations o
             WHERE p.person_id IN ({placeholders})
               AND o.observation_id = p.observation_id
@@ -13737,31 +13700,8 @@ def _world_register_effective_person_function(
     *,
     focus_person_ids: set[str] | None = None,
 ) -> set[str]:
-    corrections = {
-        (str(row["observation_id"]), str(row["from_person_id"])):
-            str(row["to_person_id"])
-        for row in conn.execute(
-            """SELECT observation_id, from_person_id, to_person_id
-               FROM identity_corrections
-               WHERE correction_type = 'OBSERVATION_IDENTITY'
-               ORDER BY created_at, correction_id"""
-        ).fetchall()
-    }
-
-    participation = {}
-    for revision in conn.execute("SELECT observation_id, person_id, disposition FROM encounter_participant_revisions ORDER BY created_at, rowid"):
-        participation[(str(revision[0]), str(revision[1]))] = str(revision[2])
-
     def effective_person(observation_id: object, raw_person_id: object) -> str:
-        current = str(raw_person_id)
-        seen: set[str] = set()
-        while (str(observation_id), current) in corrections:
-            if current in seen:
-                raise RuntimeError("Observation identity correction cycle detected")
-            seen.add(current)
-            current = corrections[(str(observation_id), current)]
-        terminal = canonical_map[current]
-        return "" if participation.get((str(observation_id), current)) == "REMOVED" else terminal
+        return canonical_map[str(raw_person_id)]
 
     conn.create_function("world_effective_person", 2, effective_person, deterministic=True)
     if focus_person_id is not None and focus_person_ids is not None:
@@ -13777,13 +13717,6 @@ def _world_register_effective_person_function(
         raw_id for raw_id, canonical_id in canonical_map.items()
         if canonical_id in target_ids
     }
-    changed = True
-    while changed:
-        changed = False
-        for (_, source), target in corrections.items():
-            if target in candidates and source not in candidates:
-                candidates.add(source)
-                changed = True
     if focus_person_ids is not None:
         conn.create_function(
             "world_effective_person_in_scope", 2,
@@ -13826,7 +13759,12 @@ def _world_event_participant_mapping(
     participants, provenance = _world_participant_mapping(
         [str(row["person_id"]) for row in raw_rows], corrections, canonical_map,
     )
-    if conn.execute("SELECT 1 FROM encounter_participant_revisions WHERE observation_id = ? LIMIT 1", (event_id,)).fetchone():
+    amended = conn.execute(
+        "SELECT 1 FROM encounter_participant_revisions WHERE observation_id = ? "
+        "UNION ALL SELECT 1 FROM identity_corrections WHERE observation_id = ? "
+        "AND correction_type = 'FACE_ASSIGNMENT' LIMIT 1", (event_id, event_id),
+    ).fetchone()
+    if amended:
         participants = tuple({"person_id": pid} for pid in _effective_observation_person_ids(conn, event_id))
         provenance = tuple({**item, "effective_participation": item["effective_person_id"] in {p["person_id"] for p in participants}} for item in provenance)
     return participants, provenance
@@ -13918,7 +13856,7 @@ def _world_event_batch_data(
     ).fetchall():
         media_by_event[str(row["observation_id"])] = int(row["count"])
     revised_events = {str(row[0]) for row in conn.execute(
-        f"SELECT DISTINCT observation_id FROM encounter_participant_revisions WHERE observation_id IN ({placeholders})", event_ids)}
+        f"SELECT observation_id FROM encounter_participant_revisions WHERE observation_id IN ({placeholders}) UNION SELECT observation_id FROM identity_corrections WHERE correction_type = 'FACE_ASSIGNMENT' AND observation_id IN ({placeholders})", [*event_ids, *event_ids])}
     return {
         event_id: (
             _world_event_participant_mapping(conn, event_id) if event_id in revised_events else _world_participant_mapping(
@@ -14383,7 +14321,7 @@ def _world_location_facets_effective(
         recent_activity=filters.recent_activity, missing_location="INCLUDE",
     )
     scope_sql, params = _world_scope_sql(location_filters, evidence=False)
-    cte = _world_effective_participant_cte(scope_sql)
+    cte = _world_effective_participant_cte(conn, scope_sql)
     placeholders = ",".join("?" for _ in eligible_person_ids)
     rows = conn.execute(
         f"""{cte}, eligible_events AS (
