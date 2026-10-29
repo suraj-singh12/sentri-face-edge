@@ -1,15 +1,12 @@
 # SentriFace Edge documentation map
 
-## Current committed baseline — Batch 3.7
+## Current source and qualification (2026-10-29)
 
-Batch 3.7 was committed at `555433f082dc39112bd815dddf3a8f35791f2f4b`. The verified `release-v2.0.0-hardening` baseline is `683f3641e3532f08e180fe6c4c4386ac0f798917`, including merged PR #8. Schema v34 extends existing immutable enrollment history with Reference source identity/provenance and append-only lifecycle revisions. NO_FACE Add Face and ENROLLED Recognition References management share admission, cap, lifecycle, authorization and recognition. Encounter correction is source-scoped; equal-vector dedup cannot transfer Reference identity. Existing schema-v33 Attach ownership/Retry/Cancel and compact backup-card fix are preserved. IMPLEMENTATION_PLAN owns implementation/verification status; DOMAIN_MODEL owns the source contract, ARCHITECTURE_STATE its representation, FEATURES_BY_TAB operator entry points, and ARCHITECTURE_EXPLANATION the rationale. No Batch 4.
-
-## Next priorities and current qualification
-
-- **P0 complete:** [#1 CI repair](https://github.com/suraj-singh12/sentri-face-edge/issues/1) merged through [PR #8](https://github.com/suraj-singh12/sentri-face-edge/pull/8). [Hardening CI #40071662474](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40071662474) passed Linux/macOS/Windows backend, frontend and unsigned Windows packaging. Python 3.12 is the only active target; 3.11 is disabled. Production signatures and current-artifact installer/model lifecycle acceptance remain pending.
-- **P1 documentation:** [#2 status reconciliation](https://github.com/suraj-singh12/sentri-face-edge/issues/2) tracks this commit's source-of-truth update.
-- **Remaining work, not yet completed:** [#3 World vNext](https://github.com/suraj-singh12/sentri-face-edge/issues/3), [#4 Encounter Split/Merge](https://github.com/suraj-singh12/sentri-face-edge/issues/4), [#6 Figma-first operator workflow](https://github.com/suraj-singh12/sentri-face-edge/issues/6) and [#5 release acceptance](https://github.com/suraj-singh12/sentri-face-edge/issues/5). Every issue must undergo a bounded review and operator approval before coding; material UI changes are design-first, followed by issue branch, PR, checks and merge.
-- Roadmap priority prefixes P0–P4 are **not** the historical engineering phases P0–P14 described below.
+- **Product baseline:** Schema v34 / Batch 3.7 remains authoritative. [World intelligence #3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) was merged into `release-v2.0.0-hardening` at `f907073edc3375dbfd15b8bb39cc6d32bc60f6b6`. It adds backend evidence criteria, recurrence, discoveries and saved-location suggestions. The **Current World UI remains unchanged**; the optional Explore UI is still under [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13).
+- **QA foundation:** [Issue #17](https://github.com/suraj-singh12/sentri-face-edge/issues/17) completed its defined macOS QA-J01 acceptance: two genuine browser/ONNX journeys, independent People/Events/World and restart checks, negative controls and isolated cleanup. [Draft PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23) at `b81d451` has [five passing CI jobs](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40905213311) but is **unmerged**. Runbooks and private fixture policy live in [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md#qa-foundation-17), not in the root README.
+- **Known integrity issue:** [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) tracks a confirmed pre-existing finalized FACE_ASSIGNMENT correction mismatch in World discoveries. [Period fix PR #15](https://github.com/suraj-singh12/sentri-face-edge/pull/15) remains draft/held; do not conflate its code change with the pre-existing defect.
+- **Remaining:** Review/merge #23 only with operator permission; evaluate #22; approve/complete World Explore #13; then QA expansion [#18–#21](https://github.com/suraj-singh12/sentri-face-edge/issues/16). [#4](https://github.com/suraj-singh12/sentri-face-edge/issues/4) Split/Merge and [#6](https://github.com/suraj-singh12/sentri-face-edge/issues/6) UI refinement remain planned. [#9](https://github.com/suraj-singh12/sentri-face-edge/issues/9) main-branch CI adoption is explicitly deferred. Production release/signing and current Windows installer acceptance [#5](https://github.com/suraj-singh12/sentri-face-edge/issues/5) remain open.
+- GitHub Issues and their linked PRs track **live work**; the implementation plan and historical phase records preserve engineering provenance. Roadmap P0–P4 labels are distinct from historical phases P0–P14.
 
 ## Historical implementation checkpoints
 
@@ -33,7 +30,7 @@ Batch 3.7 was committed at `555433f082dc39112bd815dddf3a8f35791f2f4b`. The verif
 ## Start here
 
 1. Repository-root `AGENTS.md` — product and safety rules.
-2. [`README.md`](README.md) — this map.
+2. [Repository README](../README.md) — newcomer overview and first run; this map owns deeper reading.
 3. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — canonical tracker, current batch and next work.
 4. [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) — complete product mental model.
 5. [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) — implemented checkpoint.
@@ -100,7 +97,7 @@ The historical engineering assessment was written later in wall-clock time than 
 | --- | --- | --- |
 | Overview | [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) | Complete narrative introduction covering the product purpose, user workflows, architecture, domain concepts, security, reliability, repository map, development model, and AI-safe change rules. |
 | Handoff | [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) | Fast takeover path, current checkpoint, code map, invariant summary, development commands, and release/support cautions. |
-| Development | [`DEVELOPMENT_MODE.md`](DEVELOPMENT_MODE.md) | macOS and Windows source launch, local model onboarding, isolated authority, frontend build, and exact-scope development reset. |
+| Development and QA | [`DEVELOPMENT_MODE.md`](DEVELOPMENT_MODE.md) | macOS, Windows and Linux source notes, local model onboarding, isolated authority, exact-scope reset, and QA-J01 setup, fixtures, reports and acceptance limits. |
 | Current core | [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) | Concise stable implementation checkpoint, current authority sources, read behavior, frozen World state, and deferred work. |
 | Current core | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) | Ordered P0–P14 roadmap, completed phases, phase exit criteria, cross-phase gates, and next work. |
 | Current core | [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) | Normative identity, observation, note, evidence, canonical, graph, Person Graph, and World domain rules. |
@@ -123,7 +120,7 @@ The historical engineering assessment was written later in wall-clock time than 
 
 ## Authority and maintenance rules
 
-- Follow the reading order above. Keep `IMPLEMENTATION_PLAN.md` as the single current-work tracker.
+- Follow the reading order above. GitHub Issues and linked PRs are the durable current-work tracker; `IMPLEMENTATION_PLAN.md` preserves implementation sequence, qualification and historical phase decisions.
 - Update every affected canonical document in each implementation batch; revise obsolete current-state statements rather than layering contradictory patch notes.
 - Use P11 documents for frozen integrity, rebuild, repair, revert, and recovery detail.
 - Use P12 and P14 documents for backup/restore and Windows release acceptance detail.

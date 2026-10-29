@@ -21,6 +21,7 @@ dependencies = [
   "sqlcipher3==0.6.2",
 ]
 [project.optional-dependencies]
+qa = ["playwright>=1.50,<2"]
 index = [
   "qhnswlib>=0.8.6,<0.9",
 ]

@@ -1,5 +1,9 @@
 # SentriFace Edge features by tab
 
+## Current World boundary and QA (2026-10-29)
+
+World intelligence [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) adds evidence-filtered reads, recurrence and discoveries at the existing backend; the Current World UI is unchanged. Optional Explore view [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13) has not been implemented. QA #17 demonstrated one macOS genuine browser/ONNX Encounter journey twice on unmerged [draft PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23); this does not establish all UI flows have been tested. Corrected World participation defect [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) remains open.
+
 ## Batch 3.7 operator flows
 
 **People:** NO_FACE exposes prominent Add Face. ENROLLED exposes secondary Manage Recognition References, without prominent generic Add Face. Both open the same Recognition References modal and backend mutation. Management shows active/retired sources, quality, Reference Only labels, count /4, Retire/Restore and shared-sample warnings. Upload explains cropped single-person and Encounter-first rules; explicit no-context acknowledgment and exactly-one-face detection precede confirmation. Zero/multiple faces reject without a picker. Proof-only can leave Add Face visible while still consuming a slot. Photos visibly identify Reference Only origin; timed Deleted Faces/global transfer controls are disabled for Reference-backed samples.

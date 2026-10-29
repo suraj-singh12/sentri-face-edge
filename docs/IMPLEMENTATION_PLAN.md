@@ -23,7 +23,11 @@ passed. No separate lint/type checker is configured. Skips cover obsolete APIs a
 platform-specific checks (Windows PowerShell/Inno and macOS); no World tests skipped.
 Exact-SHA CI and independent QA status belong to the draft PR.
 
-## Issue #3 — World intelligence implementation (independent acceptance pending)
+## Current delivery gate — World #3 merged; QA #17 accepted on draft PR
+
+World intelligence [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) is merged into hardening at `f907073`. Optional Explore UI is [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13); period-scope [draft PR #15](https://github.com/suraj-singh12/sentri-face-edge/pull/15) is held while the independently reproduced correction inconsistency [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) is investigated. QA Foundation [#17](https://github.com/suraj-singh12/sentri-face-edge/issues/17) passed two genuine macOS QA-J01 runs and five CI jobs on [draft PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23) (`b81d451`); it was merged as `6a9ec82` after all five checks passed at final head `6eda54a`. Future QA phases #18–#21 require operator gates; release #5 remains pending. GitHub Issues own live task status.
+
+## Historical Issue #3 implementation and test plan
 
 Issue branch starts at refreshed `release-v2.0.0-hardening` commit
 `9b02eba72b155421f06cb7a4b590047380dd59eb`. Implementation extends World v2 and
