@@ -12794,35 +12794,19 @@ def _world_register_effective_evidence_function(
     conn: sqlite3.Connection,
     canonical_map: dict[str, str],
 ):
-    """Register correction-before-canonical endpoint resolution for one read."""
-    corrections = {
-        (str(row["observation_id"]), str(row["from_person_id"])):
-            str(row["to_person_id"])
-        for row in conn.execute(
-            """SELECT observation_id, from_person_id, to_person_id
-               FROM identity_corrections
-               WHERE correction_type = 'OBSERVATION_IDENTITY'
-               ORDER BY created_at, correction_id"""
-        ).fetchall()
-    }
+    """Match graph projection semantics for regenerated active evidence.
 
+    Corrections retire and regenerate co-observation evidence atomically. Replaying
+    old identity corrections over its current endpoints loses explicitly re-added
+    participants and misinterprets valid forward/reverse histories as cycles.
+    """
     def effective_person(
         evidence_type: object,
         source_entity_type: object,
         source_entity_id: object,
         raw_person_id: object,
     ) -> str:
-        current = str(raw_person_id)
-        if str(evidence_type) == "CO_OBSERVED" and str(source_entity_type) == "OBSERVATION":
-            seen: set[str] = set()
-            key = (str(source_entity_id), current)
-            while key in corrections:
-                if current in seen:
-                    raise RuntimeError("Observation identity correction cycle detected")
-                seen.add(current)
-                current = corrections[key]
-                key = (str(source_entity_id), current)
-        return canonical_map[current]
+        return canonical_map[str(raw_person_id)]
 
     conn.create_function(
         "world_effective_evidence_person", 4, effective_person, deterministic=True,
@@ -13760,7 +13744,7 @@ def _world_event_participant_mapping(
         """SELECT from_person_id, to_person_id, operation_id
            FROM identity_corrections
            WHERE observation_id = ? AND correction_type = 'OBSERVATION_IDENTITY'
-           ORDER BY created_at, correction_id""",
+           ORDER BY created_at, rowid""",
         (event_id,),
     ).fetchall()
     canonical_map = _world_canonical_map(conn)
@@ -13773,6 +13757,48 @@ def _world_event_participant_mapping(
         "AND correction_type = 'FACE_ASSIGNMENT' LIMIT 1", (event_id, event_id),
     ).fetchone()
     if amended:
+        assignments = _effective_face_assignments(conn, event_id)
+        if assignments:
+            represented = {item["original_person_id"] for item in assignments}
+            _, untouched = _world_participant_mapping(
+                [str(row["person_id"]) for row in raw_rows if str(row["person_id"]) not in represented],
+                corrections, canonical_map,
+            )
+            face_operations: dict[str, list[str]] = {}
+            for row in conn.execute(
+                "SELECT face_assignment_id, operation_id FROM identity_corrections "
+                "WHERE observation_id = ? AND correction_type = 'FACE_ASSIGNMENT' "
+                "ORDER BY created_at, rowid", (event_id,),
+            ):
+                face_operations.setdefault(str(row[0]), []).append(str(row[1]))
+            origins = list(untouched)
+            for assignment in assignments:
+                _, mapped = _world_participant_mapping(
+                    [assignment["current_person_id"]], corrections, canonical_map,
+                )
+                item = dict(mapped[0])
+                operations = face_operations.get(assignment["assignment_id"], [])
+                item.update(raw_person_id=assignment["original_person_id"],
+                    face_assignment_id=assignment["assignment_id"],
+                    correction_operation_ids=list(dict.fromkeys([*operations, *item["correction_operation_ids"]])))
+                if operations:
+                    item["relationship_to_effective_identity"] = "CORRECTED_PARTICIPANT"
+                origins.append(item)
+            provenance = tuple(origins)
+        presence_revisions: dict[str, sqlite3.Row] = {}
+        for row in conn.execute(
+            "SELECT person_id, disposition, operation_id FROM encounter_participant_revisions "
+            "WHERE observation_id = ? ORDER BY created_at, rowid", (event_id,),
+        ):
+            presence_revisions[str(row["person_id"])] = row
+        revision_origins = []
+        for pid, revision in presence_revisions.items():
+            if revision["disposition"] != "PRESENT":
+                continue
+            _, mapped = _world_participant_mapping([pid], [], canonical_map)
+            revision_origins.append({**mapped[0],
+                "participant_revision_operation_ids": [str(revision["operation_id"])]})
+        provenance = (*provenance, *revision_origins)
         participants = tuple({"person_id": pid} for pid in _effective_observation_person_ids(conn, event_id))
         provenance = tuple({**item, "effective_participation": item["effective_person_id"] in {p["person_id"] for p in participants}} for item in provenance)
     return participants, provenance
@@ -13788,15 +13814,10 @@ def _world_participant_mapping(
     for raw_id in sorted(raw_ids):
         current = raw_id
         correction_ids: list[str] = []
-        changed = True
-        while changed:
-            changed = False
-            for correction in corrections:
-                if str(correction["from_person_id"]) == current:
-                    current = str(correction["to_person_id"])
-                    correction_ids.append(str(correction["operation_id"]))
-                    changed = True
-                    break
+        for correction in corrections:
+            if str(correction["from_person_id"]) == current:
+                current = str(correction["to_person_id"])
+                correction_ids.append(str(correction["operation_id"]))
         effective_id = canonical_map[current]
         effective_ids.add(effective_id)
         relationship = (
@@ -13842,7 +13863,7 @@ def _world_event_batch_data(
             FROM identity_corrections
             WHERE correction_type = 'OBSERVATION_IDENTITY'
               AND observation_id IN ({placeholders})
-            ORDER BY observation_id, created_at, correction_id""",
+            ORDER BY observation_id, created_at, rowid""",
         event_ids,
     ).fetchall():
         corrections_by_event[str(row["observation_id"])].append(row)
@@ -14179,7 +14200,7 @@ def _world_evidence_page(
             calculation_version=_WORLD_CALCULATION_VERSION,
             evidence_types=(str(row["evidence_type"]),), evidence_count=1,
             first_occurrence_at=known_occurrence, last_occurrence_at=known_occurrence,
-            method="correction_before_terminal_canonical_resolution",
+            method="terminal_canonical_resolution_of_current_evidence",
             sample={"evidence_items": 1},
             limitations=(
                 "This evidence is descriptive provenance, not confidence, risk, or inferred intent.",
