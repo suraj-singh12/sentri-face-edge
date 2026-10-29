@@ -2,9 +2,42 @@
   "version": 1,
   "scope": "Compact feature inventory; partial means existing synthetic/domain coverage, not real biometric acceptance",
   "dataset_profiles": {
-    "Sparse": "Initial one actor/two distinct verified images; achieved 0",
-    "Regular": "Expanded actor/pose/lighting/age/quality coverage; sizes not yet qualified",
-    "Dense": "Expanded group and historical interactions; sizes not yet qualified"
+    "Sparse": {
+      "target": {
+        "people": 3,
+        "photos": 6,
+        "encounters": 2
+      },
+      "achieved": {
+        "people": 0,
+        "verified_photos": 0,
+        "encounters": 0
+      }
+    },
+    "Regular": {
+      "target": {
+        "people": 25,
+        "photos": 80,
+        "encounters": 30
+      },
+      "achieved": {
+        "people": 0,
+        "verified_photos": 0,
+        "encounters": 0
+      }
+    },
+    "Dense": {
+      "target": {
+        "people": 100,
+        "photos": 350,
+        "encounters": 120
+      },
+      "achieved": {
+        "people": 0,
+        "verified_photos": 0,
+        "encounters": 0
+      }
+    }
   },
   "cases": [
     {
@@ -520,5 +553,6 @@
       "missing": "Deferred product phase; no acceptance claim",
       "dependencies": []
     }
-  ]
+  ],
+  "acceptance_phases": "Normal \u2192 operator gate \u2192 Moderate \u2192 operator gate \u2192 Advanced; no automatic progression"
 }
