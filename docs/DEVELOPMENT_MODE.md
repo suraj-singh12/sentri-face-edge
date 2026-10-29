@@ -237,6 +237,40 @@ npm --prefix frontend run build
 
 ## QA Foundation #17
 
+### Fresh macOS VM setup
+
+Use Python **3.12** (the package rejects 3.11) and a Node version allowed by
+`frontend/package.json`; CI uses Node 22. Inspect existing tools before installing
+anything. A managed environment may already provide working Git, Python and Node
+outside `PATH`; use those explicit executable paths when available. On a bare Mac,
+`xcode-select --install` supplies Git, but requires operator interaction and may be
+unavailable from Apple's update server. Do not repeatedly retry that failure or
+disable security controls. Install Python from python.org's signed macOS installer
+and Node from nodejs.org only if needed. Verify the Python installer with
+`pkgutil --check-signature` and the Node archive against the vendor's
+`SHASUMS256.txt`; a Node archive can be extracted locally without administrator
+access. Homebrew is not required.
+
+With the selected Git/Node tools on `PATH`, and `python3.12` pointing to the
+selected supported interpreter:
+
+```bash
+git clone --branch qa/issue-17-foundation --single-branch https://github.com/suraj-singh12/sentri-face-edge.git
+cd sentri-face-edge
+python3.12 -m venv .venv312
+source .venv312/bin/activate
+python -m pip install -e ".[test,qa]"
+python -m playwright install chromium
+npm --prefix frontend ci
+```
+
+Keep the normal logged-in macOS Keychain available; permit any OS vault prompts
+through the ordinary operator flow. On a small VM, run backend and browser suites
+sequentially to avoid resource contention. No system Python changes or global pip
+installation are needed. The real QA command below uses the existing built UI.
+
+### Journey and local assets
+
 The 21-area inventory remains `tests/qa_coverage.json`. Real biometric acceptance
 is still pending authorized local models and visually verified photographs.
 QA-J01 now implements source launch, UI owner/Person creation, Reference enrollment,
@@ -298,8 +332,12 @@ python scripts/fetch_marvel_photos.py --verify
 python scripts/fetch_marvel_photos.py --restore
 ```
 
-Both Commons API and direct upload-host requests returned proxy HTTP 403 in this
-environment. A practical alternative is operator-provided licensed local photos:
+The earlier implementation environment received proxy HTTP 403 from both Commons
+hosts; the macOS VM could reach both on 2026-10-29 and download candidates with the
+existing collector. Search labels still require review: `Chris Evans` also returns
+UK Parliament namesake portraits, and different crops can share one original photo.
+Never treat different filenames or hashes as proof of distinct photographic scenes.
+A practical alternative when downloads are unavailable is operator-provided licensed local photos:
 place them at `qa-fixtures/marvel-actors/actor/enrollment.jpg` and `actor/query.jpg`,
 and save a version-1 `manifest.json` using the same downloader schema. Each record
 needs `id`, `actor`, `file` (two safe path components), pinned `sha256`, `author`,

@@ -66,6 +66,7 @@ def create_person(page, truth):
 
 
 def enroll(page, root, row, actor):
+    from playwright.sync_api import expect
     page.get_by_role('button', name='Add Face', exact=True).click()
     dialog = page.get_by_role('dialog', name='Recognition References', exact=True)
     field(dialog, 'No reliable Encounter context is available').check()
@@ -75,7 +76,11 @@ def enroll(page, root, row, actor):
     result = action(page, '/api/reference-confirm', lambda: dialog.get_by_role('button', name='Confirm Reference Only', exact=True).click())
     if len(result.get('created_reference_ids', [])) != 1:
         raise AssertionError('Enrollment did not create exactly one Reference source')
-    page.get_by_role('button', name='Close Recognition References', exact=True).click()
+    # The POST response precedes the UI's reference refresh. While that refresh
+    # is busy, the normal modal close handler deliberately ignores clicks.
+    expect(dialog.get_by_role('button', name='Add Reference Only', exact=True)).to_be_enabled()
+    dialog.get_by_role('button', name='Close Recognition References', exact=True).click()
+    dialog.wait_for(state='hidden')
     return draft
 
 
