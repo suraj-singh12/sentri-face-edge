@@ -25,7 +25,9 @@ def test_candidate_rejects_poster():
     assert marvel.candidate("Scarlett Johansson", p) is None
 
 def test_download_pins_sha_and_rejects_tampering(tmp_path):
-    blob = bytes([255, 216, 255]) + b"a" * 6000
+    import cv2
+    import numpy as np
+    blob = cv2.imencode(".jpg", np.full((120, 120, 3), 180, dtype=np.uint8))[1].tobytes()
     row = {"file": "chris-evans/example.jpg", "url": "https://upload.wikimedia.org/example.jpg", "sha256": ""}
     with patch.object(marvel, "request", return_value=blob):
         sha = marvel.download(row, tmp_path, 2)
@@ -38,3 +40,22 @@ def test_download_pins_sha_and_rejects_tampering(tmp_path):
 
 def test_verify_requires_existing_fixture(tmp_path):
     assert marvel.main(["--verify", "--out", str(tmp_path)]) == 1
+
+
+def test_restore_rejects_changed_source_before_writing(tmp_path):
+    import cv2
+    import numpy as np
+    import pytest
+    blob = cv2.imencode(".jpg", np.zeros((120, 120, 3), dtype=np.uint8))[1].tobytes()
+    row = {"file": "actor/photo.jpg", "url": "https://upload.wikimedia.org/a.jpg", "sha256": "0" * 64}
+    with patch.object(marvel, "request", return_value=blob), pytest.raises(ValueError, match="Restored photo hash"):
+        marvel.download(row, tmp_path, 2)
+    assert not (tmp_path / row["file"]).exists()
+    assert row["sha256"] == "0" * 64
+
+
+def test_rejects_fake_image_and_escaped_path(tmp_path):
+    import pytest
+    assert not marvel.image_valid(b"\xff\xd8\xff" + b"x" * 6000, ".jpg")
+    with pytest.raises(ValueError, match="Unsafe"):
+        marvel.photo_path(tmp_path, "../outside.jpg")

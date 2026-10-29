@@ -1,0 +1,524 @@
+{
+  "version": 1,
+  "scope": "Compact feature inventory; partial means existing synthetic/domain coverage, not real biometric acceptance",
+  "dataset_profiles": {
+    "Sparse": "Initial one actor/two distinct verified images; achieved 0",
+    "Regular": "Expanded actor/pose/lighting/age/quality coverage; sizes not yet qualified",
+    "Dense": "Expanded group and historical interactions; sizes not yet qualified"
+  },
+  "cases": [
+    {
+      "id": "QA-AUTH01",
+      "feature": "Accounts and capability gates",
+      "behavior": "Sign in, lock, roles; reject unauthorized writes",
+      "risk": "reject unauthorized writes",
+      "source": [
+        "src/sentriface/api_server.py"
+      ],
+      "tests": [
+        "tests/test_auth_api.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-MODEL01",
+      "feature": "Model admission and activation",
+      "behavior": "Hash, declaration, calibration, fail closed; reject incompatible models",
+      "risk": "reject incompatible models",
+      "source": [
+        "src/sentriface/model_activation.py"
+      ],
+      "tests": [
+        "tests/test_model_activation.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-PEOPLE01",
+      "feature": "People lifecycle",
+      "behavior": "Create, rename, archive, restore, tombstone; retain history",
+      "risk": "retain history",
+      "source": [
+        "src/sentriface/engine.py"
+      ],
+      "tests": [
+        "tests/test_person_management.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-REF01",
+      "feature": "Recognition References",
+      "behavior": "Enroll, retire; source ownership and quality eligibility",
+      "risk": "source ownership and quality eligibility",
+      "source": [
+        "src/sentriface/engine.py"
+      ],
+      "tests": [
+        "tests/test_recognition_lifecycle_filter.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": [
+        "QA-J01"
+      ]
+    },
+    {
+      "id": "QA-RECOG01",
+      "feature": "Recognition",
+      "behavior": "Detect and propose only; operator owns acceptance",
+      "risk": "operator owns acceptance",
+      "source": [
+        "src/sentriface/engine.py"
+      ],
+      "tests": [
+        "tests/test_engine.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": [
+        "QA-J01"
+      ]
+    },
+    {
+      "id": "QA-REVIEW01",
+      "feature": "Review Photos",
+      "behavior": "All faces decided before atomic finalization; cancel/retry",
+      "risk": "cancel/retry",
+      "source": [
+        "src/sentriface/engine.py"
+      ],
+      "tests": [
+        "tests/test_photo_review_finalization.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": [
+        "QA-J01"
+      ]
+    },
+    {
+      "id": "QA-ENC01",
+      "feature": "Encounters",
+      "behavior": "Finalize, inspect, correct, attach; retain media/date/location",
+      "risk": "retain media/date/location",
+      "source": [
+        "src/sentriface/storage/sqlite_store.py"
+      ],
+      "tests": [
+        "tests/test_observations.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": [
+        "QA-J01"
+      ]
+    },
+    {
+      "id": "QA-EVENT01",
+      "feature": "Events",
+      "behavior": "Read persisted encounters and evidence",
+      "risk": "Read persisted encounters and evidence",
+      "source": [
+        "src/sentriface/storage/sqlite_store.py"
+      ],
+      "tests": [
+        "tests/test_intelligence_read_models.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": [
+        "QA-J01"
+      ]
+    },
+    {
+      "id": "QA-WORLD01",
+      "feature": "World",
+      "behavior": "Bounded scope, clusters, proof navigation and discoveries",
+      "risk": "Bounded scope, clusters, proof navigation and discoveries",
+      "source": [
+        "src/sentriface/storage/sqlite_store.py"
+      ],
+      "tests": [
+        "tests/test_world_graph_v2.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": [
+        "QA-J01"
+      ]
+    },
+    {
+      "id": "QA-CORR01",
+      "feature": "Identity correction",
+      "behavior": "Effective participant consistency across views; issue #22 known gap",
+      "risk": "issue #22 known gap",
+      "source": [
+        "src/sentriface/storage/sqlite_store.py"
+      ],
+      "tests": [
+        "tests/test_identity_corrections.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-MERGE01",
+      "feature": "Canonical merge",
+      "behavior": "Retain provenance and avoid self links",
+      "risk": "Retain provenance and avoid self links",
+      "source": [
+        "src/sentriface/engine.py"
+      ],
+      "tests": [
+        "tests/test_merge_foundation.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-NOTE01",
+      "feature": "Notes and mentions",
+      "behavior": "Save/revise mentions; never invent presence",
+      "risk": "never invent presence",
+      "source": [
+        "src/sentriface/storage/sqlite_store.py"
+      ],
+      "tests": [
+        "tests/test_person_notes.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-GRAPH01",
+      "feature": "Graph and relations",
+      "behavior": "Independent evidence, rebuild equivalence",
+      "risk": "Independent evidence, rebuild equivalence",
+      "source": [
+        "src/sentriface/storage/sqlite_store.py"
+      ],
+      "tests": [
+        "tests/test_graph_evidence.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-BACKUP01",
+      "feature": "Encrypted backup and restore",
+      "behavior": "Media closure, fresh authority, restart",
+      "risk": "Media closure, fresh authority, restart",
+      "source": [
+        "src/sentriface/backup_service.py"
+      ],
+      "tests": [
+        "tests/test_backup_service.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-INTEGRITY01",
+      "feature": "Integrity and repair",
+      "behavior": "Read only diagnosis, bounded R01/R02 repairs",
+      "risk": "Read only diagnosis, bounded R01/R02 repairs",
+      "source": [
+        "src/sentriface/storage/sqlite_store.py"
+      ],
+      "tests": [
+        "tests/test_integrity_checker.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-SEC01",
+      "feature": "Offline security",
+      "behavior": "Loopback/socket/auth boundaries",
+      "risk": "Loopback/socket/auth boundaries",
+      "source": [
+        "src/sentriface/api_server.py"
+      ],
+      "tests": [
+        "tests/test_api_security.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal",
+        "Moderate",
+        "Advanced"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "dependencies": []
+    },
+    {
+      "id": "QA-J01",
+      "feature": "Enrollment \u2192 recognition \u2192 confirmation \u2192 Encounter \u2192 People/Events/World \u2192 restart",
+      "behavior": "Enrollment \u2192 recognition \u2192 confirmation \u2192 Encounter \u2192 People/Events/World \u2192 restart",
+      "risk": "No browser adapter, admitted models or verified photo pair",
+      "source": [],
+      "tests": [],
+      "status": "untested",
+      "phases": [
+        "Normal"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "No browser adapter, admitted models or verified photo pair",
+      "dependencies": []
+    },
+    {
+      "id": "QA-O01",
+      "feature": "Independent expected-result comparison",
+      "behavior": "Independent expected-result comparison",
+      "risk": "Domain response adapters still missing",
+      "source": [],
+      "tests": [
+        "tests/test_qa_foundation.py::test_qa_o01_correct_and_wrong_expectation"
+      ],
+      "status": "covered",
+      "phases": [
+        "Normal"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Domain response adapters still missing",
+      "dependencies": []
+    },
+    {
+      "id": "QA-D01",
+      "feature": "Disposable repeatable data",
+      "behavior": "Disposable repeatable data",
+      "risk": "Application launch and model onboarding not yet integrated",
+      "source": [],
+      "tests": [
+        "tests/test_qa_foundation.py::test_qa_d01_disposable_repeat"
+      ],
+      "status": "covered",
+      "phases": [
+        "Normal"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Application launch and model onboarding not yet integrated",
+      "dependencies": []
+    },
+    {
+      "id": "QA-F01",
+      "feature": "Photographic fixture integrity",
+      "behavior": "Photographic fixture integrity",
+      "risk": "Live collection, visual labels and achieved dataset sizes",
+      "source": [],
+      "tests": [
+        "tests/test_marvel_photo_fetcher.py"
+      ],
+      "status": "partial",
+      "phases": [
+        "Normal"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Live collection, visual labels and achieved dataset sizes",
+      "dependencies": []
+    },
+    {
+      "id": "QA-FUTURE01",
+      "feature": "Guarded operation revert",
+      "behavior": "Guarded operation revert",
+      "risk": "Deferred product phase; no acceptance claim",
+      "source": [],
+      "tests": [],
+      "status": "unimplemented",
+      "phases": [
+        "Normal"
+      ],
+      "datasets": [
+        "Sparse",
+        "Regular",
+        "Dense"
+      ],
+      "missing": "Deferred product phase; no acceptance claim",
+      "dependencies": []
+    }
+  ]
+}

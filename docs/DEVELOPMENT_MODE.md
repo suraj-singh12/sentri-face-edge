@@ -234,3 +234,61 @@ npm --prefix frontend run build
   files around model authority.
 - A production-path refusal is intentional. Do not work around it with an
   environment alias, junction, or nested directory.
+
+## QA Foundation #17 (partial; not acceptance-qualified)
+
+Coverage inventory: `tests/qa_coverage.json`. `partial` means existing domain or
+synthetic tests cover some operations; it does not mean real inference passed.
+The compact inventory groups operations rather than assigning a test file per row.
+Issues #18–#21 own expanded coverage; #22 remains a known product regression target.
+
+Run the offline QA checks with the existing environment:
+
+```bash
+python -m pytest -q tests/test_marvel_photo_fetcher.py tests/test_qa_foundation.py
+python scripts/qa_foundation.py --test QA-J01
+```
+
+The second command is currently **preflight only**, emits revision/dirty status and
+BLOCKED JSON, and exits 2. Browser actions, runtime admission attestation and actual
+People/Event/World read adapters are still missing. It cannot report PASS. The
+comparison primitive has an isolated wrong-expectation test; this is mechanism
+validation, not a real application defect-detection demonstration.
+
+Photographs stay under ignored `qa-fixtures/`, never Actions artifacts:
+
+```bash
+python scripts/fetch_marvel_photos.py --per-actor 8
+python scripts/fetch_marvel_photos.py --verify
+python scripts/fetch_marvel_photos.py --restore
+```
+
+Use `--actors-file` (one name per line) and `--per-actor` to expand collection.
+Requires the existing OpenCV/NumPy dependencies for decoded image validation.
+Save manifest.json separately with the photos; restoration checks the pinned hash
+and fails if a source changes. Exact-content duplicates are reported. Similar crops,
+CGI and false identity labels still require visual review. Discovery title/license
+filters produce **candidates**, never verified truth. For each usable photo, record
+`reviewed: true`, `reviewer`, descriptive `review_notes` (identity, real photograph,
+pose, expression, lighting, age, quality, all visible faces), and `split` of
+`enrollment` or `query` only after review. A smoke pair needs distinct hashes for
+the same actor. Group images need every visible identity independently annotated
+before future group tests can use them. Preserve source URL, author, license and
+SHA-256. Do not upload raw photos, models, databases, credentials or browser traces
+containing them to public CI. Dataset profiles in the registry are plans, not
+achieved collection sizes; this execution collected zero verified photos.
+
+`disposable_data()` creates and removes only its own random temporary directory;
+it accepts no reset path. Future browser launch must select that directory using
+the existing source-development data option and normal authentication/model
+onboarding above. Do not copy ordinary user credentials or reset user authorities.
+
+To observe the comparator's intentional failure directly (exit 1), independently
+of the passing regression test that asserts the exception:
+
+```bash
+python -c "import sys; sys.path.insert(0, 'scripts'); from qa_foundation import assert_expected; assert_expected({'participants':['person-b']}, {'participants':['person-a']})"
+```
+
+Expected diagnostic: `result.participants[0]: expected 'person-b', actual 'person-a'`.
+These are ordinary mechanism-test identifiers, not fabricated inference results.

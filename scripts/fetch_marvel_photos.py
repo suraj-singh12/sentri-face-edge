@@ -173,16 +173,30 @@ def load_manifest(path: Path) -> dict:
 
 
 def image_valid(blob: bytes, extension: str) -> bool:
-    if len(blob) < 5000:
+    # Decode the entire image; magic bytes alone accept truncated/non-image data.
+    import cv2
+    import numpy as np
+    if extension not in (".jpg", ".png") or len(blob) > 50_000_000:
         return False
-    return blob.startswith(b"\xff\xd8\xff") if extension == ".jpg" else blob.startswith(b"\x89PNG\r\n\x1a\n")
+    magic = b"\xff\xd8\xff" if extension == ".jpg" else b"\x89PNG\r\n\x1a\n"
+    if not blob.startswith(magic):
+        return False
+    image = cv2.imdecode(np.frombuffer(blob, dtype=np.uint8), cv2.IMREAD_COLOR)
+    return image is not None and min(image.shape[:2]) >= 100
 
 
-def download(row: dict, root: Path, max_mb: int) -> str:
-    rel = Path(row["file"])
+def photo_path(root: Path, filename: str) -> Path:
+    rel = Path(filename)
     if rel.is_absolute() or ".." in rel.parts or len(rel.parts) != 2 or rel.suffix not in (".jpg", ".png"):
         raise ValueError("Unsafe manifest path")
     path = root / rel
+    if not path.resolve().is_relative_to(root.resolve()):
+        raise ValueError("Unsafe manifest symlink")
+    return path
+
+
+def download(row: dict, root: Path, max_mb: int) -> str:
+    path = photo_path(root, row["file"])
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_file():
         content = path.read_bytes()
@@ -196,6 +210,8 @@ def download(row: dict, root: Path, max_mb: int) -> str:
         if not image_valid(content, path.suffix):
             raise ValueError("Invalid or empty image")
         digest = hashlib.sha256(content).hexdigest()
+        if row.get("sha256") and digest != row["sha256"]:
+            raise ValueError("Restored photo hash differs from pinned manifest")
         with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as temp:
             temp.write(content)
             tempname = temp.name
@@ -245,14 +261,12 @@ def main(argv: list[str] | None = None) -> int:
     for row in records.values():
         if args.verify:
             try:
-                path = root / row["file"]
+                path = photo_path(root, row["file"])
                 content = path.read_bytes()
-                assert row.get("sha256") and hashlib.sha256(content).hexdigest() == row["sha256"]
-                assert image_valid(content, path.suffix)
-            except (OSError, AssertionError) as exc:
+                if not row.get("sha256") or hashlib.sha256(content).hexdigest() != row["sha256"] or not image_valid(content, path.suffix):
+                    raise ValueError("missing, invalid or hash mismatch")
+            except (OSError, AssertionError, ValueError) as exc:
                 problems.append(row["file"] + ": missing, invalid or hash mismatch")
-            continue
-        if row.get("sha256") and (root / row["file"]).exists() and not args.restore:
             continue
         try:
             download(row, root, args.max_mb)
@@ -267,6 +281,9 @@ def main(argv: list[str] | None = None) -> int:
     valid = sum(bool(r.get("sha256")) and (root / r["file"]).exists() for r in data["photos"])
     if not data["photos"]:
         problems.append("No candidates found; check Commons access, search terms and licenses")
+    hashes = [r["sha256"] for r in data["photos"] if r.get("sha256")]
+    if len(hashes) != len(set(hashes)):
+        problems.append("Duplicate image content; select distinct photographs before QA")
     reviewed = sum(bool(r.get("reviewed")) for r in data["photos"])
     print(f"Photos: {valid}/{len(data['photos'])}; human-reviewed: {reviewed}; errors: {len(problems)}; manifest: {manifest}")
     for err in problems:
