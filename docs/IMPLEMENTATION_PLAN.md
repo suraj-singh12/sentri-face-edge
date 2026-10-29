@@ -23,9 +23,18 @@ interpretation. Discoveries join disjoint unamended/amended sources separately;
 overview retains its fast aggregate and selectively replaces affected counts.
 There is no schema, write, cache, journal, evidence-authority or permission change.
 World event inspection now recognizes face corrections without requiring an explicit
-participant revision. Existing evidence endpoint interpretation is preserved:
-correction commands regenerate active evidence, and bounded probes verify actual
-endpoints/source Encounters instead of remapping raw evidence speculatively.
+participant revision. Its provenance retains each independent original face and
+correction operation, plus explicit presence revision origins. Chronological replay
+matches the participant authority instead of following a potentially cyclic map.
+
+A separate explicit-participant probe established a second defect: A→B→A made
+World reject a valid reversal as a cycle; re-adding explicit A after A→B collapsed
+three genuine current relationships into one. Person Graph and the regenerated
+active evidence were already correct. World now resolves those current evidence
+endpoints canonically, matching the existing graph projection instead of replaying
+old observation corrections over a new evidence generation. No evidence source,
+history, transaction or projection-write semantics are changed. Permanent proof
+regressions assert exact independent pairs, source Encounters and recurrence.
 
 Permanent regressions in `tests/test_world_intelligence.py` cover independent
 before/after E1/E2 truth, correction chains and reversals, multiple independent faces,

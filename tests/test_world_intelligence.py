@@ -902,3 +902,57 @@ def test_combined_fixed_oct29_corrected_period_locations(store, period, expected
     assert result.discovery_context['period_days'] == (period or 30)
     assert result.discovery_context['date_from'] == (end-timedelta(days=period or 30)).isoformat()
     assert result.discovery_context['date_to'] == end.isoformat()
+
+def test_world_face_provenance_preserves_independent_assignment_origins(store):
+    from sentriface.storage import sqlite_store as sql
+    a,b,c = [store.create_person(n) for n in 'ABC']
+    finalized = correction_helpers.IdentityCorrectionTest()._finalize(store, 'origin-split', [a,a,b])
+    oid = finalized['observation_id']
+    store.move_face(finalized['embedding_assignments']['face-0'], c.person_id, 'origin-a-c')
+    with store._connect() as conn:
+        participants, provenance = sql._world_event_participant_mapping(conn, oid)
+    assert {p['person_id'] for p in participants} == {a.person_id,b.person_id,c.person_id}
+    assert {(p['raw_person_id'], p['effective_person_id']) for p in provenance} == {
+        (a.person_id,a.person_id),(a.person_id,c.person_id),(b.person_id,b.person_id)}
+    reassigned = next(p for p in provenance if p['effective_person_id'] == c.person_id)
+    assert reassigned['correction_operation_ids'] == ['origin-a-c']
+    assert reassigned['effective_participation'] is True
+    d = store.create_person('D')
+    store.correct_encounter(oid, 'origin-add-d', expected_revision=store.get_encounter_read(oid)['revision'],
+        participant_correction={'action': 'ADD', 'person_id': d.person_id},
+        relations=[{'first_person_id': p.person_id, 'second_person_id': d.person_id, 'disposition': 'INCLUDE'} for p in (a,b,c)])
+    with store._connect() as conn:
+        _, provenance = sql._world_event_participant_mapping(conn, oid)
+    explicit = next(p for p in provenance if p.get('participant_revision_operation_ids') == ['origin-add-d'])
+    assert explicit['raw_person_id'] == explicit['effective_person_id'] == d.person_id
+    assert explicit['effective_participation'] is True
+
+
+def test_explicit_identity_reversal_and_readdition_preserve_world_proof(store):
+    a,b,c = [store.create_person(n) for n in 'ABC']
+    oid = correction_helpers.IdentityCorrectionTest()._finalize(store, 'explicit-history', [c])['observation_id']
+    as_of = '2026-10-29T12:00:00Z'
+    store.correct_encounter(oid, 'explicit-date', expected_revision=store.get_encounter_read(oid)['revision'],
+        event_details={'date':'2026-10-28','time':'12:00','time_precision':'exact'})
+    def add(person, op, peers):
+        store.correct_encounter(oid, op, expected_revision=store.get_encounter_read(oid)['revision'],
+            participant_correction={'action':'ADD','person_id':person.person_id},
+            relations=[{'first_person_id':person.person_id,'second_person_id':peer.person_id,'disposition':'INCLUDE'} for peer in peers])
+    add(a, 'explicit-initial-a', [c])
+    store.correct_observation_identity(oid, a.person_id, b.person_id, 'explicit-a-b')
+    store.correct_observation_identity(oid, b.person_id, a.person_id, 'explicit-b-a')
+    assert set(store.get_encounter_read(oid)['participant_ids']) == {a.person_id,c.person_id}
+    assert len(store.get_world_graph_v2_read(Request(collection=C.RELATIONSHIPS,as_of=as_of)).relationships) == 1
+    store.correct_observation_identity(oid, a.person_id, b.person_id, 'explicit-again-a-b')
+    add(a, 'explicit-readd-a', [b,c])
+    assert set(store.get_encounter_read(oid)['participant_ids']) == {a.person_id,b.person_id,c.person_id}
+    assert len(store.get_person_neighbors(a.person_id)) == 2
+    result = store.get_world_graph_v2_read(Request(collection=C.RELATIONSHIPS,as_of=as_of))
+    assert {frozenset((r.source_person_id,r.target_person_id)) for r in result.relationships} == {
+        frozenset(pair) for pair in itertools.combinations((a.person_id,b.person_id,c.person_id),2)}
+    for edge in result.relationships:
+        assert edge.evidence_count == edge.encounter_recurrence['count'] == 1
+        proof = store.get_world_graph_v2_read(Request(collection=C.EVIDENCE,detail_level=L.EVIDENCE,
+            focus_type='RELATIONSHIP',focus_id=edge.relationship_id,as_of=as_of))
+        assert len(proof.evidence) == 1 and proof.evidence[0].supporting_references[0]['source_entity_id'] == oid
+        assert set(proof.evidence[0].effective_endpoints) == {edge.source_person_id,edge.target_person_id}
