@@ -1,10 +1,10 @@
 # Global identity graph implementation plan
 
-## Issue #22 — corrected World participation (review pending)
+## Issue #22 — corrected World participation (merged)
 
 Foundation #23 merged as `6a9ec8250561154157fbc5d45fb03857d4d1687c`
 following five successful jobs at head `6eda54a59bb795458ed116350289e985a7d49675`;
-#17 is closed. Identity and Period changes still require separate operator merges.
+#17 is closed. Identity correction [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24) merged at `3a22b5a9cb7c2ea3b3633411cfd79f566c8ae05c`; Issue #22 is closed. The Period change [PR #15](https://github.com/suraj-singh12/sentri-face-edge/pull/15) is the remaining independent merge.
 
 Reproduced eight failing assertions against untouched hardening `f907073` with
 fixed `as_of=2026-10-29T12:00:00Z`: E1 B/Delhi/Oct 27 12:00 and E2 A/Agra/Oct 28
@@ -49,10 +49,33 @@ semantics are expanded by this read correction.
 Exact-SHA checks, measured performance and combined Period acceptance belong to the
 linked PR and #22 evidence. PR #15 stays independent; #13 remains open for Explore UI.
 
+## Issue #13 — bounded backend Period correction (reviewed, merge pending)
 
-## Current delivery gate — World #3 merged; QA #17 accepted on draft PR
+Based on refreshed hardening `f907073edc3375dbfd15b8bb39cc6d32bc60f6b6`.
+Multiple Locations now shares Frequent’s validated `discovery_period_days`
+(7/30/90, default 30), replacing its fixed 30-day override. This supersedes the
+original Issue #3 fixed-window behavior; historical acceptance records remain intact.
+Recent and all graph/cluster/evidence/proof/inspector semantics remain independent.
+No UI, schema, storage authority, worker or API changes. Independent combined
+identity/Period QA and five CI jobs passed at `fffb6654a92f1382518cb8f79beb70fb4e4b6097`.
+Final refreshed-PR CI and merge authorization are the remaining gates.
 
-World intelligence [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) is merged into hardening at `f907073`. Optional Explore UI is [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13); period-scope [draft PR #15](https://github.com/suraj-singh12/sentri-face-edge/pull/15) is held while the independently reproduced correction inconsistency [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) is investigated. QA Foundation [#17](https://github.com/suraj-singh12/sentri-face-edge/issues/17) passed two genuine macOS QA-J01 runs and five CI jobs on [PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23) (`b81d451`); it was merged as `6a9ec82` after final-head `6eda54a` passed all five CI jobs. Future QA phases #18–#21 require operator gates; release #5 remains pending. GitHub Issues own live task status.
+Regression coverage extends existing World intelligence fixtures for distinct windows,
+default equivalence, UTC microsecond boundaries/offsets, normalization/support caps,
+corrections/merges, cursor/filter/revision binding, snapshot consistency, isolation,
+and rebuild/restart/encrypted restore across all three periods.
+
+Local verification (Python 3.12, Linux): focused World suite 88 passed / 15 subtests;
+full backend 793 passed / 54 skipped / 137 subtests; final timestamp/Period subset
+10 passed. Frontend clean-install tests 124 passed; production build reproduced
+committed assets. Dependency check, Python compilation and diff whitespace checks
+passed. No separate lint/type checker is configured. Skips cover obsolete APIs and
+platform-specific checks (Windows PowerShell/Inno and macOS); no World tests skipped.
+Exact-SHA CI and independent QA status belong to the draft PR.
+
+## Current delivery gate — World #3, QA #17 and correction #22 merged
+
+World intelligence [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) is merged into hardening at `f907073`. Optional Explore UI is [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13); period-scope [PR #15](https://github.com/suraj-singh12/sentri-face-edge/pull/15) is separately reviewed after [correction #22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) merged in [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). QA Foundation [#17](https://github.com/suraj-singh12/sentri-face-edge/issues/17) passed two genuine macOS QA-J01 runs and five CI jobs on [PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23) (`b81d451`); it was merged as `6a9ec82` after final-head `6eda54a` passed all five CI jobs. Future QA phases #18–#21 require operator gates; release #5 remains pending. GitHub Issues own live task status.
 
 ## Historical Issue #3 implementation and test plan
 
