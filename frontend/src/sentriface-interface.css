@@ -4478,3 +4478,39 @@ button.encounter-list-row:hover { background: var(--mantine-color-default-hover)
 .explore-toolbar .mantine-NumberInput-root { width: 180px; flex: none; }
 .explore-node[aria-disabled="true"] { cursor: default; opacity: .65; }
 .explore-node[aria-disabled="true"] circle { stroke: var(--mantine-color-gray-6); }
+
+/* Approved Explore refinement v2: compact controls and authoritative findings. */
+.explore-weaker-control { margin-left: auto; min-width: 155px; }
+.explore-weaker-control .mantine-Button-label { flex: 1; justify-content: flex-start; }
+.explore-discovery-controls { flex: none; margin-top: 4px; }
+.explore-discovery-options > .mantine-Button-root { flex: 1 1 0; min-width: 0; padding-inline: 4px; height: 30px; }
+.explore-discovery-options .mantine-Button-label { font-size: 11px; }
+.explore-independent-controls { border-top: 1px solid var(--sentriface-card-border); padding-top: 7px; }
+.explore-period { padding: 2px; }
+.explore-period .mantine-SegmentedControl-label { padding: 3px 8px; font-size: 10px; }
+.explore-inspector-body { padding-top: 7px; padding-right: 2px; }
+.explore-inspector-title { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.explore-inspector-finding { padding: var(--mantine-spacing-sm); background: var(--mantine-color-teal-light); border-color: var(--mantine-color-teal-light-hover); }
+.explore-inspector-number { font-size: 32px; line-height: 1.15; font-weight: 750; font-variant-numeric: tabular-nums; }
+.explore-inspector-metrics .mantine-Paper-root { min-width: 0; background: var(--sentriface-muted-surface); }
+.explore-inspector-section { padding-top: 9px; border-top: 1px solid var(--sentriface-card-border); }
+.explore-inspector-row { padding-block: 4px; }
+.explore-inspector-row > :first-child { min-width: 0; }
+.explore-inspector-row > :last-child { flex-shrink: 0; }
+.explore-inspector-actions { flex: none; padding-top: 9px; border-top: 1px solid var(--sentriface-card-border); }
+.explore-inspector-source { height: auto; min-height: 28px; }
+.explore-inspector-source .mantine-Button-label { white-space: normal; overflow-wrap: anywhere; }
+@media (min-width: 1101px) {
+  .world-explore .explore-panels { grid-template-columns: 260px minmax(0, 1fr) 300px; }
+}
+@media (max-width: 1100px) {
+  .explore-discovery-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+  .explore-independent-controls { border-top: 0; border-left: 1px solid var(--sentriface-card-border); padding-top: 0; padding-left: 12px; }
+  .explore-independent-controls > .mantine-Text-root { min-height: 24px; display: flex; align-items: center; }
+  .explore-inspector-body > .mantine-Stack-root { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .explore-inspector-subject { grid-column: 1; align-self: start; }
+  .explore-inspector-finding { grid-column: 2; grid-row: 1; padding: var(--mantine-spacing-xs); }
+  .explore-inspector-metrics, .explore-inspector-section { grid-column: 1 / -1; }
+  .explore-inspector-metrics { gap: 6px; }
+  .explore-inspector-actions[data-person="true"] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: center; }
+}

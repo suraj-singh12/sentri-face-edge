@@ -2,6 +2,43 @@
 
 ## Issue #13 — native World Explore implementation
 
+### Approved UI refinement v2
+
+The operator-approved `SentriFace_World_Explore_UI_Refinement_v2.html` is implemented
+on the existing #13 branch / draft PR #26. This changes Explore presentation only:
+counted Evidence popover, native ON/OFF weaker-links button, compact paired discovery
+navigation, and type-specific Inspector hierarchy with a docked proof action.
+Controllers, graph layout/selection, backend queries, Current World, saved locations,
+authorization and application theme state remain unchanged. No dependencies or
+backend/schema changes are introduced.
+
+Regression verification: **139 frontend tests passed**, including rendered criteria
+controls and authoritative Person/Cluster/Relationship Inspector cases (62 World
+frontend tests). Focused backend World regression: **113 passed / 15 subtests**, no
+skips. Production build passes; final-head five-job CI is recorded on PR #26.
+
+Actual Chromium inspected the source React implementation over the existing
+disposable encrypted QA authority. Both Day/Night were checked at **1440×900,
+1280×800, 1024×768 and 790×650**, including all three Inspector types, evidence
+popover, ON/OFF states, proof and compact panel navigation. Browser assertions
+verify no document overflow, equal-width unclipped discovery controls, visible
+primary findings/proof actions, at least 70px of compact result-list space, draft
+selection/count/keyboard/Escape behavior, Apply/Reset/empty-selection validation,
+visual-only weaker changes without World requests, Current state retention and
+Period isolation. No browser page errors occurred. Initial visual findings (clipped
+Multiple locations label and insufficient compact results/finding space) were fixed
+and the complete matrix rerun. Fixture counts come from the backend, not the HTML.
+
+Representative final native captures:
+- [Person, Day 1280×800](examples/world-explore/day-1280.png)
+- [Person, Night 790×650](examples/world-explore/night-790.png)
+- [Discover, Night 790×650](examples/world-explore/v2-discover-night-790.png)
+- [Evidence dropdown and weaker OFF, Day 1440×900](examples/world-explore/v2-evidence-day-1440.png)
+- [Relationship, Day 1440×900](examples/world-explore/v2-relationship-day-1440.png)
+- [Cluster, Night 1280×800](examples/world-explore/v2-cluster-night-1280.png)
+- [Expanded proof, Night 1440×900](examples/world-explore/v2-proof-night-1440.png)
+
+
 The feature branch adds a native React Explore workspace beside the preserved
 Current view. It reuses World query builders/validators, the revision-bound World
 and Evidence controllers, deterministic Person Graph layout and the existing

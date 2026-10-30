@@ -142,3 +142,18 @@ Loading is indeterminate. Saved-location autocomplete starts after three normali
 characters and pages the existing `LOCATION_SUGGESTIONS` collection. Typing and
 cancellation never register locations; existing successful Encounter transactions
 remain the sole write path.
+
+World Explore's approved UI refinement v2 consolidates draft evidence selection in
+an **Evidence · n/3** keyboard-accessible popover. **Weaker links ON/OFF** is a
+pressed-state button that changes only canvas visibility. Discover uses paired,
+equal-width controls for Frequent / Multiple locations and Recently seen / Clusters;
+the compact day selector remains local to the first group. In compact windows the
+two groups sit alongside each other to preserve result-list space.
+
+The Inspector prioritizes the selected subject, one authoritative finding, secondary
+facts, context and a fixed **Inspect supporting proof** action. Person activity uses
+loaded finalized Encounter totals (unloaded activity stays explicitly unavailable),
+cluster findings use total membership rather than preview size, and direct
+relationships use selected evidence strength with backend qualification/support.
+Compact layouts place subject and finding beside each other. Secondary details
+scroll within the panel; existing proof/source navigation is preserved.
