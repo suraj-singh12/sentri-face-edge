@@ -1,6 +1,6 @@
 # SentriFace Edge: complete project guide
 
-For the latest implementation and QA qualification state, start with the [documentation map](README.md). This is the detailed product and architecture guide; GitHub Issues and linked PRs hold live work status. In particular, backend World intelligence #3 is merged, optional Explore UI #13 is pending, and QA Foundation #17 has real macOS acceptance on draft PR #23 but is not merged.
+For the latest implementation and QA qualification state, start with the [documentation map](README.md). This is the detailed product and architecture guide; GitHub Issues and linked PRs hold live work status. In particular, backend World intelligence #3 is merged, optional Explore UI #13 is pending, and QA Foundation #17 has real macOS acceptance on PR #23, merged as `6a9ec82` after final-head CI passed.
 
 ## Batch 3.7 — contextless biometric references
 

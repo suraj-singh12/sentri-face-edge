@@ -38,7 +38,7 @@ npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
-The reusable QA foundation includes isolated test data, real-photo fixture validation, a browser/ONNX acceptance journey, independent People/Events/World checks and failure evidence. Its complete setup and command are in [Development Mode — QA Foundation](docs/DEVELOPMENT_MODE.md#qa-foundation-17). QA Foundation acceptance was demonstrated on macOS in [draft PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23); this work is **not yet merged** into the hardening branch.
+The reusable QA foundation includes isolated test data, real-photo fixture validation, a browser/ONNX acceptance journey, independent People/Events/World checks and failure evidence. Its complete setup and command are in [Development Mode — QA Foundation](docs/DEVELOPMENT_MODE.md#qa-foundation-17). QA Foundation acceptance was demonstrated on macOS in [PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23); this work is merged into the hardening branch.
 
 ## Documentation
 
