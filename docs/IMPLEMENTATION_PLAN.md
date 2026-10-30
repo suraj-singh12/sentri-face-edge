@@ -27,7 +27,9 @@ Current/Explore selection and second-page retention without collection reload,
 location discoveries, UTC Recent and local
 Period isolation. Relationship evidence and the shared inspector opened correctly. Final navigation
 checks ensure proof Back returns to Explore without exposing Current scope controls;
-archived nodes honor existing backend navigation restrictions. A separate modern
+archived nodes honor existing backend navigation restrictions. Relationship media
+navigation, unavailable-image fallback, nested Escape and evidence Back were
+verified against retained revisions without discarding the focused graph. A separate modern
 finalized Encounter fixture confirmed that successful correction registers a saved
 location, while cancelling a new value does not.
 Day/Night screenshots were inspected at 1440×900, 1280×800, 1024×768 and 790×650;

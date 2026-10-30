@@ -930,6 +930,8 @@ export function useWorldController({ activeView, apiGet, initialFilters = EMPTY_
       nextWorldEvidencePage,
       refreshWorldEvidence,
       validateWorldMediaOrigin,
+      validateWorldRevision: validateRetainedWorldRevision,
+      closeWorldProof: discardRetainedWorldHierarchy,
       invalidateWorld,
     },
   };
