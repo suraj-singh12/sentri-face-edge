@@ -4476,3 +4476,5 @@ button.encounter-list-row:hover { background: var(--mantine-color-default-hover)
 .explore-canvas svg { position: absolute; inset: 0; }
 .explore-edge-bounds { fill: transparent; stroke: none; pointer-events: none; }
 .explore-toolbar .mantine-NumberInput-root { width: 180px; flex: none; }
+.explore-node[aria-disabled="true"] { cursor: default; opacity: .65; }
+.explore-node[aria-disabled="true"] circle { stroke: var(--mantine-color-gray-6); }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionIcon, Box, Group, Text, Tooltip } from "@mantine/core";
 import { IconFocusCentered, IconZoomIn, IconZoomOut } from "@tabler/icons-react";
+import { graphNodeNavigation } from "../utils/personGraph.js";
 import { fitGraphCamera, layoutPersonGraph } from "../utils/personGraphLayout.js";
 
 export function WorldExploreCanvas({ graph, selected, onSelect, weaker }) {
@@ -48,8 +49,9 @@ export function WorldExploreCanvas({ graph, selected, onSelect, weaker }) {
       })}
       {nodes.map((person) => {
         const position = layout.positions[person.person_id];
-        const choose = () => onSelect({ type: "person", value: person });
-        return <g key={person.person_id} transform={`translate(${position.x},${position.y})`} role="button" tabIndex={0} aria-label={`Inspect ${person.display_name}`} onClick={choose} onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); choose(); } }} className="explore-node" data-selected={selected?.value?.canonical_person_id === person.person_id}><circle r={32} /><text textAnchor="middle" dy="5">{person.display_name.slice(0, 2).toUpperCase()}</text><text className="explore-node-label" textAnchor="middle" dy="54">{person.display_name.length > 23 ? `${person.display_name.slice(0, 22)}…` : person.display_name}</text><title>{person.display_name} · {person.lifecycle_state}</title></g>;
+        const navigation = graphNodeNavigation(person);
+        const choose = () => { if (navigation.allowed) onSelect({ type: "person", value: person }); };
+        return <g key={person.person_id} transform={`translate(${position.x},${position.y})`} role="button" tabIndex={navigation.allowed ? 0 : -1} aria-disabled={!navigation.allowed} aria-label={navigation.allowed ? `Inspect ${person.display_name}` : `${person.display_name} · ${person.lifecycle_state} · inspection restricted`} onClick={choose} onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); choose(); } }} className="explore-node" data-selected={selected?.value?.canonical_person_id === person.person_id}><circle r={32} /><text textAnchor="middle" dy="5">{person.display_name.slice(0, 2).toUpperCase()}</text><text className="explore-node-label" textAnchor="middle" dy="54">{person.display_name.length > 23 ? `${person.display_name.slice(0, 22)}…` : person.display_name}</text><title>{person.display_name} · {person.lifecycle_state}</title></g>;
       })}
     </svg>}
   </Box>;
