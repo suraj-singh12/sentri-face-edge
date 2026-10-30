@@ -1,5 +1,54 @@
 # Global identity graph implementation plan
 
+## Issue #22 — corrected World participation (review pending)
+
+Foundation #23 merged as `6a9ec8250561154157fbc5d45fb03857d4d1687c`
+following five successful jobs at head `6eda54a59bb795458ed116350289e985a7d49675`;
+#17 is closed. Identity and Period changes still require separate operator merges.
+
+Reproduced eight failing assertions against untouched hardening `f907073` with
+fixed `as_of=2026-10-29T12:00:00Z`: E1 B/Delhi/Oct 27 12:00 and E2 A/Agra/Oct 28
+12:00; Move Face appends FACE_ASSIGNMENT A→B. Inspector/People correctly retain
+E1+E2 for B. Frequent retains A, Recent reports A, Multiple Locations omits B.
+World scoped presence/activity, overview activity, focused event membership and
+World event inspector also retain A in independent single-E2 probes. The existing
+stored-revision Encounter REASSIGN command already passes this minimal discovery
+case because it additionally records raw target participation and explicit revisions.
+Do not conflate the two supported historical paths.
+
+The read fix reuses `_batch_effective_observation_person_ids` for amended events,
+exposing their effective raw membership to existing SQL consumers. Unamended events
+retain indexed raw membership; canonical resolution/deduplication follows correction
+interpretation. Discoveries join disjoint unamended/amended sources separately;
+overview retains its fast aggregate and selectively replaces affected counts.
+There is no schema, write, cache, journal, evidence-authority or permission change.
+World event inspection now recognizes face corrections without requiring an explicit
+participant revision. Its provenance retains each independent original face and
+correction operation, plus explicit presence revision origins. Chronological replay
+matches the participant authority instead of following a potentially cyclic map.
+
+A separate explicit-participant probe established a second defect: A→B→A made
+World reject a valid reversal as a cycle; re-adding explicit A after A→B collapsed
+three genuine current relationships into one. Person Graph and the regenerated
+active evidence were already correct. World now resolves those current evidence
+endpoints canonically, matching the existing graph projection instead of replaying
+old observation corrections over a new evidence generation. No evidence source,
+history, transaction or projection-write semantics are changed. Permanent proof
+regressions assert exact independent pairs, source Encounters and recurrence.
+
+Permanent regressions in `tests/test_world_intelligence.py` cover independent
+before/after E1/E2 truth, correction chains and reversals, multiple independent faces,
+explicit add/remove precedence, canonical occurrence deduplication, archive/delete
+history, repeated reads, reopen/rebuild, encrypted backup/import/restore and immutable
+correction/evidence IDs. Legacy and current finalized review helpers are reused;
+no manufactured final projection is used for correctness. Modern explicit Relations
+continue to reject an unsupported Move Face when its pairs would become invalid;
+use the revision-bound Encounter REASSIGN command for that scenario. No relation
+semantics are expanded by this read correction.
+
+Exact-SHA checks, measured performance and combined Period acceptance belong to the
+linked PR and #22 evidence. PR #15 stays independent; #13 remains open for Explore UI.
+
 ## Issue #13 — bounded backend Period correction (review pending)
 
 Based on refreshed hardening `f907073edc3375dbfd15b8bb39cc6d32bc60f6b6`.
@@ -25,7 +74,7 @@ Exact-SHA CI and independent QA status belong to the draft PR.
 
 ## Current delivery gate — World #3 merged; QA #17 accepted on draft PR
 
-World intelligence [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) is merged into hardening at `f907073`. Optional Explore UI is [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13); period-scope [draft PR #15](https://github.com/suraj-singh12/sentri-face-edge/pull/15) is held while the independently reproduced correction inconsistency [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) is investigated. QA Foundation [#17](https://github.com/suraj-singh12/sentri-face-edge/issues/17) passed two genuine macOS QA-J01 runs and five CI jobs on [draft PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23) (`b81d451`); it was merged as `6a9ec82` after all five checks passed at final head `6eda54a`. Future QA phases #18–#21 require operator gates; release #5 remains pending. GitHub Issues own live task status.
+World intelligence [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) is merged into hardening at `f907073`. Optional Explore UI is [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13); period-scope [draft PR #15](https://github.com/suraj-singh12/sentri-face-edge/pull/15) is held while the independently reproduced correction inconsistency [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) is investigated. QA Foundation [#17](https://github.com/suraj-singh12/sentri-face-edge/issues/17) passed two genuine macOS QA-J01 runs and five CI jobs on [PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23) (`b81d451`); it was merged as `6a9ec82` after final-head `6eda54a` passed all five CI jobs. Future QA phases #18–#21 require operator gates; release #5 remains pending. GitHub Issues own live task status.
 
 ## Historical Issue #3 implementation and test plan
 

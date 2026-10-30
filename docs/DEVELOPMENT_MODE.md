@@ -279,7 +279,7 @@ operator-authorized InsightFace SCRFD-500MF/ArcFace R50 models and an
 operator-reviewed Scarlett Johansson enrollment/query pair from Commons.
 Both runs verified independent People/Events/World results, rejected deliberately
 incorrect location truth, verified persistence after source restart, and completed
-disposable data/vault cleanup; [all five final-SHA CI jobs passed](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40905213311). This is [draft PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23), not yet merged. Private SHA-bound JSON/JUnit, traces, model hashes
+disposable data/vault cleanup; [all five final-SHA CI jobs passed](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40905213311). This is [PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23), merged as `6a9ec82` after final-head `6eda54a` passed all five CI jobs. Private SHA-bound JSON/JUnit, traces, model hashes
 and photo hashes remain in local `qa-fixtures/runs/`; no biometric assets are
 published. The first real attempt exposed a QA modal-refresh race, fixed by waiting
 for the Reference UI to finish refreshing before closing it.

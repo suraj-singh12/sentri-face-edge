@@ -2,7 +2,7 @@
 
 ## Current World and QA qualification (2026-10-29)
 
-World intelligence backend [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) merged into hardening at `f907073` (schema v34). Current World UI is unchanged; optional Explore UI remains [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13). Correction-read defect [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) remains unresolved. QA Foundation #17's real macOS browser/ONNX journey passed twice at `b81d451` with independent People/Events/World and restart verification, but is still in unmerged [draft PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23). This is source-mode acceptance, not product release qualification.
+World intelligence backend [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) merged into hardening at `f907073` (schema v34). Current World UI is unchanged; optional Explore UI remains [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13). Correction-read defect [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) has a correction on the separate Issue #22 review branch; hardening still requires its authorized merge. QA Foundation #17's real macOS browser/ONNX journey passed twice at `b81d451` with independent People/Events/World and restart verification, and is merged as `6a9ec82` via [PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23). This is source-mode acceptance, not product release qualification.
 
 ## Historical Issue #3 implementation checkpoint
 
