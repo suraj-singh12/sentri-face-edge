@@ -48,10 +48,10 @@ export function WorldEvidenceDrilldownView({ evidence, onBack, onRefresh, onColl
   };
 
   if (!detail && collectionState?.loading) {
-    return <Stack gap="sm" className="world-evidence-shell"><Button variant="subtle" size="xs" leftSection={<IconArrowLeft size={15} />} onClick={onBack} className="world-evidence-back">Back to finalized event</Button><Stack align="center" justify="center" className="world-evidence-loading"><Loader color="teal" /><Text size="sm" c="dimmed">Loading authoritative evidence and provenance…</Text></Stack></Stack>;
+    return <Stack gap="sm" className="world-evidence-shell"><Button variant="subtle" size="xs" leftSection={<IconArrowLeft size={15} />} onClick={onBack} className="world-evidence-back">{evidence.origin?.level === "RELATIONSHIP" ? "Back to relationship proof" : "Back to finalized event"}</Button><Stack align="center" justify="center" className="world-evidence-loading"><Loader color="teal" /><Text size="sm" c="dimmed">Loading authoritative evidence and provenance…</Text></Stack></Stack>;
   }
   if (!detail) {
-    return <Stack gap="sm" className="world-evidence-shell"><Button variant="subtle" size="xs" leftSection={<IconArrowLeft size={15} />} onClick={onBack} className="world-evidence-back">Back to finalized event</Button><Alert color="red" title="World evidence could not be loaded">{collectionState?.error?.message || "The required World Evidence contract is unavailable."}</Alert><Button variant="default" size="xs" leftSection={<IconRefresh size={15} />} onClick={onRefresh}>Try again</Button></Stack>;
+    return <Stack gap="sm" className="world-evidence-shell"><Button variant="subtle" size="xs" leftSection={<IconArrowLeft size={15} />} onClick={onBack} className="world-evidence-back">{evidence.origin?.level === "RELATIONSHIP" ? "Back to relationship proof" : "Back to finalized event"}</Button><Alert color="red" title="World evidence could not be loaded">{collectionState?.error?.message || "The required World Evidence contract is unavailable."}</Alert><Button variant="default" size="xs" leftSection={<IconRefresh size={15} />} onClick={onRefresh}>Try again</Button></Stack>;
   }
 
   return (
@@ -78,7 +78,7 @@ function EvidenceHeader({ evidence, binding, state, page, onBack, onRefresh }) {
     <Stack gap="xs">
       <Group justify="space-between" align="flex-start" wrap="nowrap" className="world-evidence-header">
         <Group gap="sm" wrap="nowrap" miw={0}>
-          <ActionIcon variant="subtle" size={36} onClick={onBack} aria-label="Back to finalized event"><IconArrowLeft size={18} /></ActionIcon>
+          <ActionIcon variant="subtle" size={36} onClick={onBack} aria-label="Back to supporting evidence"><IconArrowLeft size={18} /></ActionIcon>
           <ThemeIcon size={40} radius="md" variant="light" color="blue"><IconFileDescription size={21} /></ThemeIcon>
           <Box miw={0}>
             <Group gap="xs" wrap="wrap"><Title order={2} size="h3">Evidence</Title><Badge size="xs" color="blue" variant="light">{evidence.evidence_type}</Badge><Badge size="xs" color={evidence.active ? "teal" : "gray"} variant="outline">{evidence.active ? "ACTIVE" : "INACTIVE"}</Badge></Group>

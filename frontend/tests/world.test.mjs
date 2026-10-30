@@ -1315,3 +1315,152 @@ test("World Evidence UI never calculates endpoints, provenance, evidence, or med
   assert.match(view, /page\.total_count/);
   assert.match(view, /evidence\.media_summary\.availability/);
 });
+
+// Explore shares World contracts while retaining explicit independent criteria.
+import { EXPLORE_DEFAULT_FILTERS, exploreRequest, validateExploreCriteria, requireWorldDiscoveryContract, buildWorldRelationshipProofQuery } from "../src/utils/world.js";
+
+test("Explore defaults do not change Current request semantics", () => {
+  const current = new URL(buildWorldScopeQuery(), "http://localhost").searchParams;
+  assert.equal(current.has("view"), false);
+  assert.equal(current.has("min_relationship_strength"), false);
+  assert.deepEqual(current.getAll("evidence_type"), []);
+  const explore = new URL(exploreRequest(buildWorldScopeQuery({ filters: EXPLORE_DEFAULT_FILTERS })), "http://localhost").searchParams;
+  assert.equal(explore.get("view"), "EXPLORE");
+  assert.equal(explore.get("min_relationship_strength"), "2");
+  assert.deepEqual(explore.getAll("evidence_type"), ["CO_OBSERVED"]);
+  assert.equal(explore.get("include_below_threshold"), "true");
+  assert.equal(exploreRequest("/api/graph-revision"), "/api/graph-revision");
+});
+
+test("Explore rejects empty evidence and invalid integer strengths", () => {
+  assert.equal(validateExploreCriteria(EXPLORE_DEFAULT_FILTERS), null);
+  for (const strength of [0, -1, 1.5, "2", NaN, Infinity]) assert.ok(validateExploreCriteria({ ...EXPLORE_DEFAULT_FILTERS, min_relationship_strength: strength }));
+  assert.ok(validateExploreCriteria({ ...EXPLORE_DEFAULT_FILTERS, evidence_type: [] }));
+});
+
+test("Period is serialized only for Frequent and Multiple Locations", () => {
+  for (const collection of ["MOST_FREQUENTLY_SEEN", "MULTIPLE_LOCATIONS", "MOST_RECENTLY_SEEN", "CLUSTERS", "RELATIONSHIPS"]) {
+    for (const days of [7, 30, 90]) {
+      const query = new URL(buildWorldScopeQuery({ collection, discoveryPeriodDays: days }), "http://localhost").searchParams;
+      assert.equal(query.get("discovery_period_days"), ["MOST_FREQUENTLY_SEEN", "MULTIPLE_LOCATIONS"].includes(collection) ? String(days) : null);
+      assert.equal(query.has("date_from"), false);
+    }
+  }
+  assert.throws(() => buildWorldScopeQuery({ collection: "MULTIPLE_LOCATIONS", discoveryPeriodDays: 8 }));
+});
+
+test("Discovery validator rejects mixed revisions, incomplete counts and invented support", () => {
+  const collection = "MOST_FREQUENTLY_SEEN";
+  const payload = { contract: "sentriface.world-graph", contract_version: 2, graph_revision: "r1", as_of: "2026-10-30T00:00:00Z", requested_detail_level: "WORLD_SCOPE", returned_detail_level: "WORLD_SCOPE", pagination: { [collection]: page(collection, 1) }, has_more: false, next_cursor: null, truncated: false, discovery_context: { type: collection, calendar_timezone: "UTC", latest_observed_day: null, period_days: 30, measurement: "distinct_finalized_person_encounter_appearances" }, discoveries: [{ canonical_person_id: "a", display_name: "A", discovery_type: collection, count: 2, missing_location_count: 0, supporting_encounters: [{ event_id: "e1", occurred_at: "2026-10-29T00:00:00Z" }], supporting_encounters_state: { total_count: 2, returned_count: 1, has_more: true, truncated: true, retrieval: "PERSON_EVENTS_COLLECTION" }, locations: [], locations_state: { total_count: 0, returned_count: 0, has_more: false, truncated: false, retrieval: "PERSON_EVENTS_COLLECTION" } }] };
+  const expected = { collection, revision: "r1", period: 30 };
+  assert.equal(requireWorldDiscoveryContract(payload, expected), payload);
+  assert.throws(() => requireWorldDiscoveryContract(payload, { ...expected, revision: "r2" }));
+  assert.throws(() => requireWorldDiscoveryContract(payload, { ...expected, period: 7 }));
+  for (const mutate of [(p) => { p.discoveries[0].count = -1; }, (p) => { p.discoveries[0].supporting_encounters[0] = {}; }, (p) => { p.discoveries[0].supporting_encounters_state.returned_count = 5; }, (p) => { p.pagination[collection].next_cursor = "invalid"; }]) {
+    const copy = structuredClone(payload); mutate(copy); assert.throws(() => requireWorldDiscoveryContract(copy, expected));
+  }
+});
+
+test("Relationship proof preserves direct identity and revision without Period", () => {
+  const query = new URL(buildWorldRelationshipProofQuery({ relationshipId: "relationship:a:b", revision: "r1", asOf: "2026-10-30T00:00:00Z", filters: EXPLORE_DEFAULT_FILTERS }), "http://localhost").searchParams;
+  assert.equal(query.get("focus_type"), "RELATIONSHIP");
+  assert.equal(query.get("focus_id"), "relationship:a:b");
+  assert.equal(query.get("revision"), "r1");
+  assert.equal(query.has("discovery_period_days"), false);
+});
+
+import { requireExploreResponse } from "../src/utils/world.js";
+
+test("Explore refuses mixed snapshot data before rendering", () => {
+  const payload = { graph_revision: "r1", as_of: "2026-10-30T00:00:00Z", relationships: [] };
+  const query = "/api/world-graph?revision=r1&as_of=2026-10-30T00%3A00%3A00Z";
+  assert.equal(requireExploreResponse(payload, query), payload);
+  assert.throws(() => requireExploreResponse({ ...payload, graph_revision: "r2" }, query));
+  assert.throws(() => requireExploreResponse({ ...payload, as_of: "2026-10-31T00:00:00Z" }, query));
+});
+
+test("Saved locations validate backend value/count records and bounded pages", () => {
+  const collection = "LOCATION_SUGGESTIONS";
+  const payload = { contract: "sentriface.world-graph", contract_version: 2, graph_revision: "r1", as_of: "2026-10-30T00:00:00Z", requested_detail_level: "WORLD_SCOPE", returned_detail_level: "WORLD_SCOPE", pagination: { [collection]: page(collection, 1) }, has_more: false, next_cursor: null, truncated: false, available_facets: { locations: [{ value: "Delhi", count: 2 }] } };
+  assert.equal(requireWorldDiscoveryContract(payload, { collection }), payload);
+  assert.throws(() => requireWorldDiscoveryContract({ ...payload, available_facets: { locations: ["Delhi"] } }, { collection }));
+  assert.throws(() => requireWorldDiscoveryContract({ ...payload, available_facets: { locations: [{ value: "Delhi", count: -1 }] } }, { collection }));
+});
+
+test("Explore v2 renders compact criteria and authoritative type-specific Inspectors", async (t) => {
+  const { createServer } = await import("vite");
+  const React = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { MantineProvider } = await import("@mantine/core");
+  const server = await createServer({ root: fileURLToPath(new URL("../", import.meta.url)), appType: "custom", logLevel: "silent", server: { middlewareMode: true } });
+  t.after(() => server.close());
+  const { ExploreEvidenceControl, ExploreWeakerControl, ExploreDiscoveryControls, WorldExploreInspector } = await server.ssrLoadModule("/src/views/WorldExploreView.jsx");
+  const render = (component, props) => renderToStaticMarkup(React.createElement(MantineProvider, { env: "test" }, React.createElement(component, props)));
+  const noop = () => {};
+
+  await t.test("Evidence count describes independent draft selection while closed", () => {
+    for (const types of [[], ["CO_OBSERVED"], ["NOTE_REFERENCE", "MANUAL_ASSOCIATION"], ["CO_OBSERVED", "NOTE_REFERENCE", "MANUAL_ASSOCIATION"]]) {
+      const markup = render(ExploreEvidenceControl, { value: types, onChange: noop });
+      assert.match(markup, new RegExp(`aria-label="Evidence · ${types.length}/3"`));
+      assert.match(markup, /aria-expanded="false"/);
+      assert.doesNotMatch(markup, /type="checkbox"/);
+    }
+  });
+  await t.test("Weaker links exposes distinguishable native pressed states", () => {
+    for (const value of [true, false]) {
+      const markup = render(ExploreWeakerControl, { value, onChange: noop });
+      assert.match(markup, new RegExp(`aria-pressed="${value}"`));
+      assert.match(markup, new RegExp(`>${value ? "ON" : "OFF"}<`));
+      assert.match(markup, /aria-label="Weaker links"/);
+    }
+  });
+  await t.test("Discovery groups retain one active choice and local day options", () => {
+    for (const collection of ["MOST_FREQUENTLY_SEEN", "MULTIPLE_LOCATIONS", "MOST_RECENTLY_SEEN", "CLUSTERS"]) {
+      const markup = render(ExploreDiscoveryControls, { collection, period: 30, onPeriod: noop, onCollection: noop });
+      assert.match(markup, /aria-label="Period-based discoveries"/);
+      assert.match(markup, /aria-label="Independent discoveries"/);
+      assert.equal((markup.match(/aria-pressed="true"/g) || []).length, 1);
+      for (const label of ["Frequent", "Multiple locations", "Recently seen", "Clusters", "7d", "30d", "90d"]) assert.ok(markup.includes(label), label);
+    }
+  });
+  await t.test("Person primary activity uses loaded Encounter totals, never discovery count", () => {
+    const value = person({ display_name: "Asha", analytics_state: "LOADED", activity_summary: { finalized_event_count: 11 }, intelligence_summary: { relationship_count: 8, relationship_evidence_count: 19 } });
+    const markup = render(WorldExploreInspector, { selected: { type: "person", value, discovery: { count: 777 } }, onFocus: noop, onProof: noop });
+    assert.match(markup, /data-inspector-type="person"/);
+    assert.match(markup, /explore-inspector-number[^>]*>11</);
+    assert.match(markup, />Asha</);
+    assert.match(markup, /Relationships/);
+    assert.match(markup, /Evidence records/);
+    assert.match(markup, /Inspect supporting proof/);
+    assert.doesNotMatch(markup, /777/);
+  });
+  await t.test("Unloaded Person activity stays unavailable while genuine zero stays zero", () => {
+    const unavailable = render(WorldExploreInspector, { selected: { type: "person", value: person() } });
+    assert.match(unavailable, /explore-inspector-number[^>]*>—</);
+    assert.match(unavailable, /Encounter activity is not loaded/);
+    const zero = render(WorldExploreInspector, { selected: { type: "person", value: person({ analytics_state: "LOADED", activity_summary: { finalized_event_count: 0 } }) } });
+    assert.match(zero, /explore-inspector-number[^>]*>0</);
+  });
+  await t.test("Cluster totals are authoritative, not the bounded member preview size", () => {
+    const markup = render(WorldExploreInspector, { selected: { type: "cluster", value: clusterSummary({ member_count: 73, member_preview_state: { total_count: 73, returned_count: 1, has_more: true, truncated: true }, evidence_basis: { relationship_count: 10, evidence_count: 33 } }) } });
+    assert.match(markup, /explore-inspector-number[^>]*>73</);
+    assert.match(markup, /Qualifying relationships/);
+    assert.match(markup, />10</);
+    assert.match(markup, />33</);
+    assert.match(markup, /Member preview/);
+    assert.match(markup, /More members in supporting proof/);
+  });
+  await t.test("Relationship emphasizes selected strength with qualification and real support", () => {
+    const value = relationship({ selected_evidence_strength: 7, evidence_count: 99, qualifies_for_cluster: false, evidence_type_counts: { CO_OBSERVED: 5, NOTE_REFERENCE: 2 }, encounter_recurrence: { count: 2 } });
+    const markup = render(WorldExploreInspector, { selected: { type: "relationship", value }, people: [person({ display_name: "Asha" }), person({ canonical_person_id: "person-b", display_name: "Biren" })] });
+    assert.match(markup, /Asha · Biren/);
+    assert.match(markup, /explore-inspector-number[^>]*>7</);
+    assert.match(markup, /Below threshold/);
+    assert.match(markup, /does not contribute to cluster membership/);
+    assert.match(markup, /Co-observed/);
+    assert.match(markup, /Note references/);
+    assert.match(markup, /Supporting Encounters/);
+    assert.doesNotMatch(markup, />99</);
+    assert.match(markup, /2026-08-05/);
+  });
+});
