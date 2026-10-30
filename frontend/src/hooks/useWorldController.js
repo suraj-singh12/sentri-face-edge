@@ -105,8 +105,8 @@ function invalidateCollectionRequests(requestsRef) {
   requestsRef.current = next;
 }
 
-export function useWorldController({ activeView, apiGet }) {
-  const [world, setWorld] = useState(INITIAL_WORLD_STATE);
+export function useWorldController({ activeView, apiGet, initialFilters = EMPTY_WORLD_FILTERS, initialCollection = "PEOPLE" }) {
+  const [world, setWorld] = useState(() => ({ ...INITIAL_WORLD_STATE, filters: { ...initialFilters }, collection: initialCollection }));
   const [worldCluster, setWorldCluster] = useState(() => emptyWorldCluster());
   const [worldPerson, setWorldPerson] = useState(() => emptyWorldPerson());
   const [worldEvent, setWorldEvent] = useState(() => emptyWorldEvent());

@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { notifications } from "@mantine/notifications";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
-const SESSION_TOKEN = document.querySelector('meta[name="sentriface-session-token"]')?.content || "";
+const SESSION_TOKEN = typeof document === "undefined" ? "" : document.querySelector('meta[name="sentriface-session-token"]')?.content || "";
 const GET_REQUESTS_IN_FLIGHT = new Map();
 
 function authorizedHeaders(headers = {}) {

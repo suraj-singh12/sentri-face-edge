@@ -116,3 +116,29 @@ Associations explains independent evidence and opens Person Graph. Add Associati
 | Face origin / recognition eligibility | How an embedding entered history / whether it may influence matching. They are separate, even after Move Face or merge. |
 
 Every implementation batch must update this map and all affected canonical docs before claiming completion. Planned features must be labelled as planned, and frozen phase records remain historical acceptance evidence.
+
+### World Explore (#13)
+
+World opens in **Current**, retaining the original scope UI and request defaults.
+The compact **Current | Explore** switch retains each view's independent controls
+and selection while switching. Explore uses a separate instance of the existing
+World controller with explicit `CO_OBSERVED`, strength 2 defaults; it does not own
+graph, identity, evidence, location or theme authority.
+
+Explore provides draft/Apply relationship criteria, reset, a visual-only weaker-edge
+toggle, bounded discoveries, authoritative cluster focus and a Person canvas with
+selection, pan, zoom and fit. Frequent and Multiple Locations alone use the local
+7/30/90-day Period. Recent displays the latest observed finalized UTC date; clusters,
+relationships and proof remain independent of Period. Person focus resolves the
+backend's `cluster_memberships`, or displays that Person alone. Cluster member and
+relationship pages remain bounded; an edge is rendered only when both canonical
+endpoints are on the displayed member page. Layout never determines membership.
+
+The inspector opens bounded supporting evidence, source Encounters and existing
+Person/Cluster/Event/Evidence/Media drilldowns in a viewport-contained overlay.
+Desktop has Discover / Canvas / Inspector; compact windows use a panel selector.
+Both themes inherit the existing Mantine provider and SentriFace surface tokens.
+Loading is indeterminate. Saved-location autocomplete starts after three normalized
+characters and pages the existing `LOCATION_SUGGESTIONS` collection. Typing and
+cancellation never register locations; existing successful Encounter transactions
+remain the sole write path.

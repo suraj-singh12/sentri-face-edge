@@ -1,4 +1,4 @@
-const WORLD_COLLECTIONS = new Set(["PEOPLE", "CLUSTERS", "RELATIONSHIPS", "PATTERNS"]);
+const WORLD_COLLECTIONS = new Set(["PEOPLE", "CLUSTERS", "RELATIONSHIPS", "PATTERNS", "MOST_FREQUENTLY_SEEN", "MOST_RECENTLY_SEEN", "MULTIPLE_LOCATIONS", "LOCATION_SUGGESTIONS"]);
 const WORLD_CLUSTER_COLLECTIONS = new Set(["MEMBERS", "RELATIONSHIPS"]);
 const WORLD_PERSON_COLLECTIONS = new Set(["RELATIONSHIPS", "EVENTS"]);
 const WORLD_EVENT_COLLECTIONS = new Set(["PARTICIPANTS", "PROVENANCE", "EVIDENCE", "MEDIA"]);
@@ -378,6 +378,8 @@ export function buildWorldScopeQuery({
   cursor = null,
   revision = null,
   asOf = null,
+  discoveryPeriodDays = null,
+  locationQuery = null,
 } = {}) {
   const normalizedCollection = String(collection || "PEOPLE").toUpperCase();
   if (!WORLD_COLLECTIONS.has(normalizedCollection)) throw new Error("Unsupported World collection");
@@ -392,6 +394,11 @@ export function buildWorldScopeQuery({
     pattern_limit: "10",
     facet_limit: "100",
   });
+  if (discoveryPeriodDays !== null && ["MOST_FREQUENTLY_SEEN", "MULTIPLE_LOCATIONS"].includes(normalizedCollection)) {
+    if (![7, 30, 90].includes(discoveryPeriodDays)) throw new Error("Invalid discovery Period");
+    query.set("discovery_period_days", String(discoveryPeriodDays));
+  }
+  if (locationQuery !== null && normalizedCollection === "LOCATION_SUGGESTIONS") query.set("location_query", locationQuery);
   const scalar = {
     date_from: filters.date_from,
     date_to: filters.date_to,
@@ -886,4 +893,70 @@ function appendWorldFilters(query, filters) {
   for (const [key, values] of Object.entries(collections)) {
     for (const value of values || []) query.append(key, String(value));
   }
+}
+
+export const EXPLORE_DEFAULT_FILTERS = Object.freeze({ ...EMPTY_WORLD_FILTERS, evidence_type: Object.freeze(["CO_OBSERVED"]), min_relationship_strength: 2 });
+
+export function exploreRequest(path) {
+  if (!path.startsWith("/api/world-graph?")) return path;
+  const query = new URLSearchParams(path.split("?")[1]);
+  query.set("view", "EXPLORE");
+  query.set("include_below_threshold", "true");
+  return `/api/world-graph?${query}`;
+}
+
+export function validateExploreCriteria(filters) {
+  if (!Number.isSafeInteger(filters.min_relationship_strength) || filters.min_relationship_strength < 1) return "Enter a positive integer strength.";
+  if (!filters.evidence_type?.length || filters.evidence_type.some((type) => !WORLD_EVIDENCE_TYPES.has(type))) return "Select at least one evidence type.";
+  return null;
+}
+
+export function requireWorldDiscoveryContract(payload, { collection, revision, period } = {}) {
+  requireWorldContractIdentity(payload);
+  if (payload.requested_detail_level !== "WORLD_SCOPE" || payload.returned_detail_level !== "WORLD_SCOPE" || !payload.graph_revision || !payload.as_of || (revision && payload.graph_revision !== revision)) throw new Error("Invalid discovery snapshot binding");
+  requireWorldPagination(payload.pagination, collection);
+  const page = payload.pagination[collection];
+  if (!page || payload.has_more !== page.has_more || payload.next_cursor !== page.next_cursor || payload.truncated !== page.truncated) throw new Error("Invalid discovery pagination");
+  if (collection === "LOCATION_SUGGESTIONS") {
+    if (!Array.isArray(payload.available_facets?.locations) || payload.available_facets.locations.length !== page.returned_count || payload.available_facets.locations.some((v) => typeof v?.value !== "string" || !isNonNegativeInteger(v.count))) throw new Error("Invalid saved locations");
+    return payload;
+  }
+  const context = payload.discovery_context;
+  if (!context || context.type !== collection || context.calendar_timezone !== "UTC" || !context.measurement || !hasOwn(context, "latest_observed_day") || (period && context.period_days !== period)) throw new Error("Invalid discovery context");
+  if (!Array.isArray(payload.discoveries) || payload.discoveries.length !== page.returned_count) throw new Error("Invalid discovery collection");
+  for (const row of payload.discoveries) {
+    if (!row.canonical_person_id || typeof row.display_name !== "string" || row.discovery_type !== collection || !isNonNegativeInteger(row.count) || !isNonNegativeInteger(row.missing_location_count) || !Array.isArray(row.supporting_encounters) || !Array.isArray(row.locations)) throw new Error("Invalid discovery record");
+    for (const [name, records] of [["supporting_encounters", row.supporting_encounters], ["locations", row.locations]]) {
+      const state = row[`${name}_state`];
+      if (!state || !isNonNegativeInteger(state.total_count) || state.returned_count !== records.length || state.total_count < state.returned_count || state.truncated !== (state.total_count > state.returned_count) || state.has_more !== state.truncated || !state.retrieval) throw new Error("Invalid discovery support bounds");
+    }
+    if (row.supporting_encounters.some((e) => !e.event_id || !e.occurred_at) || row.locations.some((v) => typeof v !== "string")) throw new Error("Invalid discovery provenance");
+  }
+  return payload;
+}
+
+export function buildWorldRelationshipProofQuery({ relationshipId, ...binding }) {
+  const query = new URLSearchParams(buildWorldEvidenceQuery({ evidenceId: relationshipId, ...binding }).split("?")[1]);
+  query.set("focus_type", "RELATIONSHIP");
+  return `/api/world-graph?${query}`;
+}
+
+export function requireWorldRelationshipProofContract(payload, { relationshipId, revision }) {
+  requireWorldContractIdentity(payload);
+  if (payload.requested_detail_level !== "EVIDENCE" || payload.returned_detail_level !== "EVIDENCE" || payload.focus?.type !== "RELATIONSHIP" || payload.focus.id !== relationshipId || payload.graph_revision !== revision || !payload.as_of) throw new Error("Invalid relationship proof binding");
+  requireWorldPagination(payload.pagination, "EVIDENCE");
+  if (!Array.isArray(payload.evidence) || payload.evidence.length !== payload.pagination.EVIDENCE?.returned_count) throw new Error("Invalid relationship proof page");
+  payload.evidence.forEach((item) => requireWorldEvidence(item, "Relationship"));
+  return payload;
+}
+
+export function requireExploreResponse(payload, path) {
+  if (!path.startsWith("/api/world-graph?")) return payload;
+  const query = new URLSearchParams(path.split("?")[1]);
+  if ((query.has("revision") && payload.graph_revision !== query.get("revision")) || (query.has("as_of") && Date.parse(payload.as_of) !== Date.parse(query.get("as_of")))) throw new Error("Explore response does not match its retained snapshot");
+  for (const edge of payload.relationships || []) {
+    requireWorldRelationship(edge);
+    if (!Number.isSafeInteger(edge.selected_evidence_strength) || edge.selected_evidence_strength < 1 || typeof edge.qualifies_for_cluster !== "boolean" || !isNonNegativeInteger(edge.encounter_recurrence?.count) || !Array.isArray(edge.encounter_recurrence.supporting_encounters)) throw new Error("Incomplete Explore relationship authority");
+  }
+  return payload;
 }

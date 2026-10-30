@@ -27,7 +27,7 @@ export function emptyWorldEvidence(values = {}) {
   };
 }
 
-export function useWorldEvidenceController({ apiGet, getEvent, onStale }) {
+export function useWorldEvidenceController({ apiGet, getEvent, getOrigin, onStale }) {
   const [evidence, setEvidence] = useState(() => emptyWorldEvidence());
   const evidenceRef = useRef(evidence);
   const requestsRef = useRef({
@@ -119,24 +119,26 @@ export function useWorldEvidenceController({ apiGet, getEvent, onStale }) {
   }, [apiGet, onStale, resetWorldEvidence]);
 
   const openWorldEvidence = useCallback((evidenceSummary) => {
-    const event = getEvent();
-    if (!event?.active || !evidenceSummary?.evidence_id || !event.binding) return null;
+    const event = getEvent?.() || {};
+    const origin = getOrigin?.();
+    if (!evidenceSummary?.evidence_id || (!origin?.binding && (!event?.active || !event.binding))) return null;
     for (const request of Object.values(requestsRef.current)) request.abort?.abort();
     const next = emptyWorldEvidence({
       active: true,
       evidenceId: evidenceSummary.evidence_id,
-      binding: event.binding,
+      binding: origin?.binding || event?.binding,
       origin: {
         level: "EVENT",
         eventId: event.eventId,
         collection: event.collection,
-        pageNumber: event.collections[event.collection]?.pageNumber || 1,
+        pageNumber: event.collections?.[event.collection]?.pageNumber || 1,
       },
     });
+    if (origin) next.origin = origin.origin;
     evidenceRef.current = next;
     setEvidence(next);
     return loadWorldEvidenceCollection({ collection: "EVIDENCE" });
-  }, [getEvent, loadWorldEvidenceCollection]);
+  }, [getEvent, getOrigin, loadWorldEvidenceCollection]);
 
   const closeWorldEvidence = useCallback((expected = {}) => {
     const current = evidenceRef.current;
