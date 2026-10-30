@@ -29,7 +29,9 @@ export function WorldExploreView(props) {
   };
   const local = ["MOST_FREQUENTLY_SEEN", "MULTIPLE_LOCATIONS"].includes(model.collection);
   const clusters = model.collection === "CLUSTERS";
-  const data = clusters ? scope.data : discovery.data;
+  const discoveryIsCurrent = discovery.collection === model.collection && discovery.data?.graph_revision === scope.data?.graph_revision
+    && discovery.data?.as_of === scope.data?.as_of && (!local || discovery.period === model.period);
+  const data = clusters ? scope.data : discoveryIsCurrent ? discovery.data : null;
   const page = data?.pagination?.[model.collection];
   const items = clusters ? data?.clusters || [] : data?.discoveries || [];
   const choose = (item) => { run(model.focus)(item, clusters ? "cluster" : "person"); setTab("canvas"); };

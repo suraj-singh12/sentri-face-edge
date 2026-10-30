@@ -57,7 +57,8 @@ export function useWorldExplore({ apiGet, active, mutationRevision }) {
   useEffect(() => {
     if (!active || !snapshot || scope.loading) return;
     if (collection === "CLUSTERS") return;
-    if (collection === "MOST_RECENTLY_SEEN" && discovery.collection === collection && discovery.data) return;
+    if (discovery.collection === collection && discovery.data?.graph_revision === snapshot.graph_revision
+      && discovery.data?.as_of === snapshot.as_of && (discoveryPeriod === null || discovery.period === discoveryPeriod)) return;
     discover();
     return () => requests.current.discovery?.abort();
   }, [active, snapshot?.graph_revision, snapshot?.as_of, scope.loading, collection, discoveryPeriod, discover]);
@@ -78,7 +79,7 @@ export function useWorldExplore({ apiGet, active, mutationRevision }) {
         const payload = requireWorldPersonContract(await get(buildWorldPersonQuery({ ...binding, personId: item.canonical_person_id }), options), { personId: item.canonical_person_id, revision: binding.revision, collection: "RELATIONSHIPS" });
         person = payload.people[0]; clusterId = person.cluster_memberships[0]?.cluster_id;
       }
-      let next = { people: person ? [person] : [], relationships: [], cluster: null };
+      let next = { people: person ? [person] : [], relationships: [], cluster: null, binding };
       if (clusterId) {
         const results = await Promise.all(["MEMBERS", "RELATIONSHIPS"].map(async (page) => requireWorldClusterContract(await get(buildWorldClusterQuery({ ...binding, clusterId, collection: page }), options), { clusterId, revision: binding.revision, collection: page })));
         const [members, relationships] = results;
@@ -106,5 +107,7 @@ export function useWorldExplore({ apiGet, active, mutationRevision }) {
       }
     } catch (failure) { if (!abort.signal.aborted) { setLoading(false); await recover(failure); } }
   }, [get, graph, recover]);
-  return { controller, get, scope, period, setPeriod, collection, setCollection, discovery, discover, graph, selected, setSelected, focus, loading, error, nextGraphPage, resetCanvas: () => { requests.current.graph?.abort(); setGraph({ people: [], relationships: [], cluster: null }); setSelected(null); setLoading(false); } };
+  const graphIsCurrent = graph.binding?.revision === snapshot?.graph_revision && graph.binding?.asOf === snapshot?.as_of;
+  const visibleGraph = graphIsCurrent ? graph : { people: [], relationships: [], cluster: null };
+  return { controller, get, scope, period, setPeriod, collection, setCollection, discovery, discover, graph: visibleGraph, selected: graphIsCurrent ? selected : null, setSelected, focus, loading, error, nextGraphPage, resetCanvas: () => { requests.current.graph?.abort(); setGraph({ people: [], relationships: [], cluster: null }); setSelected(null); setLoading(false); } };
 }

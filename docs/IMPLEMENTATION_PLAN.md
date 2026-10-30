@@ -23,8 +23,13 @@ finalization test helper writes authoritative fixture records, not graph edges.
 Browser checks exercised saved-location search/cancellation without registration,
 defaults/reset, rejected empty criteria, strength 4 lone
 Person behavior, authoritative cluster selection, weaker-toggle request isolation,
-Current/Explore selection retention, location discoveries, UTC Recent and local
-Period isolation. Relationship evidence and the shared inspector opened correctly.
+Current/Explore selection and second-page retention without collection reload,
+location discoveries, UTC Recent and local
+Period isolation. Relationship evidence and the shared inspector opened correctly. Final navigation
+checks ensure proof Back returns to Explore without exposing Current scope controls;
+archived nodes honor existing backend navigation restrictions. A separate modern
+finalized Encounter fixture confirmed that successful correction registers a saved
+location, while cancelling a new value does not.
 Day/Night screenshots were inspected at 1440×900, 1280×800, 1024×768 and 790×650;
 all Explore document scroll heights fit the viewport and browser errors were empty.
 Representative native captures: [Day desktop](examples/world-explore/day-1280.png)
