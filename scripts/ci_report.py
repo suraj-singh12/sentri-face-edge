@@ -279,6 +279,9 @@ def main(argv=None):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf8') as stream:
             stream.write(rendered)
     distinct = {f['signature']: f for f in reversed(report['failures'])}
+    # The same allowlisted payload is inspectable through native step logs too.
+    print(rendered)
+    print('Sanitized CI report JSON: ' + json.dumps(report, sort_keys=True))
     for f in list(distinct.values())[-3:]:
         if f['location']:
             # Source-derived labels only. Escape workflow command delimiters.

@@ -250,3 +250,18 @@ def test_all_skipped_is_blocked(results):
     report = results([('skipped', 'unavailable')], 'success')
     assert report['outcome'] == 'BLOCKED'
     assert report['counts']['passed'] == 0
+
+
+def test_summary_cli_publishes_identical_safe_payload(results, tmp_path, monkeypatch, capsys):
+    report = results([('', '')], 'success')
+    monkeypatch.setattr(ci, 'make_report', lambda *args: report)
+    monkeypatch.setattr(ci, 'PUBLIC', tmp_path / 'public')
+    monkeypatch.setenv('GITHUB_STEP_SUMMARY', str(tmp_path / 'step-summary.md'))
+    monkeypatch.setenv('CI_STEPS', '{}')
+    assert ci.main(['summary', '--check', 'backend', '--status', 'success']) == 0
+    output = capsys.readouterr().out
+    assert (tmp_path / 'step-summary.md').read_text() == ci.markdown(report)
+    assert (tmp_path / 'public/summary.md').read_text() == ci.markdown(report)
+    assert json.loads((tmp_path / 'public/report.json').read_text()) == report
+    assert 'Sanitized CI report JSON: ' + json.dumps(report, sort_keys=True) in output
+    assert ci.markdown(report) in output
