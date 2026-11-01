@@ -438,7 +438,9 @@ available, a safe error/comparison, curated coverage purpose when applicable,
 and one investigation step. Numeric comparisons without explicit expected/actual
 labels retain their original operand order. Unknown impact requires investigation.
 Only identical raw failure signatures at the same source location are grouped;
-all group members remain in JSON. Dynamic/unverified test names or parameter
+all group members remain in JSON. Multiple subtest/teardown diagnostics within
+one JUnit testcase are all retained, with a diagnostic index; totals count the
+failed testcase once. Dynamic/unverified test names or parameter
 values are withheld, with an availability indicator; use the original JUnit/test
 output in the failing step log to identify those cases. Source lines point to test
 declarations, not guessed assertion locations.

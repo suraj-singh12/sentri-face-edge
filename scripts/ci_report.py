@@ -115,23 +115,21 @@ def read_junit(path, root=ROOT):
         identifier = source[2] if source else f'unverified-test-{index + 1}'
         coverage = [r for r in registry if source and any(t == identifier or t == source[0] for t in r['tests'])]
         suites.update(r['id'] for r in coverage)
-        skip = case.find('skipped')
-        failure = case.find('failure')
-        error = case.find('error')
-        if skip is not None:
+        problems = [element for element in case if element.tag in ('failure', 'error')]
+        if problems:
+            counts['failed'] += 1 # Count failed testcases, retaining every diagnostic below.
+            for failure_index, element in enumerate(problems, 1):
+                raw = element.get('message', '') + '\n' + (element.text or '')
+                detail = diagnostics(raw)
+                category = 'test infrastructure' if element.tag == 'error' or "failureType: 'hookFailed'" in raw else ('test/product behavior' if detail['error'] in ('AssertionError', 'ERR_ASSERTION') or detail['comparison'] else 'unknown')
+                failures.append(dict(test_id=identifier, failure_index=failure_index, location=location, category=category,
+                    description=name.removeprefix('test_').replace('_', ' ') if source else 'Test identity unavailable for safe publication',
+                    impact=('Coverage purpose: ' + coverage[0]['behavior']) if coverage and category == 'test/product behavior' else 'Impact requires investigation.',
+                    next_step='Inspect the failing test and reproduce it locally. Root cause not yet confirmed.',
+                    signature=hashlib.sha256((str(location or identifier) + category + raw).encode()).hexdigest(), **detail))
+        elif case.find('skipped') is not None:
             counts['skipped'] += 1
             skipped.append({'test_id': identifier, 'reason': 'Skipped; reason withheld unless reviewed in step log.'})
-        elif failure is not None or error is not None:
-            counts['failed'] += 1
-            element = error if error is not None else failure
-            raw = element.get('message', '') + '\n' + (element.text or '')
-            detail = diagnostics(raw)
-            category = 'test infrastructure' if error is not None or "failureType: 'hookFailed'" in raw else ('test/product behavior' if detail['error'] in ('AssertionError', 'ERR_ASSERTION') or detail['comparison'] else 'unknown')
-            failures.append(dict(test_id=identifier, location=location, category=category,
-                description=name.removeprefix('test_').replace('_', ' ') if source else 'Test identity unavailable for safe publication',
-                impact=('Coverage purpose: ' + coverage[0]['behavior']) if coverage and category == 'test/product behavior' else 'Impact requires investigation.',
-                next_step='Inspect the failing test and reproduce it locally. Root cause not yet confirmed.',
-                signature=hashlib.sha256((str(location or identifier) + category + raw).encode()).hexdigest(), **detail))
         else:
             counts['passed'] += 1
     return counts, failures, skipped, sorted(suites), True, round(seconds, 3)

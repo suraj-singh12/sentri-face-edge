@@ -271,3 +271,30 @@ def test_summary_explicitly_defers_later_cancellation_to_github(results):
     report = results([('', '')], 'success')
     assert 'GitHub final job conclusion takes precedence, including later cancellation.' in ci.markdown(report)
     assert report['status_scope'].startswith('Checks at publication')
+
+
+def test_real_unittest_subtests_retain_all_failures(tmp_path):
+    source = tmp_path / 'test_subtest_control.py'
+    source.write_text("import unittest\nclass Controlled(unittest.TestCase):\n    def test_two(self):\n        for value in (1, 2):\n            with self.subTest(value=value):\n                self.assertEqual(value, 0)\n")
+    output = tmp_path / 'junit.xml'
+    process = subprocess.run([sys.executable, '-m', 'pytest', '-q', str(source), '--junitxml=' + str(output)], capture_output=True)
+    assert process.returncode == 1
+    assert len(list(ET.parse(output).iter('failure'))) == 2
+    report = ci.make_report('backend', 'failure', {}, private=tmp_path)
+    assert report['counts']['failed'] == 1
+    assert len(report['failures']) == 2
+    assert [f['failure_index'] for f in report['failures']] == [1, 2]
+    assert len(set(f['signature'] for f in report['failures'])) == 2
+
+
+def test_teardown_error_does_not_hide_assertion_or_skip(results, tmp_path):
+    results([('failure', 'AssertionError')])
+    path = tmp_path / 'junit.xml'
+    tree = ET.parse(path)
+    case = next(tree.iter('testcase'))
+    ET.SubElement(case, 'error', message='RuntimeError in teardown')
+    ET.SubElement(case, 'skipped', message='not meaningful after error')
+    tree.write(path)
+    report = ci.make_report('backend', 'failure', {}, private=tmp_path)
+    assert report['counts'] == dict(passed=0, failed=1, skipped=0, blocked=0)
+    assert [f['category'] for f in report['failures']] == ['test/product behavior', 'test infrastructure']
