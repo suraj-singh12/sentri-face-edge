@@ -298,3 +298,52 @@ def test_teardown_error_does_not_hide_assertion_or_skip(results, tmp_path):
     report = ci.make_report('backend', 'failure', {}, private=tmp_path)
     assert report['counts'] == dict(passed=0, failed=1, skipped=0, blocked=0)
     assert [f['category'] for f in report['failures']] == ['test/product behavior', 'test infrastructure']
+
+
+def node_rows(tmp_path, rows):
+    (tmp_path / 'node.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows), encoding='utf8')
+
+
+def native_parent(**extra):
+    return dict(event='test:fail', name='CI events retain parent assertions and distinguish skipped tests',
+                file=str(ROOT / 'frontend/tests/ci-reporting.test.mjs'), kind='test', duration_ms=2,
+                error='Error\nAssertionError [ERR_ASSERTION]', expected=2, actual=1, **extra)
+
+
+def test_native_node_parent_assertion_and_skips(tmp_path):
+    node_rows(tmp_path, [dict(event='test:pass', name='child', kind='test', duration_ms=1),
+                         dict(event='test:pass', name='skipped', skipped=True, kind='test'), native_parent()])
+    report = ci.make_report('frontend', 'failure', {}, private=tmp_path)
+    assert report['counts'] == dict(passed=1, failed=1, skipped=1, blocked=0)
+    assert report['availability']['structured_results']
+    assert not report['availability']['junit']
+    assert report['failures'][0]['test_id'].startswith('frontend/tests/ci-reporting.test.mjs::CI events')
+    assert report['failures'][0]['category'] == 'test/product behavior'
+    assert '**Expected:** 2 · **Actual:** 1' in ci.markdown(report)
+
+
+def test_native_node_hook_and_parent_cancellation(tmp_path):
+    node_rows(tmp_path, [native_parent(failure_type='hookFailed'), native_parent(failure_type='cancelledByParent')])
+    report = ci.make_report('frontend', 'failure', {}, private=tmp_path)
+    assert [f['category'] for f in report['failures']] == ['test infrastructure', 'blocked/skipped']
+    assert report['counts']['blocked'] == 1
+    assert report['counts']['passed'] == 0
+
+
+def test_native_node_partial_data_never_passes(tmp_path):
+    node_rows(tmp_path, [dict(event='test:pass', name='child', kind='test', duration_ms=1)])
+    with (tmp_path / 'node.jsonl').open('a') as stream:
+        stream.write('{partial')
+    report = ci.make_report('frontend', 'success', {}, private=tmp_path)
+    assert report['outcome'] == 'BLOCKED'
+    assert not report['availability']['structured_results']
+
+
+def test_native_node_untrusted_values_and_file_omitted(tmp_path):
+    row = native_parent()
+    row.update(error='AssertionError password=PRIVATE', expected='SECRET', actual='PRIVATE', file='/private/SECRET')
+    node_rows(tmp_path, [row])
+    report = ci.make_report('frontend', 'failure', {}, private=tmp_path)
+    assert report['failures'][0]['location'] is None
+    assert 'SECRET' not in json.dumps(report)
+    assert 'PRIVATE' not in json.dumps(report)

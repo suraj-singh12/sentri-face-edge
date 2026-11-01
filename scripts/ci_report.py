@@ -110,7 +110,7 @@ def read_junit(path, root=ROOT):
         seconds += elapsed(case.get('time', '0'))
         classname, name = case.get('classname', ''), case.get('name', '')
         # Only accept complete source-declared IDs. Dynamic parameter values may be private.
-        source = allowed.get((classname, name)) or allowed.get(('', name))
+        source = allowed.get((classname, name))
         location = {'file': source[0], 'line': source[1]} if source else None
         identifier = source[2] if source else f'unverified-test-{index + 1}'
         coverage = [r for r in registry if source and any(t == identifier or t == source[0] for t in r['tests'])]
@@ -133,6 +133,54 @@ def read_junit(path, root=ROOT):
         else:
             counts['passed'] += 1
     return counts, failures, skipped, sorted(suites), True, round(seconds, 3)
+
+
+def read_node(path, root=ROOT):
+    """Node native events retain parent assertions that Node 22 JUnit drops."""
+    counts = dict(passed=0, failed=0, skipped=0, blocked=0)
+    failures, skipped, seconds = [], [], 0.0
+    try:
+        lines = path.read_text(encoding='utf8').splitlines()
+    except OSError:
+        return counts, failures, skipped, [], False, seconds
+    allowed = source_tests(root)
+    complete = bool(lines)
+    for index, line in enumerate(lines):
+        try:
+            row = json.loads(line)
+            if row.get('event') not in ('test:pass', 'test:fail') or not isinstance(row.get('name'), str) or (row.get('file') is not None and not isinstance(row['file'], str)):
+                raise ValueError('Unknown event')
+        except (ValueError, AttributeError):
+            complete = False
+            continue
+        source = allowed.get(('', row.get('name', '')))
+        if source and (not row.get('file') or Path(row['file']).resolve() != (root / source[0]).resolve()):
+            source = None
+        identifier = source[2] if source else f'unverified-test-{index + 1}'
+        suite = row.get('kind') == 'suite'
+        seconds += elapsed(row.get('duration_ms')) / 1000
+        if row.get('skipped'):
+            if not suite:
+                counts['skipped'] += 1
+            skipped.append(dict(test_id=identifier, reason='Skipped/todo; reason withheld unless reviewed in step log.'))
+        elif row['event'] == 'test:fail':
+            blocked = row.get('failure_type') == 'cancelledByParent'
+            if not suite:
+                counts['blocked' if blocked else 'failed'] += 1
+            raw = str(row.get('error', ''))
+            if 'expected' in row and 'actual' in row:
+                raw += '\nexpected: ' + json.dumps(row['expected']) + '\nactual: ' + json.dumps(row['actual'])
+            detail = diagnostics(raw)
+            category = 'blocked/skipped' if blocked else 'test infrastructure' if row.get('failure_type') == 'hookFailed' else 'test/product behavior' if detail['error'] in ('AssertionError', 'ERR_ASSERTION') else 'unknown'
+            failures.append(dict(test_id=identifier, failure_index=1,
+                description=row['name'] if source else 'Test identity unavailable for safe publication',
+                location={'file': source[0], 'line': source[1]} if source else None,
+                category=category, impact='Impact requires investigation.',
+                next_step='Inspect the failing test and reproduce it locally. Root cause not yet confirmed.',
+                signature=hashlib.sha256((identifier + raw).encode()).hexdigest(), **detail))
+        elif not suite:
+            counts['passed'] += 1
+    return counts, failures, skipped, ['node:test'], complete, round(seconds, 3)
 
 
 def run(stage, command):
@@ -160,7 +208,7 @@ def run(stage, command):
 
 def make_report(check, status, steps, root=ROOT, private=PRIVATE):
     junit = private / 'junit.xml'
-    counts, failures, skipped, suites, available, seconds = read_junit(junit, root)
+    counts, failures, skipped, suites, available, seconds = read_node(private / 'node.jsonl', root) if check == 'frontend' else read_junit(junit, root)
     stages = []
     has_test_failures = bool(failures)
     for key in STAGES:
@@ -214,17 +262,17 @@ def make_report(check, status, steps, root=ROOT, private=PRIVATE):
         seconds=round(sum(s['seconds'] for s in stages), 3), test_seconds=seconds,
         failures=failures, skipped=skipped,
         stages=[dict(stage=s['stage'], outcome=s['outcome'], seconds=s['seconds'], exit_code=s.get('exit_code')) for s in stages],
-        availability={'junit': available, 'identities_complete': all(f['location'] for f in failures if f['test_id'] not in STAGES),
+        availability={'structured_results': available, 'junit': available and check != 'frontend', 'format': 'node-events' if check == 'frontend' else 'pytest-junit', 'identities_complete': all(f['location'] for f in failures if f['test_id'] not in STAGES),
                       'diagnostics': 'Allowlisted only; raw JUnit and free text are never uploaded.'},
         evidence=['report.json', 'summary.md', 'Failing step logs in the linked run'],
-        limitation='Fast synthetic/domain checks do not establish real ONNX or installer acceptance.' + (' Node totals count JUnit testcases; container tests are excluded.' if check == 'frontend' else ''))
+        limitation='Fast synthetic/domain checks do not establish real ONNX or installer acceptance.')
 
 
 def markdown(report):
     def safe(value):
         return html.escape(str(value)).replace('`', '&#96;').replace('\n', ' ')
     c = report['counts']
-    totals = f"{c['passed']} passed · {c['failed']} failed · {c['skipped']} skipped · {c['blocked']} blocked" if report['availability']['junit'] else ('Test totals not applicable' if report['check'] == 'windows-package' else 'Test totals unavailable')
+    totals = f"{c['passed']} passed · {c['failed']} failed · {c['skipped']} skipped · {c['blocked']} blocked" if report['availability']['structured_results'] else ('Test totals not applicable' if report['check'] == 'windows-package' else 'Test totals unavailable')
     sections = [f"## {report['outcome']} — {report['check']} ({report['platform']})",
                 f"{totals} | {report['seconds']}s (recorded commands)  \nSHA: `{report['commit']}`", report['status_scope']]
     groups = {}
@@ -244,8 +292,8 @@ def markdown(report):
     remaining = sum(len(g) for g in list(groups.values())[3:])
     if remaining:
         sections.append(f'{remaining} additional failures: see report.json.')
-    if not report['availability']['junit']:
-        sections.append('Test diagnostics unavailable: no complete JUnit report.' if report['check'] != 'windows-package' else 'Packaging check; no test suite.')
+    if not report['availability']['structured_results']:
+        sections.append('Test diagnostics unavailable: no complete structured test report.' if report['check'] != 'windows-package' else 'Packaging check; no test suite.')
     if report['outcome'] == 'CANCELLED':
         sections.append('Execution cancelled; results may be partial.')
     evidence = ['**Evidence:** sanitized report.json and summary.md in the job artifact (7 days); all failures and available IDs in JSON.',

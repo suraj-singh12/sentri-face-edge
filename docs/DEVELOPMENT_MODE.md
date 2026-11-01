@@ -416,7 +416,7 @@ persisted-read verifier and requires that precise mismatch before reporting PASS
 
 Open a PR's **Checks → CI and Windows packaging → run Summary**. Each of the
 existing five jobs writes a compact native GitHub summary: outcome, platform,
-executed JUnit testcase pass/fail/skip totals (Node container parents excluded), recorded command duration and exact **checked-out**
+executed test pass/fail/skip totals, recorded command duration and exact **checked-out**
 SHA. A PR checkout normally tests GitHub's merge commit; that SHA can differ from
 the PR head. Packaging has no test suite, so its test totals are not applicable.
 The summary shows at most three distinct failure groups. All failures, test IDs,
@@ -428,10 +428,16 @@ Read the failure category before interpreting impact:
 - **test/product behavior:** an executed assertion failed; this alone does not
   establish a product defect or root cause.
 - **environment/setup:** dependency installation or toolchain preparation failed.
-- **test infrastructure:** JUnit reports a harness/fixture error.
+- **test infrastructure:** JUnit or a Node hook reports a harness/fixture error.
 - **unknown:** evidence cannot establish the category; investigate the failed step.
 - **BLOCKED/skipped:** execution was unavailable or not meaningful. Skips never
   count as passes. Cancellation is always **CANCELLED**, even with partial passes.
+
+Backend results use pytest JUnit. Frontend results use a small serializer of
+Node 22's native test events alongside its normal console reporter, in one suite
+execution with no dependency. Node 22's built-in JUnit reporter omits parent-test
+assertions after nested children; native events retain those failures and count
+all tests (including parents), while skips/todos remain separate.
 
 The first explanation names the actual source-verified test and location where
 available, a safe error/comparison, curated coverage purpose when applicable,
@@ -458,8 +464,8 @@ JUnit text, assertion objects, environment variables, application logs, absolute
 paths, model hashes, photos, model weights, licenses, credentials, storage or
 private Playwright traces. Public diagnostics allow only source-declared test
 names/locations, curated coverage metadata, known error classes and bounded
-numeric/bool/null comparisons. Other details are explicitly withheld. Raw JUnit
-is **not uploaded**. Original CI command logs still use GitHub's existing log
+numeric/bool/null comparisons. Other details are explicitly withheld. Raw JUnit and Node event JSON
+are **not uploaded**. Original CI command logs still use GitHub's existing log
 access/retention; keep real operator data out of public CI. Command exit codes
 are preserved, summaries run with `always()`, and reporter failure emits a minimal
 fallback and fails its step. If the runner is forcibly terminated, a summary or
