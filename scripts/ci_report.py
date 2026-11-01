@@ -177,7 +177,7 @@ def read_node(path, root=ROOT):
                 location={'file': source[0], 'line': source[1]} if source else None,
                 category=category, impact='Impact requires investigation.',
                 next_step='Inspect the failing test and reproduce it locally. Root cause not yet confirmed.',
-                signature=hashlib.sha256((identifier + raw).encode()).hexdigest(), **detail))
+                signature=hashlib.sha256((identifier + category + str(row.get('failure_type')) + raw).encode()).hexdigest(), **detail))
         elif not suite:
             counts['passed'] += 1
     return counts, failures, skipped, ['node:test'], complete, round(seconds, 3)
