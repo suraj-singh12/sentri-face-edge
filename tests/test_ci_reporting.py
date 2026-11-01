@@ -359,10 +359,12 @@ def test_packaging_phase_and_original_exit_are_retained(tmp_path, monkeypatch):
     failure = report['failures'][0]
     assert 'Run frontend regression suite' in failure['description']
     assert failure['location']['file'] == 'build_release.ps1'
-    line = (ROOT / failure['location']['file']).read_text().splitlines()[failure['location']['line'] - 1]
+    line = (ROOT / failure['location']['file']).read_text(encoding='utf8').splitlines()[failure['location']['line'] - 1]
     assert 'Invoke-Checked "Run frontend regression suite"' in line
     assert failure['category'] == 'unknown'
     assert report['stages'][0]['exit_code'] == 23
+    assert 'Test totals unavailable' in ci.markdown(report)
+    assert 'nested regression checks' in ci.markdown(report)
 
 
 def test_private_packaging_phase_is_not_published(tmp_path):

@@ -298,7 +298,7 @@ def markdown(report):
     def safe(value):
         return html.escape(str(value)).replace('`', '&#96;').replace('\n', ' ')
     c = report['counts']
-    totals = f"{c['passed']} passed · {c['failed']} failed · {c['skipped']} skipped · {c['blocked']} blocked" if report['availability']['structured_results'] else ('Test totals not applicable' if report['check'] == 'windows-package' else 'Test totals unavailable')
+    totals = f"{c['passed']} passed · {c['failed']} failed · {c['skipped']} skipped · {c['blocked']} blocked" if report['availability']['structured_results'] else 'Test totals unavailable'
     sections = [f"## {report['outcome']} — {report['check']} ({report['platform']})",
                 f"{totals} | {report['seconds']}s (recorded commands)  \nSHA: `{report['commit']}`", report['status_scope']]
     groups = {}
@@ -319,7 +319,7 @@ def markdown(report):
     if remaining:
         sections.append(f'{remaining} additional failures: see report.json.')
     if not report['availability']['structured_results']:
-        sections.append('Test diagnostics unavailable: no complete structured test report.' if report['check'] != 'windows-package' else 'Packaging check; no test suite.')
+        sections.append('Test diagnostics unavailable: no complete structured test report.' if report['check'] != 'windows-package' else 'Packaging runs nested regression checks; their separate structured totals are unavailable. See the build-step log.')
     if report['outcome'] == 'CANCELLED':
         sections.append('Execution cancelled; results may be partial.')
     evidence = ['**Evidence:** sanitized report.json and summary.md in the job artifact (7 days); all failures and available IDs in JSON.',

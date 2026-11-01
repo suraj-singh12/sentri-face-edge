@@ -418,7 +418,8 @@ Open a PR's **Checks → CI and Windows packaging → run Summary**. Each of the
 existing five jobs writes a compact native GitHub summary: outcome, platform,
 executed test pass/fail/skip totals, recorded command duration and exact **checked-out**
 SHA. A PR checkout normally tests GitHub's merge commit; that SHA can differ from
-the PR head. Packaging has no test suite, so its test totals are not applicable.
+the PR head. Packaging runs nested backend/frontend regressions inside `build_release.ps1`;
+separate structured totals are unavailable, so open its build-step log for those results.
 The summary shows at most three distinct failure groups. All failures, test IDs,
 source declarations, coverage IDs and stage exit codes are in the job's
 `qa-<check>-<OS>` artifact (`report.json`, schema version 1; `summary.md`).
