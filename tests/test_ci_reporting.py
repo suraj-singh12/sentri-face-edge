@@ -260,8 +260,8 @@ def test_summary_cli_publishes_identical_safe_payload(results, tmp_path, monkeyp
     monkeypatch.setenv('CI_STEPS', '{}')
     assert ci.main(['summary', '--check', 'backend', '--status', 'success']) == 0
     output = capsys.readouterr().out
-    assert (tmp_path / 'step-summary.md').read_text() == ci.markdown(report)
-    assert (tmp_path / 'public/summary.md').read_text() == ci.markdown(report)
+    assert (tmp_path / 'step-summary.md').read_text(encoding='utf8') == ci.markdown(report)
+    assert (tmp_path / 'public/summary.md').read_text(encoding='utf8') == ci.markdown(report)
     assert json.loads((tmp_path / 'public/report.json').read_text()) == report
     assert 'Sanitized CI report JSON: ' + json.dumps(report, sort_keys=True) in output
     assert ci.markdown(report) in output
