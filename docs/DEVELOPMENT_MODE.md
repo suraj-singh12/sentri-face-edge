@@ -456,7 +456,9 @@ For deeper evidence, expand the failed step log. Backend reproduction:
 ID); frontend: `npm --prefix frontend test`; build: `npm --prefix frontend run build`;
 Windows packaging: `powershell -NoProfile -File .\build_release.ps1` on a prepared
 Windows machine. Use the reported SHA and the same Python 3.12 / Node 22 toolchain.
-The existing installer build remains a check; broad installer-content uploads
+Packaging failures also identify the last failing literal `Invoke-Checked` stage
+from `build_release.ps1`, with its verified source declaration. Other build text
+stays in the existing step logs. The existing installer build remains a check; broad installer-content uploads
 were replaced by the two explicitly allowed reporting files.
 
 Public artifacts expire after **7 days**. The reporter never copies arbitrary

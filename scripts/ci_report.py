@@ -187,6 +187,22 @@ def read_node(path, root=ROOT):
     return counts, failures, skipped, ['node:test'], complete, round(seconds, 3)
 
 
+def package_stages(root=ROOT):
+    """Only public literal Invoke-Checked labels/locations can leave the runner."""
+    try:
+        source = (root / 'build_release.ps1').read_text(encoding='utf8')
+    except OSError:
+        return {}
+    return {m[1]: {'file': 'build_release.ps1', 'line': source[:m.start()].count('\n') + 1}
+            for m in re.finditer(r'Invoke-Checked "([^"\n$`]+)"', source)}
+
+
+def package_failure(tail, root=ROOT):
+    allowed = package_stages(root)
+    matches = re.findall(r'^([^\r\n]+) failed with exit code -?\d+\.', tail, re.M)
+    return next((name for name in reversed(matches) if name in allowed), None)
+
+
 def run(stage, command):
     """Persist start before command; return the original command exit code."""
     PRIVATE.mkdir(parents=True, exist_ok=True)
@@ -206,6 +222,8 @@ def run(stage, command):
         code = 127
     record.update(outcome='success' if code == 0 else 'failure', exit_code=code,
                   seconds=round(time.monotonic() - start, 3), diagnostic=diagnostics(tail))
+    if stage == 'package' and code:
+        record['substage'] = package_failure(tail)
     path.write_text(json.dumps(record))
     return code
 
@@ -239,7 +257,11 @@ def make_report(check, status, steps, root=ROOT, private=PRIVATE):
             if key in ('tests', 'node-tests') and has_test_failures:
                 continue
             label, category = STAGES[key]
-            failures.append(dict(test_id=key, description=label, location=None, category=category,
+            location = None
+            if key == 'package' and record and record.get('substage') in package_stages(root):
+                label += ': ' + record['substage']
+                location = package_stages(root)[record['substage']]
+            failures.append(dict(test_id=key, description=label, location=location, category=category,
                 impact='Impact requires investigation.' if category == 'unknown' else 'This check could not complete reliably.',
                 next_step='Inspect this step log; check installation and dependencies.' if category == 'environment/setup' else 'Inspect this step log and reproduce the command locally.',
                 signature=key, **diagnostics(str(record.get('diagnostic', {}).get('error', '')) if record and isinstance(record.get('diagnostic'), dict) else '')))

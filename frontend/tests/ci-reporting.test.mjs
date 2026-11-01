@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 test('CI events retain parent assertions and distinguish skipped tests', () => {
@@ -20,7 +19,7 @@ test('skipped control', {skip: 'fixture disabled'}, () => {});
 `);
     const environment = { ...process.env };
     delete environment.NODE_TEST_CONTEXT;
-    const reporter = fileURLToPath(new URL('../../scripts/node_ci_reporter.mjs', import.meta.url));
+    const reporter = new URL('../../scripts/node_ci_reporter.mjs', import.meta.url).href;
     const run = spawnSync(process.execPath, ['--test', '--test-reporter=' + reporter, fixture], {
       encoding: 'utf8', env: environment,
     });

@@ -349,3 +349,24 @@ def test_native_node_untrusted_values_and_file_omitted(tmp_path):
     assert report['failures'][0]['location'] is None
     assert 'SECRET' not in json.dumps(report)
     assert 'PRIVATE' not in json.dumps(report)
+
+
+def test_packaging_phase_and_original_exit_are_retained(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci, 'PRIVATE', tmp_path)
+    code = ci.run('package', [sys.executable, '-c', "print('Run frontend regression suite failed with exit code 23.'); raise SystemExit(23)"])
+    assert code == 23
+    report = ci.make_report('windows-package', 'failure', {}, private=tmp_path)
+    failure = report['failures'][0]
+    assert 'Run frontend regression suite' in failure['description']
+    assert failure['location']['file'] == 'build_release.ps1'
+    line = (ROOT / failure['location']['file']).read_text().splitlines()[failure['location']['line'] - 1]
+    assert 'Invoke-Checked "Run frontend regression suite"' in line
+    assert failure['category'] == 'unknown'
+    assert report['stages'][0]['exit_code'] == 23
+
+
+def test_private_packaging_phase_is_not_published(tmp_path):
+    (tmp_path / 'package.json').write_text(json.dumps(dict(stage='package', outcome='failure', seconds=1, exit_code=1, substage='password=SECRET')))
+    report = ci.make_report('windows-package', 'failure', {}, private=tmp_path)
+    assert 'SECRET' not in json.dumps(report)
+    assert report['failures'][0]['location'] is None
