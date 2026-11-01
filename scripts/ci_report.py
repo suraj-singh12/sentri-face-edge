@@ -171,6 +171,10 @@ def read_node(path, root=ROOT):
             if 'expected' in row and 'actual' in row:
                 raw += '\nexpected: ' + json.dumps(row['expected']) + '\nactual: ' + json.dumps(row['actual'])
             detail = diagnostics(raw)
+            if blocked:
+                detail['error'] = 'Cancelled by parent test; this test did not complete.'
+            elif row.get('failure_type') == 'subtestsFailed':
+                detail['error'] = 'Child test failures propagated to this parent test.'
             category = 'blocked/skipped' if blocked else 'test infrastructure' if row.get('failure_type') == 'hookFailed' else 'test/product behavior' if detail['error'] in ('AssertionError', 'ERR_ASSERTION') else 'unknown'
             failures.append(dict(test_id=identifier, failure_index=1,
                 description=row['name'] if source else 'Test identity unavailable for safe publication',

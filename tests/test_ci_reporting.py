@@ -327,6 +327,7 @@ def test_native_node_hook_and_parent_cancellation(tmp_path):
     report = ci.make_report('frontend', 'failure', {}, private=tmp_path)
     assert [f['category'] for f in report['failures']] == ['test infrastructure', 'blocked/skipped']
     assert len(set(f['signature'] for f in report['failures'])) == 2
+    assert report['failures'][1]['error'] == 'Cancelled by parent test; this test did not complete.'
     assert report['counts']['blocked'] == 1
     assert report['counts']['passed'] == 0
 
