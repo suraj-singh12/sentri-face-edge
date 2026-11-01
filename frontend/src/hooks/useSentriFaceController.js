@@ -77,6 +77,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
     refs: { ...recognize.refs },
     actions: {
       setActiveView,
+      worldApiGet: api.apiGet,
       refreshAll: appData.refreshAll,
       reloadAppData: appData.reloadAppData,
       configureRecovery: appData.configureRecovery,

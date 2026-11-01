@@ -1,5 +1,92 @@
 # Global identity graph implementation plan
 
+## Issue #13 — native World Explore implementation
+
+### Approved UI refinement v2
+
+The operator-approved `SentriFace_World_Explore_UI_Refinement_v2.html` is implemented
+on the existing #13 branch / draft PR #26. This changes Explore presentation only:
+counted Evidence popover, native ON/OFF weaker-links button, compact paired discovery
+navigation, and type-specific Inspector hierarchy with a docked proof action.
+Controllers, graph layout/selection, backend queries, Current World, saved locations,
+authorization and application theme state remain unchanged. No dependencies or
+backend/schema changes are introduced.
+
+Regression verification: **139 frontend tests passed**, including rendered criteria
+controls and authoritative Person/Cluster/Relationship Inspector cases (62 World
+frontend tests). Focused backend World regression: **113 passed / 15 subtests**, no
+skips. Production build passes; final-head five-job CI is recorded on PR #26.
+
+Actual Chromium inspected the source React implementation over the existing
+disposable encrypted QA authority. Both Day/Night were checked at **1440×900,
+1280×800, 1024×768 and 790×650**, including all three Inspector types, evidence
+popover, ON/OFF states, proof and compact panel navigation. Browser assertions
+verify no document overflow, equal-width unclipped discovery controls, visible
+primary findings/proof actions, at least 70px of compact result-list space, draft
+selection/count/keyboard/Escape behavior, Apply/Reset/empty-selection validation,
+visual-only weaker changes without World requests, Current state retention and
+Period isolation. No browser page errors occurred. Initial visual findings (clipped
+Multiple locations label and insufficient compact results/finding space) were fixed
+and the complete matrix rerun. Fixture counts come from the backend, not the HTML.
+
+Representative final native captures:
+- [Person, Day 1280×800](examples/world-explore/day-1280.png)
+- [Person, Night 790×650](examples/world-explore/night-790.png)
+- [Discover, Night 790×650](examples/world-explore/v2-discover-night-790.png)
+- [Evidence dropdown and weaker OFF, Day 1440×900](examples/world-explore/v2-evidence-day-1440.png)
+- [Relationship, Day 1440×900](examples/world-explore/v2-relationship-day-1440.png)
+- [Cluster, Night 1280×800](examples/world-explore/v2-cluster-night-1280.png)
+- [Expanded proof, Night 1440×900](examples/world-explore/v2-proof-night-1440.png)
+
+
+The feature branch adds a native React Explore workspace beside the preserved
+Current view. It reuses World query builders/validators, the revision-bound World
+and Evidence controllers, deterministic Person Graph layout and the existing
+Mantine shell and drilldowns. There are no backend/schema/dependency changes.
+The pinned approved HTML is unchanged.
+
+Local verification on 2026-10-30: focused World backend **113 passed / 15 subtests**;
+full backend **841 passed / 56 skipped / 137 subtests**; frontend **131 passed**;
+clean npm installation and production build. The backend skips are existing
+compatibility/platform gates, not World acceptance passes. Generated assets are
+rebuilt from source. The existing bundle-size advisory remains.
+
+Actual Chromium inspected the built React application through the supported Linux
+source ONNX runtime with a disposable encrypted authority. Existing repository
+model-use declarations were reused; no recognition results establish World truth.
+The independently specified finalized fixture has A–B strength 2, B–C strength 2,
+A–C strength 1, and D alone, with appearance counts A=3/B=4/C=3/D=1. The existing
+finalization test helper writes authoritative fixture records, not graph edges.
+Browser checks exercised saved-location search/cancellation without registration,
+defaults/reset, rejected empty criteria, strength 4 lone
+Person behavior, authoritative cluster selection, weaker-toggle request isolation,
+Current/Explore selection and second-page retention without collection reload,
+location discoveries, UTC Recent and local
+Period isolation. Relationship evidence and the shared inspector opened correctly. Final navigation
+checks ensure proof Back returns to Explore without exposing Current scope controls;
+archived nodes honor existing backend navigation restrictions. Relationship media
+navigation, unavailable-image fallback, nested Escape and evidence Back were
+verified against retained revisions without discarding the focused graph. A separate modern
+finalized Encounter fixture confirmed that successful correction registers a saved
+location, while cancelling a new value does not.
+Day/Night screenshots were inspected at 1440×900, 1280×800, 1024×768 and 790×650;
+all Explore document scroll heights fit the viewport and browser errors were empty.
+Representative native captures: [Day desktop](examples/world-explore/day-1280.png)
+and [Night compact](examples/world-explore/night-790.png). These show the real React
+app over the disposable authoritative fixture, not the approved HTML demo.
+Initial QA found SVG-induced overflow and an Event-only evidence origin access;
+both were fixed and the checks rerun. Source synthetic startup on this Linux host
+failed due to unavailable OS key vault; supported source ONNX startup succeeded.
+
+Review boundaries: browser fixture identities are synthetic test records, not a
+recognition/model-quality claim. Large scale, corrected identity/provenance,
+revision/cursor and authorization semantics use the existing passing backend
+regressions. Native macOS/Windows runtime/packaging results and exact final-SHA
+five-job CI status belong to the linked draft PR. No VM runner is configured.
+Operator review should repeat the visible workflow on representative local data;
+no additional VM acceptance is required by this frontend-only change.
+
+
 ## Issue #22 — corrected World participation (merged)
 
 Foundation #23 merged as `6a9ec8250561154157fbc5d45fb03857d4d1687c`

@@ -1,5 +1,7 @@
 import { Button, Group, Modal, MultiSelect, Paper, Select, Stack, Text, TextInput, Textarea } from "@mantine/core";
 
+import { SavedLocationInput } from "./SavedLocationInput.jsx";
+
 import { activeMentionQuery, replaceMentionQuery } from "./RecognitionFollowupForm.jsx";
 
 export function EncounterDetailsModal({ opened, values, people = [], onChange, onConfirm, onClose, correction = false, busy = false, error = "" }) {
@@ -19,7 +21,7 @@ export function EncounterDetailsModal({ opened, values, people = [], onChange, o
           <Select label="Time" data={[{ value: "exact", label: "Start and end" }, { value: "approximate", label: "Approximate" }, { value: "unknown", label: "Unknown" }]} value={values.timePrecision || "unknown"} onChange={(value) => onChange("timePrecision", value)} />
           {values.timePrecision !== "unknown" && <TextInput required={!correction} type="time" label={values.timePrecision === "approximate" ? "Approximate time" : "Start time"} value={values.time || ""} onChange={(event) => onChange("time", event.currentTarget.value)} />}
           {values.timePrecision === "exact" && <TextInput required={!correction} type="time" label="End time" min={values.time || undefined} value={values.endTime || ""} onChange={(event) => onChange("endTime", event.currentTarget.value)} />}
-          <TextInput required={!correction} label="Location" value={values.placeSeen || ""} onChange={(event) => onChange("placeSeen", event.currentTarget.value)} />
+          <SavedLocationInput required={!correction} value={values.placeSeen || ""} onChange={(value) => onChange("placeSeen", value)} />
           <Select label="Context" data={[{ value: "ordinary", label: "Ordinary / small" }, { value: "public", label: "Public / group" }, { value: "unknown", label: "Unknown" }]} value={values.eventContext || "unknown"} onChange={(value) => onChange("eventContext", value)} />
           <Textarea label="Event Notes" description="Type @ and three characters, then select a Person to record an explicit mention." value={values.eventNotes || ""} onChange={(event) => onChange("eventNotes", event.currentTarget.value)} />
           {suggestions.map((person) => <Paper key={person.person_id} component="button" type="button" withBorder p="xs" onClick={() => {

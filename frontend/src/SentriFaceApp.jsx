@@ -15,7 +15,7 @@ import { EventsView } from "./views/EventsView.jsx";
 import { PeopleView } from "./views/PeopleView.jsx";
 import { QueueView } from "./views/QueueView.jsx";
 import { RecognizeView } from "./views/RecognizeView.jsx";
-import { WorldView } from "./views/WorldView.jsx";
+import { WorldWorkspace } from "./views/WorldWorkspace.jsx";
 
 function ShellNotice({ color, title, children, action }) {
   return (
@@ -350,7 +350,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
           </Tabs.Panel>
 
           <Tabs.Panel value="world">
-            <WorldView
+            <WorldWorkspace apiGet={actions.worldApiGet} active={state.activeView === "world"}
               state={state.world}
               onRefresh={guarded(actions.refreshWorld)}
               onApplyScope={guarded(actions.applyWorldScope)}
