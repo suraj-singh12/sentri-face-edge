@@ -209,7 +209,7 @@ def make_report(check, status, steps, root=ROOT, private=PRIVATE):
     for failure in failures:
         groups.setdefault(failure['signature'], f'failure-group-{len(groups) + 1}')
         failure['signature'] = groups[failure['signature']] # Never publish hashes of private error text.
-    return dict(schema_version=1, repository=repo, commit=actual_sha,
+    return dict(schema_version=1, status_scope='Checks at publication; GitHub final job conclusion takes precedence, including later cancellation.', repository=repo, commit=actual_sha,
         run_id=run_id, run_attempt=os.environ.get('GITHUB_RUN_ATTEMPT', '') if os.environ.get('GITHUB_RUN_ATTEMPT', '').isdigit() else '',
         run_url=f'https://github.com/{repo}/actions/runs/{run_id}' if repo and run_id else None,
         platform=sys.platform, check=check, suites=suites, counts=counts, outcome=outcome,
@@ -228,7 +228,7 @@ def markdown(report):
     c = report['counts']
     totals = f"{c['passed']} passed · {c['failed']} failed · {c['skipped']} skipped · {c['blocked']} blocked" if report['availability']['junit'] else ('Test totals not applicable' if report['check'] == 'windows-package' else 'Test totals unavailable')
     sections = [f"## {report['outcome']} — {report['check']} ({report['platform']})",
-                f"{totals} | {report['seconds']}s (recorded commands)  \nSHA: `{report['commit']}`"]
+                f"{totals} | {report['seconds']}s (recorded commands)  \nSHA: `{report['commit']}`", report['status_scope']]
     groups = {}
     for failure in report['failures']:
         groups.setdefault(failure['signature'], []).append(failure)

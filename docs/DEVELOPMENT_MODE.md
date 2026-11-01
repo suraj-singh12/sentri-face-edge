@@ -461,7 +461,11 @@ is **not uploaded**. Original CI command logs still use GitHub's existing log
 access/retention; keep real operator data out of public CI. Command exit codes
 are preserved, summaries run with `always()`, and reporter failure emits a minimal
 fallback and fails its step. If the runner is forcibly terminated, a summary or
-artifact may be unavailable. No extra aggregator or permissions are required.
+artifact may be unavailable. No extra aggregator or permissions are required. Status is a snapshot at publication:
+GitHub can fail/cancel a job during later action cleanup, after reporting ran. The
+final job conclusion in Checks takes precedence, including later cancellation;
+this report cannot predict post-job outcomes. This boundary was observed during
+a real concurrency cancellation in #18 verification.
 
 Longer QA remains local on an authorized machine. Reuse the Foundation setup and
 reviewed fixtures/model declaration above, then run (PowerShell or bash):

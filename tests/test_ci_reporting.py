@@ -265,3 +265,9 @@ def test_summary_cli_publishes_identical_safe_payload(results, tmp_path, monkeyp
     assert json.loads((tmp_path / 'public/report.json').read_text()) == report
     assert 'Sanitized CI report JSON: ' + json.dumps(report, sort_keys=True) in output
     assert ci.markdown(report) in output
+
+
+def test_summary_explicitly_defers_later_cancellation_to_github(results):
+    report = results([('', '')], 'success')
+    assert 'GitHub final job conclusion takes precedence, including later cancellation.' in ci.markdown(report)
+    assert report['status_scope'].startswith('Checks at publication')
