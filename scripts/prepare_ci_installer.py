@@ -1,6 +1,7 @@
 """Select a validated unsigned installer and publish only minimal provenance."""
 import hashlib
 import json
+import os
 import re
 import runpy
 import shutil
@@ -52,5 +53,8 @@ def prepare(root=ROOT):
 if __name__ == '__main__':
     name = prepare()
     manifest = json.loads((ROOT / 'qa-fixtures/installer-public/manifest.json').read_text(encoding='utf8'))
+    if os.environ.get('GITHUB_OUTPUT'):
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf8') as output:
+            output.write(f'installer={name}\nchecksum={name}.sha256\n')
     print('Validated installer:', name)
     print('Installer SHA-256:', manifest['sha256'])

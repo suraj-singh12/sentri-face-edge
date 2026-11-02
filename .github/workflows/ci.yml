@@ -147,8 +147,8 @@ jobs:
         with:
           name: SentriFaceEdge-Windows-x64-unsigned-engineering-candidate
           path: |
-            qa-fixtures/installer-public/SentriFaceEdge-2.0.0-x64-unsigned-pretag-rc.exe
-            qa-fixtures/installer-public/SentriFaceEdge-2.0.0-x64-unsigned-pretag-rc.exe.sha256
+            qa-fixtures/installer-public/${{ steps.installer-evidence.outputs.installer }}
+            qa-fixtures/installer-public/${{ steps.installer-evidence.outputs.checksum }}
             qa-fixtures/installer-public/manifest.json
           retention-days: 7
           if-no-files-found: error

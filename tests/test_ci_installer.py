@@ -56,6 +56,8 @@ def test_workflow_gates_installer_but_not_failure_reports():
     workflow = (ROOT / '.github/workflows/ci.yml').read_text()
     assert "if: success() && steps.package.outcome == 'success' && steps.installer-evidence.outcome == 'success'" in workflow
     assert 'qa-fixtures/installer-public/*' not in workflow
+    assert 'qa-fixtures/installer-public/${{ steps.installer-evidence.outputs.installer }}' in workflow
+    assert 'qa-fixtures/installer-public/${{ steps.installer-evidence.outputs.checksum }}' in workflow
     assert 'dist/windows-x64/2.0.0/*' not in workflow
     assert workflow.count('if: always()') == 6
     assert 'exit $LASTEXITCODE' in workflow
