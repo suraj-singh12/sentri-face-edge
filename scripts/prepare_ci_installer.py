@@ -39,6 +39,11 @@ def prepare(root=ROOT):
     if provenance.get('commit') != sha or provenance.get('version') != version:
         raise ValueError('Release provenance commit or version does not match checkout')
     if provenance.get('working_tree_clean') is not True:
+        status = subprocess.check_output(['git', 'status', '--porcelain'], cwd=root, text=True).splitlines()
+        tracked = [line[3:].replace('\\', '/') for line in status if not line.startswith('?? ')]
+        print('Tracked changes:', bool(tracked), '; only generated UI:',
+              bool(tracked) and all(path.startswith('src/sentriface/ui_static/') for path in tracked),
+              '; untracked files:', any(line.startswith('?? ') for line in status))
         raise ValueError('Release provenance records a dirty source tree')
     if provenance.get('development_build') is not True or provenance.get('authenticode_signed') is not False:
         raise ValueError('Release provenance is not an unsigned engineering candidate')
