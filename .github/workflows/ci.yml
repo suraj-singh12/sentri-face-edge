@@ -142,6 +142,7 @@ jobs:
         id: installer-evidence
         run: python scripts/prepare_ci_installer.py
       - name: Upload validated unsigned Windows candidate
+        id: installer-upload
         if: success() && steps.package.outcome == 'success' && steps.installer-evidence.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:

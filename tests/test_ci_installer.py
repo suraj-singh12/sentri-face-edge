@@ -61,3 +61,16 @@ def test_workflow_gates_installer_but_not_failure_reports():
     assert 'dist/windows-x64/2.0.0/*' not in workflow
     assert workflow.count('if: always()') == 6
     assert 'exit $LASTEXITCODE' in workflow
+
+@pytest.mark.parametrize('stage,description', [
+    ('installer-evidence', 'Verify installer publication inputs'),
+    ('installer-upload', 'Upload validated Windows installer'),
+])
+def test_publication_failures_are_identified(stage, description, tmp_path):
+    spec = importlib.util.spec_from_file_location('ci_report_installer_test', ROOT / 'scripts/ci_report.py')
+    reporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reporter)
+    report = reporter.make_report('windows-package', 'failure', {stage: {'outcome': 'failure'}}, private=tmp_path)
+    assert report['outcome'] == 'FAILED'
+    assert report['failures'][0]['description'] == description
+    assert report['failures'][0]['category'] == 'unknown'

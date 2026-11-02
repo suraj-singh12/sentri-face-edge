@@ -31,6 +31,8 @@ STAGES = {
     'build': ('Frontend production build', 'unknown'),
     'assets': ('Generated frontend consistency', 'unknown'),
     'package': ('Unsigned Windows installer build', 'unknown'),
+    'installer-evidence': ('Verify installer publication inputs', 'unknown'),
+    'installer-upload': ('Upload validated Windows installer', 'unknown'),
 }
 OMITTED = 'Details withheld: not on the public diagnostic allowlist. Inspect the failing step log.'
 
