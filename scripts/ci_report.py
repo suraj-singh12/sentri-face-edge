@@ -361,7 +361,7 @@ def main(argv=None):
             # Source-derived labels only. Escape workflow command delimiters.
             message = f['description'].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
             print(f"::error file={f['location']['file']},line={f['location']['line']}::{message}. Inspect job summary.")
-    return 1 if report['outcome'] == 'BLOCKED' else 0
+    return 1 if report['outcome'] == 'BLOCKED' or (args.status == 'success' and report['outcome'] == 'FAILED') else 0
 
 
 if __name__ == '__main__':

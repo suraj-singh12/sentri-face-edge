@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -265,6 +266,82 @@ def test_summary_cli_publishes_identical_safe_payload(results, tmp_path, monkeyp
     assert json.loads((tmp_path / 'public/report.json').read_text()) == report
     assert 'Sanitized CI report JSON: ' + json.dumps(report, sort_keys=True) in output
     assert ci.markdown(report) in output
+
+
+@pytest.fixture
+def cli_repo(tmp_path):
+    """Run the real CLI against disposable tracked source and private results."""
+    for directory in ('scripts', 'tests', 'frontend/tests', 'qa-fixtures/ci'):
+        (tmp_path / directory).mkdir(parents=True)
+    shutil.copyfile(ROOT / 'scripts/ci_report.py', tmp_path / 'scripts/ci_report.py')
+    (tmp_path / 'tests/qa_coverage.json').write_text('{"cases": []}', encoding='utf8')
+    (tmp_path / 'tests/test_sample.py').write_text('def test_case():\n    assert False\n', encoding='utf8')
+    (tmp_path / 'frontend/tests/sample.mjs').write_text("test('sample assertion', () => {});\n", encoding='utf8')
+    for command in (['git', 'init', '-q'], ['git', 'add', 'scripts', 'tests', 'frontend'],
+                    ['git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture']):
+        subprocess.run(command, cwd=tmp_path, check=True, capture_output=True)
+    return tmp_path
+
+
+def invoke_summary(root, check, status):
+    env = dict(os.environ, CI_STEPS='{}', GITHUB_STEP_SUMMARY=str(root / 'step-summary.md'))
+    process = subprocess.run([sys.executable, str(root / 'scripts/ci_report.py'), 'summary',
+                              '--check', check, '--status', status], cwd=root, env=env,
+                             text=True, capture_output=True, check=False)
+    public = root / 'qa-fixtures/ci-public'
+    report = json.loads((public / 'report.json').read_text(encoding='utf8'))
+    summary = (public / 'summary.md').read_text(encoding='utf8')
+    assert (root / 'step-summary.md').read_text(encoding='utf8') == summary
+    return process, report, summary
+
+
+@pytest.mark.parametrize('check', ['backend', 'frontend'])
+@pytest.mark.parametrize('failed', [False, True])
+def test_cli_success_requires_passing_structured_results(cli_repo, check, failed):
+    private = cli_repo / 'qa-fixtures/ci'
+    if check == 'backend':
+        case = ET.Element('testcase', classname='tests.test_sample', name='test_case')
+        if failed:
+            ET.SubElement(case, 'failure', message='AssertionError password=PRIVATE').text = 'AssertionError password=PRIVATE'
+        suite = ET.Element('testsuite')
+        suite.append(case)
+        ET.ElementTree(suite).write(private / 'junit.xml')
+    else:
+        row = dict(event='test:fail' if failed else 'test:pass', name='sample assertion',
+                   file=str(cli_repo / 'frontend/tests/sample.mjs'), kind='test',
+                   error='AssertionError password=PRIVATE' if failed else '')
+        node_rows(private, [row])
+    process, report, summary = invoke_summary(cli_repo, check, 'success')
+    assert process.returncode == (1 if failed else 0)
+    assert report['outcome'] == ('FAILED' if failed else 'PASS')
+    if failed:
+        assert report['counts']['failed'] == 1
+        assert '**What failed:**' in summary and 'AssertionError' in summary
+        assert 'PRIVATE' not in summary + json.dumps(report) + process.stdout
+        assert process.stdout.count('::error file=') == 1
+
+
+@pytest.mark.parametrize('check,evidence', [('backend', None), ('backend', '<testsuite><testcase'),
+                                           ('frontend', None), ('frontend', '{partial')])
+def test_cli_missing_or_incomplete_results_fail_closed(cli_repo, check, evidence):
+    if evidence is not None:
+        name = 'junit.xml' if check == 'backend' else 'node.jsonl'
+        (cli_repo / 'qa-fixtures/ci' / name).write_text(evidence, encoding='utf8')
+    process, report, summary = invoke_summary(cli_repo, check, 'success')
+    assert process.returncode != 0
+    assert report['outcome'] == 'BLOCKED'
+    assert 'diagnostics unavailable' in summary
+
+
+@pytest.mark.parametrize('status,outcome', [('failure', 'FAILED'), ('cancelled', 'CANCELLED')])
+def test_cli_preserves_existing_failure_and_cancellation(cli_repo, status, outcome):
+    (cli_repo / 'qa-fixtures/ci/junit.xml').write_text(
+        '<testsuite><testcase classname="tests.test_sample" name="test_case">'
+        '<failure message="AssertionError">AssertionError</failure></testcase></testsuite>', encoding='utf8')
+    process, report, summary = invoke_summary(cli_repo, 'backend', status)
+    assert process.returncode == 0  # GitHub already owns the failure/cancellation conclusion.
+    assert report['outcome'] == outcome
+    assert '**What failed:**' in summary and 'AssertionError' in summary
 
 
 def test_summary_explicitly_defers_later_cancellation_to_github(results):
