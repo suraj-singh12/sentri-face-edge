@@ -20,8 +20,8 @@ def candidate(tmp_path, monkeypatch):
     (directory / name).write_bytes(b'controlled installer fixture')
     digest = hashlib.sha256((directory / name).read_bytes()).hexdigest()
     (directory / (name + '.sha256')).write_text(f'{digest}  {name}\n')
-    (directory / 'artifact-inspection.json').write_text(json.dumps(dict(status='PASS', version='2.0.0', expected_architecture='AMD64', installer=dict(path=name, sha256=digest))))
-    (directory / (name + '.provenance.json')).write_text(json.dumps(dict(commit='a'*40, version='2.0.0', development_build=True, authenticode_signed=False, artifacts=[dict(kind='installer', name=name, sha256=digest)])))
+    (directory / 'artifact-inspection.json').write_text(json.dumps(dict(status='PASS', version='2.0.0', expected_architecture='AMD64', installer=dict(path=name, sha256=digest, architecture='AMD64', size=(directory / name).stat().st_size))))
+    (directory / (name + '.provenance.json')).write_text(json.dumps(dict(commit='a'*40, version='2.0.0', working_tree_clean=True, development_build=True, authenticode_signed=False, artifacts=[dict(kind='installer', name=name, sha256=digest, size=(directory / name).stat().st_size)])))
     monkeypatch.setattr(mod.subprocess, 'check_output', lambda *args, **kwargs: 'a'*40)
     return tmp_path, directory, name, digest
 
@@ -34,7 +34,7 @@ def test_validated_artifact_only(candidate):
     assert {p.name for p in out.iterdir()} == {name, name + '.sha256', 'manifest.json'}
     assert json.loads((out / 'manifest.json').read_text())['sha256'] == digest
 
-@pytest.mark.parametrize('mutation', ['missing', 'checksum', 'ambiguous', 'inspection', 'revision'])
+@pytest.mark.parametrize('mutation', ['missing', 'checksum', 'ambiguous', 'inspection', 'revision', 'dirty'])
 def test_invalid_artifact_refused(candidate, mutation):
     root, directory, name, _ = candidate
     if mutation == 'missing': (directory / name).unlink()
@@ -43,7 +43,10 @@ def test_invalid_artifact_refused(candidate, mutation):
     elif mutation == 'inspection': (directory / 'artifact-inspection.json').write_text('{"status":"FAIL"}')
     else:
         path = directory / (name + '.provenance.json')
-        obj = json.loads(path.read_text()); obj['commit'] = 'b'*40; path.write_text(json.dumps(obj))
+        obj = json.loads(path.read_text())
+        if mutation == 'revision': obj['commit'] = 'b'*40
+        else: obj['working_tree_clean'] = False
+        path.write_text(json.dumps(obj))
     with pytest.raises((ValueError, FileNotFoundError)):
         mod.prepare(root)
     assert not (root / 'qa-fixtures/installer-public').exists()

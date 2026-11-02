@@ -32,10 +32,13 @@ def prepare(root=ROOT):
     artifacts = [a for a in provenance.get('artifacts', []) if a.get('kind') == 'installer']
     if (inspection.get('status') != 'PASS' or inspection.get('version') != version
         or inspection.get('expected_architecture') != 'AMD64' or item.get('path') != name
-        or item.get('sha256') != digest or provenance.get('commit') != sha
+        or item.get('sha256') != digest or item.get('architecture') != 'AMD64'
+        or item.get('size') != installer.stat().st_size or provenance.get('commit') != sha
+        or provenance.get('working_tree_clean') is not True
         or provenance.get('version') != version or provenance.get('development_build') is not True
         or provenance.get('authenticode_signed') is not False or len(artifacts) != 1
-        or artifacts[0].get('name') != name or artifacts[0].get('sha256') != digest):
+        or artifacts[0].get('name') != name or artifacts[0].get('sha256') != digest
+        or artifacts[0].get('size') != installer.stat().st_size):
         raise ValueError('Release inspection or provenance does not match installer')
     output = root / 'qa-fixtures/installer-public'
     output.mkdir(parents=True, exist_ok=True)
