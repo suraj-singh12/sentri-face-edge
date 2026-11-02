@@ -147,7 +147,7 @@ def test_workflow_preserves_checks_and_publication_allowlist():
     text = (ROOT / '.github/workflows/ci.yml').read_text()
     assert 'continue-on-error' not in text
     assert text.count('if: always()') == 6
-    assert text.count('retention-days: 7') == 3
+    assert text.count('retention-days: 7') == 4
     assert text.count('python-version: "3.12"') == 2
     assert 'os: [ubuntu-latest, macos-latest, windows-latest]' in text
     assert 'exit $LASTEXITCODE' in text

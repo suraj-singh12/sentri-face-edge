@@ -138,6 +138,20 @@ jobs:
         run: |
           python scripts/ci_report.py run package -- powershell -NoProfile -File .\build_release.ps1
           exit $LASTEXITCODE
+      - name: Verify installer publication inputs
+        id: installer-evidence
+        run: python scripts/prepare_ci_installer.py
+      - name: Upload validated unsigned Windows candidate
+        if: success() && steps.package.outcome == 'success' && steps.installer-evidence.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SentriFaceEdge-Windows-x64-unsigned-engineering-candidate
+          path: |
+            qa-fixtures/installer-public/SentriFaceEdge-2.0.0-x64-unsigned-pretag-rc.exe
+            qa-fixtures/installer-public/SentriFaceEdge-2.0.0-x64-unsigned-pretag-rc.exe.sha256
+            qa-fixtures/installer-public/manifest.json
+          retention-days: 7
+          if-no-files-found: error
       - name: Publish concise QA summary
         if: always()
         shell: bash

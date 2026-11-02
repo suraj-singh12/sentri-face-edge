@@ -459,8 +459,7 @@ Windows packaging: `powershell -NoProfile -File .\build_release.ps1` on a prepar
 Windows machine. Use the reported SHA and the same Python 3.12 / Node 22 toolchain.
 Packaging failures also identify the last failing literal `Invoke-Checked` stage
 from `build_release.ps1`, with its verified source declaration. Other build text
-stays in the existing step logs. The existing installer build remains a check; broad installer-content uploads
-were replaced by the two explicitly allowed reporting files.
+stays in the existing step logs. The Windows packaging job also publishes the separately named `SentriFaceEdge-Windows-x64-unsigned-engineering-candidate` artifact after the release inspection and checksum verification succeed. Download it from the Actions run artifacts. It contains only the installer, its `.sha256` file and a minimal manifest linking the installer hash to the tested commit. From the extracted directory, run `sha256sum -c SentriFaceEdge-2.0.0-x64-unsigned-pretag-rc.exe.sha256` (or compare `Get-FileHash -Algorithm SHA256 <installer>` with that file in PowerShell). It is an unsigned engineering candidate, not a signed production release or model-acceptance claim. Artifacts expire after seven days; private QA fixtures, logs and traces are not uploaded.
 
 Public artifacts expire after **7 days**. The reporter never copies arbitrary
 JUnit text, assertion objects, environment variables, application logs, absolute
