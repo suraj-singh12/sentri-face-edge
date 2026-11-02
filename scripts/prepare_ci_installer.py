@@ -38,13 +38,15 @@ def prepare(root=ROOT):
         raise ValueError('Release inspection does not match the exact AMD64 installer')
     if provenance.get('commit') != sha or provenance.get('version') != version:
         raise ValueError('Release provenance commit or version does not match checkout')
-    if provenance.get('working_tree_clean') is not True:
-        status = subprocess.check_output(['git', 'status', '--porcelain'], cwd=root, text=True).splitlines()
-        tracked = [line[3:].replace('\\', '/') for line in status if not line.startswith('?? ')]
-        print('Tracked changes:', bool(tracked), '; only generated UI:',
-              bool(tracked) and all(path.startswith('src/sentriface/ui_static/') for path in tracked),
-              '; untracked files:', any(line.startswith('?? ') for line in status))
-        raise ValueError('Release provenance records a dirty source tree')
+    clean = provenance.get('working_tree_clean')
+    if clean not in (True, False) or not isinstance(clean, bool):
+        raise ValueError('Release provenance has no source tree status')
+    status = subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=root, text=True).splitlines()
+    if clean != (not status):
+        raise ValueError('Release provenance source tree status changed')
+    if any(line[:2] not in (' M', 'M ', 'MM') or
+           not line[3:].replace('\\', '/').startswith('src/sentriface/ui_static/') for line in status):
+        raise ValueError('Unexpected source tree changes outside generated frontend assets')
     if provenance.get('development_build') is not True or provenance.get('authenticode_signed') is not False:
         raise ValueError('Release provenance is not an unsigned engineering candidate')
     if (len(artifacts) != 1 or artifacts[0].get('name') != name
@@ -55,7 +57,8 @@ def prepare(root=ROOT):
     shutil.copyfile(installer, output / name)
     shutil.copyfile(checksum, output / (name + '.sha256'))
     (output / 'manifest.json').write_text(json.dumps({'schema_version': 1, 'commit': sha,
-        'installer': name, 'sha256': digest, 'classification': 'unsigned engineering candidate'}, indent=2) + '\n', encoding='utf8')
+        'installer': name, 'sha256': digest, 'classification': 'unsigned engineering candidate',
+        'working_tree_clean': clean, 'generated_frontend_changed': bool(status)}, indent=2) + '\n', encoding='utf8')
     return name
 
 

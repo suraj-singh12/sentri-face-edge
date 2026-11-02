@@ -22,7 +22,7 @@ def candidate(tmp_path, monkeypatch):
     (directory / (name + '.sha256')).write_text(f'{digest}  {name}\n')
     (directory / 'artifact-inspection.json').write_text(json.dumps(dict(status='PASS', version='2.0.0', expected_architecture='AMD64', installer=dict(path=name, sha256=digest, architecture='AMD64', size=(directory / name).stat().st_size))))
     (directory / (name + '.provenance.json')).write_text(json.dumps(dict(commit='a'*40, version='2.0.0', working_tree_clean=True, development_build=True, authenticode_signed=False, artifacts=[dict(kind='installer', name=name, sha256=digest, size=(directory / name).stat().st_size)])))
-    monkeypatch.setattr(mod.subprocess, 'check_output', lambda *args, **kwargs: 'a'*40)
+    monkeypatch.setattr(mod.subprocess, 'check_output', lambda args, **kwargs: 'a'*40 if args[1] == 'rev-parse' else '')
     return tmp_path, directory, name, digest
 
 
@@ -33,6 +33,34 @@ def test_validated_artifact_only(candidate):
     out = root / 'qa-fixtures/installer-public'
     assert {p.name for p in out.iterdir()} == {name, name + '.sha256', 'manifest.json'}
     assert json.loads((out / 'manifest.json').read_text())['sha256'] == digest
+
+
+def test_generated_frontend_change_is_recorded(candidate, monkeypatch):
+    root, directory, name, _ = candidate
+    path = directory / (name + '.provenance.json')
+    obj = json.loads(path.read_text())
+    obj['working_tree_clean'] = False
+    path.write_text(json.dumps(obj))
+    monkeypatch.setattr(mod.subprocess, 'check_output', lambda args, **kwargs:
+                        'a'*40 if args[1] == 'rev-parse' else ' M src/sentriface/ui_static/index.html\n')
+    mod.prepare(root)
+    manifest = json.loads((root / 'qa-fixtures/installer-public/manifest.json').read_text())
+    assert manifest['working_tree_clean'] is False
+    assert manifest['generated_frontend_changed'] is True
+
+
+@pytest.mark.parametrize('status', [' M src/sentriface/core.py\n', '?? secret.txt\n',
+                                    'R  src/sentriface/ui_static/a -> secret.txt\n'])
+def test_unexpected_dirty_tree_is_refused(candidate, monkeypatch, status):
+    root, directory, name, _ = candidate
+    path = directory / (name + '.provenance.json')
+    obj = json.loads(path.read_text())
+    obj['working_tree_clean'] = False
+    path.write_text(json.dumps(obj))
+    monkeypatch.setattr(mod.subprocess, 'check_output', lambda args, **kwargs:
+                        'a'*40 if args[1] == 'rev-parse' else status)
+    with pytest.raises(ValueError, match='Unexpected source tree'):
+        mod.prepare(root)
 
 @pytest.mark.parametrize('mutation', ['missing', 'checksum', 'ambiguous', 'inspection', 'revision', 'dirty'])
 def test_invalid_artifact_refused(candidate, mutation):
