@@ -47,4 +47,7 @@ def prepare(root=ROOT):
 
 
 if __name__ == '__main__':
-    print('Validated installer:', prepare())
+    name = prepare()
+    manifest = json.loads((ROOT / 'qa-fixtures/installer-public/manifest.json').read_text(encoding='utf8'))
+    print('Validated installer:', name)
+    print('Installer SHA-256:', manifest['sha256'])
