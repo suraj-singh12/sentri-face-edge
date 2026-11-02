@@ -304,6 +304,10 @@ def require_browser():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='QA-J01 real browser / ONNX journey. Assets and evidence stay local.')
+    parser.add_argument('--expected-sha', help='Exact full checked-out commit; mismatch refuses execution')
+    parser.add_argument('--phase', choices=['Foundation'], default='Foundation')
+    parser.add_argument('--density', choices=['journey-only'], default='journey-only', help='One Person, two distinct photos, one Encounter per fresh run; full profiles unavailable')
+    parser.add_argument('--evidence-output', type=Path, help='Local parent directory beneath ignored qa-fixtures/')
     parser.add_argument('--test', default='QA-J01', choices=['QA-J01'])
     parser.add_argument('--disposable', action='store_true', help='Explicitly authorize a fresh disposable QA authority, never an existing database')
     parser.add_argument('--fixtures', type=Path, default=ROOT / 'qa-fixtures/marvel-actors')
@@ -316,13 +320,21 @@ def main(argv=None):
     parser.add_argument('--location', default='QA London')
     args = parser.parse_args(argv)
     started = time.monotonic()
-    evidence = ROOT / 'qa-fixtures' / 'runs' / uuid.uuid4().hex
+    evidence_parent = (args.evidence_output or ROOT / 'qa-fixtures' / 'runs').resolve()
+    if not evidence_parent.is_relative_to((ROOT / 'qa-fixtures').resolve()):
+        parser.error('--evidence-output must remain beneath ignored qa-fixtures/ for privacy')
+    evidence = evidence_parent / uuid.uuid4().hex
     evidence.mkdir(parents=True, mode=0o700)
     report = {'test_id': args.test, 'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-              'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True)),
+              'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=no'], cwd=ROOT, text=True)),
               'outcome': 'BLOCKED', 'model_hashes': {}, 'fixture_hashes': [], 'inference_executed': False,
               'evidence': str(evidence), 'reason': ''}
+    report.update(phase=args.phase, density=args.density, requested_size={'people': 1, 'photos': 2, 'encounters': 1}, achieved_size={'people': 0, 'photos': 0, 'encounters': 0})
     try:
+        if args.expected_sha is not None and (len(args.expected_sha) != 40 or args.expected_sha != report['commit']):
+            raise ValueError('Expected SHA differs from checked-out HEAD; execution refused')
+        if report['dirty']:
+            raise ValueError('Tracked source is dirty; execution refused')
         if not args.disposable:
             raise ValueError('Explicit --disposable selection required; no existing user authority may be used')
         from datetime import date
@@ -365,6 +377,13 @@ def main(argv=None):
             report.update(outcome='FAIL', reason=f'{type(exc).__name__}: {exc}')
         else:
             report.update(outcome='PASS', reason=f'{args.repeat} fresh run(s): independent domain reads, negative control and restart verified')
+    if report['outcome'] == 'PASS':
+        report['achieved_size'] = dict(report['requested_size']) # independently verified by execute, per fresh authority
+    if not report['inference_executed']:
+        report['model_hashes'] = {}
+    for run in report.get('runs', []):
+        if not run['inference_executed']:
+            run['model_hashes'] = {}
     report['foundation'] = 'COMPLETE' if report['outcome'] == 'PASS' and args.repeat == 2 else 'PARTIAL'
     report['seconds'] = round(time.monotonic() - started, 3)
     write_report(evidence, report)

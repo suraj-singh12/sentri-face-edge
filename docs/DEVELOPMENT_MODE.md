@@ -411,3 +411,96 @@ python -c "import sys; sys.path.insert(0, 'scripts'); from qa_foundation import 
 Expected diagnostic: `result.participants[0]: expected 'person-b', actual 'person-a'`.
 The real journey separately applies deliberately wrong location truth to the same
 persisted-read verifier and requires that precise mismatch before reporting PASS.
+
+### CI summaries and repeatable reporting (#18)
+
+Open a PR's **Checks → CI and Windows packaging → run Summary**. Each of the
+existing five jobs writes a compact native GitHub summary: outcome, platform,
+executed test pass/fail/skip totals, recorded command duration and exact **checked-out**
+SHA. A PR checkout normally tests GitHub's merge commit; that SHA can differ from
+the PR head. Packaging runs nested backend/frontend regressions inside `build_release.ps1`;
+separate structured totals are unavailable, so open its build-step log for those results.
+The summary shows at most three distinct failure groups. All failures, test IDs,
+source declarations, coverage IDs and stage exit codes are in the job's
+`qa-<check>-<OS>` artifact (`report.json`, schema version 1; `summary.md`).
+
+Read the failure category before interpreting impact:
+
+- **test/product behavior:** an executed assertion failed; this alone does not
+  establish a product defect or root cause.
+- **environment/setup:** dependency installation or toolchain preparation failed.
+- **test infrastructure:** JUnit or a Node hook reports a harness/fixture error.
+- **unknown:** evidence cannot establish the category; investigate the failed step.
+- **BLOCKED/skipped:** execution was unavailable or not meaningful. Skips never
+  count as passes. Cancellation is always **CANCELLED**, even with partial passes.
+
+Backend results use pytest JUnit. Frontend results use a small serializer of
+Node 22's native test events alongside its normal console reporter, in one suite
+execution with no dependency. Node 22's built-in JUnit reporter omits parent-test
+assertions after nested children; native events retain those failures and count
+all tests (including parents), while skips/todos remain separate.
+
+The first explanation names the actual source-verified test and location where
+available, a safe error/comparison, curated coverage purpose when applicable,
+and one investigation step. Numeric comparisons without explicit expected/actual
+labels retain their original operand order. Unknown impact requires investigation.
+Only identical raw failure signatures at the same source location are grouped;
+all group members remain in JSON. Multiple subtest/teardown diagnostics within
+one JUnit testcase are all retained, with a diagnostic index; totals count the
+failed testcase once. Dynamic/unverified test names or parameter
+values are withheld, with an availability indicator; use the original JUnit/test
+output in the failing step log to identify those cases. Source lines point to test
+declarations, not guessed assertion locations.
+
+For deeper evidence, expand the failed step log. Backend reproduction:
+`python -m pytest -q tests/test_example.py::test_name` (replace with the reported
+ID); frontend: `npm --prefix frontend test`; build: `npm --prefix frontend run build`;
+Windows packaging: `powershell -NoProfile -File .\build_release.ps1` on a prepared
+Windows machine. Use the reported SHA and the same Python 3.12 / Node 22 toolchain.
+Packaging failures also identify the last failing literal `Invoke-Checked` stage
+from `build_release.ps1`, with its verified source declaration. Other build text
+stays in the existing step logs. The Windows packaging job also publishes the separately named `SentriFaceEdge-Windows-x64-unsigned-engineering-candidate` artifact after the release inspection and checksum verification succeed. Download it from the Actions run artifacts. It contains only the installer, its `.sha256` file and a minimal manifest linking the installer hash to the tested commit. The release build regenerates frontend assets; the manifest records whether those generated tracked files changed. Other source changes prevent publication. From the extracted directory, run `sha256sum -c SentriFaceEdge-2.0.0-x64-unsigned-pretag-rc.exe.sha256` (or compare `Get-FileHash -Algorithm SHA256 <installer>` with that file in PowerShell). It is an unsigned engineering candidate, not a signed production release or model-acceptance claim. Artifacts expire after seven days; private QA fixtures, logs and traces are not uploaded.
+
+Public artifacts expire after **7 days**. The reporter never copies arbitrary
+JUnit text, assertion objects, environment variables, application logs, absolute
+paths, model hashes, photos, model weights, licenses, credentials, storage or
+private Playwright traces. Public diagnostics allow only source-declared test
+names/locations, curated coverage metadata, known error classes and bounded
+numeric/bool/null comparisons. Other details are explicitly withheld. Raw JUnit and Node event JSON
+are **not uploaded**. Original CI command logs still use GitHub's existing log
+access/retention; keep real operator data out of public CI. Command exit codes
+are preserved, summaries run with `always()`, and reporter failure emits a minimal
+fallback and fails its step. If the runner is forcibly terminated, a summary or
+artifact may be unavailable. No extra aggregator or permissions are required. Status is a snapshot at publication:
+GitHub can fail/cancel a job during later action cleanup, after reporting ran. The
+final job conclusion in Checks takes precedence, including later cancellation;
+this report cannot predict post-job outcomes. This boundary was observed during
+a real concurrency cancellation in #18 verification.
+
+Longer QA remains local on an authorized machine. Reuse the Foundation setup and
+reviewed fixtures/model declaration above, then run (PowerShell or bash):
+
+```text
+python scripts/qa_foundation.py --expected-sha FULL_40_CHARACTER_HEAD_SHA --phase Foundation --test QA-J01 --density journey-only --repeat 2 --disposable --fixtures LOCAL_FIXTURES --models-config LOCAL_MODEL_DECLARATION --evidence-output qa-fixtures/runs
+```
+
+`--expected-sha` binds this invocation to checked-out HEAD; a mismatch or dirty
+tracked source produces BLOCKED/exit 2 **before any fixture/model execution**.
+The legacy invocation remains usable without the optional SHA flag; use it for
+repeatable campaigns. Nothing switches/resets branches. Evidence output must
+remain beneath ignored `qa-fixtures/`; the runner creates a unique subdirectory.
+Existing private QA-J01 `report.json`/`junit.xml`, traces and photographs stay under
+operator custody. Do not upload these local reports to public Actions: they are
+not sanitized CI reports.
+
+Currently executable selections are **Foundation / QA-J01 / journey-only / 1 or
+2 repetitions**. Journey-only requests one Person, two distinct reviewed photos
+and one Encounter **per fresh authority**; achieved sizes are recorded separately
+and confirmed only after independent successful verification. Partial runs report
+zero confirmed achieved size, rather than estimating partially created records.
+Missing authorized assets or browser prerequisites are BLOCKED, never PASS. Model
+hashes appear in local results only when actual inference occurred. Unsupported
+features, Sparse/Regular/Dense profiles and Normal/Moderate/Advanced campaigns are
+rejected, not silently downsized; these belong to #19–#21 and their operator gates.
+No real models, heavy workflow, VM configuration or model downloads are added by
+#18. macOS Foundation qualification from #17 does not qualify the new Windows VM.
