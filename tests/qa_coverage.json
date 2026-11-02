@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "scope": "Compact feature inventory; partial means existing synthetic/domain coverage, not real biometric acceptance",
+  "scope": "Source coverage inventory; normal_acceptance is executable selection, never an execution claim. Current SHA-bound status is in private runner reports.",
   "dataset_profiles": {
     "Sparse": {
       "target": {
@@ -99,7 +99,7 @@
         "src/sentriface/engine.py"
       ],
       "tests": [
-        "tests/test_person_management.py"
+        "tests/test_auth_api.py::AuthenticationApiTest::test_person_profile_defaults_to_effective_view_for_every_entry_point"
       ],
       "status": "partial",
       "phases": [
@@ -280,13 +280,14 @@
     {
       "id": "QA-CORR01",
       "feature": "Identity correction",
-      "behavior": "Effective participant consistency across views; issue #22 known gap",
-      "risk": "issue #22 known gap",
+      "behavior": "Effective participant consistency across views; #22 fixed by merged PR #24",
+      "risk": "Regression in corrected effective participation",
       "source": [
         "src/sentriface/storage/sqlite_store.py"
       ],
       "tests": [
-        "tests/test_identity_corrections.py"
+        "tests/test_identity_corrections.py",
+        "tests/test_world_intelligence.py::test_combined_fixed_oct29_corrected_period_locations"
       ],
       "status": "partial",
       "phases": [
@@ -299,7 +300,7 @@
         "Regular",
         "Dense"
       ],
-      "missing": "Real browser/ONNX integration and independently checked cross-view history",
+      "missing": "Extensive correction histories reserved for Moderate #20",
       "dependencies": []
     },
     {
@@ -573,5 +574,143 @@
       "dependencies": []
     }
   ],
-  "acceptance_phases": "Normal \u2192 operator gate \u2192 Moderate \u2192 operator gate \u2192 Advanced; no automatic progression"
+  "acceptance_phases": "Normal \u2192 operator gate \u2192 Moderate \u2192 operator gate \u2192 Advanced; no automatic progression",
+  "normal_acceptance": [
+    {
+      "id": "N01",
+      "feature": "Authentication",
+      "tests": [
+        "tests/test_auth_api.py::AuthenticationApiTest::test_first_run_signup_cookie_status_and_logout",
+        "tests/test_auth_api.py::AuthenticationApiTest::test_backend_enforces_each_role_boundary"
+      ],
+      "journeys": [
+        "QA-J02"
+      ],
+      "limitation": "Available session lock/unlock is Sign out/Sign in; no separate lock control exists."
+    },
+    {
+      "id": "N02",
+      "feature": "People",
+      "tests": [
+        "tests/test_auth_api.py::AuthenticationApiTest::test_person_profile_defaults_to_effective_view_for_every_entry_point"
+      ],
+      "journeys": [
+        "QA-J02"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "N03",
+      "feature": "References",
+      "tests": [
+        "tests/test_recognition_references.py::test_bootstrap_and_enrolled_use_one_source_contract_and_independent_vectors",
+        "tests/test_recognition_references.py::test_ack_and_legacy_controller_cannot_bypass_admission",
+        "tests/test_recognition_references.py::test_reference_cancel_removes_staging_and_retains_no_ordinary_work"
+      ],
+      "journeys": [
+        "QA-J01"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "N04",
+      "feature": "Recognition",
+      "tests": [],
+      "journeys": [
+        "QA-J01"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "N05",
+      "feature": "Review Photos",
+      "tests": [
+        "tests/test_photo_review_finalization.py::PhotoReviewFinalizationTest::test_fresh_schema_and_incomplete_review_cannot_finalize",
+        "tests/test_photo_review_finalization.py::PhotoReviewFinalizationTest::test_single_existing_and_single_new_finalize_without_edges",
+        "tests/test_queue_cancellation_api.py::QueueCancellationApiTest::test_cancel_endpoint_stops_scan_and_removes_partial_session"
+      ],
+      "journeys": [
+        "QA-J01"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "N06",
+      "feature": "Encounters",
+      "tests": [
+        "tests/test_photo_review_finalization.py::PhotoReviewFinalizationTest::test_queue_staged_faces_attach_all_media_and_finalize_atomically"
+      ],
+      "journeys": [
+        "QA-J01",
+        "QA-J02"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "N07",
+      "feature": "Events / Profiles",
+      "tests": [
+        "tests/test_photo_review_finalization.py::PhotoReviewFinalizationTest::test_event_pages_and_present_plus_mentioned_do_not_add_evidence"
+      ],
+      "journeys": [
+        "QA-J01",
+        "QA-J02"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "N08",
+      "feature": "World / Person Graph",
+      "tests": [
+        "tests/test_graph_read_contracts.py::GraphReadContractsTest::test_person_graph_aggregates_multiple_relationships_and_provenance",
+        "tests/test_world_intelligence.py::test_combined_fixed_oct29_corrected_period_locations",
+        "tests/test_qa_normal.py::test_bounded_domain_reads"
+      ],
+      "journeys": [
+        "QA-J01",
+        "QA-J02"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "N09",
+      "feature": "Explore",
+      "tests": [
+        "tests/test_world_intelligence.py::test_query_validation_and_additive_payload",
+        "tests/test_qa_normal.py::test_bounded_domain_reads"
+      ],
+      "journeys": [
+        "QA-J02"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "N10",
+      "feature": "Persistence",
+      "tests": [],
+      "journeys": [
+        "QA-J01",
+        "QA-J02"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "J01",
+      "feature": "Genuine biometric journey",
+      "tests": [],
+      "journeys": [
+        "QA-J01"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "J02",
+      "feature": "Ordinary non-biometric journey",
+      "tests": [],
+      "journeys": [
+        "QA-J02"
+      ],
+      "limitation": "Media-free domain fixture setup is separate from operator actions; no synthetic inference."
+    }
+  ]
 }

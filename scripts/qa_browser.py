@@ -52,6 +52,9 @@ def select(page, label, value):
 
 def create_person(page, truth):
     page.get_by_role('tab', name='People', exact=True).click()
+    back = page.get_by_role('button', name='Back to people', exact=True)
+    if back.count():
+        back.click()
     page.get_by_role('button', name='Add without photo', exact=True).click()
     dialog = page.get_by_role('dialog', name='Add person without a photograph')
     for label, value in [('Rank', 'QA fixture'), ('Name', truth['actor']), ('Date', truth['date']),
@@ -190,3 +193,94 @@ def snapshot(context, truth, person_id, query_hash):
     return {'person_id': person_id, 'actor': person['person']['name'], 'observation_id': oid,
             'date': truth['date'], 'location': detail['location'], 'participant_ids': detail['participant_ids'],
             'media_id': media['media_id'], 'media_sha256': query_hash, 'world_count': discovery['count']}
+
+
+def reference_snapshot(context, person_id):
+    """Expected ownership/eligibility comes from the enrollment input, not proposals."""
+    profile = get(context, '/api/person?' + urlencode({'person_id': person_id}))
+    catalog = profile['recognition_references']
+    assert_expected({'active_count': 1, 'drafts': []}, catalog, 'Reference.catalog')
+    assert_expected(1, len(catalog['references']), 'Reference.count')
+    reference = catalog['references'][0]
+    assert_expected({'person_id': person_id, 'canonical_person_id': person_id, 'active': True,
+                     'recognition_conflict': False, 'recognition_eligible': True,
+                     'origin': 'STANDALONE_ENROLLMENT'}, reference, 'Reference.owner')
+    return {'owner': person_id, 'eligible': True, 'count': 1}
+
+
+def single_person_graph(context, person_id):
+    graph = get(context, '/api/person-graph?' + urlencode({'person_id': person_id}))
+    assert_expected({'root_person_id': person_id, 'edge_count': 0, 'edges': []}, graph, 'PersonGraph.no_invented_pair')
+
+
+def edit_person(page, name, *, cancel=False):
+    page.get_by_role('button', name='Edit', exact=True).click()
+    page.get_by_role('menuitem', name='Edit profile', exact=True).click()
+    dialog = page.get_by_role('dialog', name='Edit Person', exact=True)
+    field(dialog, 'Name').fill(name)
+    field(dialog, 'Edited by').fill('QA operator')
+    if cancel:
+        dialog.get_by_role('button', name='Cancel', exact=True).click()
+    else:
+        action(page, '/api/person-update', lambda: dialog.get_by_role('button', name='Save Changes', exact=True).click())
+    dialog.wait_for(state='hidden')
+
+
+def ordinary_snapshot(context, expected_people, expected_events, date):
+    """Non-biometric truth is authored before fixture writes and UI operations.
+
+    Names, participant sets, dates, locations and occurrence counts are expected
+    input; generated IDs only address the records. No production calculation is
+    imported. Full event collection must fit the bounded tiny journey.
+    """
+    people = get(context, '/api/persons')['persons']
+    assert_expected(sorted(expected_people), sorted(p['person_id'] for p in people), 'J02.people.ids')
+    for pid, name in expected_people.items():
+        person = get(context, '/api/person?' + urlencode({'person_id': pid}))['person']
+        assert_expected({'person_id': pid, 'name': name, 'biometric_status': 'NO_FACE'}, person, 'J02.person')
+    events = get(context, '/api/encounters')
+    assert_expected(None, events['next_cursor'], 'J02.events.cursor')
+    assert_expected(sorted(expected_events), sorted(e['observation_id'] for e in events['events']), 'J02.events.ids')
+    for event in events['events']:
+        assert_expected(expected_events[event['observation_id']], event, 'J02.event')
+    for oid, expected in expected_events.items():
+        detail = get(context, '/api/encounter?' + urlencode({'observation_id': oid}))
+        assert_expected(expected, detail, 'J02.encounter')
+        assert_expected(date, detail['observed_at'][:10], 'J02.encounter.date')
+        assert_expected([], detail['media'], 'J02.no_photographic_claim')
+    for pid in expected_people:
+        expected_ids = sorted(oid for oid, e in expected_events.items() if pid in e['participant_ids'])
+        sightings = get(context, '/api/person-sightings?' + urlencode({'person_id': pid}))['sightings']
+        assert_expected(expected_ids, sorted(s['observation_id'] for s in sightings), 'J02.sightings')
+    world = get(context, '/api/world-graph?version=2&view=EXPLORE&evidence_type=CO_OBSERVED&collection=MOST_RECENTLY_SEEN')
+    expected_counts = {pid: sum(pid in e['participant_ids'] for e in expected_events.values()) for pid in expected_people}
+    assert_expected(sorted(expected_counts.items()), sorted((d['canonical_person_id'], d['count']) for d in world['discoveries']), 'J02.discovery')
+    for discovery in world['discoveries']:
+        expected_ids = sorted(oid for oid, e in expected_events.items() if discovery['canonical_person_id'] in e['participant_ids'])
+        assert_expected(expected_ids, sorted(e['event_id'] for e in discovery['supporting_encounters']), 'J02.discovery.proof')
+    return {'people': expected_people, 'events': expected_events, 'graph_revision': world['graph_revision']}
+
+
+def browse_ordinary(page, name, location, person_id, observation_id):
+    """Operator navigation; correctness is established separately by ordinary_snapshot."""
+    page.get_by_role('tab', name='Events', exact=True).click()
+    with page.expect_response(lambda r: r.url.split('?')[0].endswith('/api/encounter')) as saved:
+        page.locator('.encounter-list-row').filter(has_text=location).click()
+    if not saved.value.ok:
+        raise AssertionError('Encounter navigation failed')
+    assert_expected({'observation_id': observation_id, 'participant_ids': [person_id], 'location': location}, saved.value.json(), 'navigation.Encounter')
+    page.get_by_role('button', name='Back to Events', exact=True).click()
+    page.get_by_role('tab', name='World', exact=True).click()
+    page.get_by_text('Explore', exact=True).click()
+    page.get_by_role('button', name='Recently seen', exact=True).click()
+    page.locator('.explore-record').filter(has_text=name).click()
+    page.get_by_role('button', name=f'Inspect {name}', exact=True).click()
+    with page.expect_response(lambda r: '/api/world-graph?' in r.url and 'level=PERSON' in r.url and person_id in r.url) as proof:
+        page.get_by_role('button', name='Inspect supporting proof', exact=True).click()
+    if not proof.value.ok:
+        raise AssertionError('Explore proof navigation failed')
+    payload = proof.value.json()
+    assert_expected({'requested_detail_level': 'PERSON', 'focus': {'type': 'PERSON', 'id': person_id}}, payload, 'navigation.Explore')
+    focused = [p for p in payload['people'] if p['canonical_person_id'] == person_id]
+    assert_expected(1, len(focused), 'navigation.focused_count')
+    assert_expected(name, focused[0]['display_name'], 'navigation.focused_name')
