@@ -34,13 +34,17 @@ def prepare(root=ROOT):
     if (inspection.get('status') != 'PASS' or inspection.get('version') != version
         or inspection.get('expected_architecture') != 'AMD64' or item.get('path') != name
         or item.get('sha256') != digest or item.get('architecture') != 'AMD64'
-        or item.get('size') != installer.stat().st_size or provenance.get('commit') != sha
-        or provenance.get('working_tree_clean') is not True
-        or provenance.get('version') != version or provenance.get('development_build') is not True
-        or provenance.get('authenticode_signed') is not False or len(artifacts) != 1
-        or artifacts[0].get('name') != name or artifacts[0].get('sha256') != digest
-        or artifacts[0].get('size') != installer.stat().st_size):
-        raise ValueError('Release inspection or provenance does not match installer')
+        or item.get('size') != installer.stat().st_size):
+        raise ValueError('Release inspection does not match the exact AMD64 installer')
+    if provenance.get('commit') != sha or provenance.get('version') != version:
+        raise ValueError('Release provenance commit or version does not match checkout')
+    if provenance.get('working_tree_clean') is not True:
+        raise ValueError('Release provenance records a dirty source tree')
+    if provenance.get('development_build') is not True or provenance.get('authenticode_signed') is not False:
+        raise ValueError('Release provenance is not an unsigned engineering candidate')
+    if (len(artifacts) != 1 or artifacts[0].get('name') != name
+        or artifacts[0].get('sha256') != digest or artifacts[0].get('size') != installer.stat().st_size):
+        raise ValueError('Release provenance installer identity, size or hash mismatch')
     output = root / 'qa-fixtures/installer-public'
     output.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(installer, output / name)
