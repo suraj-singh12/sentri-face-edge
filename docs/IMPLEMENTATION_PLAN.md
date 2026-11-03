@@ -1,5 +1,41 @@
 # Global identity graph implementation plan
 
+## Issue #21 — bounded Advanced User QA
+
+Extends the existing Foundation runner/registry/private reports for exactly
+A01–A08/H01–H02. Reuses Moderate completed-review fixtures, independent map
+comparator/read adapters, source application, browser authentication/tracing,
+encrypted disposable authorities, exact credential cleanup, existing merge fault
+seams and P11 checker/rebuild. No product changes, schema, history reducer, new
+framework or CI job. The clean executed checkpoint is in DEVELOPMENT_MODE; final source and CI evidence belong on Issue #21/PR.
+
+H01 authors three accepted Encounters: A/X, B/Y, A+C/Z. REASSIGN A→B at X,
+location revision, independent A/C and B/C manual assertions, legal A→B merge,
+selected B→C Person Note, EXCLUDE Z co-observation and selected Event mention
+are independently checked at each transition. Raw review/face/media and manual
+provenance remain separate from canonical current truth. Duplicate canonical
+standing assertions collapse without raw-row deletion. Exact evidence sources,
+direction, operations, occurrences, locations and cross-feature projections are
+checked against explicit scenario inputs. Generated IDs are handles only.
+
+H02 uses another authority: stale correction rejection; graph-boundary correction
+rollback; canonical-update merge rollback. Exceptions and injection reachability
+are asserted. Failed corrections leave no journal; failed merge retains its
+required FAILED attempt and requires a new ID. Successful lost-response replay
+returns one logical result. These are safe in-process failure equivalents, not a
+process-kill or arbitrary power-loss claim. Restart/rebuild/P11 verify final truth.
+
+Existing tests cover multi-face atomicity, reference caps/ownership/conflicts,
+stale revisions, roles, tombstones and proposal-vs-operator identity. New tests
+add archived-source merge, denied merge endpoints, a Regular 25-Person/30-Encounter
+correction/merge pagination history and four precise negative oracle mutations.
+No Dense escalation or photographic volume campaign. Source restarts verify
+live authenticated HTTP projections and browser Events navigation/refresh after
+domain operations while stopped; no UI merge/fault-action claim. A separate fresh
+admitted-ONNX correction uses existing authorized photographs where available.
+Missing biometric evidence keeps the Advanced campaign incomplete (exit 2), even
+if its ten domain/browser rows pass. Skips/declarations never justify PASS.
+
 ## Issue #20 — Moderate User QA implementation
 
 Reuses the Foundation/Normal runner, comparator, browser actions, encrypted source
@@ -37,7 +73,7 @@ are maintained in [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md#moderate-user-qa-20).
 
 ## Issue #19 — Normal User QA implementation
 
-World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 completed and merged through [PR #28](https://github.com/suraj-singh12/sentri-face-edge/pull/28). Moderate #20 is operator-authorized for implementation/execution; acceptance and any Advanced #21 work remain separate operator gates. Schema v34 and the existing authority boundaries remain unchanged.
+World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 completed and merged through [PR #28](https://github.com/suraj-singh12/sentri-face-edge/pull/28). Moderate #20 completed and merged through [PR #29](https://github.com/suraj-singh12/sentri-face-edge/pull/29). The operator authorized the bounded Advanced #21 campaign; final acceptance and merge remain separate operator gates. Schema v34 and the existing authority boundaries remain unchanged.
 
 The existing Foundation runner now selects `--phase Normal --test Normal`:
 focused representative feature checks first, then J02 and genuine J01 on separate

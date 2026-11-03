@@ -404,15 +404,18 @@ def normal_campaign(args, evidence, report, started):
     journey proofs count; declaration, collection and skips never become PASS.
     """
     import qa_browser as ui
-    moderate = getattr(args, 'phase', 'Normal') == 'Moderate'
-    registry_key = 'moderate_acceptance' if moderate else 'normal_acceptance'
+    phase = getattr(args, 'phase', 'Normal')
+    advanced = phase == 'Advanced'
+    moderate = phase == 'Moderate'
+    stateful = moderate or advanced
+    registry_key = phase.lower() + '_acceptance'
     registry = json.loads((ROOT / 'tests/qa_coverage.json').read_text())[registry_key]
-    selected = registry if args.test in ('Normal', 'Moderate') else [r for r in registry if r['id'] == args.test]
+    selected = registry if args.test in ('Normal', 'Moderate', 'Advanced') else [r for r in registry if r['id'] == args.test]
     report.update(runs=[], acceptance=[], inference_executed=False, model_hashes={}, dataset_scope='Per fresh authority; see runs and datasets, never cumulative biometric volume')
     report.pop('requested_size', None)
     report.pop('achieved_size', None)
     focused = {}
-    if args.test == 'Normal' or moderate:
+    if args.test == 'Normal' or stateful:
         targets = sorted({target for row in selected for target in row.get('tests', [])})
         with (evidence / 'focused.log').open('wb') as stream:
             result = subprocess.run([sys.executable, '-m', 'pytest', '-q', *targets,
@@ -431,7 +434,7 @@ def normal_campaign(args, evidence, report, started):
         report['focused_exit_code'] = result.returncode
         report['focused_results'] = focused
         report['datasets'] = [json.loads(prop.get('value')) for prop in ET.parse(evidence / 'focused.xml').iter('property') if prop.get('name') == 'dataset']
-    journey_ids = sorted({j for row in selected for j in row.get('journeys', [])}) if moderate else (['QA-J02', 'QA-J01'] if args.test == 'Normal' else ['QA-J02'])
+    journey_ids = sorted({j for row in selected for j in row.get('journeys', [])}) if stateful else (['QA-J02', 'QA-J01'] if args.test == 'Normal' else ['QA-J02'])
     for journey in journey_ids:
         run = dict(test_id=journey, outcome='BLOCKED', inference_executed=False, model_hashes={})
         report['runs'].append(run)
@@ -443,9 +446,12 @@ def normal_campaign(args, evidence, report, started):
                 require_browser()
             except ImportError as exc:
                 raise ui.Blocked('Install the optional Playwright QA dependency') from exc
-            if moderate:
-                import qa_moderate
-                qa_moderate.execute(args, directory, run, journey)
+            if stateful:
+                if advanced:
+                    import qa_advanced as campaign
+                else:
+                    import qa_moderate as campaign
+                campaign.execute(args, directory, run, journey)
                 assert_expected({'browser_executed': True, 'domain_verified': True, 'rebuild_verified': True}, run, 'Moderate.proofs')
             elif journey == 'QA-J01':
                 try:
@@ -474,9 +480,9 @@ def normal_campaign(args, evidence, report, started):
         run['seconds'] = round(time.monotonic() - start, 3)
         if not run['inference_executed']:
             run['model_hashes'] = {}
-    if moderate and args.test == 'Moderate':
+    if stateful and args.test == phase:
         # Supplemental genuine saved-Encounter correction, never historical #19 proof.
-        run = dict(test_id='Moderate-biometric', outcome='BLOCKED', inference_executed=False, model_hashes={})
+        run = dict(test_id=phase + '-biometric', outcome='BLOCKED', inference_executed=False, model_hashes={})
         report['runs'].append(run)
         directory = evidence / 'biometric'; directory.mkdir(mode=0o700)
         try:
@@ -521,17 +527,25 @@ def normal_campaign(args, evidence, report, started):
     report['outcome'] = 'FAIL' if 'FAIL' in states or report.get('focused_exit_code', 0) else 'PASS' if all(s == 'PASS' for s in states) else 'BLOCKED'
     if args.test == 'QA-J02':
         report['outcome'] = journeys['QA-J02']['outcome']
-    if moderate:
+    if stateful:
         report['historical_proofs'] = [dict(test=case.get('classname') + '::' + case.get('name'),
             **{p.get('name'): json.loads(p.get('value')) for p in case.iter('property') if p.get('name') in ('historical_proofs', 'provenance')})
             for case in ET.parse(evidence / 'focused.xml').iter('testcase') if any(p.get('name') == 'historical_proofs' for p in case.iter('property'))]
         report['outcome'] = 'FAIL' if report['outcome'] == 'FAIL' or any(r['outcome'] == 'FAIL' for r in report['runs']) else report['outcome']
-        report['biometric_status'] = journeys.get('Moderate-biometric', {}).get('outcome', 'NOT RUN')
+        report['biometric_status'] = journeys.get(phase + '-biometric', {}).get('outcome', 'NOT RUN')
         for row in report['acceptance']:
             row.update(commit=report.get('commit'), environment=report.get('platform'), evidence=str(evidence),
                        domain_verification=bool(row['tests']) and all(v == 'PASS' for v in row['tests'].values()),
                        browser_verification=bool(row['journeys']) and all(v == 'PASS' for v in row['journeys'].values()))
-    report['reason'] = ('Moderate' if moderate else 'Normal') + ' campaign evidence; operator acceptance and subsequent phases remain separate gates.'
+    if advanced:
+        if report['biometric_status'] != 'PASS' and report['outcome'] == 'PASS':
+            report['outcome'] = 'BLOCKED'
+        for row in report['acceptance']:
+            row.update(operations_reference='historical_proofs / runs historical_proofs and focused.xml',
+                original_expected_observed_reference='historical_proofs', differences_reference='focused.xml failures / historical_proofs differences',
+                real_inference=False, fault_injection='precommit stale rejection; correction graph boundary; merge after_canonical_update' if row['id'] in ('A04','A05','H02') else None,
+                restart_rebuild_reference='runs H01/H02 and connected-history/Regular tests', product_defects=[])
+    report['reason'] = phase + ' campaign evidence; operator acceptance and subsequent phases remain separate gates.'
     report['seconds'] = round(time.monotonic() - started, 3)
     write_report(evidence, report)
     print(json.dumps(report, indent=2))
@@ -563,10 +577,10 @@ def write_report(evidence, report):
     case = ET.SubElement(suite, 'testcase', name=report['test_id'], classname='sentriface.qa', time=str(report['seconds']))
     if report['outcome'] != 'PASS':
         ET.SubElement(case, 'skipped' if report['outcome'] == 'BLOCKED' else 'failure', message=report['reason']).text = report['reason']
-    if report.get('phase') == 'Moderate':
+    if report.get('phase') in ('Moderate', 'Advanced'):
         rows = report.get('acceptance', [])
         for row in rows:
-            item = ET.SubElement(suite, 'testcase', name=row['id'], classname='sentriface.qa.Moderate')
+            item = ET.SubElement(suite, 'testcase', name=row['id'], classname='sentriface.qa.' + report['phase'])
             if row['status'] != 'PASS':
                 ET.SubElement(item, 'failure' if row['status'] == 'FAIL' else 'skipped', message=row.get('reason', row.get('limitation') or row['status']))
         suite.set('tests', str(1 + len(rows)))
@@ -580,12 +594,12 @@ def require_browser():
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Foundation J01 and bounded Normal/Moderate User QA. Assets and evidence stay local.')
+    parser = argparse.ArgumentParser(description='Foundation J01 and bounded Normal/Moderate/Advanced User QA. Assets and evidence stay local.')
     parser.add_argument('--expected-sha', help='Exact full checked-out commit; mismatch refuses execution')
-    parser.add_argument('--phase', choices=['Foundation', 'Normal', 'Moderate'], default='Foundation')
+    parser.add_argument('--phase', choices=['Foundation', 'Normal', 'Moderate', 'Advanced'], default='Foundation')
     parser.add_argument('--density', choices=['journey-only'], default='journey-only', help='One Person, two distinct photos, one Encounter per fresh run; full profiles unavailable')
     parser.add_argument('--evidence-output', type=Path, help='Local parent directory beneath ignored qa-fixtures/')
-    parser.add_argument('--test', default='QA-J01', choices=['QA-J01', 'QA-J02', 'Normal', 'Moderate', 'C01', 'C02'] + [f'M{i:02}' for i in range(1, 9)])
+    parser.add_argument('--test', default='QA-J01', choices=['QA-J01', 'QA-J02', 'Normal', 'Moderate', 'Advanced', 'C01', 'C02', 'H01', 'H02'] + [f'M{i:02}' for i in range(1, 9)] + [f'A{i:02}' for i in range(1, 9)])
     parser.add_argument('--disposable', action='store_true', help='Explicitly authorize a fresh disposable QA authority, never an existing database')
     parser.add_argument('--fixtures', type=Path, default=ROOT / 'qa-fixtures/marvel-actors')
     parser.add_argument('--actor', default='Chris Evans')
@@ -608,6 +622,8 @@ def main(argv=None):
               'evidence': str(evidence), 'reason': ''}
     report.update(phase=args.phase, density=args.density, requested_size={'people': 1, 'photos': 2, 'encounters': 1}, achieved_size={'people': 0, 'photos': 0, 'encounters': 0})
     try:
+        if args.phase == 'Advanced' and args.test not in ['Advanced', 'H01', 'H02'] + [f'A{i:02}' for i in range(1,9)]:
+            raise ValueError('Advanced requires --test Advanced, A01-A08 or H01-H02')
         if args.phase == 'Moderate' and args.test in ('QA-J01', 'QA-J02', 'Normal'):
             raise ValueError('Moderate requires --test Moderate, M01-M08 or C01-C02')
         if args.expected_sha is not None and (len(args.expected_sha) != 40 or args.expected_sha != report['commit']):
@@ -621,7 +637,7 @@ def main(argv=None):
         if not args.location.strip():
             raise ValueError('Known location required')
         if args.test != 'QA-J01':
-            expected_phase = 'Normal' if args.test in ('QA-J02', 'Normal') else 'Moderate'
+            expected_phase = 'Advanced' if args.test in ['Advanced','H01','H02'] + [f'A{i:02}' for i in range(1,9)] else 'Normal' if args.test in ('QA-J02', 'Normal') else 'Moderate'
             if args.phase != expected_phase:
                 raise ValueError(args.test + ' requires --phase ' + expected_phase)
         else:
@@ -639,8 +655,8 @@ def main(argv=None):
                 return normal_campaign(args, evidence, report, started)
             except Exception as exc:
                 report.update(outcome='FAIL', reason=f'QA campaign infrastructure: {type(exc).__name__}: {exc}', seconds=round(time.monotonic() - started, 3))
-                if args.phase == 'Moderate' and not report.get('acceptance'):
-                    rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())['moderate_acceptance']
+                if args.phase in ('Moderate', 'Advanced') and not report.get('acceptance'):
+                    rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())[args.phase.lower() + '_acceptance']
                     report['acceptance'] = [dict(id=r['id'], status='NOT RUN', reason=report['reason']) for r in rows]
                 write_report(evidence, report)
                 print(json.dumps(report, indent=2))
@@ -672,8 +688,8 @@ def main(argv=None):
             report.update(outcome='FAIL', reason=f'{type(exc).__name__}: {exc}')
         else:
             report.update(outcome='PASS', reason=f'{args.repeat} fresh run(s): independent domain reads, negative control and restart verified')
-    if (args.test != 'QA-J01' or args.phase == 'Moderate') and 'acceptance' not in report:
-        rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())['moderate_acceptance' if args.phase == 'Moderate' else 'normal_acceptance']
+    if (args.test != 'QA-J01' or args.phase in ('Moderate', 'Advanced')) and 'acceptance' not in report:
+        rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())[args.phase.lower() + '_acceptance' if args.phase in ('Moderate','Advanced') else 'normal_acceptance']
         report['acceptance'] = [dict(id=r['id'], status='NOT RUN', reason=report['reason']) for r in rows]
     if report['outcome'] == 'PASS':
         report['achieved_size'] = dict(report['requested_size']) # independently verified by execute, per fresh authority
