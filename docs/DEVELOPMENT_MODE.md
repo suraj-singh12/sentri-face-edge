@@ -493,17 +493,11 @@ Existing private QA-J01 `report.json`/`junit.xml`, traces and photographs stay u
 operator custody. Do not upload these local reports to public Actions: they are
 not sanitized CI reports.
 
-Currently executable selections are **Foundation / QA-J01 / journey-only / 1 or
-2 repetitions**. Journey-only requests one Person, two distinct reviewed photos
-and one Encounter **per fresh authority**; achieved sizes are recorded separately
-and confirmed only after independent successful verification. Partial runs report
-zero confirmed achieved size, rather than estimating partially created records.
-Missing authorized assets or browser prerequisites are BLOCKED, never PASS. Model
-hashes appear in local results only when actual inference occurred. Unsupported
-features, Sparse/Regular/Dense profiles and Normal/Moderate/Advanced campaigns are
-rejected, not silently downsized; these belong to #19–#21 and their operator gates.
-No real models, heavy workflow, VM configuration or model downloads are added by
-#18. macOS Foundation qualification from #17 does not qualify the new Windows VM.
+Foundation remains **QA-J01 / journey-only / 1 or 2 repetitions**. Normal and
+Moderate now have additional bounded selections described below. Full photographic
+Sparse/Regular/Dense and Advanced campaigns remain unqualified; unsupported density
+choices are refused, never silently downsized. No model/photo downloads or heavy
+workflow are added. Historical host results do not qualify another revision/host.
 
 
 ## Normal User QA #19
@@ -589,3 +583,97 @@ selection, accidental fixture-class test collection, source-command fixture impo
 and omitted normal safety-copy acknowledgment. Their affected tests/journeys were
 rerun; no product defect was established. All private photos/models/licenses,
 credentials, raw assertions, traces and authority files remain outside Git.
+
+
+## Moderate User QA #20
+
+Start from the latest hardening HEAD after operator authorization. On the supported
+source environment and a clean issue branch:
+
+```bash
+python scripts/qa_foundation.py --phase Moderate --test Moderate --expected-sha FULL_40_CHARACTER_HEAD_SHA --disposable --actor "Scarlett Johansson" --fixtures qa-fixtures/marvel-actors --models-config qa-fixtures/models.json --date 2026-11-03
+```
+
+Reuse the existing authorized local photos/model declaration; nothing is acquired.
+C01/C02 use source dev mode **without invoking synthetic inference**, with explicit
+completed-review fixture setup while the app is stopped. People, participant and
+Relations forms use the real UI; Person Notes/manual decisions also use actual
+HTTP services. Domain media paths are fixture provenance, not photographic bytes.
+A supplemental genuine source ONNX run corrects the saved Encounter's location,
+checks its exact original query hash and repeats reads after a second restart.
+Missing assets/browser/runtime are recorded as BLOCKED/NOT RUN and never PASS;
+a genuine executed assertion failure fails the campaign. The optional biometric
+result is separate from the ten correction entries.
+
+`--test M01` through `M08`, `C01`, or `C02` executes only that entry's linked tests
+and journeys. The full matrix remains incomplete (exit 2) unless all required
+evidence actually ran. Exit 1 preserves test/infrastructure failures, including a
+nonzero focused command even if all emitted testcases passed. Missing or skipped
+linked evidence produces NOT RUN/PARTIAL. Moderate JSON records all ten rows,
+source SHA/environment, per-test execution, browser/domain flags, independent
+historical proofs, exact occurrence/evidence IDs, datasets and limitations. JUnit
+contains the overall campaign and ten entry results. All raw reports, model/photo
+hashes, authority paths, assertions, traces and screenshots remain under the
+existing ignored private `qa-fixtures/runs/<run>/` directory. Do not upload them.
+
+Focused checks include metadata date/time/location revisions; participant
+reassign/add/remove; Attach ownership, stale-plan retry and cancel; Relations
+INCLUDE/EXCLUDE with retained independent manual/Note sources; Event, Sighting and
+Person selected/literal mentions; archive/restore; authorization, invalid/stale
+requests, idempotence and existing transaction atomicity checks. Original review
+and media provenance is separate from effective presence. C01 checks the pure
+FACE_ASSIGNMENT regression as well as actual UI correction. Read comparisons
+include Encounter, Events, Person Events/Sightings, canonical Person Graph,
+Current World/Explore relationships, clusters and exact supporting evidence,
+7/30/90-day Frequent/Recent/Multiple Locations, refresh/restart and supported
+storage-service graph rebuild while the app is stopped.
+
+Unsupported dedicated Sighting-edit UI/HTTP and in-place Manual endpoint editing
+are NOT RUN with source-contract evidence; existing domain note revisions and
+manual retire/create are covered. No feature is added to satisfy QA. No new
+scale/performance run is attempted without correction-specific risk. The genuine
+Sparse/Regular/Dense photographic profiles remain NOT RUN; domain fixture counts
+never substitute for photographs. Windows/installer and Advanced QA are separate.
+
+
+### Executed Moderate checkpoint — 2026-11-03
+
+Clean source `dfea5def6c5347b1c72f35ce5442268ef3bcf3f3`, macOS 26.0 arm64:
+M01–M08 and C01–C02 **PASS** against their linked executed evidence. Campaign
+86.368 s; 33 focused tests passed, C01 19.796 s, C02 24.251 s, plus a fresh
+real-ONNX saved-Encounter correction. Private evidence reference
+`qa-fixtures/runs/5d29b2cd91e044089d428d727ef7d718/`: `report.json`,
+`focused.xml`, `junit.xml`, C01/C02 traces and biometric correction/restart trace.
+This checkpoint predates final proof-record refinements; final PR-head rerun and
+GitHub tested merge SHA are reported on the PR and Issue #20.
+
+C01's independently expected A→B correction yielded B's two legitimate Encounters
+at X/Y and no A presence, duplicated occurrence, self-edge or manufactured pair.
+The pure FACE_ASSIGNMENT domain path rechecked #22/#24 independently from the live
+UI REASSIGN path. Actual metadata UI revisions and selected Event mentions retained
+historical A mentions without presence or relationship evidence. C02 retained
+manual support across EXCLUDE, retained co-observation across manual/Note removal,
+and distinguished literal from selected Person/Sighting references. Domain Attach
+added media to the same Encounter without adding presence/occurrences; existing
+stale-target retry/cancel regressions passed. Refresh, fresh source restart,
+supported domain graph rebuild and exact credential cleanup passed. Genuine
+correction retained original query bytes after its second source restart.
+
+| Authority | Requested People / genuine photos / Encounters | Created and verified | Evidence limit |
+| --- | --- | --- | --- |
+| C01 domain and browser, separately | 2 / 0 / 2 | 2 / 0 / 2 each | Two deterministic face/media records, no inference |
+| C02 browser | 2 / 0 / 1 | 2 / 0 / 1 | Deterministic completed-review fixture, UI/API decisions |
+| C02 domain | 2 / 0 / 1 | 2 / 0 / 1 | Three media records after attachment, zero genuine photos |
+| Supplemental genuine ONNX | 1 / 2 / 1 | 1 / 2 / 1 | Existing reviewed distinct pair; saved-location correction |
+| Full Sparse 3/6/2 | NOT RUN | Not claimed | Only the existing one-Person reviewed pair reused |
+| Regular 25/80/30 and Dense 100/350/120 | NOT RUN | Not claimed | No additional correction-specific scale risk identified |
+
+Broader regression: **910 backend passed / 89 existing skips / 137 subtests**,
+**140 frontend passed**, production build passed (existing bundle-size advisory).
+QA/report/oracle subset: **105 passed / 2 opt-in mechanism skips**; actual browser
+journeys and ONNX ran separately. A stale reporter test still rejecting Moderate,
+a wrong UI selector and non-UUID QA operation IDs were QA implementation defects,
+corrected and rerun. No product defect was confirmed; no production code changed.
+Unsupported dedicated Sighting-edit UI/HTTP and in-place Manual endpoint editing
+remain explicitly NOT RUN. Evidence is ready for operator review after final-head
+verification; no Moderate acceptance, merge or Advanced authorization is inferred.

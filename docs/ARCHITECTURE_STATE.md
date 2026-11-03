@@ -2,7 +2,7 @@
 
 ## Current World and QA qualification (2026-10-29)
 
-World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 is operator-approved; execution at its own revision is required. Moderate #20 remains gated on subsequent operator review. Schema v34 and the existing authority boundaries remain unchanged.
+World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 completed and merged through [PR #28](https://github.com/suraj-singh12/sentri-face-edge/pull/28). Moderate #20 is operator-authorized for implementation/execution; acceptance and any Advanced #21 work remain separate operator gates. Schema v34 and the existing authority boundaries remain unchanged.
 
 ## Historical Issue #3 implementation checkpoint
 

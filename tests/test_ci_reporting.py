@@ -191,7 +191,7 @@ def test_missing_assets_blocked_without_hash_claim(tmp_path, monkeypatch, capsys
     assert result['achieved_size']['people'] == 0
 
 
-@pytest.mark.parametrize('option,value', [('--phase', 'Moderate'), ('--test', 'QA-J03'), ('--density', 'Sparse'), ('--repeat', '3')])
+@pytest.mark.parametrize('option,value', [('--phase', 'Advanced'), ('--test', 'QA-J03'), ('--density', 'Sparse'), ('--repeat', '3')])
 def test_manual_unavailable_selection(option, value):
     sys.path.insert(0, str(ROOT / 'scripts'))
     import qa_foundation as qa
