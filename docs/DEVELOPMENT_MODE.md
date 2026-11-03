@@ -504,3 +504,88 @@ features, Sparse/Regular/Dense profiles and Normal/Moderate/Advanced campaigns a
 rejected, not silently downsized; these belong to #19–#21 and their operator gates.
 No real models, heavy workflow, VM configuration or model downloads are added by
 #18. macOS Foundation qualification from #17 does not qualify the new Windows VM.
+
+
+## Normal User QA #19
+
+Reuse the supported Python 3.12 source environment, installed frontend, Playwright
+Chromium and normal macOS Keychain. Run on a clean issue branch. Only J01 needs
+reviewed distinct genuine photos and the existing permitted local model
+declaration (see Foundation prerequisites above). Nothing is downloaded by this
+campaign. The normal runner continues J02 and focused checks if those biometric
+inputs are unavailable; J01 is NOT RUN with the precise blocker in its report.
+
+```bash
+python scripts/qa_foundation.py --phase Normal --test Normal --expected-sha FULL_40_CHARACTER_HEAD_SHA --disposable --actor "Scarlett Johansson" --fixtures qa-fixtures/marvel-actors --models-config qa-fixtures/models.json --date 2026-11-02
+```
+
+For J02 alone, omit the photo/model arguments and select `--phase Normal --test
+QA-J02`. Foundation's existing `--test QA-J01` command and default two fresh runs
+are preserved. Normal runs each of the two journeys once; `--repeat` applies to
+Foundation J01 only. `--density journey-only` describes the genuine baseline;
+Regular/Dense read comparisons are separately labeled domain fixtures, never
+biometric acceptance. No full Sparse photographic campaign is inferred from one
+reviewed pair.
+
+The existing ignored `qa-fixtures/runs/<run>/report.json` adds `acceptance` for all
+twelve entries: PASS only when every linked executed test/journey passed, FAIL
+when evidence contradicted truth, PARTIAL when some evidence passed but the rest
+is incomplete, NOT RUN when none executed. BLOCKED describes a missing prerequisite
+and maps to NOT RUN/PARTIAL, never product failure or PASS. Exit 0 means selected
+scope passed, 1 means execution failed, 2 means acceptance is incomplete. A J02-only
+success leaves the full matrix incomplete. The report records source SHA, dirty
+state, platform, per-test outcomes, journey proofs, timings and requested/created/
+independently verified quantities. JUnit, application logs and browser evidence
+remain private; use the existing `ci_report.py` allowlist for CI publication.
+
+Available session lock/unlock is **Sign out / Sign in**. No dedicated lock control
+exists in this revision. J02 checks that a signed-out mutation is rejected and
+that saved identity remains unchanged. Fixtures are prepared using domain methods
+on this run's exact disposable encrypted database while the app is stopped;
+operator UI actions are separately recorded. Source dev mode performs no inference
+in J02. J01 requires admitted real ONNX, encrypted authority and offline guards.
+Cleanup removes only the random QA directory and its exact storage/recovery vault
+entries and verifies the credentials are absent. Failure assertions, screenshots,
+traces and model/photo details must stay local. No report should be copied wholesale
+into GitHub. Review and reproduce failures before classifying a product defect.
+
+
+### Executed checkpoint — 2026-11-02
+
+Clean source `f1a37bebd82d8d7f1799eef7783ce8276a16d4ef`, macOS 26.0 arm64:
+Normal campaign **PASS** in 47.638 s. N01, N02, N03, N04, N05, N06, N07, N08,
+N09, N10, J01 and J02 each passed its linked executed checks. The focused campaign
+ran 19 tests; J02 took 21.837 s and genuine J01 19.976 s. Reference ownership and
+eligibility, exact saved query bytes, participants, occurrences, People/World reads,
+wrong-location rejection, proof navigation, refresh/restart and exact credential
+cleanup passed. These are execution results, not operator acceptance. The draft PR
+records the final head rerun and GitHub's distinct tested merge SHA; this checkpoint
+does not substitute for either.
+
+| Dataset | Requested People / photos / Encounters | Created and independently verified | Limits |
+| --- | --- | --- | --- |
+| Genuine journey-only J01 | 1 / 2 / 1 | 1 / 2 / 1 | One reviewed distinct pair; real admitted ONNX |
+| J02 domain journey | 2 / 0 / 2 | 2 / 0 / 2 | Media-free deterministic occurrences; no inference |
+| Sparse | 3 / 6 / 2 | Not attempted as a full profile | Only 2 of 10 local candidate photos are reviewed; one actor |
+| Regular domain reads | 25 / 80 / 30 | 25 / 0 / 30 | No photographic acceptance; Event pagination and World discovery only |
+| Dense domain reads | 100 / 350 / 120 | 100 / 0 / 120 | Same two operations; zero photographic evidence |
+
+Regular/Dense first/repeat/reopen timings are retained in private report properties;
+Event pagination was approximately 2–3 / 7–8 ms, World discovery approximately
+2–3 / 11–12 ms respectively. These are local observations without pass thresholds.
+Repeated reads and reopening preserved every occurrence and all audited database
+rows. Additional genuine photo acquisition/review and Windows qualification are
+outside this execution.
+
+At the same source checkpoint: backend **893 passed / 89 skipped / 137 subtests
+passed**; frontend **140 passed**, production build and dependency check passed;
+QA/report/oracle machinery **88 passed / 2 opt-in browser checks skipped**. The
+campaign's two live browser journeys actually ran separately. Existing platform
+and obsolete-suite skips are not acceptance passes. The existing frontend bundle
+size advisory remains; generated assets did not change.
+
+QA defects found and corrected during implementation: missing Explore evidence
+selection, accidental fixture-class test collection, source-command fixture import,
+and omitted normal safety-copy acknowledgment. Their affected tests/journeys were
+rerun; no product defect was established. All private photos/models/licenses,
+credentials, raw assertions, traces and authority files remain outside Git.

@@ -2,7 +2,7 @@
 
 ## Current World boundary and QA (2026-10-29)
 
-World intelligence [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) adds evidence-filtered reads, recurrence and discoveries at the existing backend; the Current World UI is unchanged. Optional Explore view [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13) has not been implemented. QA #17 demonstrated one macOS genuine browser/ONNX Encounter journey twice on [PR #23], merged as `6a9ec82`(https://github.com/suraj-singh12/sentri-face-edge/pull/23); this does not establish all UI flows have been tested. Corrected World participation defect [#22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) remains open.
+World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 is operator-approved; execution at its own revision is required. Moderate #20 remains gated on subsequent operator review. Schema v34 and the existing authority boundaries remain unchanged.
 
 ## Batch 3.7 operator flows
 

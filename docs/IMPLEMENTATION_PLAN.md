@@ -1,11 +1,41 @@
 # Global identity graph implementation plan
 
-## Issue #13 — native World Explore implementation
+## Issue #19 — Normal User QA implementation
+
+World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 is operator-approved; execution at its own revision is required. Moderate #20 remains gated on subsequent operator review. Schema v34 and the existing authority boundaries remain unchanged.
+
+The existing Foundation runner now selects `--phase Normal --test Normal`:
+focused representative feature checks first, then J02 and genuine J01 on separate
+disposable authorities. `tests/qa_coverage.json::normal_acceptance` owns exactly
+N01–N10/J01–J02 and links reused tests to actual per-run outcomes. Missing,
+skipped or blocked evidence cannot yield PASS. Failures remain failures pending
+investigation; this PR changes QA and documentation only.
+
+J02 creates/edits/searches People through the UI, checks cancel and signed-out
+write rejection, then uses the existing deterministic World domain helper for two
+media-free occurrences while the app is stopped. Events, Current/Explore,
+supporting proof, refresh and restart are checked against independently authored
+input. No synthetic detector or embedding is invoked. J01 additionally verifies
+Reference ownership/eligibility and absence of invented Person Graph edges.
+The existing wrong-location negative control remains.
+
+Exactly two larger-volume read operations are exercised: Event pagination and
+World discovery. Regular 25/30 and Dense 100/120 People/Encounters use domain
+fixtures with zero verified photos. Timings, achieved/verified counts and limits
+are in the existing private JSON/JUnit. Full genuine Sparse/Regular/Dense remain
+unqualified when reviewed photo quantities are unavailable. Historical runs are
+not evidence for this implementation revision.
+
+Run instructions and result semantics: [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md#normal-user-qa-19).
+Operator review is required before #20; no merge or phase acceptance is implied.
+
+
+## Issue #13 — native World Explore implementation (merged PR #26)
 
 ### Approved UI refinement v2
 
 The operator-approved `SentriFace_World_Explore_UI_Refinement_v2.html` is implemented
-on the existing #13 branch / draft PR #26. This changes Explore presentation only:
+in merged PR #26. This changes Explore presentation only:
 counted Evidence popover, native ON/OFF weaker-links button, compact paired discovery
 navigation, and type-specific Inspector hierarchy with a docked proof action.
 Controllers, graph layout/selection, backend queries, Current World, saved locations,
@@ -82,7 +112,7 @@ Review boundaries: browser fixture identities are synthetic test records, not a
 recognition/model-quality claim. Large scale, corrected identity/provenance,
 revision/cursor and authorization semantics use the existing passing backend
 regressions. Native macOS/Windows runtime/packaging results and exact final-SHA
-five-job CI status belong to the linked draft PR. No VM runner is configured.
+five-job CI status belong to merged PR #26. No VM runner is configured.
 Operator review should repeat the visible workflow on representative local data;
 no additional VM acceptance is required by this frontend-only change.
 
@@ -136,7 +166,7 @@ semantics are expanded by this read correction.
 Exact-SHA checks, measured performance and combined Period acceptance belong to the
 linked PR and #22 evidence. PR #15 stays independent; #13 remains open for Explore UI.
 
-## Issue #13 — bounded backend Period correction (reviewed, merge pending)
+## Historical Issue #13 — bounded backend Period correction review
 
 Based on refreshed hardening `f907073edc3375dbfd15b8bb39cc6d32bc60f6b6`.
 Multiple Locations now shares Frequent’s validated `discovery_period_days`
@@ -160,7 +190,7 @@ passed. No separate lint/type checker is configured. Skips cover obsolete APIs a
 platform-specific checks (Windows PowerShell/Inno and macOS); no World tests skipped.
 Exact-SHA CI and independent QA status belong to the draft PR.
 
-## Current delivery gate — World #3, QA #17 and correction #22 merged
+## Historical delivery gate — World #3, QA #17 and correction #22 merged
 
 World intelligence [#3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) is merged into hardening at `f907073`. Optional Explore UI is [#13](https://github.com/suraj-singh12/sentri-face-edge/issues/13); period-scope [PR #15](https://github.com/suraj-singh12/sentri-face-edge/pull/15) is separately reviewed after [correction #22](https://github.com/suraj-singh12/sentri-face-edge/issues/22) merged in [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). QA Foundation [#17](https://github.com/suraj-singh12/sentri-face-edge/issues/17) passed two genuine macOS QA-J01 runs and five CI jobs on [PR #23](https://github.com/suraj-singh12/sentri-face-edge/pull/23) (`b81d451`); it was merged as `6a9ec82` after final-head `6eda54a` passed all five CI jobs. Future QA phases #18–#21 require operator gates; release #5 remains pending. GitHub Issues own live task status.
 

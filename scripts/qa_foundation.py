@@ -1,6 +1,7 @@
 """Offline QA primitives. No application/biometric acceptance is implied by these checks."""
 from __future__ import annotations
 import argparse
+import platform
 import hashlib
 import json
 import subprocess
@@ -18,6 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
+sys.path.insert(0, str(ROOT)) # Existing deterministic fixtures are imported by J02.
 
 
 def assert_expected(expected, actual, path="result"):
@@ -133,7 +135,8 @@ def admit_models(config, data_dir, log):
 
 class Application:
     """Existing source entry point, fresh authority, loopback only, normal auth."""
-    def __init__(self, data_dir, evidence):
+    def __init__(self, data_dir, evidence, runtime="onnx"):
+        self.runtime = runtime
         self.data_dir, self.evidence, self.process, self.stream = data_dir, evidence, None, None
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
@@ -142,8 +145,8 @@ class Application:
 
     def start(self):
         self.stream = (self.evidence / 'application.log').open('ab')
-        self.process = subprocess.Popen([sys.executable, '-m', 'sentriface.ui', '--runtime', 'onnx',
-            '--allow-unpackaged-source-onnx', '--data-dir', str(self.data_dir), '--port', str(self.port)],
+        self.process = subprocess.Popen([sys.executable, '-m', 'sentriface.ui', '--runtime', self.runtime,
+            *(['--allow-unpackaged-source-onnx'] if self.runtime == 'onnx' else []), '--data-dir', str(self.data_dir), '--port', str(self.port)],
             cwd=ROOT, env=source_environment(), stdout=self.stream, stderr=subprocess.STDOUT)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({})) # Loopback only.
         deadline = time.monotonic() + 90
@@ -219,7 +222,10 @@ def execute(args, config, pair, evidence, report):
                     person_id = ui.create_person(page, truth)
                     report['step'] = 'enroll Reference through UI'
                     ui.enroll(page, args.fixtures, pair[0], args.actor)
+                    report['reference_verified'] = ui.reference_snapshot(context, person_id)
                     assert_expected({'events': []}, ui.get(context, '/api/encounters'), 'ReferenceOnly.no_presence')
+                    assert_expected({'sightings': []}, ui.get(context, '/api/person-sightings?person_id=' + person_id), 'ReferenceOnly.no_sighting')
+                    assert_expected({'discoveries': []}, ui.get(context, '/api/world-graph?version=2&collection=MOST_RECENTLY_SEEN'), 'ReferenceOnly.no_world_presence')
                     report['step'] = 'recognize, operator confirmation and finalize'
                     inference, _ = ui.recognize_and_finalize(page, context, args.fixtures, pair[1], truth, person_id, report)
                     report['inference_executed'] = True
@@ -236,6 +242,10 @@ def execute(args, config, pair, evidence, report):
                         report['negative_control'] = {'outcome': 'FAIL_EXPECTED', 'mismatch': str(exc)}
                     else:
                         raise AssertionError('Verifier accepted deliberately incorrect location')
+                    ui.single_person_graph(context, person_id)
+                    ui.browse_ordinary(page, truth['actor'], truth['location'], person_id, before['observation_id'])
+                    page.reload()
+                    ui.snapshot(context, truth, person_id, pair[1]['sha256'])
                     page.screenshot(path=str(evidence / 'finalized.png'))
                     context.tracing.stop(path=str(evidence / 'journey.zip'))
                     context.close(); context = None
@@ -247,6 +257,8 @@ def execute(args, config, pair, evidence, report):
                     ui.attest(context, data_dir, report['model_hashes'])
                     after = ui.snapshot(context, truth, person_id, pair[1]['sha256'])
                     assert_expected(before, after, 'restart')
+                    ui.reference_snapshot(context, person_id)
+                    ui.single_person_graph(context, person_id)
                     report['verified'] = after
                     report['restart_verified'] = True
                     if report['browser_errors']:
@@ -272,6 +284,196 @@ def execute(args, config, pair, evidence, report):
     report['cleanup_completed'] = True
 
 
+def execute_ordinary(args, evidence, report):
+    """J02 uses dev source mode without calling its synthetic detector/embedder.
+
+    People writes are UI actions. Two media-free occurrences are deterministic
+    domain fixture setup, using the existing World fixture utility while stopped.
+    They are never labeled photographic or biometric evidence.
+    """
+    from playwright.sync_api import sync_playwright, expect
+    import qa_browser as ui
+    from sentriface.secure_storage import load_or_create_master_key
+    from sentriface.storage.sqlite_store import SQLiteIdentityStore
+    from tests.test_world_graph_v2 import WorldGraphV2Test
+    password = secrets.token_urlsafe(24)
+    report.update(browser_errors=[], inference_executed=False, fixture_setup='Existing World domain fixture; two media-free occurrences; no inference')
+    with disposable_data() as data:
+        app = Application(data, evidence, runtime='dev')
+        context = browser = page = None
+        try:
+            app.start()
+            with sync_playwright() as playwright:
+                try:
+                    browser = playwright.chromium.launch(executable_path=args.chromium, headless=not args.headed)
+                except Exception as exc:
+                    raise ui.Blocked(f'Chromium unavailable: {exc}') from exc
+                try:
+                    context, page = browser_context(browser, app.url, report['browser_errors'])
+                    ui.authenticate(page, password, first=True)
+                    first = ui.create_person(page, dict(actor='Normal Alpha', date=args.date, location=args.location))
+                    ui.edit_person(page, 'Cancelled identity', cancel=True)
+                    assert_expected('Normal Alpha', ui.get(context, '/api/person?person_id=' + first)['person']['name'], 'J02.cancel_edit')
+                    ui.edit_person(page, 'Normal Alpha Edited')
+                    second = ui.create_person(page, dict(actor='Normal Beta', date=args.date, location=args.location))
+                    names = {first: 'Normal Alpha Edited', second: 'Normal Beta'}
+                    # Session lock/unlock in the available UI is Sign out/Sign in.
+                    page.get_by_role('button', name='Open account menu').click()
+                    ui.action(page, '/api/auth/logout', lambda: page.get_by_role('menuitem', name='Sign out').click())
+                    rejected = context.request.post('/api/person-update', data={'person_id': first, 'name': 'Unauthorized'})
+                    assert_expected(401, rejected.status, 'J02.unauthorized_write')
+                    ui.authenticate(page, password, first=False, recovery=False)
+                    context.tracing.stop(path=str(evidence / 'people.zip'))
+                    context.close(); context = None
+                    app.stop()
+                    # Exact disposable authority only. Existing domain helper; no SQL writes.
+                    store = SQLiteIdentityStore(data / 'sentriface.db', database_key=load_or_create_master_key(data))
+                    store.initialize()
+                    expected = {}
+                    for index, pid in enumerate(names):
+                        location = f'{args.location} {index + 1}'
+                        oid = WorldGraphV2Test()._observe(store, f'normal-{index}', [pid],
+                            observed_at=args.date + 'T12:00:00+00:00', location=location)
+                        expected[oid] = dict(participant_ids=[pid], location=location, media_count=0)
+                    report['requested_size'] = dict(people=2, photos=0, encounters=2)
+                    app.start()
+                    for cycle in ('fixture', 'refresh', 'restart'):
+                        if cycle == 'restart':
+                            context.tracing.stop(path=str(evidence / 'navigation.zip'))
+                            context.close(); context = None
+                            app.stop(); app.start()
+                        if cycle != 'refresh':
+                            context, page = browser_context(browser, app.url, report['browser_errors'])
+                            ui.authenticate(page, password, first=False, recovery=False)
+                        else:
+                            page.reload()
+                        before = ui.ordinary_snapshot(context, names, expected, args.date)
+                        page.get_by_role('tab', name='People', exact=True).click()
+                        search = page.get_by_placeholder('Search by name, ID or tag...')
+                        search.fill('no-such-normal-person')
+                        expect(page.get_by_role('button', name='Open Normal Beta', exact=True)).to_have_count(0)
+                        search.fill('Normal Alpha Edited')
+                        page.get_by_role('button', name='Open Normal Alpha Edited', exact=True).click()
+                        ui.browse_ordinary(page, names[first], args.location + ' 1', first, next(oid for oid, e in expected.items() if e['participant_ids'] == [first]))
+                        after = ui.ordinary_snapshot(context, names, expected, args.date)
+                        assert_expected(before, after, 'J02.read_only')
+                    report['verified'] = after
+                    report['achieved_size'] = dict(report['requested_size'])
+                    report['restart_verified'] = True
+                    assert_expected([], report['browser_errors'], 'J02.browser_errors')
+                    context.tracing.stop(path=str(evidence / 'restart.zip'))
+                except Exception:
+                    try:
+                        if page and not page.is_closed():
+                            page.screenshot(path=str(evidence / 'failure.png'))
+                        if context:
+                            context.tracing.stop(path=str(evidence / 'failure.zip'))
+                    except Exception as capture_error:
+                        report['evidence_error'] = str(capture_error)
+                    raise
+                finally:
+                    if context:
+                        context.close()
+                    browser.close()
+        finally:
+            app.stop()
+    report['cleanup_completed'] = True
+
+
+def normal_status(states):
+    if 'FAIL' in states:
+        return 'FAIL'
+    if states and all(s == 'PASS' for s in states):
+        return 'PASS'
+    return 'PARTIAL' if 'PASS' in states else 'NOT RUN'
+
+
+def normal_campaign(args, evidence, report, started):
+    """Extend the Foundation report, not a second runner/reporting format.
+
+    Registry links select focused tests. Only completed testcase results and
+    journey proofs count; declaration, collection and skips never become PASS.
+    """
+    import qa_browser as ui
+    registry = json.loads((ROOT / 'tests/qa_coverage.json').read_text())['normal_acceptance']
+    report.update(runs=[], acceptance=[], inference_executed=False, model_hashes={}, dataset_scope='Per fresh authority; see runs and datasets, never cumulative biometric volume')
+    report.pop('requested_size', None)
+    report.pop('achieved_size', None)
+    focused = {}
+    if args.test == 'Normal':
+        targets = sorted({target for row in registry for target in row.get('tests', [])})
+        with (evidence / 'focused.log').open('wb') as stream:
+            result = subprocess.run([sys.executable, '-m', 'pytest', '-q', *targets,
+                '--junitxml=' + str(evidence / 'focused.xml')], cwd=ROOT, env=source_environment(),
+                stdout=stream, stderr=subprocess.STDOUT, timeout=600)
+        result_states = {}
+        for case in ET.parse(evidence / 'focused.xml').iter('testcase'):
+            for target in targets:
+                parts = target.split('::')
+                classname = parts[0][:-3].replace('/', '.') + ('.' + '.'.join(parts[1:-1]) if len(parts) > 2 else '')
+                if case.get('classname') == classname and case.get('name', '').split('[')[0] == parts[-1]:
+                    state = 'FAIL' if any(case.find(t) is not None for t in ('failure', 'error')) else 'NOT RUN' if case.find('skipped') is not None else 'PASS'
+                    result_states.setdefault(target, []).append(state)
+        for target, states in result_states.items():
+            focused[target] = 'FAIL' if 'FAIL' in states else 'PASS' if all(s == 'PASS' for s in states) else 'NOT RUN'
+        report['focused_exit_code'] = result.returncode
+        report['focused_results'] = focused
+        report['datasets'] = [json.loads(prop.get('value')) for prop in ET.parse(evidence / 'focused.xml').iter('property') if prop.get('name') == 'dataset']
+    for journey in (['QA-J02', 'QA-J01'] if args.test == 'Normal' else ['QA-J02']):
+        run = dict(test_id=journey, outcome='BLOCKED', inference_executed=False, model_hashes={})
+        report['runs'].append(run)
+        directory = evidence / journey
+        directory.mkdir(mode=0o700)
+        start = time.monotonic()
+        try:
+            try:
+                require_browser()
+            except ImportError as exc:
+                raise ui.Blocked('Install the optional Playwright QA dependency') from exc
+            if journey == 'QA-J01':
+                try:
+                    pair = verified_pair(args.fixtures, args.actor)
+                    config = model_inputs(args.models_config)
+                except (OSError, ValueError, KeyError) as exc:
+                    raise ui.Blocked(str(exc)) from exc
+                run['model_hashes'] = {k: config[k + '_sha256'] for k in ('detector', 'recognizer')}
+                execute(args, config, pair, directory, run)
+                assert_expected({'reference_verified': {'owner': run['verified']['person_id'], 'eligible': True, 'count': 1},
+                    'inference_executed': True, 'negative_control': {'outcome': 'FAIL_EXPECTED'}}, run, 'J01.proofs')
+            else:
+                execute_ordinary(args, directory, run)
+            assert_expected({'restart_verified': True, 'cleanup_completed': True, 'browser_errors': []}, run, 'journey.proofs')
+            run['outcome'] = 'PASS'
+            if journey == 'QA-J01':
+                run['requested_size'] = dict(people=1, photos=2, encounters=1)
+                run['achieved_size'] = dict(run['requested_size'])
+        except ui.Blocked as exc:
+            run.update(outcome='BLOCKED', reason=str(exc), category='environment blocker')
+        except Exception as exc:
+            run.update(outcome='FAIL', reason=f'{type(exc).__name__}: {exc}',
+                       category='uncertain observation; investigate private evidence')
+        run['seconds'] = round(time.monotonic() - start, 3)
+        if not run['inference_executed']:
+            run['model_hashes'] = {}
+    journeys = {r['test_id']: r for r in report['runs']}
+    for row in registry:
+        evidence_states = [focused.get(t, 'NOT RUN') for t in row.get('tests', [])]
+        evidence_states += [journeys.get(j, {}).get('outcome', 'NOT RUN') for j in row.get('journeys', [])]
+        status = normal_status(evidence_states)
+        report['acceptance'].append(dict(id=row['id'], status=status, tests={t: focused.get(t, 'NOT RUN') for t in row.get('tests', [])},
+            journeys={j: journeys.get(j, {}).get('outcome', 'NOT RUN') for j in row.get('journeys', [])}, limitation=row.get('limitation', '')))
+    report['inference_executed'] = any(r['inference_executed'] for r in report['runs'])
+    states = [r['status'] for r in report['acceptance']]
+    report['outcome'] = 'FAIL' if 'FAIL' in states or report.get('focused_exit_code', 0) else 'PASS' if all(s == 'PASS' for s in states) else 'BLOCKED'
+    if args.test == 'QA-J02':
+        report['outcome'] = journeys['QA-J02']['outcome']
+    report['reason'] = 'Normal campaign evidence; operator acceptance and Moderate progression remain separate gates.'
+    report['seconds'] = round(time.monotonic() - started, 3)
+    write_report(evidence, report)
+    print(json.dumps(report, indent=2))
+    return {'PASS': 0, 'FAIL': 1, 'BLOCKED': 2}[report['outcome']]
+
+
 def cleanup_qa_credentials(data_dir):
     # Only called for this execution's random, already removed QA directory.
     # Preserve the key if filesystem cleanup failed, just like source-dev reset.
@@ -286,13 +488,15 @@ def cleanup_qa_credentials(data_dir):
             keyring.delete_password(service, account)
         except PasswordDeleteError:
             pass
+        if keyring.get_password(service, account) is not None:
+            raise RuntimeError('Disposable credential cleanup did not remove exact QA entry')
 
 
 def write_report(evidence, report):
     (evidence / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf8')
-    suite = ET.Element('testsuite', name='QA-J01', tests='1', failures=str(int(report['outcome'] == 'FAIL')),
+    suite = ET.Element('testsuite', name=report['test_id'], tests='1', failures=str(int(report['outcome'] == 'FAIL')),
                        skipped=str(int(report['outcome'] == 'BLOCKED')), time=str(report['seconds']))
-    case = ET.SubElement(suite, 'testcase', name='QA-J01', classname='sentriface.qa', time=str(report['seconds']))
+    case = ET.SubElement(suite, 'testcase', name=report['test_id'], classname='sentriface.qa', time=str(report['seconds']))
     if report['outcome'] != 'PASS':
         ET.SubElement(case, 'skipped' if report['outcome'] == 'BLOCKED' else 'failure', message=report['reason']).text = report['reason']
     ET.ElementTree(suite).write(evidence / 'junit.xml', encoding='utf-8', xml_declaration=True)
@@ -303,12 +507,12 @@ def require_browser():
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='QA-J01 real browser / ONNX journey. Assets and evidence stay local.')
+    parser = argparse.ArgumentParser(description='Foundation J01 and bounded Normal User QA. Assets and evidence stay local.')
     parser.add_argument('--expected-sha', help='Exact full checked-out commit; mismatch refuses execution')
-    parser.add_argument('--phase', choices=['Foundation'], default='Foundation')
+    parser.add_argument('--phase', choices=['Foundation', 'Normal'], default='Foundation')
     parser.add_argument('--density', choices=['journey-only'], default='journey-only', help='One Person, two distinct photos, one Encounter per fresh run; full profiles unavailable')
     parser.add_argument('--evidence-output', type=Path, help='Local parent directory beneath ignored qa-fixtures/')
-    parser.add_argument('--test', default='QA-J01', choices=['QA-J01'])
+    parser.add_argument('--test', default='QA-J01', choices=['QA-J01', 'QA-J02', 'Normal'])
     parser.add_argument('--disposable', action='store_true', help='Explicitly authorize a fresh disposable QA authority, never an existing database')
     parser.add_argument('--fixtures', type=Path, default=ROOT / 'qa-fixtures/marvel-actors')
     parser.add_argument('--actor', default='Chris Evans')
@@ -326,8 +530,8 @@ def main(argv=None):
     evidence = evidence_parent / uuid.uuid4().hex
     evidence.mkdir(parents=True, mode=0o700)
     report = {'test_id': args.test, 'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-              'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=no'], cwd=ROOT, text=True)),
-              'outcome': 'BLOCKED', 'model_hashes': {}, 'fixture_hashes': [], 'inference_executed': False,
+              'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True)),
+              'platform': platform.platform(), 'outcome': 'BLOCKED', 'model_hashes': {}, 'fixture_hashes': [], 'inference_executed': False,
               'evidence': str(evidence), 'reason': ''}
     report.update(phase=args.phase, density=args.density, requested_size={'people': 1, 'photos': 2, 'encounters': 1}, achieved_size={'people': 0, 'photos': 0, 'encounters': 0})
     try:
@@ -341,15 +545,27 @@ def main(argv=None):
         date.fromisoformat(args.date)
         if not args.location.strip():
             raise ValueError('Known location required')
-        pair = verified_pair(args.fixtures, args.actor)
-        report['fixture_hashes'] = [r['sha256'] for r in pair]
-        config = model_inputs(args.models_config)
-        report['model_hashes'] = {k: config[k + '_sha256'] for k in ('detector', 'recognizer')}
-        report['model_names'] = {k: Path(config[k + '_source']).name for k in ('detector', 'recognizer')}
-        require_browser()
+        if args.test != 'QA-J01':
+            if args.phase != 'Normal':
+                raise ValueError('QA-J02/Normal requires --phase Normal')
+        else:
+            pair = verified_pair(args.fixtures, args.actor)
+            report['fixture_hashes'] = [r['sha256'] for r in pair]
+            config = model_inputs(args.models_config)
+            report['model_hashes'] = {k: config[k + '_sha256'] for k in ('detector', 'recognizer')}
+            report['model_names'] = {k: Path(config[k + '_source']).name for k in ('detector', 'recognizer')}
+            require_browser()
     except (ValueError, KeyError, OSError, ImportError) as exc:
         report['reason'] = str(exc)
     else:
+        if args.test != 'QA-J01':
+            try:
+                return normal_campaign(args, evidence, report, started)
+            except Exception as exc:
+                report.update(outcome='FAIL', reason=f'QA campaign infrastructure: {type(exc).__name__}: {exc}', seconds=round(time.monotonic() - started, 3))
+                write_report(evidence, report)
+                print(json.dumps(report, indent=2))
+                return 1
         from qa_browser import Blocked
         try:
             report['runs'] = []
@@ -377,6 +593,9 @@ def main(argv=None):
             report.update(outcome='FAIL', reason=f'{type(exc).__name__}: {exc}')
         else:
             report.update(outcome='PASS', reason=f'{args.repeat} fresh run(s): independent domain reads, negative control and restart verified')
+    if args.test != 'QA-J01' and 'acceptance' not in report:
+        rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())['normal_acceptance']
+        report['acceptance'] = [dict(id=r['id'], status='NOT RUN', reason=report['reason']) for r in rows]
     if report['outcome'] == 'PASS':
         report['achieved_size'] = dict(report['requested_size']) # independently verified by execute, per fresh authority
     if not report['inference_executed']:
