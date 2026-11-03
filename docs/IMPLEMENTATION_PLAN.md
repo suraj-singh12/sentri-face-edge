@@ -1,8 +1,43 @@
 # Global identity graph implementation plan
 
+## Issue #20 — Moderate User QA implementation
+
+Reuses the Foundation/Normal runner, comparator, browser actions, encrypted source
+startup, disposable data/credential cleanup, existing domain fixtures, registry and
+private JSON/JUnit. `--phase Moderate --test Moderate` selects exactly M01–M08 and
+C01–C02. Individual IDs select bounded evidence and leave unexecuted matrix entries
+NOT RUN/PARTIAL. The existing five CI jobs run the fast domain/reporting tests;
+no workflow, product service, authority, schema or UI changes are required.
+
+The independent scenario inputs name original/effective identities, Encounter IDs,
+locations, timestamps and exact evidence categories. Production functions appear
+only on the observed side. C01 checks both pure FACE_ASSIGNMENT (#22 / merged #24)
+and the live UI REASSIGN path; current presence revisions cannot hide a regression
+in the pure face path. C02 separates co-observation, manual and directed Note
+sources, selected Event mentions and literal text. Exact proof, occurrences and
+cross-feature collections are checked after meaningful changes and after
+restart/rebuild. Deliberately wrong participants, location, occurrence and evidence
+expectations must fail. Immutable raw review decisions, face assignments and media
+ownership are audited independently of current interpretation.
+
+Notes/media and lifecycle boundaries reuse existing focused regressions alongside
+new histories. Manual endpoint changes use retirement plus creation; no in-place
+endpoint API exists. Sighting Notes are saved in review and can be revisioned by
+the existing note service; no dedicated Sighting-edit UI/HTTP route is claimed.
+No-face domain attachment proves ownership/occurrence semantics without biometric
+inference. Optional authorized genuine J01 adds a saved-Encounter metadata
+correction and second source restart on this revision, separately reported.
+
+Sparse-like domain histories have zero genuine photographs. No Regular/Dense
+correction run is required: the bounded transition has no identified scale risk
+that adds evidence beyond existing Normal pagination checks. Exact requested,
+created and verified quantities are in private results; no photographic volume is
+inferred from domain media records. Run instructions and the executed checkpoint
+are maintained in [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md#moderate-user-qa-20).
+
 ## Issue #19 — Normal User QA implementation
 
-World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 is operator-approved; execution at its own revision is required. Moderate #20 remains gated on subsequent operator review. Schema v34 and the existing authority boundaries remain unchanged.
+World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 completed and merged through [PR #28](https://github.com/suraj-singh12/sentri-face-edge/pull/28). Moderate #20 is operator-authorized for implementation/execution; acceptance and any Advanced #21 work remain separate operator gates. Schema v34 and the existing authority boundaries remain unchanged.
 
 The existing Foundation runner now selects `--phase Normal --test Normal`:
 focused representative feature checks first, then J02 and genuine J01 on separate
@@ -27,7 +62,7 @@ unqualified when reviewed photo quantities are unavailable. Historical runs are
 not evidence for this implementation revision.
 
 Run instructions and result semantics: [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md#normal-user-qa-19).
-Operator review is required before #20; no merge or phase acceptance is implied.
+Normal #19 was subsequently completed/merged as PR #28; the current operator instruction authorizes #20. No Moderate acceptance or Advanced progression is implied.
 
 
 ## Issue #13 — native World Explore implementation (merged PR #26)

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "scope": "Source coverage inventory; normal_acceptance is executable selection, never an execution claim. Current SHA-bound status is in private runner reports.",
+  "scope": "Source coverage inventory; normal_acceptance and moderate_acceptance are executable selections, never execution claims. Exact SHA-bound results remain in private reports.",
   "dataset_profiles": {
     "Sparse": {
       "target": {
@@ -300,7 +300,7 @@
         "Regular",
         "Dense"
       ],
-      "missing": "Extensive correction histories reserved for Moderate #20",
+      "missing": "Advanced multi-stage histories remain outside #20; current Moderate acceptance is in exact-SHA private reports.",
       "dependencies": []
     },
     {
@@ -572,6 +572,32 @@
       ],
       "missing": "Deferred product phase; no acceptance claim",
       "dependencies": []
+    },
+    {
+      "id": "QA-MODERATE01",
+      "feature": "Moderate corrective history",
+      "behavior": "Independent original/effective history, participant propagation, independent evidence and restart/rebuild",
+      "risk": "Wrong effective participants, provenance or evidence; false-green campaign reporting",
+      "source": [
+        "scripts/qa_moderate.py",
+        "scripts/qa_foundation.py"
+      ],
+      "tests": [
+        "tests/test_qa_moderate.py"
+      ],
+      "status": "covered",
+      "phases": [
+        "Moderate"
+      ],
+      "datasets": [
+        "Sparse"
+      ],
+      "missing": "Full photographic profiles, dedicated Sighting-edit UI and Advanced histories are not claimed.",
+      "dependencies": [
+        "QA-CORR01",
+        "QA-NOTE01",
+        "QA-GRAPH01"
+      ]
     }
   ],
   "acceptance_phases": "Normal \u2192 operator gate \u2192 Moderate \u2192 operator gate \u2192 Advanced; no automatic progression",
@@ -711,6 +737,133 @@
         "QA-J02"
       ],
       "limitation": "Media-free domain fixture setup is separate from operator actions; no synthetic inference."
+    }
+  ],
+  "moderate_acceptance": [
+    {
+      "id": "M01",
+      "feature": "Encounter metadata",
+      "tests": [
+        "tests/test_qa_moderate.py::test_metadata_participants_rejections",
+        "tests/test_encounter_management.py::EncounterManagementTest::test_metadata_mentions_history_stale_and_retry"
+      ],
+      "journeys": [
+        "C01"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "M02",
+      "feature": "Participant / face corrections",
+      "tests": [
+        "tests/test_qa_moderate.py::test_metadata_participants_rejections",
+        "tests/test_qa_moderate.py::test_c01_face_assignment_history",
+        "tests/test_encounter_management.py::EncounterManagementTest::test_remove_add_relations_rebuild_and_mention_independence"
+      ],
+      "journeys": [
+        "C01"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "M03",
+      "feature": "Attached media",
+      "tests": [
+        "tests/test_qa_moderate.py::test_c02_independent_evidence_history",
+        "tests/test_encounter_management.py::EncounterManagementTest::test_rejected_attachment_keeps_ownership_across_restart_and_retry",
+        "tests/test_encounter_management.py::EncounterManagementTest::test_compatibility_attachment_failure_cannot_change_workflow_or_target",
+        "tests/test_encounter_management.py::EncounterManagementTest::test_dedup_refuses_existing_encounter_media"
+      ],
+      "journeys": [],
+      "limitation": "No-face attachment exercises domain ownership/cancel/retry without inference; browser upload inference is supplemental, not claimed."
+    },
+    {
+      "id": "M04",
+      "feature": "Relations and manual associations",
+      "tests": [
+        "tests/test_qa_moderate.py::test_c02_independent_evidence_history",
+        "tests/test_encounter_management.py::EncounterManagementTest::test_manual_evidence_independent_retirement_retry_and_rollback"
+      ],
+      "journeys": [
+        "C02"
+      ],
+      "limitation": "Manual endpoint change is retire + create; no in-place edit API."
+    },
+    {
+      "id": "M05",
+      "feature": "Notes and mentions",
+      "tests": [
+        "tests/test_qa_moderate.py::test_c02_independent_evidence_history",
+        "tests/test_qa_moderate.py::test_sighting_selected_and_literal_mentions",
+        "tests/test_person_notes.py::PersonNotesTest::test_stale_and_deleted_person_updates_are_rejected_without_history"
+      ],
+      "journeys": [
+        "C02"
+      ],
+      "limitation": "Sighting notes are recorded in review and revisioned through existing note service; no dedicated Sighting edit HTTP/UI route."
+    },
+    {
+      "id": "M06",
+      "feature": "Person lifecycle",
+      "tests": [
+        "tests/test_qa_moderate.py::test_archive_restore_preserves_corrected_history",
+        "tests/test_identity_lifecycle.py::IdentityLifecycleTest::test_archive_retains_data_and_restore_returns_active"
+      ],
+      "journeys": [],
+      "limitation": ""
+    },
+    {
+      "id": "M07",
+      "feature": "Cross-feature projections",
+      "tests": [
+        "tests/test_qa_moderate.py::test_c01_face_assignment_history",
+        "tests/test_qa_moderate.py::test_c02_independent_evidence_history",
+        "tests/test_world_intelligence.py::test_face_reassignment_independent_history",
+        "tests/test_world_intelligence.py::test_face_assignment_world_consumers"
+      ],
+      "journeys": [
+        "C01",
+        "C02"
+      ],
+      "limitation": "Minimal corrected history only; scale read pagination is already covered by Normal and is not repeated."
+    },
+    {
+      "id": "M08",
+      "feature": "Correction safety",
+      "tests": [
+        "tests/test_qa_moderate.py::test_metadata_participants_rejections",
+        "tests/test_qa_moderate.py::test_oracle_rejects_wrong_historical_expectations",
+        "tests/test_encounter_management_api.py::EncounterManagementApiTest::test_permissions_tombstone_history_corrections_and_manual_evidence",
+        "tests/test_encounter_management.py::EncounterManagementTest::test_each_correction_rolls_back_before_and_after_authority",
+        "tests/test_qa_moderate.py::test_saved_operator_identity_outranks_proposal"
+      ],
+      "journeys": [
+        "C01"
+      ],
+      "limitation": ""
+    },
+    {
+      "id": "C01",
+      "feature": "Corrected-participant propagation",
+      "tests": [
+        "tests/test_qa_moderate.py::test_c01_face_assignment_history"
+      ],
+      "journeys": [
+        "C01"
+      ],
+      "limitation": "Domain pure FACE_ASSIGNMENT and live UI REASSIGN are separately verified; no biometric claim from domain vectors."
+    },
+    {
+      "id": "C02",
+      "feature": "Evidence changes and historical consistency",
+      "tests": [
+        "tests/test_qa_moderate.py::test_c02_independent_evidence_history",
+        "tests/test_qa_moderate.py::test_sighting_selected_and_literal_mentions"
+      ],
+      "journeys": [
+        "C02"
+      ],
+      "limitation": "Media and Sighting-note transitions are domain checks; Relations and Person Notes also execute against live source UI/API."
     }
   ]
 }

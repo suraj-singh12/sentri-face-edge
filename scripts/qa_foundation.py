@@ -195,7 +195,7 @@ def browser_context(browser, url, errors=None):
     return context, page
 
 
-def execute(args, config, pair, evidence, report):
+def execute(args, config, pair, evidence, report, after_verified=None):
     from playwright.sync_api import sync_playwright
     import qa_browser as ui
     truth = {'actor': args.actor, 'date': args.date, 'location': args.location, 'occasion': 'QA-J01 smoke'}
@@ -260,6 +260,15 @@ def execute(args, config, pair, evidence, report):
                     ui.reference_snapshot(context, person_id)
                     ui.single_person_graph(context, person_id)
                     report['verified'] = after
+                    if after_verified is not None:
+                        corrected_truth = after_verified(context, page, truth, person_id, pair[1]['sha256'], report)
+                        context.tracing.stop(path=str(evidence / 'correction.zip'))
+                        context.close(); context = None
+                        app.stop(); app.start()
+                        context, page = browser_context(browser, app.url, report['browser_errors'])
+                        ui.authenticate(page, password, first=False)
+                        report['correction']['after_restart'] = ui.snapshot(context, corrected_truth, person_id, pair[1]['sha256'])
+                        assert_expected(report['correction']['observed'], report['correction']['after_restart'], 'Moderate.genuine.restart')
                     report['restart_verified'] = True
                     if report['browser_errors']:
                         raise AssertionError(f"Browser page errors: {report['browser_errors']}")
@@ -395,13 +404,16 @@ def normal_campaign(args, evidence, report, started):
     journey proofs count; declaration, collection and skips never become PASS.
     """
     import qa_browser as ui
-    registry = json.loads((ROOT / 'tests/qa_coverage.json').read_text())['normal_acceptance']
+    moderate = getattr(args, 'phase', 'Normal') == 'Moderate'
+    registry_key = 'moderate_acceptance' if moderate else 'normal_acceptance'
+    registry = json.loads((ROOT / 'tests/qa_coverage.json').read_text())[registry_key]
+    selected = registry if args.test in ('Normal', 'Moderate') else [r for r in registry if r['id'] == args.test]
     report.update(runs=[], acceptance=[], inference_executed=False, model_hashes={}, dataset_scope='Per fresh authority; see runs and datasets, never cumulative biometric volume')
     report.pop('requested_size', None)
     report.pop('achieved_size', None)
     focused = {}
-    if args.test == 'Normal':
-        targets = sorted({target for row in registry for target in row.get('tests', [])})
+    if args.test == 'Normal' or moderate:
+        targets = sorted({target for row in selected for target in row.get('tests', [])})
         with (evidence / 'focused.log').open('wb') as stream:
             result = subprocess.run([sys.executable, '-m', 'pytest', '-q', *targets,
                 '--junitxml=' + str(evidence / 'focused.xml')], cwd=ROOT, env=source_environment(),
@@ -419,7 +431,8 @@ def normal_campaign(args, evidence, report, started):
         report['focused_exit_code'] = result.returncode
         report['focused_results'] = focused
         report['datasets'] = [json.loads(prop.get('value')) for prop in ET.parse(evidence / 'focused.xml').iter('property') if prop.get('name') == 'dataset']
-    for journey in (['QA-J02', 'QA-J01'] if args.test == 'Normal' else ['QA-J02']):
+    journey_ids = sorted({j for row in selected for j in row.get('journeys', [])}) if moderate else (['QA-J02', 'QA-J01'] if args.test == 'Normal' else ['QA-J02'])
+    for journey in journey_ids:
         run = dict(test_id=journey, outcome='BLOCKED', inference_executed=False, model_hashes={})
         report['runs'].append(run)
         directory = evidence / journey
@@ -430,7 +443,11 @@ def normal_campaign(args, evidence, report, started):
                 require_browser()
             except ImportError as exc:
                 raise ui.Blocked('Install the optional Playwright QA dependency') from exc
-            if journey == 'QA-J01':
+            if moderate:
+                import qa_moderate
+                qa_moderate.execute(args, directory, run, journey)
+                assert_expected({'browser_executed': True, 'domain_verified': True, 'rebuild_verified': True}, run, 'Moderate.proofs')
+            elif journey == 'QA-J01':
                 try:
                     pair = verified_pair(args.fixtures, args.actor)
                     config = model_inputs(args.models_config)
@@ -447,6 +464,8 @@ def normal_campaign(args, evidence, report, started):
             if journey == 'QA-J01':
                 run['requested_size'] = dict(people=1, photos=2, encounters=1)
                 run['achieved_size'] = dict(run['requested_size'])
+                run['created_size'] = dict(run['requested_size'])
+                run['independently_verified_size'] = dict(run['requested_size'])
         except ui.Blocked as exc:
             run.update(outcome='BLOCKED', reason=str(exc), category='environment blocker')
         except Exception as exc:
@@ -455,6 +474,41 @@ def normal_campaign(args, evidence, report, started):
         run['seconds'] = round(time.monotonic() - start, 3)
         if not run['inference_executed']:
             run['model_hashes'] = {}
+    if moderate and args.test == 'Moderate':
+        # Supplemental genuine saved-Encounter correction, never historical #19 proof.
+        run = dict(test_id='Moderate-biometric', outcome='BLOCKED', inference_executed=False, model_hashes={})
+        report['runs'].append(run)
+        directory = evidence / 'biometric'; directory.mkdir(mode=0o700)
+        try:
+            try:
+                pair = verified_pair(args.fixtures, args.actor)
+                config = model_inputs(args.models_config)
+                require_browser()
+            except (OSError, ValueError, KeyError, ImportError) as exc:
+                raise ui.Blocked(str(exc)) from exc
+            run['model_hashes'] = {k: config[k + '_sha256'] for k in ('detector', 'recognizer')}
+            def correct_saved(context, page, truth, pid, query_hash, run):
+                before = ui.get(context, '/api/encounters')['events'][0]
+                detail = ui.get(context, '/api/encounter?observation_id=' + before['observation_id'])
+                expected = dict(truth, location='Moderate corrected genuine location')
+                response = context.request.post('/api/encounter-correct', data=dict(observation_id=before['observation_id'],
+                    expected_revision=detail['revision'], operation_id=str(uuid.uuid4()), event_details=dict(place_seen=expected['location'])))
+                if not response.ok:
+                    raise AssertionError('Genuine saved-Encounter correction rejected: ' + str(response.status))
+                run['correction'] = dict(original=before, expected=expected, observed=ui.snapshot(context, expected, pid, query_hash))
+                return expected
+            execute(args, config, pair, directory, run, after_verified=correct_saved)
+            assert_expected({'inference_executed': True, 'restart_verified': True, 'cleanup_completed': True, 'browser_errors': []}, run, 'Moderate.biometric.proofs')
+            run['outcome'] = 'PASS'
+            run['requested_size'] = dict(people=1, photos=2, encounters=1)
+            run['achieved_size'] = dict(run['requested_size'])
+            run['created_size'] = dict(run['requested_size'])
+            run['independently_verified_size'] = dict(run['requested_size'])
+        except ui.Blocked as exc:
+            run.update(outcome='BLOCKED', reason=str(exc), category='environment blocker')
+        except Exception as exc:
+            run.update(outcome='FAIL', reason=str(exc), category='uncertain observation; investigate private evidence')
+        if not run['inference_executed']: run['model_hashes'] = {}
     journeys = {r['test_id']: r for r in report['runs']}
     for row in registry:
         evidence_states = [focused.get(t, 'NOT RUN') for t in row.get('tests', [])]
@@ -467,7 +521,17 @@ def normal_campaign(args, evidence, report, started):
     report['outcome'] = 'FAIL' if 'FAIL' in states or report.get('focused_exit_code', 0) else 'PASS' if all(s == 'PASS' for s in states) else 'BLOCKED'
     if args.test == 'QA-J02':
         report['outcome'] = journeys['QA-J02']['outcome']
-    report['reason'] = 'Normal campaign evidence; operator acceptance and Moderate progression remain separate gates.'
+    if moderate:
+        report['historical_proofs'] = [dict(test=case.get('classname') + '::' + case.get('name'),
+            **{p.get('name'): json.loads(p.get('value')) for p in case.iter('property') if p.get('name') in ('historical_proofs', 'provenance')})
+            for case in ET.parse(evidence / 'focused.xml').iter('testcase') if any(p.get('name') == 'historical_proofs' for p in case.iter('property'))]
+        report['outcome'] = 'FAIL' if report['outcome'] == 'FAIL' or any(r['outcome'] == 'FAIL' for r in report['runs']) else report['outcome']
+        report['biometric_status'] = journeys.get('Moderate-biometric', {}).get('outcome', 'NOT RUN')
+        for row in report['acceptance']:
+            row.update(commit=report.get('commit'), environment=report.get('platform'), evidence=str(evidence),
+                       domain_verification=bool(row['tests']) and all(v == 'PASS' for v in row['tests'].values()),
+                       browser_verification=bool(row['journeys']) and all(v == 'PASS' for v in row['journeys'].values()))
+    report['reason'] = ('Moderate' if moderate else 'Normal') + ' campaign evidence; operator acceptance and subsequent phases remain separate gates.'
     report['seconds'] = round(time.monotonic() - started, 3)
     write_report(evidence, report)
     print(json.dumps(report, indent=2))
@@ -499,6 +563,15 @@ def write_report(evidence, report):
     case = ET.SubElement(suite, 'testcase', name=report['test_id'], classname='sentriface.qa', time=str(report['seconds']))
     if report['outcome'] != 'PASS':
         ET.SubElement(case, 'skipped' if report['outcome'] == 'BLOCKED' else 'failure', message=report['reason']).text = report['reason']
+    if report.get('phase') == 'Moderate':
+        rows = report.get('acceptance', [])
+        for row in rows:
+            item = ET.SubElement(suite, 'testcase', name=row['id'], classname='sentriface.qa.Moderate')
+            if row['status'] != 'PASS':
+                ET.SubElement(item, 'failure' if row['status'] == 'FAIL' else 'skipped', message=row.get('reason', row.get('limitation') or row['status']))
+        suite.set('tests', str(1 + len(rows)))
+        suite.set('failures', str(int(report['outcome'] == 'FAIL') + sum(r['status'] == 'FAIL' for r in rows)))
+        suite.set('skipped', str(int(report['outcome'] == 'BLOCKED') + sum(r['status'] in ('NOT RUN', 'PARTIAL') for r in rows)))
     ET.ElementTree(suite).write(evidence / 'junit.xml', encoding='utf-8', xml_declaration=True)
 
 
@@ -507,12 +580,12 @@ def require_browser():
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Foundation J01 and bounded Normal User QA. Assets and evidence stay local.')
+    parser = argparse.ArgumentParser(description='Foundation J01 and bounded Normal/Moderate User QA. Assets and evidence stay local.')
     parser.add_argument('--expected-sha', help='Exact full checked-out commit; mismatch refuses execution')
-    parser.add_argument('--phase', choices=['Foundation', 'Normal'], default='Foundation')
+    parser.add_argument('--phase', choices=['Foundation', 'Normal', 'Moderate'], default='Foundation')
     parser.add_argument('--density', choices=['journey-only'], default='journey-only', help='One Person, two distinct photos, one Encounter per fresh run; full profiles unavailable')
     parser.add_argument('--evidence-output', type=Path, help='Local parent directory beneath ignored qa-fixtures/')
-    parser.add_argument('--test', default='QA-J01', choices=['QA-J01', 'QA-J02', 'Normal'])
+    parser.add_argument('--test', default='QA-J01', choices=['QA-J01', 'QA-J02', 'Normal', 'Moderate', 'C01', 'C02'] + [f'M{i:02}' for i in range(1, 9)])
     parser.add_argument('--disposable', action='store_true', help='Explicitly authorize a fresh disposable QA authority, never an existing database')
     parser.add_argument('--fixtures', type=Path, default=ROOT / 'qa-fixtures/marvel-actors')
     parser.add_argument('--actor', default='Chris Evans')
@@ -535,6 +608,8 @@ def main(argv=None):
               'evidence': str(evidence), 'reason': ''}
     report.update(phase=args.phase, density=args.density, requested_size={'people': 1, 'photos': 2, 'encounters': 1}, achieved_size={'people': 0, 'photos': 0, 'encounters': 0})
     try:
+        if args.phase == 'Moderate' and args.test in ('QA-J01', 'QA-J02', 'Normal'):
+            raise ValueError('Moderate requires --test Moderate, M01-M08 or C01-C02')
         if args.expected_sha is not None and (len(args.expected_sha) != 40 or args.expected_sha != report['commit']):
             raise ValueError('Expected SHA differs from checked-out HEAD; execution refused')
         if report['dirty']:
@@ -546,8 +621,9 @@ def main(argv=None):
         if not args.location.strip():
             raise ValueError('Known location required')
         if args.test != 'QA-J01':
-            if args.phase != 'Normal':
-                raise ValueError('QA-J02/Normal requires --phase Normal')
+            expected_phase = 'Normal' if args.test in ('QA-J02', 'Normal') else 'Moderate'
+            if args.phase != expected_phase:
+                raise ValueError(args.test + ' requires --phase ' + expected_phase)
         else:
             pair = verified_pair(args.fixtures, args.actor)
             report['fixture_hashes'] = [r['sha256'] for r in pair]
@@ -563,6 +639,9 @@ def main(argv=None):
                 return normal_campaign(args, evidence, report, started)
             except Exception as exc:
                 report.update(outcome='FAIL', reason=f'QA campaign infrastructure: {type(exc).__name__}: {exc}', seconds=round(time.monotonic() - started, 3))
+                if args.phase == 'Moderate' and not report.get('acceptance'):
+                    rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())['moderate_acceptance']
+                    report['acceptance'] = [dict(id=r['id'], status='NOT RUN', reason=report['reason']) for r in rows]
                 write_report(evidence, report)
                 print(json.dumps(report, indent=2))
                 return 1
@@ -593,8 +672,8 @@ def main(argv=None):
             report.update(outcome='FAIL', reason=f'{type(exc).__name__}: {exc}')
         else:
             report.update(outcome='PASS', reason=f'{args.repeat} fresh run(s): independent domain reads, negative control and restart verified')
-    if args.test != 'QA-J01' and 'acceptance' not in report:
-        rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())['normal_acceptance']
+    if (args.test != 'QA-J01' or args.phase == 'Moderate') and 'acceptance' not in report:
+        rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())['moderate_acceptance' if args.phase == 'Moderate' else 'normal_acceptance']
         report['acceptance'] = [dict(id=r['id'], status='NOT RUN', reason=report['reason']) for r in rows]
     if report['outcome'] == 'PASS':
         report['achieved_size'] = dict(report['requested_size']) # independently verified by execute, per fresh authority
