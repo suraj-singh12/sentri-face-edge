@@ -787,3 +787,13 @@ A final narrow oracle refinement explicitly asserts UNDIRECTED co-observation/ma
 evidence as well as DIRECTED selected Note evidence at every transition. The
 affected Advanced domain suite passed 10 tests. Final source execution and CI are
 recorded on Issue #21 / draft PR #30 rather than inferred from this checkpoint.
+
+A contended-VM follow-up retained PASS for all ten Advanced rows but FAILED the
+genuine supplement before inference: the browser helper opened the Person card
+while its creation form was still refreshing after the successful POST. The
+helper now waits for the real form to close; it neither forces closure nor relaxes
+state expectations/timeouts. The failed report remains private at
+`qa-fixtures/runs/307e37e1d144423db532c816194734df/`. Concurrent local regression
+also exceeded an existing 100,000-Encounter timing bound (36.834 s versus 30 s);
+that failure is preserved, not relabeled. Final serial execution, classification
+and exact-source CI are recorded on Issue #21 / draft PR #30.
