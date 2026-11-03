@@ -36,6 +36,9 @@ def audit(s, include_journal=False):
 
 def verify(s, people, events, edges, canonical, raw, date, read=None):
     observed = m.snapshot(read or m.store_reader(s), people, events, edges, date)
+    directions={'CO_OBSERVED':'UNDIRECTED','MANUAL_ASSOCIATION':'UNDIRECTED','NOTE_REFERENCE':'DIRECTED'}
+    for row in observed['evidence_proof']:
+        qa.assert_expected(directions[row['evidence_type']],row['directionality'],'Advanced.evidence.direction')
     for pid, survivor in canonical.items():
         qa.assert_expected(survivor, s.resolve_canonical_person_id(pid), 'Advanced.canonical')
         qa.assert_expected(survivor, s.get_effective_person(pid).person_id, 'Advanced.People')

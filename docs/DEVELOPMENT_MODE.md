@@ -729,11 +729,11 @@ Operator acceptance and merge are separate; #21 is not closed automatically.
 
 ### Executed Advanced checkpoint — 2026-11-03
 
-Clean source `6fd8ee72f5476aefddf8f8c486e602754e8d490b`, macOS 26.0 arm64:
+Clean source `818b538b7a0d1c736d375362e19d2a26c31b221d`, macOS 26.0 arm64:
 **A01–A08 and H01–H02 PASS**, 28 selected domain tests, both actual source/browser
 histories and a fresh admitted real-ONNX saved-Encounter correction. Campaign
-116.668 s; H01 44.518 s (11 transitions), H02 25.222 s (7 transitions).
-Private evidence: `qa-fixtures/runs/ab38451c803f4f728cfe2868dfcc6e9d/`:
+107.610 s; H01 40.369 s (11 transitions), H02 22.015 s (7 transitions).
+Private evidence: `qa-fixtures/runs/67a0cfde102c438aae633a23472f4042/`:
 `report.json`, `focused.xml`, `junit.xml`, per-transition browser traces and genuine
 correction/restart traces. Final published source rerun/CI are recorded on Issue
 #21 and the draft PR; this checkpoint does not substitute for final-head execution.
@@ -782,3 +782,8 @@ profile-response nesting, and exact metadata/selected-mention evidence provenanc
 Failed development reports remain private and do not qualify acceptance. The clean
 checkpoint above was rerun after these fixes. This implementation is ready for
 final-source verification and operator review, not automatic Advanced acceptance.
+
+A final narrow oracle refinement explicitly asserts UNDIRECTED co-observation/manual
+evidence as well as DIRECTED selected Note evidence at every transition. The
+affected Advanced domain suite passed 10 tests. Final source execution and CI are
+recorded on Issue #21 / draft PR #30 rather than inferred from this checkpoint.
