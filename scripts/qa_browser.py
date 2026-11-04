@@ -63,6 +63,9 @@ def create_person(page, truth):
         field(dialog, label).fill(value)
     select(page, 'Country', 'United States')
     result = action(page, '/api/person-create', lambda: dialog.get_by_role('button', name='Create person', exact=True).click())
+    # The POST commits before the form finishes its normal People/profile reads.
+    # Wait for that supported UI transition before opening a card behind it.
+    dialog.wait_for(state='hidden')
     page.get_by_role('button', name=f"Open {truth['actor']}", exact=True).click()
     page.get_by_role('button', name='Add Face', exact=True).wait_for()
     return result['person']['person_id']

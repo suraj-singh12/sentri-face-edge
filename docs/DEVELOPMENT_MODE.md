@@ -495,7 +495,7 @@ not sanitized CI reports.
 
 Foundation remains **QA-J01 / journey-only / 1 or 2 repetitions**. Normal and
 Moderate now have additional bounded selections described below. Full photographic
-Sparse/Regular/Dense and Advanced campaigns remain unqualified; unsupported density
+Sparse/Regular/Dense campaigns remain unqualified; unsupported density
 choices are refused, never silently downsized. No model/photo downloads or heavy
 workflow are added. Historical host results do not qualify another revision/host.
 
@@ -677,3 +677,123 @@ corrected and rerun. No product defect was confirmed; no production code changed
 Unsupported dedicated Sighting-edit UI/HTTP and in-place Manual endpoint editing
 remain explicitly NOT RUN. Evidence is ready for operator review after final-head
 verification; no Moderate acceptance, merge or Advanced authorization is inferred.
+
+
+## Advanced User QA #21
+
+On the supported source Python 3.12 / optional Playwright Chromium / macOS
+Keychain environment, with the existing operator-reviewed photo manifest and
+local admitted-model declaration:
+
+```bash
+python scripts/qa_foundation.py --phase Advanced --test Advanced --expected-sha FULL_40_CHARACTER_HEAD_SHA --disposable --actor "Scarlett Johansson" --fixtures qa-fixtures/marvel-actors --models-config qa-fixtures/models.json --date 2026-11-03
+```
+
+Use `--test A01` through `A08`, `H01` or `H02` for a bounded selection. All ten
+rows remain in the report; unexecuted evidence remains NOT RUN/PARTIAL and exit 2.
+Foundation, Normal and Moderate selections remain available unchanged. Exact SHA,
+clean-checkout, random disposable authority and private-output preflight apply.
+No existing authority, model installation or user photographs are reset/modified.
+Do not upload raw histories, JSON/JUnit, models, photo manifests, database traces,
+credentials or browser traces. Private evidence stays under ignored
+`qa-fixtures/runs/<run>/`. The existing CI sanitizer still governs public output.
+
+H01/H02 use domain writes on the stopped encrypted source authority. After each
+transition, actual source restart, browser authentication/Events navigation/refresh
+and live HTTP Encounter/Events/People/Sightings/Person Graph/Current World/Explore
+reads verify authored truth. This is browser/read acceptance, not UI correction or
+merge interaction acceptance. H02 injects exactly three existing safe boundaries:
+stale precommit rejection, correction graph publication and merge canonical update.
+A failed merge's FAILED journal is intentional; it requires a fresh operation ID.
+No unsafe crash or production fault hook is added. P11 and repeated rebuilds
+must pass; rebuilding is checked against authored history, not its previous graph.
+
+Regular domain fixture requests the existing 25 People / 80 photos / 30 Encounters
+target and creates 25 / **0** / 30, yielding 24 canonical People after merge.
+Seven-item pages check collection completeness and survivor occurrence union.
+Dense is NOT RUN: Regular provides the selected correction/merge pagination
+coverage without a scale-dependent finding. H01 is 3/0/3, H02 2/0/1; fixture media
+records/vectors are not genuine photographs/inference. Genuine supplement is
+separately 1/2/1 and repeats admitted real ONNX plus a saved metadata correction
+and second restart. Full photographic Sparse/Regular/Dense and Windows lifecycle
+remain NOT RUN. If models/photos are absent, provide a permitted local model pair
+with exact hash/calibration/usage declaration and two distinct reviewed enrollment/
+query photos with identity/license/provenance and context acknowledgment; install
+the optional QA browser dependency/Chromium. Nothing is downloaded by this runner.
+
+Every acceptance row links executed domain targets, browser journey results,
+source/environment, original/expected/observed private proofs, fault boundary,
+restart/rebuild, inference flag and limitations. Overall exit 1 preserves failures;
+exit 2 preserves incomplete requested evidence, including missing genuine supplement.
+Operator acceptance and merge are separate; #21 is not closed automatically.
+
+### Executed Advanced checkpoint — 2026-11-03
+
+Clean source `818b538b7a0d1c736d375362e19d2a26c31b221d`, macOS 26.0 arm64:
+**A01–A08 and H01–H02 PASS**, 28 selected domain tests, both actual source/browser
+histories and a fresh admitted real-ONNX saved-Encounter correction. Campaign
+107.610 s; H01 40.369 s (11 transitions), H02 22.015 s (7 transitions).
+Private evidence: `qa-fixtures/runs/67a0cfde102c438aae633a23472f4042/`:
+`report.json`, `focused.xml`, `junit.xml`, per-transition browser traces and genuine
+correction/restart traces. Final published source rerun/CI are recorded on Issue
+#21 and the draft PR; this checkpoint does not substitute for final-head execution.
+
+| Entry | Executed independent result | Verification boundary |
+| --- | --- | --- |
+| A01 | Sequential participant/location corrections retained earlier truth | Domain + source HTTP/browser reads |
+| A02 | A→B survivor union; raw review/media/manual provenance retained | Domain + source HTTP effective/raw profiles |
+| A03 | Co-observation removal preserved manual and B→C selected Note | Exact source/type/direction counts; Sighting/literal/Event rules reused |
+| A04 | Stale rejection and injected correction/merge rollback passed | Domain injection; no unsafe crash |
+| A05 | Correction same-ID retry and new-ID merge recovery/replay passed | Exact rows and journal; FAILED merge ID refused |
+| A06 | Repeated rebuild and reopen reproduced authored truth | P11, domain tables and actual source restarts |
+| A07 | Roles, invalid/lifecycle conflicts, reference caps/ownership passed | Focused domain/HTTP tests; no general security claim |
+| A08 | Regular pagination/union and four precise negative controls passed | Nonbiometric domain only; Dense NOT RUN |
+| H01 | Complete three-Person history passed every transition | 3 raw People / 0 genuine photos / 3 Encounters |
+| H02 | Separate failure/retry history passed every transition | 2 raw People / 0 genuine photos / 1 Encounter |
+
+Raw A remained traceable after resolving to B; B retained its own Y history and
+received corrected X and canonical Z exactly once. C kept only its legitimate Z
+presence; the Event mention at X did not create presence or relationship evidence.
+Manual pair deduplication retained both raw assertions and retired only redundancy.
+Directed Note and manual support survived EXCLUDE. P11 and rebuilds passed against
+independent final inputs. Mutations rejected wrong survivor, duplicate participant,
+missing manual evidence and altered original decision provenance at their precise
+expected assertion paths. No confirmed product defect was established.
+
+Requested/created/verified Regular sizes: 25/80/30 target; 25/0/30 raw domain
+records, 24 canonical People, survivor B exactly four occurrences. H01 has four
+domain media records; H02 two. These are provenance fixtures, not photographs.
+Genuine supplement independently verified 1 Person / 2 existing reviewed distinct
+photographs / 1 Encounter, with real admitted inference and exact source bytes
+retained after correction/restart. Full Sparse/Regular/Dense photographic profiles,
+Dense domain escalation, unsafe process-kill recovery, Windows/signing/lifecycle
+and UI merge/fault interactions are NOT RUN/not claimed.
+
+Local regression: **926 backend passed / 89 existing skips / 137 subtests**,
+**140 frontend passed**, production build and dependency check passed. QA/report/
+oracle compatibility subset: **121 passed / 2 opt-in mechanism skips**; actual
+browser/ONNX journeys ran separately. Final self-review extended rollback/rebuild
+row snapshots to the three Encounter revision tables; its affected Advanced suite
+passed **10 tests**. Private per-transition stored-state snapshots include those
+revisions. No production service/schema/UI/generated assets changed.
+
+QA defects corrected here: JSON tuple-key serialization, raw face-owner column,
+profile-response nesting, and exact metadata/selected-mention evidence provenance.
+Failed development reports remain private and do not qualify acceptance. The clean
+checkpoint above was rerun after these fixes. This implementation is ready for
+final-source verification and operator review, not automatic Advanced acceptance.
+
+A final narrow oracle refinement explicitly asserts UNDIRECTED co-observation/manual
+evidence as well as DIRECTED selected Note evidence at every transition. The
+affected Advanced domain suite passed 10 tests. Final source execution and CI are
+recorded on Issue #21 / draft PR #30 rather than inferred from this checkpoint.
+
+A contended-VM follow-up retained PASS for all ten Advanced rows but FAILED the
+genuine supplement before inference: the browser helper opened the Person card
+while its creation form was still refreshing after the successful POST. The
+helper now waits for the real form to close; it neither forces closure nor relaxes
+state expectations/timeouts. The failed report remains private at
+`qa-fixtures/runs/307e37e1d144423db532c816194734df/`. Concurrent local regression
+also exceeded an existing 100,000-Encounter timing bound (36.834 s versus 30 s);
+that failure is preserved, not relabeled. Final serial execution, classification
+and exact-source CI are recorded on Issue #21 / draft PR #30.

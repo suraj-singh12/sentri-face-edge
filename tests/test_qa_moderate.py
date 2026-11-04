@@ -264,14 +264,15 @@ def test_moderate_dirty_preflight_reports_no_acceptance(tmp_path, monkeypatch, c
 
 
 @pytest.mark.parametrize('condition,outcome', [('complete','PASS'), ('missing','BLOCKED'), ('skipped','BLOCKED'), ('failure','FAIL'), ('exit','FAIL')])
-def test_moderate_reporting_never_substitutes_missing_execution(tmp_path, monkeypatch, condition, outcome):
+@pytest.mark.parametrize('phase', ['Moderate','Advanced'])
+def test_moderate_reporting_never_substitutes_missing_execution(tmp_path, monkeypatch, condition, outcome, phase):
     """Mechanism test only; fabricated outcomes cannot be acceptance evidence."""
     import time
     import xml.etree.ElementTree as ET
     from types import SimpleNamespace
-    rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())['moderate_acceptance']
+    rows = json.loads((ROOT / 'tests/qa_coverage.json').read_text())[phase.lower() + '_acceptance']
     (tmp_path / 'tests').mkdir()
-    (tmp_path / 'tests/qa_coverage.json').write_text(json.dumps(dict(moderate_acceptance=rows)))
+    (tmp_path / 'tests/qa_coverage.json').write_text(json.dumps({phase.lower() + '_acceptance': rows}))
     evidence = tmp_path / 'evidence'; evidence.mkdir()
     targets = sorted({t for r in rows for t in r['tests']})
     chosen = rows[-2]['tests'][0]
@@ -290,12 +291,14 @@ def test_moderate_reporting_never_substitutes_missing_execution(tmp_path, monkey
     monkeypatch.setattr(qa, 'ROOT', tmp_path)
     monkeypatch.setattr(qa.subprocess, 'run', focused)
     monkeypatch.setattr(qa, 'require_browser', lambda: None)
-    monkeypatch.setattr(m, 'execute', lambda args, directory, run, journey: run.update(
+    import qa_advanced
+    monkeypatch.setattr(m if phase == 'Moderate' else qa_advanced, 'execute', lambda args, directory, run, journey: run.update(
         browser_executed=True, domain_verified=True, rebuild_verified=True, restart_verified=True, cleanup_completed=True, browser_errors=[]))
     def missing(*args): raise ValueError('No authorized pair')
     monkeypatch.setattr(qa, 'verified_pair', missing)
-    report = dict(test_id='Moderate', phase='Moderate', commit='a'*40, platform='Mechanism test')
-    args = SimpleNamespace(test='Moderate', phase='Moderate', fixtures=tmp_path, actor='QA')
+    report = dict(test_id=phase, phase=phase, commit='a'*40, platform='Mechanism test')
+    args = SimpleNamespace(test=phase, phase=phase, fixtures=tmp_path, actor='QA')
+    if phase == 'Advanced' and outcome == 'PASS': outcome = 'BLOCKED'
     assert qa.normal_campaign(args, evidence, report, time.monotonic()) == {'PASS':0,'FAIL':1,'BLOCKED':2}[outcome]
     assert report['outcome'] == outcome
     assert len(report['acceptance']) == 10
