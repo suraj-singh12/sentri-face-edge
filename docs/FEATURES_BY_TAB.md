@@ -1,8 +1,8 @@
 # SentriFace Edge features by tab
 
-## Current World boundary and QA (2026-10-29)
+## Current World navigation and QA status (PR #32 review)
 
-World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 is operator-approved; execution at its own revision is required. Moderate #20 remains gated on subsequent operator review. Schema v34 and the existing authority boundaries remain unchanged.
+World Explore (#13 / PR #26) and the original World view are implemented. The World selector on the unmerged PR #32 branch is **Explore | Connections**, opening in Explore by default. **Connections** is only the new user-visible name for Current; its controls and backend `view=CURRENT` semantics are preserved. Foundation #17, Normal #19, Moderate #20 and Advanced #21 are operator-accepted and merged within their explicitly bounded tests; no full photographic-volume, production signing or current-artifact Windows lifecycle qualification is implied. Issue #31 / PR #32 is pending review. Schema v34 and authority boundaries are unchanged.
 
 ## Batch 3.7 operator flows
 
@@ -119,9 +119,11 @@ Every implementation batch must update this map and all affected canonical docs 
 
 ### World Explore (#13)
 
-World opens in **Explore**. The original scope UI and request defaults remain
-available as **Connections**. The compact **Explore | Connections** switch retains each view's independent controls
-and selection while switching. Explore uses a separate instance of the existing
+World opens in **Explore** when no view has been explicitly selected. The original
+scope interface remains available as **Connections** (formerly the user-facing
+**Current** tab). The **Explore | Connections** switch retains each view's independent
+controls and selections while switching. Internal `view=CURRENT`/`view=EXPLORE`
+API contracts and omitted-view defaults do not change. Explore uses a separate instance of the existing
 World controller with explicit `CO_OBSERVED`, strength 2 defaults; it does not own
 graph, identity, evidence, location or theme authority.
 

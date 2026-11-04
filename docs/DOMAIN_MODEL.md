@@ -5,9 +5,15 @@
 This extension uses the existing `/api/world-graph?version=2`, `WorldGraphRequest`,
 `IdentityStore`, `GraphReadService`, and `FaceEngine` boundaries. It adds no schema,
 World authority, graph store, background job, dependency, or frontend change.
-Current World remains the default (`view=CURRENT`): all evidence types when no
-selector is supplied, effective minimum strength 1. Existing controls and reads
-remain valid. Issue #13 owns the optional graphical Explore interface.
+The **World API** still defaults to `view=CURRENT` when the `view` parameter is
+omitted: all evidence types when no selector is supplied and effective minimum
+strength 1. This is distinct from the **World UI navigation default**: the World
+workspace opens the implemented Explore interface (`view=EXPLORE`) by default
+on the PR #32 branch. Its selector is **Explore | Connections**; Connections is
+the former user-facing Current view and still requests `view=CURRENT`. Existing
+backend contracts, request defaults, graph authority and controls remain valid.
+Explore was implemented by #13 / merged PR #26; navigation refinement #31 is
+under review in PR #32.
 
 Explore sends `view=EXPLORE`, a nonempty `evidence_type` list drawn independently
 from `CO_OBSERVED`, `NOTE_REFERENCE`, and `MANUAL_ASSOCIATION`, and a positive integer
