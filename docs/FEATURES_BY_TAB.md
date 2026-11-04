@@ -1,8 +1,10 @@
 # SentriFace Edge features by tab
 
-## Current World navigation and QA status (PR #32 review)
+## Current World navigation and QA status (2026-11-04)
 
-World Explore (#13 / PR #26) and the original World view are implemented. The World selector on the unmerged PR #32 branch is **Explore | Connections**, opening in Explore by default. **Connections** is only the new user-visible name for Current; its controls and backend `view=CURRENT` semantics are preserved. Foundation #17, Normal #19, Moderate #20 and Advanced #21 are operator-accepted and merged within their explicitly bounded tests; no full photographic-volume, production signing or current-artifact Windows lifecycle qualification is implied. Issue #31 / PR #32 is pending review. Schema v34 and authority boundaries are unchanged.
+World Explore (#13 / PR #26) and the original World view are implemented. The World selector since merged PR #32 is **Explore | Connections**, opening in Explore by default. **Connections** is only the new user-visible name for Current; its controls and backend `view=CURRENT` semantics are preserved. Foundation #17, Normal #19, Moderate #20 and Advanced #21 are operator-accepted and merged within their explicitly bounded tests; no full photographic-volume, production signing or current-artifact Windows lifecycle qualification is implied. Issue #31 / PR #32 is completed and merged into hardening. Schema v34 and authority boundaries are unchanged.
+
+**Design ownership:** This document remains the implemented feature/permission map. The approved Product Studio charter, source-mapped UI inventory, screen decisions, cross-feature journey coverage and design evidence live in [UI_UX_DESIGN.md](UI_UX_DESIGN.md). UI redesign proposals must preserve every feature and capability listed here; do not mistake planned #4 Split/Merge for implemented functionality.
 
 ## Batch 3.7 operator flows
 

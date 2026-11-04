@@ -1,6 +1,8 @@
 # SentriFace Edge: complete project guide
 
-For the latest implementation and QA qualification state, start with the [documentation map](README.md). This is the detailed product and architecture guide; GitHub Issues and linked PRs hold live work status. World intelligence #3 and Explore UI #13 are merged, and the current World UI refinement #31 / PR #32 (unmerged) defaults to **Explore** with the original Current interface labeled **Connections**. Foundation #17, Normal #19, Moderate #20 and Advanced #21 have completed operator-accepted, bounded source QA; current-artifact Windows installer lifecycle, full photographic volumes and production signing remain separate release gates.
+For the latest implementation and QA qualification state, start with the [documentation map](README.md). This is the detailed product and architecture guide; GitHub Issues and linked PRs hold live work status. World intelligence #3 and Explore UI #13 are merged, and the merged World UI refinement #31 / PR #32 defaults to **Explore** with the original Current interface labeled **Connections**. Foundation #17, Normal #19, Moderate #20 and Advanced #21 have completed operator-accepted, bounded source QA; current-artifact Windows installer lifecycle, full photographic volumes and production signing remain separate release gates.
+
+**Current design direction:** #6 operator UI/UX refinement and #4 Encounter Split/Merge are mandatory for v2.0.0 before #5 release acceptance. [UI_UX_DESIGN.md](UI_UX_DESIGN.md) owns the approved Product Studio process and preliminary source-based UI inventory; individual mockups and the #4 domain policy remain unapproved. Preserve and improve existing interfaces rather than introducing competing systems.
 
 ## Batch 3.7 — contextless biometric references
 

@@ -1,24 +1,14 @@
 # Global identity graph implementation plan
 
-## Current gate — World navigation #31 / PR #32 (pending review)
+## Current gate — v2.0.0 UX #6 and Encounter Split/Merge #4 (design stage, 2026-11-04)
 
-The latest `release-v2.0.0-hardening` baseline includes the completed and
-operator-accepted Foundation #17, Normal #19 (PR #28), Moderate #20 (PR #29)
-and Advanced #21 (PR #30) QA campaigns. #22 was fixed via PR #24.
-Their bounded macOS domain/browser/real-ONNX evidence is **not** equivalent
-to full photographic-volume, Windows installed-artifact lifecycle, signing or
-final release acceptance; use the issue reports and [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md).
+`release-v2.0.0-hardening` at `0c5d451424f56ca236f921c08e3e4d6e09236458` includes the operator-approved World navigation #31 / merged PR #32, and the accepted/closed Foundation #17, Normal #19, Moderate #20, Advanced #21 QA phases. World opens in Explore and presents **Explore | Connections**; the internal API `view=CURRENT` contract is unchanged. Do not treat bounded source/ONNX CI as signed release qualification.
 
-The approved issue-linked [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32)
-implements **Explore | Connections** with **Explore** initially selected.
-`Connections` is the original user-facing Current World view; internal
-`view=CURRENT` API/omitted-view defaults, architecture, authority and schema v34
-remain unchanged. Issue #31 and PR #32 are **open/unmerged** pending final
-verification and explicit operator approval. Explicit deep-link behavior was
-not independently verified at the initial implementation checkpoint.
+**Mandatory v2.0.0 sequence:** [#6 UI/UX review and refinement](https://github.com/suraj-singh12/sentri-face-edge/issues/6) → [#4 Encounter Split/Merge design/implementation](https://github.com/suraj-singh12/sentri-face-edge/issues/4) → [#5 release acceptance](https://github.com/suraj-singh12/sentri-face-edge/issues/5). #9 `main` CI remains separately deferred. The operator approved the design **principles and Product Studio process**, **not** any particular redesign, Split/Merge semantics or code implementation.
 
-This section is the live gate. Earlier numbered phase and issue sections below
-retain their original implementation/design evidence, not current authorization.
+The canonical [UI_UX_DESIGN.md](UI_UX_DESIGN.md) owns the Product Studio operating charter, source-mapped UX-00…UX-15 inventory and required complete runtime/control/state coverage ledger. The present inventory is **source-only preliminary**: full actual-screen screenshots, role/keyboard/error/multi-platform coverage and editable Figma designs remain pending. #6 design must account for future #4 entry points while leaving #4 mutation policy to its own approval. No UI code or merge is authorized by this docs-only gate.
+
+Historical issue/phase sections below document their original source/evidence, not present work authorization.
 
 ## Issue #21 — bounded Advanced User QA
 

@@ -1,14 +1,14 @@
 # SentriFace Edge agent handoff
 
-## Current handoff — World #31 / PR #32 review
+## Current handoff — Product Studio #6 and #4 design gate (2026-11-04)
 
-**Baseline:** `release-v2.0.0-hardening` has operator-accepted Foundation #17, Normal #19 (PR #28), Moderate #20 (PR #29) and Advanced #21 (PR #30), with the proven scope and limitations recorded in their GitHub issues and [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md). Corrected participation defect #22 is fixed through PR #24. The graph schema remains v34.
+**Integrated baseline:** `release-v2.0.0-hardening` at `0c5d451424f56ca236f921c08e3e4d6e09236458` incorporates World #31 / merged PR #32 and accepted source QA Foundation #17, Normal #19, Moderate #20 and Advanced #21. **Explore** is the opening World UI, with **Connections** preserving the original Current view. Backend `view=CURRENT` default is unchanged. Schema v34/identity/evidence authority remains unchanged.
 
-**Pending change:** [World navigation #31](https://github.com/suraj-singh12/sentri-face-edge/issues/31) / [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32) is **unmerged**. Its branch presents **Explore | Connections** with Explore as the opening view. Connections is the original user-facing Current World interface; API `view=CURRENT` and omitted-view defaults, projections, evidence authority and backend behavior do not change. Initial frontend/live navigation verification is documented on the PR; do not imply untested explicit deep links or final CI were verified without fresh evidence.
+**Next v2.0.0 requirement:** #6 professional, Apple-HIG-inspired UI refinement and #4 safe Encounter Split/Merge **both ship before** #5 final release acceptance. #9 `main` CI remains explicitly deferred. Read [UI_UX_DESIGN.md](UI_UX_DESIGN.md), the *sole canonical Product Studio charter and UI design register*, after [FEATURES_BY_TAB.md](FEATURES_BY_TAB.md). The approved design direction is not screen approval. Its UX-00…UX-15 register is source-mapped only and must be expanded against the actual application. Prepare editable Figma-first designs and red-team/role/state review, obtain explicit operator approval, then code on issue branches. #4 requires separate domain and Figma approval.
 
-**Next gates:** Review PR #32's final CI and UI evidence, obtain explicit operator merge authorization, then separately assess full photo-volume qualification, the current Windows installer/model lifecycle, production signing and release acceptance. Neither source QA nor unsigned CI equals release readiness. Never modify `main` or merge without explicit authorization.
+**Release limits:** Real ONNX and bounded QA are accepted, not full photographic-volume, actual power loss, installed current-artifact Windows lifecycle or signed release qualification. All merge and `main` boundaries in [AGENTS.md](../AGENTS.md) remain binding.
 
-This opening section is the live handoff; dated checkpoints below are retained as historical evidence, not current implementation/issue status. For canonical reading order consult [docs/README](README.md).
+Earlier dated sections below are historical checkpoints, not active instructions.
 
 ## Historical handoff — 2026-10-29 (superseded)
 
