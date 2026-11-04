@@ -119,8 +119,8 @@ Every implementation batch must update this map and all affected canonical docs 
 
 ### World Explore (#13)
 
-World opens in **Current**, retaining the original scope UI and request defaults.
-The compact **Current | Explore** switch retains each view's independent controls
+World opens in **Explore**. The original scope UI and request defaults remain
+available as **Connections**. The compact **Explore | Connections** switch retains each view's independent controls
 and selection while switching. Explore uses a separate instance of the existing
 World controller with explicit `CO_OBSERVED`, strength 2 defaults; it does not own
 graph, identity, evidence, location or theme authority.
