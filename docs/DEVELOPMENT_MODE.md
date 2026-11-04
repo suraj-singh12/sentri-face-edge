@@ -1,5 +1,17 @@
 # SentriFace Edge — source development
 
+## Current source QA / World navigation status
+
+Foundation #17, Normal #19, Moderate #20 and Advanced #21 were
+operator-accepted and merged into `release-v2.0.0-hardening` through their
+respective PRs (#23, #28, #29 and #30). Their executed macOS browser,
+ONNX, correction, merge and recovery evidence remains **bounded**; full
+photographic-volume, installed Windows lifecycle and release signing are
+separate qualifications. The issue-linked, unmerged World UI PR #32 /
+issue #31 changes the opening selector to **Explore | Connections**;
+the API default remains `view=CURRENT`. Reuse the launch and QA commands
+below without treating historical results as acceptance of a new commit.
+
 ## Linux explicit source ONNX and recovery
 
 `./run.sh models` and `./run.sh onnx` use the existing isolated source authority selected by `SENTRIFACE_DEV_DATA_DIR`. Linux source ONNX admission remains explicit, Git-checkout only, unpackaged/uncompiled, and loopback-only. Real SCRFD/ArcFace models, calibration and downstream encrypted SQLCipher/storage are unchanged; no systemd path or unavailable-vault fallback is introduced.
@@ -725,7 +737,7 @@ Every acceptance row links executed domain targets, browser journey results,
 source/environment, original/expected/observed private proofs, fault boundary,
 restart/rebuild, inference flag and limitations. Overall exit 1 preserves failures;
 exit 2 preserves incomplete requested evidence, including missing genuine supplement.
-Operator acceptance and merge are separate; #21 is not closed automatically.
+The runner never accepts, merges or closes QA phases automatically. The operator subsequently accepted Advanced #21, merged PR #30 and closed the issue.
 
 ### Executed Advanced checkpoint — 2026-11-03
 
@@ -780,13 +792,14 @@ revisions. No production service/schema/UI/generated assets changed.
 QA defects corrected here: JSON tuple-key serialization, raw face-owner column,
 profile-response nesting, and exact metadata/selected-mention evidence provenance.
 Failed development reports remain private and do not qualify acceptance. The clean
-checkpoint above was rerun after these fixes. This implementation is ready for
-final-source verification and operator review, not automatic Advanced acceptance.
+checkpoint above was rerun after these fixes. At this intermediate checkpoint the implementation was ready for
+final-source verification and operator review; final-source results were
+subsequently verified and operator-accepted under closed Issue #21 / merged PR #30.
 
 A final narrow oracle refinement explicitly asserts UNDIRECTED co-observation/manual
 evidence as well as DIRECTED selected Note evidence at every transition. The
 affected Advanced domain suite passed 10 tests. Final source execution and CI are
-recorded on Issue #21 / draft PR #30 rather than inferred from this checkpoint.
+recorded on closed Issue #21 / merged PR #30 rather than inferred from this checkpoint.
 
 A contended-VM follow-up retained PASS for all ten Advanced rows but FAILED the
 genuine supplement before inference: the browser helper opened the Person card
@@ -796,4 +809,4 @@ state expectations/timeouts. The failed report remains private at
 `qa-fixtures/runs/307e37e1d144423db532c816194734df/`. Concurrent local regression
 also exceeded an existing 100,000-Encounter timing bound (36.834 s versus 30 s);
 that failure is preserved, not relabeled. Final serial execution, classification
-and exact-source CI are recorded on Issue #21 / draft PR #30.
+and exact-source CI are recorded on closed Issue #21 / merged PR #30.

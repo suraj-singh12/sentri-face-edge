@@ -1,6 +1,16 @@
 # SentriFace Edge agent handoff
 
-## Current handoff — 2026-10-29
+## Current handoff — World #31 / PR #32 review
+
+**Baseline:** `release-v2.0.0-hardening` has operator-accepted Foundation #17, Normal #19 (PR #28), Moderate #20 (PR #29) and Advanced #21 (PR #30), with the proven scope and limitations recorded in their GitHub issues and [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md). Corrected participation defect #22 is fixed through PR #24. The graph schema remains v34.
+
+**Pending change:** [World navigation #31](https://github.com/suraj-singh12/sentri-face-edge/issues/31) / [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32) is **unmerged**. Its branch presents **Explore | Connections** with Explore as the opening view. Connections is the original user-facing Current World interface; API `view=CURRENT` and omitted-view defaults, projections, evidence authority and backend behavior do not change. Initial frontend/live navigation verification is documented on the PR; do not imply untested explicit deep links or final CI were verified without fresh evidence.
+
+**Next gates:** Review PR #32's final CI and UI evidence, obtain explicit operator merge authorization, then separately assess full photo-volume qualification, the current Windows installer/model lifecycle, production signing and release acceptance. Neither source QA nor unsigned CI equals release readiness. Never modify `main` or merge without explicit authorization.
+
+This opening section is the live handoff; dated checkpoints below are retained as historical evidence, not current implementation/issue status. For canonical reading order consult [docs/README](README.md).
+
+## Historical handoff — 2026-10-29 (superseded)
 
 **Hardening:** [World intelligence #3](https://github.com/suraj-singh12/sentri-face-edge/issues/3) is merged at `f907073edc3375dbfd15b8bb39cc6d32bc60f6b6` (schema v34). It adds backend discoveries/evidence reads without replacing the Current World UI. [Explore #13](https://github.com/suraj-singh12/sentri-face-edge/issues/13) awaits approved design/implementation; its related [draft PR #15](https://github.com/suraj-singh12/sentri-face-edge/pull/15) is unmerged, with pre-existing effective-participant discrepancy tracked by [P1 #22](https://github.com/suraj-singh12/sentri-face-edge/issues/22).
 

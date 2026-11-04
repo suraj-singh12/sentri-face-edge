@@ -1,5 +1,25 @@
 # Global identity graph implementation plan
 
+## Current gate — World navigation #31 / PR #32 (pending review)
+
+The latest `release-v2.0.0-hardening` baseline includes the completed and
+operator-accepted Foundation #17, Normal #19 (PR #28), Moderate #20 (PR #29)
+and Advanced #21 (PR #30) QA campaigns. #22 was fixed via PR #24.
+Their bounded macOS domain/browser/real-ONNX evidence is **not** equivalent
+to full photographic-volume, Windows installed-artifact lifecycle, signing or
+final release acceptance; use the issue reports and [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md).
+
+The approved issue-linked [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32)
+implements **Explore | Connections** with **Explore** initially selected.
+`Connections` is the original user-facing Current World view; internal
+`view=CURRENT` API/omitted-view defaults, architecture, authority and schema v34
+remain unchanged. Issue #31 and PR #32 are **open/unmerged** pending final
+verification and explicit operator approval. Explicit deep-link behavior was
+not independently verified at the initial implementation checkpoint.
+
+This section is the live gate. Earlier numbered phase and issue sections below
+retain their original implementation/design evidence, not current authorization.
+
 ## Issue #21 — bounded Advanced User QA
 
 Extends the existing Foundation runner/registry/private reports for exactly
@@ -7,7 +27,7 @@ A01–A08/H01–H02. Reuses Moderate completed-review fixtures, independent map
 comparator/read adapters, source application, browser authentication/tracing,
 encrypted disposable authorities, exact credential cleanup, existing merge fault
 seams and P11 checker/rebuild. No product changes, schema, history reducer, new
-framework or CI job. The clean executed checkpoint is in DEVELOPMENT_MODE; final source and CI evidence belong on Issue #21/PR.
+framework or CI job. The clean executed checkpoint is in DEVELOPMENT_MODE; final source and CI evidence are recorded on closed Issue #21 / merged PR #30. The operator accepted and merged Advanced QA only within its executed scope.
 
 H01 authors three accepted Encounters: A/X, B/Y, A+C/Z. REASSIGN A→B at X,
 location revision, independent A/C and B/C manual assertions, legal A→B merge,
@@ -98,7 +118,7 @@ unqualified when reviewed photo quantities are unavailable. Historical runs are
 not evidence for this implementation revision.
 
 Run instructions and result semantics: [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md#normal-user-qa-19).
-Normal #19 was subsequently completed/merged as PR #28; the current operator instruction authorizes #20. No Moderate acceptance or Advanced progression is implied.
+Normal #19 was subsequently completed/merged as PR #28. At that earlier checkpoint, its acceptance did not automatically authorize Moderate or Advanced; those phases were later separately authorized and accepted through merged PR #29 and PR #30.
 
 
 ## Issue #13 — native World Explore implementation (merged PR #26)
