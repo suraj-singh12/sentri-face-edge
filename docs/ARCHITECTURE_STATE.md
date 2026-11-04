@@ -1,8 +1,8 @@
 # SentriFace Edge architecture state
 
-## Current World and QA qualification (2026-10-29)
+## Current World UI and QA qualification (PR #32 review)
 
-World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 completed and merged through [PR #28](https://github.com/suraj-singh12/sentri-face-edge/pull/28). Moderate #20 completed and merged through [PR #29](https://github.com/suraj-singh12/sentri-face-edge/pull/29). The operator authorized the bounded Advanced #21 campaign; final acceptance and merge remain separate operator gates. Schema v34 and the existing authority boundaries remain unchanged.
+The two implemented World interfaces are **Explore** and **Connections** (the former user-facing Current view). In the current unmerged [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32), World opens in Explore and the selector reads **Explore | Connections**; both views retain their existing distinct controls. API `view=CURRENT` and omitted-view request defaults remain unchanged; this is a presentation/navigation change only. World Explore #13 merged in PR #26 and corrected-participation #22 was fixed in PR #24. Foundation #17 and Normal #19 / Moderate #20 / Advanced #21 were accepted and merged through PRs #28–#30 on hardening. Their documented photographic, platform and release limitations still apply. Issue #31 / PR #32 remains open/unmerged; `main` is unchanged. Schema v34 and all authority boundaries remain unchanged.
 
 ## Historical Issue #3 implementation checkpoint
 

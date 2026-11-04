@@ -1,8 +1,8 @@
 # SentriFace Edge documentation map
 
-## Current source and qualification (2026-11-02)
+## Current source and qualification (PR #32 review)
 
-World Explore is implemented by merged [PR #26](https://github.com/suraj-singh12/sentri-face-edge/pull/26), alongside Current World. Corrected participation defect #22 is fixed by merged [PR #24](https://github.com/suraj-singh12/sentri-face-edge/pull/24). Foundation #17 and CI reporting #18 (PR #27) are complete. Normal #19 is operator-approved; execution at its own revision is required. Moderate #20 remains gated on subsequent operator review. Schema v34 and the existing authority boundaries remain unchanged.
+World Explore (#13 / merged PR #26) and Connections (formerly the Current World tab) are implemented. On the unmerged issue-linked [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32), the **Explore | Connections** selector defaults to Explore without altering the backend `view=CURRENT` contract. Foundation #17, Normal #19 / PR #28, Moderate #20 / PR #29 and Advanced #21 / PR #30 were operator-accepted/merged and closed on hardening; correction #22 was fixed by PR #24. Issue #31 remains open pending PR #32 approval. Schema v34 and identity/evidence authority are unchanged. All source/QA acceptance remains bounded: full photographic datasets, current Windows installer lifecycle and production signing are not qualified.
 
 Historical macOS Foundation evidence remains in [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md#qa-foundation-17). Unsigned packaging and source QA do not qualify production signing or current Windows installer lifecycle. GitHub Issues own live work; historical engineering records retain their original scope.
 

@@ -4,8 +4,8 @@ import { WorldView } from "./WorldView.jsx";
 import { WorldExploreView } from "./WorldExploreView.jsx";
 
 export function WorldWorkspace({ apiGet, active, ...current }) {
-  const [mode, setMode] = useState("current");
-  const [visited, setVisited] = useState(false);
+  const [mode, setMode] = useState("explore");
+  const [visited, setVisited] = useState(true);
   const root = useRef(null);
   const [height, setHeight] = useState(null);
   useLayoutEffect(() => {
@@ -25,7 +25,7 @@ export function WorldWorkspace({ apiGet, active, ...current }) {
     return () => abort.abort();
   }, [mode, active, visited, apiGet, current.state.data?.graph_revision]);
   return <Box ref={root} className="world-workspace" style={mode === "explore" && height ? { height } : undefined}>
-    <SegmentedControl size="xs" value={mode} data={[{ value: "current", label: "Current" }, { value: "explore", label: "Explore" }]} aria-label="World experience" onChange={(value) => { setVisited(true); setMode(value); }} />
+    <SegmentedControl size="xs" value={mode} data={[{ value: "explore", label: "Explore" }, { value: "current", label: "Connections" }]} aria-label="World experience" onChange={(value) => { setVisited(true); setMode(value); }} />
     <Box className="world-mode" hidden={mode !== "current"}><WorldView {...current} /></Box>
     {visited && <Box className="world-mode" hidden={mode !== "explore"}><WorldExploreView apiGet={apiGet} active={active && mode === "explore"} mutationRevision={current.state.pendingRevision} /></Box>}
   </Box>;

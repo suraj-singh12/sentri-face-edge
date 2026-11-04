@@ -2,6 +2,9 @@
 
 ## 2.0.0 - Unreleased
 
+- World navigation refinement (#31, open [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32), not yet merged): World opens in **Explore**, the original **Current** view is user-visible as **Connections**, and the selector is **Explore | Connections**. Internal World request identifiers, evidence authority, filters and backend defaults are unchanged.
+- Bounded source QA complete: Foundation #17, Normal #19 (PR #28), Moderate #20 (PR #29) and Advanced #21 (PR #30) were operator-accepted/merged on hardening. Full photographic-volume, current-artifact Windows installer lifecycle, signing and final release acceptance remain separate.
+
 - Issue #1 / PR #8 (merged as `683f3641e353`): restored cross-platform CI and unsigned Windows AMD64 packaging. Python 3.12 is the only active target; Python 3.11 is disabled. Platform-specific tests, Windows reset-path handling, reproducible frontend assets, detached-HEAD handling, Inno compiler validation and noninteractive Nuitka build-tool downloads are repaired. [Hardening CI #40071662474](https://github.com/suraj-singh12/sentri-face-edge/actions/runs/40071662474) passed all five jobs. Production signing and current-artifact installer/model lifecycle acceptance remain pending; Batch 4 / World vNext is still planned.
 
 - Batch 3.7 (committed `555433f` to `release-v2.0.0-hardening`): shared NO_FACE/ENROLLED Reference Only admission and management; cropped single-face/no-context requirements, four canonical active source cap, preserved retire/restore history, source-derived recognition and narrow shared-vector conflict exclusion. Schema v34 extends immutable enrollment provenance and append-only lifecycle under existing journal/backup architecture. Encounter correction does not transfer References; exact Reference/Encounter media roles remain separate. Existing targeted Attach Retry/Cancel/restart cleanup and compact backup-button fix are retained. No Batch 4.
