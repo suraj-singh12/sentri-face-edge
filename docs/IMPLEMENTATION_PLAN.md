@@ -6,7 +6,7 @@
 
 **Mandatory v2.0.0 sequence:** [#6 UI/UX review and refinement](https://github.com/suraj-singh12/sentri-face-edge/issues/6) → [#4 Encounter Split/Merge design/implementation](https://github.com/suraj-singh12/sentri-face-edge/issues/4) → [#5 release acceptance](https://github.com/suraj-singh12/sentri-face-edge/issues/5). #9 `main` CI remains separately deferred. The operator approved the design **principles and Product Studio process**, **not** any particular redesign, Split/Merge semantics or code implementation.
 
-The canonical [UI_UX_DESIGN.md](UI_UX_DESIGN.md) owns the Product Studio operating charter, source-mapped UX-00…UX-15 inventory and required complete runtime/control/state coverage ledger. The present inventory is **source-only preliminary**: full actual-screen screenshots, role/keyboard/error/multi-platform coverage and editable Figma designs remain pending. #6 design must account for future #4 entry points while leaving #4 mutation policy to its own approval. No UI code or merge is authorized by this docs-only gate.
+The canonical [UI_UX_DESIGN.md](UI_UX_DESIGN.md) owns the Product Studio operating charter, source-mapped UX-00…UX-15 inventory and required complete runtime/control/state coverage ledger. The present inventory is **source-only preliminary**: full actual-screen screenshots, role/keyboard/error/multi-platform coverage and editable Figcraft designs remain pending. #6 design must account for future #4 entry points while leaving #4 mutation policy to its own approval. No UI code or merge is authorized by this docs-only gate.
 
 Historical issue/phase sections below document their original source/evidence, not present work authorization.
 
