@@ -1,6 +1,6 @@
 # SentriFace Edge — Product Studio and UI/UX design authority
 
-**Status:** Operating charter approved by operator on 2026-11-04. **Source inventory v0.1 only**; no individual screen redesign, interaction specification, Figma mockup, or UI implementation is approved by this document.
+**Status:** Operating charter approved by operator on 2026-11-04. **Source inventory v0.1 only**; no individual screen redesign, interaction specification, Figcraft mockup, or UI implementation is approved by this document.
 **Source baseline:** `release-v2.0.0-hardening` at `0c5d451424f56ca236f921c08e3e4d6e09236458`.
 **Durable work:** [#6 UI/UX refinement](https://github.com/suraj-singh12/sentri-face-edge/issues/6), [#4 Encounter Split/Merge](https://github.com/suraj-singh12/sentri-face-edge/issues/4), then [#5 release acceptance](https://github.com/suraj-singh12/sentri-face-edge/issues/5).
 **Complementary authority:** [FEATURES_BY_TAB.md](FEATURES_BY_TAB.md) owns implemented user features and permission boundaries; [DOMAIN_MODEL.md](DOMAIN_MODEL.md) owns identity/evidence semantics; [AGENTS.md](../AGENTS.md) owns contributor rules. This document is the **one canonical home for design process, accepted UI decisions, design coverage, and UI review evidence**, not a second issue tracker or source of domain truth.
@@ -43,7 +43,7 @@ This is an **operating model of review disciplines, not a claim that actual Appl
 | --- | --- | --- |
 | **0 — Baseline** | Latest hardening SHA, canonical docs, existing screens/components/controller graph, relevant issue | Cannot identify current implementation or safe source authority |
 | **1 — Complete inventory** | All routes, nested surfaces, actions, roles, states and cross-feature journeys mapped to source + real screenshot | Unmapped feature, permission path or consequential missing state |
-| **2 — Multi-role design** | Coherent IA, Apple-inspired patterns, actual-screen-first editable Figma proposal, reuse map and #4 placement | An unreviewed policy, duplicative interface or unsafe consequence |
+| **2 — Multi-role design** | Coherent IA, Apple-inspired patterns, actual-screen-first editable Figcraft proposal, reuse map and #4 placement | An unreviewed policy, duplicative interface or unsafe consequence |
 | **3 — Red team + decision** | Accessibility, domain, security, engineering and QA critique; disagreements and scope/alternatives resolved | Material risk unresolved; no operator approval |
 | **4 — Operator approval** | Explicit signed-off design/interaction scope in #6 or #4; mark accepted decisions here | **No UI code before approval** |
 | **5 — Implementation** | Issue branch from latest hardening, one coherent PR, tests, docs, self-review, no accidental scope creep | Diff deviates from approved design/authority |
@@ -79,7 +79,7 @@ This first pass inspected tracked source and [FEATURES_BY_TAB.md](FEATURES_BY_TA
 
 ## Required coverage ledger for each ID (Gate 1 still open)
 
-For every control, submenu, dialog, panel and journey record: **UI ID → task → entry point/back path → existing code/component → required capability → source data/authority → normal/empty/loading/disabled/error/success/stale/recovery state → role/laptop/theme/keyboard case → current screenshot → design decision (preserve/refine/move/defer, with rationale) → proposed Figma frame → implementation test → actual acceptance evidence**.
+For every control, submenu, dialog, panel and journey record: **UI ID → task → entry point/back path → existing code/component → required capability → source data/authority → normal/empty/loading/disabled/error/success/stale/recovery state → role/laptop/theme/keyboard case → current screenshot → design decision (preserve/refine/move/defer, with rationale) → proposed Figcraft frame → implementation test → actual acceptance evidence**.
 
 Must enumerate and test at least:
 - Role variations: viewer/operator/admin capabilities, unavailable commands, license restrictions, model-not-ready, safety-copy requirements, disconnected/offline state, archived/deleted Persons and pending drafts.
@@ -107,4 +107,4 @@ Must enumerate and test at least:
 - **Domain/security:** Do not redesign evidence meaning, biometric consent, rollback, permission gates or Split/Merge policy by inference.
 - **QA red team:** Challenge “minimal” proposals that strand recovery, history, permission states or advanced graph controls; check long data and failure transitions.
 
-**Next #6 deliverable (not yet produced):** current laptop screenshots and a *complete expanded UX-00…UX-15 control/state ledger*; priority-by-impact UX findings, an architecture/component reuse map, Figma-first coherent proposal, red-team results and operator decision points. Stop before implementation. For #4, subsequently present an independent domain correction policy and UI interaction approval using this design language. No automatic coding, PR merge or release follows from this charter.
+**Next #6 deliverable (not yet produced):** current laptop screenshots and a *complete expanded UX-00…UX-15 control/state ledger*; priority-by-impact UX findings, an architecture/component reuse map, Figcraft-first coherent proposal, red-team results and operator decision points. Stop before implementation. For #4, subsequently present an independent domain correction policy and UI interaction approval using this design language. No automatic coding, PR merge or release follows from this charter.
