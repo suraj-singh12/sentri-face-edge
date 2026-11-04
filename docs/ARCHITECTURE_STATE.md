@@ -1,6 +1,6 @@
 # SentriFace Edge architecture state
 
-## Current World UI and QA qualification (PR #32 review)
+## Current World UI and QA qualification (2026-11-04)
 
 The two implemented World interfaces are **Explore** and **Connections** (the former user-facing Current view). Following merged [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32), World opens in Explore and the selector reads **Explore | Connections**; both views retain their existing distinct controls. API `view=CURRENT` and omitted-view request defaults remain unchanged; this is a presentation/navigation change only. World Explore #13 merged in PR #26 and corrected-participation #22 was fixed in PR #24. Foundation #17 and Normal #19 / Moderate #20 / Advanced #21 were accepted and merged through PRs #28–#30 on hardening. Their documented photographic, platform and release limitations still apply. Issue #31 / PR #32 is merged/closed on hardening; `main` is unchanged. Schema v34 and all authority boundaries remain unchanged.
 
