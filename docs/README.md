@@ -1,8 +1,8 @@
 # SentriFace Edge documentation map
 
-## Current source and qualification (PR #32 review)
+## Current source and qualification (2026-11-04)
 
-World Explore (#13 / merged PR #26) and Connections (formerly the Current World tab) are implemented. On the unmerged issue-linked [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32), the **Explore | Connections** selector defaults to Explore without altering the backend `view=CURRENT` contract. Foundation #17, Normal #19 / PR #28, Moderate #20 / PR #29 and Advanced #21 / PR #30 were operator-accepted/merged and closed on hardening; correction #22 was fixed by PR #24. Issue #31 remains open pending PR #32 approval. Schema v34 and identity/evidence authority are unchanged. All source/QA acceptance remains bounded: full photographic datasets, current Windows installer lifecycle and production signing are not qualified.
+World Explore (#13 / merged PR #26) and Connections (formerly the Current World tab) are implemented. Following merged issue-linked [PR #32](https://github.com/suraj-singh12/sentri-face-edge/pull/32), the **Explore | Connections** selector defaults to Explore without altering the backend `view=CURRENT` contract. Foundation #17, Normal #19 / PR #28, Moderate #20 / PR #29 and Advanced #21 / PR #30 were operator-accepted/merged and closed on hardening; correction #22 was fixed by PR #24. Issue #31 is closed after PR #32 merged to hardening at `0c5d451424f56ca236f921c08e3e4d6e09236458`. Schema v34 and identity/evidence authority are unchanged. All source/QA acceptance remains bounded: full photographic datasets, current Windows installer lifecycle and production signing are not qualified.
 
 Historical macOS Foundation evidence remains in [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md#qa-foundation-17). Unsigned packaging and source QA do not qualify production signing or current Windows installer lifecycle. GitHub Issues own live work; historical engineering records retain their original scope.
 
@@ -34,10 +34,11 @@ Historical macOS Foundation evidence remains in [DEVELOPMENT_MODE](DEVELOPMENT_M
 5. [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md) — implemented checkpoint.
 6. [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) — current normative entities and authority.
 7. [`FEATURES_BY_TAB.md`](FEATURES_BY_TAB.md) — current user-facing tabs, permissions and boundaries.
-8. [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) — detailed rationale.
-9. [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) — operational takeover and release boundary.
+8. [`UI_UX_DESIGN.md`](UI_UX_DESIGN.md) — **canonical Product Studio charter, design decisions and living UI/UX coverage** (mandatory before UI changes).
+9. [`ARCHITECTURE_EXPLANATION.md`](ARCHITECTURE_EXPLANATION.md) — detailed rationale.
+10. [`AGENT_HANDOFF.md`](AGENT_HANDOFF.md) — operational takeover and release boundary.
 
-Human entry path: this map → `PROJECT_OVERVIEW.md` → `FEATURES_BY_TAB.md` → `DOMAIN_MODEL.md` → `ARCHITECTURE_EXPLANATION.md`. Both paths converge on the same authority.
+Human entry path: this map → `PROJECT_OVERVIEW.md` → `FEATURES_BY_TAB.md` → `UI_UX_DESIGN.md` (for interface/design work) → `DOMAIN_MODEL.md` → `ARCHITECTURE_EXPLANATION.md`. Both paths converge on the same authority.
 
 These documents are complementary rather than successive revisions. `ARCHITECTURE_STATE.md` answers what is implemented now; `IMPLEMENTATION_PLAN.md` answers where that sits in the sequence; `DOMAIN_MODEL.md` defines the current rules; and `ARCHITECTURE_EXPLANATION.md` explains why those rules exist.
 
@@ -55,6 +56,7 @@ flowchart TD
     PLAN["IMPLEMENTATION_PLAN.md<br/>Phase sequence and next work"]
     DOMAIN["DOMAIN_MODEL.md<br/>Current normative model"]
     FEATURES["FEATURES_BY_TAB.md<br/>Current UI and roles"]
+    UX["UI_UX_DESIGN.md<br/>Product Studio + living UI design"]
     EXPLAIN["ARCHITECTURE_EXPLANATION.md<br/>Rationale and evolution"]
 
     P11I["P11_INTEGRITY_MODEL.md<br/>P11-A/A1/C2A/B/C"]
@@ -73,6 +75,7 @@ flowchart TD
     OVERVIEW -->|"implemented checkpoint"| STATE
     STATE -->|"normative rules"| DOMAIN
     DOMAIN -->|"user-facing implementation"| FEATURES
+    FEATURES -->|"design process and coverage"| UX
     FEATURES -->|"reasoning and history"| EXPLAIN
     EXPLAIN -->|"operational takeover"| HANDOFF
 
