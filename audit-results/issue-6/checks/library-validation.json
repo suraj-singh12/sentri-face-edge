@@ -1,0 +1,13 @@
+{
+  "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+  "result": "PASS",
+  "public_images_verified": 258,
+  "registered_public_assets_closed": true,
+  "relative_markdown_links_missing": 0,
+  "source_sites": 832,
+  "control_sites": 598,
+  "tasks": 60,
+  "branches": 509,
+  "product_source_changed": false,
+  "qualification": "Integrity and publication checks only; semantic coverage remains PARTIAL. Native IAB original is JPEG, remaining public images PNG. sips reads dimensions without rewriting image bytes."
+}

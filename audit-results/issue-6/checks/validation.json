@@ -1,0 +1,39 @@
+{
+  "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+  "source_product_diff": "No production source or generated assets changed",
+  "frontend_tests": {
+    "passed": 141,
+    "failed": 0
+  },
+  "source_build": {
+    "result": "PASS",
+    "output": "Private audit build directory; tracked generated assets unchanged"
+  },
+  "focused_tests": {
+    "passed": 12,
+    "subtests_passed": 2
+  },
+  "full_backend_suite": "NOT RUN \u2014 audit tooling/docs only; no claim inherited from historical campaigns",
+  "genuine_initial": {
+    "result": "PASS",
+    "inference_executed": true,
+    "restart_verified": true,
+    "cleanup_completed": true,
+    "response_captures": 9
+  },
+  "genuine_capture_retry": {
+    "result": "FAIL",
+    "classification": "Audit selector ambiguity after capture wrapper navigation; not a product failure",
+    "run": "20261110-060659",
+    "restart": "NOT RUN"
+  },
+  "genuine_final": {
+    "result": "PASS",
+    "run": "20261110-060856",
+    "inference_executed": true,
+    "restart_verified": true,
+    "cleanup_completed": true,
+    "captures": 12,
+    "stable_profile_captures": 3
+  }
+}
