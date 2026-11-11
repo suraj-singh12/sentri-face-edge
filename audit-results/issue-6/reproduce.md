@@ -21,3 +21,7 @@ The versioned private archive is preserved outside the disposable QA root. Its e
 ## Pass 2 milestone
 
 Resume from the existing non-PASS plan without deleting pass-one capture files. J02, J07, J15, J20, J22, J24 and J33 describe new actual UI interactions and exact limitations. Password updates, account disablement and backup deletion were limited to newly created or existing **audit-only disposable** account/backup objects. The backup deletion prompt is native browser UI and was observed via the Playwright dialog event; raw credential snapshots and private originals must not be committed. The pass-two plan retains all 253 original non-PASS identifiers, including rows now executed; it is not a smaller denominator.
+
+## Pass 2 continuation B
+
+Journey continuations J01/J03/J05/J06/J08/J09/J11/J13/J20/J22/J24/J32/J33/J34 record the disposable source authority, ordered actions, outcomes and limitations. For J11, perform ownership moves and erase only on expendable synthetic data; the observed erase refusal is scenario-specific. For J32, use only already-authorized local models; do not download or bypass the setup gate. Private path-bearing originals and model parsing errors are not public.

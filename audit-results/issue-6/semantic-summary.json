@@ -4,22 +4,22 @@
   "source_tasks": 60,
   "source_branch_contracts": 509,
   "branch_counts": {
-    "PASS": 272,
-    "NOT RUN": 151,
-    "PARTIAL": 74,
-    "BLOCKED": 11,
-    "FAIL": 1
+    "PASS": 291,
+    "NOT RUN": 131,
+    "PARTIAL": 76,
+    "BLOCKED": 9,
+    "FAIL": 2
   },
   "task_counts": {
-    "PARTIAL": 58,
-    "PASS": 1,
-    "FAIL": 1
+    "PARTIAL": 56,
+    "PASS": 2,
+    "FAIL": 2
   },
-  "branch_pass_percentage": 53.44,
-  "branch_exercised_percentage": 68.17,
+  "branch_pass_percentage": 57.17,
+  "branch_exercised_percentage": 72.5,
   "tasks_with_executed_evidence": 60,
   "task_exercised_percentage": 100.0,
-  "fully_covered_task_percentage": 1.67,
+  "fully_covered_task_percentage": 3.33,
   "private_genuine_supplement": {
     "journey": "J41",
     "scope": "Existing reviewed one-Person distinct enrollment/query pair, admitted real ONNX, final saved profile and graceful restart",
@@ -60,5 +60,5 @@
     "Windows packaged licensing/signing and installer acceptance are outside this macOS source execution.",
     "Private genuine source/data checks supplement but do not silently pass missing UI branch states."
   ],
-  "pass2_note": "Explicit mapped results only; J33 pre-metadata FAIL retained after post-metadata success. Prior checkpoint 27a0532 preserved."
+  "pass2_note": "Explicit mapped results only; original 509 contracts retained; discovered extra Encounter-discard path tracked separately."
 }

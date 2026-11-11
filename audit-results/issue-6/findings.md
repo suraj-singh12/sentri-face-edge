@@ -145,3 +145,35 @@ Explicit Relations Include/Exclude selected states; Reference Only origin, cap a
 **Why → direction:** The stale refusal describes an action no longer selected, which can make a valid recovery look invalid. Evaluate clearing or scoping errors when the operator changes the correction intent, while retaining actual failed request context where useful.
 
 **Reuse → tradeoffs:** Reuse the existing Encounter management modal state, server-side last-participant guard and correction-history read. Clearing a visual message must never silently retry or weaken server validation.
+
+## F16 Pending Encounter discard has no confirmation — P1 usability / safety
+
+**Problem → evidence:** In [J08 step 25 and J33 step 17](journeys/J33.md), one click on Discard Encounter removed the pending synthetic Encounter and left an empty queue; no confirmation appeared. The distinct path was absent from the original 509-contract inventory ([extension](discovered-branches.csv)). Group/session discard use confirmations.
+
+**Why → direction:** An accidental activation can lose pending work without a decision point. Evaluate clear consequences, a consistent confirmation or recoverable undo appropriate to actual authority semantics.
+
+**Reuse → tradeoffs:** Reuse existing queue confirmation patterns and controller checks; added interruption must be weighed against reversible recovery and operator frequency. No data-corruption claim is made.
+
+## F17 Recovery setup error requires browser reload — P2 usability
+
+**Problem → evidence:** An invalid destination produced a full-page error with no visible retry or sign-out; browser reload returned to the setup gate ([J01](journeys/J01.md)). The server correctly refused a destination inside its data directory.
+
+**Why → direction:** A recoverable input error leaves the operator without an obvious in-product route back. Consider an explicit retry and safe exit while preserving the guard.
+
+**Reuse → tradeoffs:** Reuse gate state and backend validation; never silently skip recovery or imply a copy exists.
+
+## F18 Permanent erase fails after ownership corrections — P1 functional defect
+
+**Problem → evidence:** After a synthetic face was moved to another Person and back, then placed in Deleted Faces, permanent erase failed twice with “FOREIGN KEY constraint failed”; the face remained and could be restored ([J11](journeys/J11.md)). A safety backup was created before the failure.
+
+**Why → direction:** The operator cannot complete the promised irreversible action in this specific correction scenario. Investigate the retained dependency and transaction behavior; provide an actionable, safe error.
+
+**Reuse → tradeoffs:** Retain existing typed confirmation, backup and history authority. Any fix must protect historical evidence and avoid broad conclusions about other erasures or corruption.
+
+## F19 Model preparation exposes low-level path — P2 privacy / usability
+
+**Problem → evidence:** Supported filenames with invalid synthetic bytes produced a parser error including a local audit-vault path; the original is private ([J32](journeys/J32.md)).
+
+**Why → direction:** Low-level implementation detail is difficult to act on and can expose local layout in shared screenshots. Offer a concise failure and retry, with controlled technical details when needed.
+
+**Reuse → tradeoffs:** Reuse setup validation and error handling; preserve diagnostic detail in appropriately protected support channels.

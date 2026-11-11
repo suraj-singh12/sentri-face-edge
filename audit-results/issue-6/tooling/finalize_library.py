@@ -36,9 +36,13 @@ for x in r:
  if j=='J30' and s==2:x['state']='Poor-accepted-option-selected-not-committed'
  if 'Headed-native-People' in x['file']:
   x.update(viewport={'width':1280,'height':608},device_scale_factor=2,capture_surface='headed browser content viewport',native_window_css={'width':1280,'height':695})
+ if j=='J01' and s>=6:x['fixture_context']='Fresh disposable synthetic recovery authority; Viewer at step 10; no operator data'
+ if j=='J32' and s>=10:x['fixture_context']='Fresh disposable source ONNX model setup authority; existing authorized local models; no inference in setup frames'
+ if (j,s) in [('J34',13),('J05',8)]:x.update(kind='genuine ONNX inference on generated flat synthetic image',fixture_context='Fresh disposable ONNX authority; generated non-photographic zero-face image')
+ if (j,s) in [('J03',5),('J05',7)]:x.update(kind='source ONNX authority; no inference in frame',fixture_context='Fresh disposable ONNX authority; synthetic Person')
  x.setdefault('capture_surface','full browser content viewport; not stitched; OS chrome excluded')
  x.setdefault('scroll',None)
- x['fixture_context']='Media-free layout authority:30 synthetic People/30 Encounters/0 photos; domain prepared while stopped' if j=='J31' else ('Fresh source ONNX setup authority; existing local operator-supplied model files; no inference in these frames' if j=='J32' else 'Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder')
+ x.setdefault('fixture_context','Media-free layout authority:30 synthetic People/30 Encounters/0 photos; domain prepared while stopped' if j=='J31' else ('Fresh source ONNX setup authority; existing local operator-supplied model files; no inference in these frames' if j=='J32' else 'Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder'))
 # Native originals are additional captures, not replacements for browser captures.
 for p in sorted(C.glob('*Native-full-window-*.png'))+sorted(C.glob('*Native-IAB-signin.jpg')):
  if any(x['file']==p.name for x in r):continue

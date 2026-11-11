@@ -42,3 +42,7 @@ Public preservation is a checkpoint, not a declaration of audit completion. The 
 ## Pass 2 milestone
 
 The current machine-readable semantic summary supersedes the historical pass-one counts above. Explicit actual UI observations qualify selected authentication, queue discard, Event filters/correction, account and backup deletion branches; composite contracts remain PARTIAL where required variants were not demonstrated. The original pre-metadata group-discard FAIL remains. See [the 253-row pass-two plan](pass2-execution-plan.csv) and current [branch ledger](branch-coverage.csv). Unexecuted rows remain planned, not blocked by assumption.
+
+## Pass 2 continuation B
+
+Current original source-contract totals: **291 PASS, 76 PARTIAL, 131 NOT RUN, 9 BLOCKED, 2 FAIL / 509**. One additional discovered Encounter discard path is tracked separately in [discovered-branches.csv](discovered-branches.csv), without changing the original denominator. Actual ONNX zero-face evidence uses generated non-photographic input; multiple-face qualification remains open. Non-owner model setup was not established: the authenticated application API refused the attempted fixture with `models_required`. All remaining NOT RUN rows are outstanding work, not assumed blockers.
