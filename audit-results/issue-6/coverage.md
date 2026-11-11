@@ -12,7 +12,7 @@
 - [Surface register](surface-register.csv) counts semantic pages, collections, profile panes and drilldowns; it excludes dialogs, themes, roles and transient states. [Captured overlays](captured-overlays.csv) counts distinct observed accessible role/title pairs. Neither is a claim that all source components have been rendered.
 - A runtime journey is one ordered J record. A sampled visual-state key is UX/state/role/fixture-kind/theme/viewport, excluding rejected audit attributions. Repeated Viewer attempts with the same key are deduplicated; native geometry remains separate. Public image count includes separately labeled sanitized derivatives. Private genuine captures are a separate supplement, never public image evidence.
 
-At freeze, branch results are **256/509 PASS (50.29%)**, **71/509 PARTIAL**, **170/509 NOT RUN**, **11/509 BLOCKED**, and **1/509 FAIL**. Executed evidence, including partial and failure, is **328/509 (64.44%)**. All **60/60 tasks** have some execution evidence, but **0/60 tasks** qualify every branch: **59 PARTIAL, 1 FAIL**. See machine-readable summaries for capture and source-candidate totals.
+At pass-one freeze (retained checkpoint `27a0532`), branch results were **256/509 PASS (50.29%)**, **71/509 PARTIAL**, **170/509 NOT RUN**, **11/509 BLOCKED**, and **1/509 FAIL**. Executed evidence, including partial and failure, is **328/509 (64.44%)**. All **60/60 tasks** have some execution evidence, but **0/60 tasks** qualify every branch: **59 PARTIAL, 1 FAIL**. See machine-readable summaries for capture and source-candidate totals.
 
 ## Sampled equivalence classes
 
@@ -38,3 +38,7 @@ The **FAIL** is J33's group discard offered before Event details: confirmation p
 Yes, menus/modal and secondary recovery branches remain unexecuted; their source rows are not silently passed. Multiple entry points are preserved in source-map/reuse-map and journey records (Reference Only Add Face/Manage References, Event Attach/Review, profile/global Events, graph/World proofs). Not every warning, tooltip or permission transition was observed. Source definitions without reliable attribution remain NOT RUN in the candidate matrix. Captures link to journey, role, theme, dimensions, fixture and SHA through capture-register and manifest; raw paths/snapshots are private. Six native windows supplement content viewport originals. Windows-specific claims remain blocked/unqualified.
 
 Public preservation is a checkpoint, not a declaration of audit completion. The next audit pass should select the remaining source rows directly, exercise their real prerequisite states, and reconcile outcomes before approving Figcraft's design scope.
+
+## Pass 2 milestone
+
+The current machine-readable semantic summary supersedes the historical pass-one counts above. Explicit actual UI observations qualify selected authentication, queue discard, Event filters/correction, account and backup deletion branches; composite contracts remain PARTIAL where required variants were not demonstrated. The original pre-metadata group-discard FAIL remains. See [the 253-row pass-two plan](pass2-execution-plan.csv) and current [branch ledger](branch-coverage.csv). Unexecuted rows remain planned, not blocked by assumption.

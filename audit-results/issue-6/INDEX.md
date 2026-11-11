@@ -4,6 +4,8 @@
 
 Source/base: [`b457f0a723e845dd1a92a07a577072c85146c89a`](https://github.com/suraj-singh12/sentri-face-edge/commit/b457f0a723e845dd1a92a07a577072c85146c89a), `release-v2.0.0-hardening`. Evidence branch: `audit/issue-6-current-experience`. It extends PR #33's UX-00–UX-15 register and [canonical design authority](../../docs/UI_UX_DESIGN.md). Current Explore | Connections naming is preserved. Future #4 Encounter Split/Merge is not an implemented workflow.
 
+**macOS completion pass 2:** [execution plan](pass2-execution-plan.csv); continuations in [J02](journeys/J02.md), [J07](journeys/J07.md), [J15](journeys/J15.md), [J20](journeys/J20.md), [J22](journeys/J22.md), [J24](journeys/J24.md), and [J33](journeys/J33.md). This is a milestone; remaining contracts require execution.
+
 ## Start here
 
 Choose an area in the gallery below or a journey in the complete ordered register. Each journey contains its goal, role/start state, actual triggers and ordered screenshots, authority consequences, return and gaps. Open a thumbnail for the original full-size public capture. Related problems and recommendations live in [findings](findings.md), component/controller opportunities in [reuse map](reuse-map.md), and independent challenges in [review](review.md).

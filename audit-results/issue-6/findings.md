@@ -18,6 +18,7 @@ This is a BEFORE audit of source `b457f0a723e845dd1a92a07a577072c85146c89a`. Rec
 | P2 | [F10 Initial reads can look like authoritative empty results](#f10-loading-versus-empty) | Startup/slow reads/dense collections | Confirmed transient presentation; no lost-data claim |
 | P2 | [F11 Backup eligibility/target text loses useful identity](#f11-backup-identification) | Restore/export/recovery | Confirmed readability issue; no wrong-target claim |
 | P2 | [F14 Group discard offers an action before its prerequisite](#f14-group-discard-prerequisite) | Queue cleanup before Event details | Confirmed interaction/sequence defect; data retained |
+| P2 | [F15 Stale correction error survives a changed action](#f15-stale-correction-error-survives-a-changed-action--p2) | Participant correction recovery | Confirmed stale feedback; valid correction subsequently succeeds |
 | P3 | [F12 Sighting thumbnail and opened photo can differ](#f12-sighting-media-context) | Multi-media Encounters | Confirmed presentation ambiguity; source contract explained |
 | P3 | [F13 Evidence counts, people counts and jargon compete](#f13-cross-feature-language-and-density) | Associations/World/small windows | Confirmed consistency/density issues |
 
@@ -136,3 +137,11 @@ This is a BEFORE audit of source `b457f0a723e845dd1a92a07a577072c85146c89a`. Rec
 ## Patterns worth retaining
 
 Explicit Relations Include/Exclude selected states; Reference Only origin, cap and retire/restore explanation; independent co-observed/Note/manual evidence; deliberate integrity preparation/refusal; verified safety backup and Restore Safely; Explore compact panels and nested proof/media Escape behavior; source-controlled capability enforcement; current Explore/Connections naming. These are design inputs, not approval to implement changes.
+
+## F15 Stale correction error survives a changed action — P2
+
+**Problem → runtime evidence:** A last-participant removal is correctly refused inline and by toast. After changing the correction to REASSIGN and choosing a valid target, the old “Cannot remove the last or an absent participant” message remains visible next to the enabled Save correction action ([J15 pass 2](journeys/J15.md)). The reassignment then succeeds and its history is retained.
+
+**Why → direction:** The stale refusal describes an action no longer selected, which can make a valid recovery look invalid. Evaluate clearing or scoping errors when the operator changes the correction intent, while retaining actual failed request context where useful.
+
+**Reuse → tradeoffs:** Reuse the existing Encounter management modal state, server-side last-participant guard and correction-history read. Clearing a visual message must never silently retry or weaken server validation.

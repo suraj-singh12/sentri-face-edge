@@ -1,29 +1,30 @@
 {
   "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
   "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
-  "registered_capture_attempts": 272,
-  "accepted_capture_records": 270,
+  "registered_capture_attempts": 322,
+  "accepted_capture_records": 320,
   "rejected_attempts": 2,
-  "distinct_sampled_visual_state_keys": 267,
-  "public_images": 258,
-  "public_originals": 246,
+  "distinct_sampled_visual_state_keys": 317,
+  "public_images": 301,
+  "public_originals": 289,
   "public_sanitized_derivatives": 12,
-  "private_only_accepted": 12,
+  "private_only_accepted": 19,
   "private_genuine_images": 33,
   "runtime_journey_records": 36,
   "semantic_surface_families": 37,
-  "observed_titled_overlays": 41,
-  "observed_dialog_title_count": 33,
+  "observed_titled_overlays": 43,
+  "observed_dialog_title_count": 34,
   "source_task_contracts": 60,
   "source_task_status": {
-    "PARTIAL": 59,
+    "PARTIAL": 58,
+    "PASS": 1,
     "FAIL": 1
   },
   "source_branch_contracts": 509,
   "source_branch_status": {
-    "PASS": 256,
-    "NOT RUN": 170,
-    "PARTIAL": 71,
+    "PASS": 272,
+    "NOT RUN": 151,
+    "PARTIAL": 74,
     "BLOCKED": 11,
     "FAIL": 1
   },
@@ -31,8 +32,8 @@
   "source_definition_sites": 832,
   "control_overlay_transition_definition_sites": 598,
   "candidate_presence": {
-    "NOT RUN": 301,
-    "PARTIAL": 297
+    "NOT RUN": 300,
+    "PARTIAL": 298
   },
   "counting_definitions": "Surfaces: explicit semantic families in surface-register.csv, not all state variants. Journeys: ordered J records, not source contracts. Branches:509 source contracts. Visual key:UX/state/role/kind/theme/viewport, excludes rejected attempts. Titled overlay count excludes unnamed popovers and tooltip definitions; see source oracle. Native and CSS captures are distinct evidence classes."
 }
