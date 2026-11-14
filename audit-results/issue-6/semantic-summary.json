@@ -1,0 +1,64 @@
+{
+  "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+  "method": "Manual exact source branch contract to ordered current-run observations. NOT RUN is not an environment blocker. PASS means this bounded observed branch, including valid refusal when expected; it is not product/accessibility/release acceptance. Static definition candidate coverage is separate.",
+  "source_tasks": 60,
+  "source_branch_contracts": 509,
+  "branch_counts": {
+    "PASS": 324,
+    "NOT RUN": 93,
+    "PARTIAL": 77,
+    "BLOCKED": 9,
+    "FAIL": 6
+  },
+  "task_counts": {
+    "PARTIAL": 51,
+    "PASS": 3,
+    "FAIL": 6
+  },
+  "branch_pass_percentage": 63.65,
+  "branch_exercised_percentage": 79.96,
+  "tasks_with_executed_evidence": 60,
+  "task_exercised_percentage": 100.0,
+  "fully_covered_task_percentage": 5.0,
+  "private_genuine_supplement": {
+    "journey": "J41",
+    "scope": "Existing reviewed one-Person distinct enrollment/query pair, admitted real ONNX, final saved profile and graceful restart",
+    "attempts": [
+      {
+        "attempt": "initial",
+        "result": "PASS",
+        "response_captures": 9,
+        "inference": true,
+        "restart_verified": true,
+        "cleanup_reported": true
+      },
+      {
+        "attempt": "060659",
+        "result": "FAIL",
+        "classification": "audit capture-wrapper selector ambiguity, not product defect",
+        "inference": true,
+        "restart_verified": false,
+        "cleanup_reported": false
+      },
+      {
+        "attempt": "060856",
+        "result": "PASS",
+        "captures": 12,
+        "inference": true,
+        "restart_verified": true,
+        "cleanup_reported": true,
+        "stable_profile_states": 3
+      }
+    ],
+    "privacy": "Original photographic images, model declarations and raw reports remain private; no extra source branches inferred."
+  },
+  "limits": [
+    "No source task or branch result is inherited from historical QA or the lexical JSX scanner.",
+    "A branch with several slash-delimited/composite values stays PARTIAL when only some values or controls were sampled.",
+    "Keyboard/accessibility failures and usability findings belong to findings/review; an expected security/domain refusal is a successfully observed guard.",
+    "All 60 task contracts and all 509 branch/state contracts remain accounted for, including unexecuted paths.",
+    "Windows packaged licensing/signing and installer acceptance are outside this macOS source execution.",
+    "Private genuine source/data checks supplement but do not silently pass missing UI branch states."
+  ],
+  "pass2_note": "Explicit mapped results only; original 509 contracts retained; discovered extra Encounter-discard path tracked separately."
+}

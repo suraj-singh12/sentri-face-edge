@@ -1,0 +1,227 @@
+# Current-experience findings — Issue #6
+
+[Visual INDEX](INDEX.md) · [Independent review](review.md) · [Architecture reuse](reuse-map.md) · [Coverage and limits](coverage.md)
+
+This is a BEFORE audit of source `b457f0a723e845dd1a92a07a577072c85146c89a`. Recommendations are directions to evaluate in the later approved design phase, not approved designs or implementation. Severity denotes operator impact in this audit, not roadmap issue priority. No authorization bypass or authoritative identity corruption was established. A source hypothesis is not a confirmed defect; [source-risk-review](source-risk-review.md) retains those distinctions.
+
+| Priority | Finding | Frequency / reach | Classification |
+|---|---|---|---|
+| P1 | [F01 Unknown time becomes exact previous-day time in World/Graph](#f01-time-precision) | Every unknown-time occurrence crossing views | Confirmed presentation/domain-meaning defect |
+| P1 | [F02 Person Graph edge evidence lacks keyboard access](#f02-keyboard-edge-inspection) | Every keyboard graph inspection | Confirmed accessibility/operability defect in sampled graph |
+| P2 | [F03 Identity names and draft labels truncate during decisions](#f03-identity-disambiguation) | Frequent recognition/review/People tasks | Confirmed usability issue |
+| P2 | [F04 Toasts cover decision controls](#f04-feedback-placement) | Upload, review, correction and genuine inference | Confirmed layout/interaction issue |
+| P2 | [F05 Viewer Notes lack an obvious full-reading path](#f05-full-note-access) | Every long Person Note | Confirmed visual access issue; AT coverage limited |
+| P2 | [F06 Viewer Favorite is enabled but forbidden](#f06-capability-affordance) | Common profile control; Viewer/Technician class | Confirmed permission-affordance mismatch; API holds |
+| P2 | [F07 Attach review does not identify its target prominently](#f07-attach-context) | Every Attach workflow and resume | Confirmed context/discoverability issue |
+| P2 | [F08 Stale correction lacks a direct recovery action](#f08-stale-recovery) | Conflicting edits | Confirmed recovery friction; refusal is correct |
+| P2 | [F09 Import errors duplicate and discard retry context](#f09-import-retry) | Wrong export passphrase | Confirmed feedback/recovery issue |
+| P2 | [F10 Initial reads can look like authoritative empty results](#f10-loading-versus-empty) | Startup/slow reads/dense collections | Confirmed transient presentation; no lost-data claim |
+| P2 | [F11 Backup eligibility/target text loses useful identity](#f11-backup-identification) | Restore/export/recovery | Confirmed readability issue; no wrong-target claim |
+| P2 | [F14 Group discard offers an action before its prerequisite](#f14-group-discard-prerequisite) | Queue cleanup before Event details | Confirmed interaction/sequence defect; data retained |
+| P2 | [F15 Stale correction error survives a changed action](#f15-stale-correction-error-survives-a-changed-action--p2) | Participant correction recovery | Confirmed stale feedback; valid correction subsequently succeeds |
+| P3 | [F12 Sighting thumbnail and opened photo can differ](#f12-sighting-media-context) | Multi-media Encounters | Confirmed presentation ambiguity; source contract explained |
+| P3 | [F13 Evidence counts, people counts and jargon compete](#f13-cross-feature-language-and-density) | Associations/World/small windows | Confirmed consistency/density issues |
+
+## F01 Time precision
+
+**Problem → evidence:** The same unknown-time `Synthetic paired review` appears in Events as `2026-11-10 · Time unknown` ([J15](journeys/J15.md)), but World source Encounter/Evidence/Media and Person Graph show `Nov 9, 2026, 04:00 PM` or an exact occurrence interval ([J18](journeys/J18.md), [J19](journeys/J19.md), [J25](journeys/J25.md)). The VM is America/Los_Angeles. This is a confirmed cross-view display discrepancy; it is not proof of changed stored occurrence authority.
+
+**Why → direction:** Operators comparing evidence can infer a different day and unwarranted exact time. Evaluate one precision-aware presentation of occurrence date, unknown/approximate/exact time and timezone across those views. Keep operational timestamps distinguishable from occurrence facts.
+
+**Reuse → tradeoffs:** Reuse `EventsView.eventDateTime`, existing `event_details.time_precision`, shared World/date helpers and the existing Encounter DTO/read owners. Domain review must decide presentation/DTO propagation; do not silently reinterpret stored historical dates or invent #4 correction semantics. Exact technical timestamps may remain available in provenance disclosure.
+
+## F14 Group discard prerequisite
+
+**Problem → runtime evidence:** Queue exposes Discard and a destructive group confirmation before Event details are complete. Confirming produces `Request failed` / `Complete Event details before deciding identities`, and both groups remain ([J33 steps1–3](journeys/J33.md)). The misleading original capture filename is explicitly corrected in metadata and the journey. Whole-session discard then succeeds.
+
+**Why → recommended direction:** Cleanup appears available but unexpectedly requires occurrence metadata. Evaluate an accurate prerequisite explanation and available-action state before confirmation; separately determine whether the existing domain contract intends to require metadata for group exclusion. No change to that contract is approved by this audit.
+
+**Existing reuse → tradeoffs:** Reuse QueueView's existing active Encounter readiness, discard confirmation, controller and backend decision guard. Disabling without explanation can strand cleanup; silently removing a guard could alter draft authority. Preserve explicit whole-session cancellation and reference-aware cleanup.
+
+## F02 Keyboard edge inspection
+
+**Problem → evidence:** Forty actual Tab presses in a two-Person Graph cycle through shell, camera controls and Person nodes but never the relationship edge. Pointer selection exposes its evidence ([J25](journeys/J25.md)); `PersonGraphView.jsx` provides the hit line pointer/click handlers without a focusable role or keyboard handler. This is bounded runtime plus source evidence, not full screen-reader certification.
+
+**Why → direction:** Keyboard operators cannot complete the same evidence inspection. Evaluate reachable relationship selection with visible focus and equivalent Enter/Space behavior.
+
+**Reuse → tradeoffs:** Explore already has focusable edges and Enter/Space handlers in `WorldExploreCanvas.jsx`. Reuse that interaction and current evidence owner. Dense graphs need a bounded, meaningful navigation order or equivalent relationship list; blindly tabbing hundreds of edges is also poor usability.
+
+## F03 Identity disambiguation
+
+**Problem → evidence:** Browse People truncates names, Weak match and Drafted labels even at 1440px ([J06](journeys/J06.md), [J08](journeys/J08.md)). Long-name fixture cards and canvas labels amplify the problem ([J31](journeys/J31.md)). The accessible name can be longer than the visible label; not every hover variant was qualified.
+
+**Why → direction:** Identity selection must remain unambiguous before accepting a proposal. Evaluate a complete selected identity label and a consistent route to full name, distinguishing metadata and stable ID.
+
+**Reuse → tradeoffs:** Reuse `profileBrowse`, `AssociationIdentity`, existing candidate cards/inspector and profile reads. Wider cards or more text reduce visible candidates and canvas space; retain rank, quality, draft status and proposal-vs-decision distinction.
+
+## F04 Feedback placement
+
+**Problem → evidence:** Upload/decision toasts cover Confirm Event, Complete Review and Confirm Encounter grouping in timed captures ([J06](journeys/J06.md), [J08](journeys/J08.md)). It repeats in private real-inference frames ([J41](journeys/J41.md)). Ordinary notifications default to 4.5 seconds; the frames prove overlap at their capture times, not that it persists indefinitely.
+
+**Why → direction:** The next decision is obscured exactly when the operator needs it. Evaluate feedback positioning, deduplication and local progress/status that preserve access to dialog footers.
+
+**Reuse → tradeoffs:** Reuse the single Mantine Notifications provider, `useApiClient.showToast` and existing busy/error state. Do not suppress important committed/refused/recovery messages to make screens look quieter.
+
+## F05 Full Note access
+
+**Problem → evidence:** The Person Note summary cuts a line mid-glyph without an expand affordance ([J04](journeys/J04.md)); the Viewer profile repeats the clipping while Edit is disabled ([J24](journeys/J24.md)). Source summary styling limits height/overflow. The DOM may retain the text, so no claim that every assistive technology loses it is made.
+
+**Why → direction:** Readers should not need edit authority to read a complete saved Note or its mention context. Evaluate a read-only expansion or complete reading surface.
+
+**Reuse → tradeoffs:** Reuse `ProfileNoteSummary`, the existing saved Note/selected-ID mention model and drawer anatomy. Keep summary density useful, and keep reading separate from mutation permission.
+
+## F06 Capability affordance
+
+**Problem → evidence:** Viewer profile Favorite remains enabled; clicking produces `Your account is not allowed to perform this operation` ([J24](journeys/J24.md)). Four independently authenticated forbidden-operation probes returned HTTP 403. The backend boundary holds.
+
+**Why → direction:** A common visible control offers an action this role cannot perform. Evaluate consistent unavailable-action presentation and explanation across profile/collection controls.
+
+**Reuse → tradeoffs:** Reuse the current `canEdit`/capability matrix and server authorization; do not redefine roles. Hiding everything can impede learning, while unexplained disabled controls are also weak feedback.
+
+## F07 Attach context
+
+**Problem → evidence:** Attach opens an ordinary-looking Review Queue/Encounter 1 of 1 without a prominent target Event name ([J17](journeys/J17.md)). Restart/resume and completion retained the existing occurrence; the independent Encounter count stayed two. This is presentation friction, not an ownership failure.
+
+**Why → direction:** Operators should be able to verify which existing occurrence receives the media before reviewing or completing it. Evaluate a persistent target/context cue and predictable return path.
+
+**Reuse → tradeoffs:** Reuse `queueAttachment`, active review `target_observation_id`, the existing Event read and current queue controller. Do not offer regrouping into new Encounters or create a second Attach authority.
+
+## F08 Stale recovery
+
+**Problem → evidence:** Two real browser views produced a stale correction refusal with the unsaved edit retained ([J16](journeys/J16.md)). The message says reload, but the dialog offers Cancel and Save correction. Recovery required Cancel → Back to Events → reopen Event.
+
+**Why → direction:** Correct conflict refusal needs an obvious, safe next step. Evaluate a reload/review-current action with explicit handling of the unsaved draft.
+
+**Reuse → tradeoffs:** Reuse `expected_revision`, current detail loading and mutation reconciliation. Automatically retrying against a newer revision could apply intent the operator has not reviewed; never make that an implicit overwrite.
+
+## F09 Import retry
+
+**Problem → evidence:** Wrong-passphrase import closes the unlock dialog and emits both `Backup was not imported` and a generic `Connection or operation error`, repeating the same passphrase/damage explanation ([J22](journeys/J22.md), private error frame). A reopened import with the correct passphrase succeeded, then Restore Safely succeeded with a safety-copy notice.
+
+**Why → direction:** Duplicate errors add noise and require reselecting the same file. Evaluate one actionable error and a retained safe retry context.
+
+**Reuse → tradeoffs:** Reuse `DatabaseBackupsPanel` local dialog/file state and `useAppData` import handling. Never retain or expose the entered passphrase beyond the authorized operation or weaken encrypted-import verification.
+
+## F10 Loading versus empty
+
+**Problem → evidence:** The initial thirty-Person fixture view shows zero counts and `No people match` while the first read is pending; its next page shows all thirty records ([J31](journeys/J31.md)). Recently seen also has an explicit loading frame retaining prior selection. These are real intermediate captures, not data-loss evidence.
+
+**Why → direction:** An unqualified empty message can be mistaken for missing data. Evaluate loading/settled-empty distinctions and retained context indicators.
+
+**Reuse → tradeoffs:** Reuse existing controller loading/generation state and backend totals. Avoid introducing polling or discarding a valid prior selection merely to display a spinner.
+
+## F11 Backup identification
+
+**Problem → evidence:** Backup status truncates to `RESTORA…` in a 1440px table, timestamps ellipsize, and restore confirmation can identify only `the selected backup` ([J22](journeys/J22.md)). Actual import/restore passed for the selected disposable backup; no wrong-target execution is claimed.
+
+**Why → direction:** Recoverability and target identity should be readable before replacement. Evaluate a clear backup name/date/status/file summary in both collection and confirmation.
+
+**Reuse → tradeoffs:** Reuse existing backup reason, timestamp, `restorable`, verification and file-count fields plus the current restore modal. Keep long technical IDs available without letting them dominate the confirmation.
+
+## F12 Sighting media context
+
+**Problem → evidence:** A multi-media Sighting card uses the first generic Encounter image; selecting it opens the Person Photos view showing that Person's different source image ([J10](journeys/J10.md)). The current Sighting read intentionally includes all occurrence media. Source review explains the mismatch; it does not establish wrong face assignment or corruption.
+
+**Why → direction:** A thumbnail in a Person history implies person-specific evidence unless labeled otherwise. Evaluate explicit Encounter-media context or the existing person-specific media projection with honest unavailable-image fallback.
+
+**Reuse → tradeoffs:** Reuse the current Sighting/Encounter reads, `_encounter_person_media`, `SightingImage` and photo-selection owner. People present without a face may have no person-specific photographic crop; do not invent one.
+
+## F13 Cross-feature language and density
+
+**Problem → evidence:** Associations (2) can mean evidence-type groups while Associated people (1) means unique counterparts; the same Person appears in separate source rows ([J29](journeys/J29.md)). World mixes operator labels with raw IDs, ranking methods and navigation-intent explanation. Sighting unknown time appears as `date & -`, while Events says Time unknown. At 900×700, People metrics and Event filters push results below the first fold ([J26](journeys/J26.md)).
+
+**Why → direction:** Consistent vocabulary, counts and hierarchy reduce interpretation work. Evaluate precise count labels and progressive disclosure of technical provenance while keeping common tasks/results apparent.
+
+**Reuse → tradeoffs:** Reuse the existing independent evidence groups, unique-counterpart calculation, shared identity labels, provider/CSS tokens, scope controllers and compact Explore panel selector. Do not collapse evidence authorities or remove expert/recovery access to reduce density. These are usability/consistency findings, not a mandate for a new navigation system or aesthetic reskin.
+
+## Patterns worth retaining
+
+Explicit Relations Include/Exclude selected states; Reference Only origin, cap and retire/restore explanation; independent co-observed/Note/manual evidence; deliberate integrity preparation/refusal; verified safety backup and Restore Safely; Explore compact panels and nested proof/media Escape behavior; source-controlled capability enforcement; current Explore/Connections naming. These are design inputs, not approval to implement changes.
+
+## F15 Stale correction error survives a changed action — P2
+
+**Problem → runtime evidence:** A last-participant removal is correctly refused inline and by toast. After changing the correction to REASSIGN and choosing a valid target, the old “Cannot remove the last or an absent participant” message remains visible next to the enabled Save correction action ([J15 pass 2](journeys/J15.md)). The reassignment then succeeds and its history is retained.
+
+**Why → direction:** The stale refusal describes an action no longer selected, which can make a valid recovery look invalid. Evaluate clearing or scoping errors when the operator changes the correction intent, while retaining actual failed request context where useful.
+
+**Reuse → tradeoffs:** Reuse the existing Encounter management modal state, server-side last-participant guard and correction-history read. Clearing a visual message must never silently retry or weaken server validation.
+
+## F16 Pending Encounter discard has no confirmation — P1 usability / safety
+
+**Problem → evidence:** In [J08 step 25 and J33 step 17](journeys/J33.md), one click on Discard Encounter removed the pending synthetic Encounter and left an empty queue; no confirmation appeared. The distinct path was absent from the original 509-contract inventory ([extension](discovered-branches.csv)). Group/session discard use confirmations.
+
+**Why → direction:** An accidental activation can lose pending work without a decision point. Evaluate clear consequences, a consistent confirmation or recoverable undo appropriate to actual authority semantics.
+
+**Reuse → tradeoffs:** Reuse existing queue confirmation patterns and controller checks; added interruption must be weighed against reversible recovery and operator frequency. No data-corruption claim is made.
+
+## F17 Recovery setup error requires browser reload — P2 usability
+
+**Problem → evidence:** An invalid destination produced a full-page error with no visible retry or sign-out; browser reload returned to the setup gate ([J01](journeys/J01.md)). The server correctly refused a destination inside its data directory.
+
+**Why → direction:** A recoverable input error leaves the operator without an obvious in-product route back. Consider an explicit retry and safe exit while preserving the guard.
+
+**Reuse → tradeoffs:** Reuse gate state and backend validation; never silently skip recovery or imply a copy exists.
+
+## F18 Permanent erase fails after ownership corrections — P1 functional defect
+
+**Problem → evidence:** After a synthetic face was moved to another Person and back, then placed in Deleted Faces, permanent erase failed twice with “FOREIGN KEY constraint failed”; the face remained and could be restored ([J11](journeys/J11.md)). A safety backup was created before the failure.
+
+**Why → direction:** The operator cannot complete the promised irreversible action in this specific correction scenario. Investigate the retained dependency and transaction behavior; provide an actionable, safe error.
+
+**Reuse → tradeoffs:** Retain existing typed confirmation, backup and history authority. Any fix must protect historical evidence and avoid broad conclusions about other erasures or corruption.
+
+## F19 Model preparation exposes low-level path — P2 privacy / usability
+
+**Problem → evidence:** Supported filenames with invalid synthetic bytes produced a parser error including a local audit-vault path; the original is private ([J32](journeys/J32.md)).
+
+**Why → direction:** Low-level implementation detail is difficult to act on and can expose local layout in shared screenshots. Offer a concise failure and retry, with controlled technical details when needed.
+
+**Reuse → tradeoffs:** Reuse setup validation and error handling; preserve diagnostic detail in appropriately protected support channels.
+
+## F20 Empty Person Note retains hidden mention-linked association — P1 evidence correction
+
+**Problem → runtime evidence:** In [J29](journeys/J29.md), an explicitly selected synthetic Person mention was saved. Clearing the entire note and saving made Overview say “No notes added,” while Associations still showed the other Person as “Mention-linked 1 evidence,” including after reload. No removal control for the selected mention was visible in the tested drawer.
+
+**Why → direction:** An operator cannot see or correct this remaining link from the empty note presentation. Investigate intended history versus active evidence and provide explicit, traceable correction controls and clear status.
+
+**Reuse → tradeoffs:** Reuse selected mention IDs, note revision guards and evidence provenance; do not erase history or equate a mention with attendance. The exact backend retention semantics are not inferred from this UI observation.
+
+## F21 Safety warning opens generic Settings — P2 navigation
+
+**Problem → runtime evidence:** From a Person profile, the safety-copy warning’s Settings button opened License & activation; a second selection was required to reach Backups & restore ([J24](journeys/J24.md)).
+
+**Why → direction:** The urgent warning does not take the operator directly to the relevant recovery context in this observed navigation state. Consider retaining a specific destination while honoring permissions.
+
+**Reuse → tradeoffs:** Reuse existing Settings navigation and backup readiness checks; restricted roles must receive a meaningful explanation rather than an inaccessible action.
+
+## F22 Duplicate placeholder rename shows raw database constraint — P2 usability
+
+**Problem → runtime evidence:** Editing a synthetic no-photo Person to an existing placeholder name was refused with a raw `UNIQUE constraint failed` index message; the editor stayed open and Cancel preserved the original ([J27](journeys/J27.md)). The underlying uniqueness guard was not bypassed.
+
+**Why → direction:** A database index name does not explain the duplicate or how to recover. Translate the refusal into clear, actionable language while retaining server validation.
+
+**Reuse → tradeoffs:** Reuse Person edit validation and existing error handling; do not silently merge identities or disclose private information.
+
+## F23 Preferred profile photo is not initially shown — P2 visual / correctness
+
+**Problem → runtime evidence:** After setting synthetic photo 2 as the profile photo, the gallery returned to photo 1. In a fresh browser session the profile header still displayed photo 1; selecting photo 2 showed its persisted “Profile photo” badge and updated the header ([J10](journeys/J10.md)).
+
+**Why → direction:** The visible identity image conflicts with the saved preference until the operator selects the photo. Investigate default selection and make the saved representative and displayed header consistent.
+
+**Reuse → tradeoffs:** Reuse the representative-embedding authority and existing gallery selector; preserve distinct Reference Only and Encounter origins. This observation concerns the sampled synthetic profile.
+
+## F24 Nested-folder grouping suggestion unavailable — P1 workflow
+
+**Problem → runtime evidence:** Two distinct synthetic subfolder paths were present in actual upload requests, and two face groups became ready, but Suggest grouping remained disabled on two uploads. Manual grouping succeeded ([J08](journeys/J08.md)).
+
+**Why → direction:** Operators cannot use the offered folder-based grouping aid in this observed source workflow and must reconstruct the grouping manually. Trace relative folder provenance through upload, scan and grouping before choosing an interaction change.
+
+**Reuse → tradeoffs:** Reuse the existing folder upload and grouping controller; suggestions remain proposals requiring operator confirmation. Do not infer that folder structure is authoritative Event truth.
+
+## F25 Reference attachment retry loses targeted controls — P1 recovery / functional
+
+**Problem → runtime evidence:** A Reference Only attachment is correctly refused and initially leaves a targeted draft. In two actual attempts, retry produced a different finalized-media error, after which Retry/Cancel disappeared and an empty Review Queue remained after reload ([J17](journeys/J17.md)). In the second attempt the targeted draft had survived a reload before retry.
+
+**Why → direction:** The operator loses the visible targeted recovery path after retry and receives inconsistent failure explanations. Investigate durable draft ownership and surface a clear recoverable state.
+
+**Reuse → tradeoffs:** Preserve the Reference/Encounter admission boundary and existing targeted retry/cancel authority. The screenshots establish UI behavior; they do not independently prove whether underlying session data was deleted.

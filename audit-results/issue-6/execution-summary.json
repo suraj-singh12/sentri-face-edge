@@ -1,0 +1,39 @@
+{
+  "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+  "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
+  "registered_capture_attempts": 540,
+  "accepted_capture_records": 537,
+  "rejected_attempts": 3,
+  "distinct_sampled_visual_state_keys": 534,
+  "public_images": 485,
+  "public_originals": 473,
+  "public_sanitized_derivatives": 12,
+  "private_only_accepted": 52,
+  "private_genuine_images": 33,
+  "runtime_journey_records": 36,
+  "semantic_surface_families": 37,
+  "observed_titled_overlays": 49,
+  "observed_dialog_title_count": 36,
+  "source_task_contracts": 60,
+  "source_task_status": {
+    "PARTIAL": 51,
+    "PASS": 3,
+    "FAIL": 6
+  },
+  "source_branch_contracts": 509,
+  "source_branch_status": {
+    "PASS": 324,
+    "NOT RUN": 93,
+    "PARTIAL": 77,
+    "BLOCKED": 9,
+    "FAIL": 6
+  },
+  "roles_sampled": 5,
+  "source_definition_sites": 832,
+  "control_overlay_transition_definition_sites": 598,
+  "candidate_presence": {
+    "NOT RUN": 294,
+    "PARTIAL": 304
+  },
+  "counting_definitions": "Surfaces: explicit semantic families in surface-register.csv, not all state variants. Journeys: ordered J records, not source contracts. Branches:509 source contracts. Visual key:UX/state/role/kind/theme/viewport, excludes rejected attempts. Titled overlay count excludes unnamed popovers and tooltip definitions; see source oracle. Native and CSS captures are distinct evidence classes."
+}

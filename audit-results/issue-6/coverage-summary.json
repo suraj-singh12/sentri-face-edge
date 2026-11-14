@@ -1,0 +1,31 @@
+{
+  "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+  "method": "Exact static accessible role/name candidates only. No automatic PASS or semantic workflow assessment.",
+  "counted_definition_kinds": [
+    "control-definition",
+    "overlay-definition",
+    "transition"
+  ],
+  "definition_denominator": 598,
+  "excluded_container_feedback_media_sites": 234,
+  "result_counts": {
+    "NOT RUN": 294,
+    "PARTIAL": 304
+  },
+  "automatic_pass_numerator": 0,
+  "automatic_pass_percent": 0.0,
+  "partial_candidate_numerator": 304,
+  "partial_candidate_percent": 50.84,
+  "partial_candidate_percentage_is_not_completed_coverage": true,
+  "source_task_denominator": 60,
+  "source_branch_state_contract_denominator": 509,
+  "semantic_workflows_assessed_by_this_tool": 0,
+  "eligible_capture_records": 478,
+  "rejected_capture_counts": {
+    "private_without_public_derivative": 55,
+    "unsafe_original_basename": 1,
+    "capture_or_snapshot_missing": 6
+  },
+  "candidate_evidence_relations": 4319,
+  "privacy": "Raw snapshots, local paths, account content and private originals are never exported. Sanitized derivatives explicitly marked."
+}
