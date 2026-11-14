@@ -4,19 +4,19 @@
   "source_tasks": 60,
   "source_branch_contracts": 509,
   "branch_counts": {
-    "PASS": 291,
-    "NOT RUN": 131,
-    "PARTIAL": 76,
+    "PASS": 299,
+    "NOT RUN": 119,
+    "PARTIAL": 79,
     "BLOCKED": 9,
-    "FAIL": 2
+    "FAIL": 3
   },
   "task_counts": {
-    "PARTIAL": 56,
+    "PARTIAL": 55,
     "PASS": 2,
-    "FAIL": 2
+    "FAIL": 3
   },
-  "branch_pass_percentage": 57.17,
-  "branch_exercised_percentage": 72.5,
+  "branch_pass_percentage": 58.74,
+  "branch_exercised_percentage": 74.85,
   "tasks_with_executed_evidence": 60,
   "task_exercised_percentage": 100.0,
   "fully_covered_task_percentage": 3.33,

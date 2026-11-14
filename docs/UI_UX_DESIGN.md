@@ -122,3 +122,5 @@ The later Figcraft phase should propose a bounded cross-feature interaction lang
 ### Audit pass 2 — safety continuity observations
 
 On the disposable macOS source baseline, pending Encounter discard was immediate whereas other queue discards requested confirmation; a corrected synthetic face could not be permanently erased in one tested sequence, although it remained restorable. Recovery setup errors and backend restarts required browser reload in the observed paths. Preserve server guards, historical evidence and correction authority when evaluating clearer recovery and consistent consequences. See the issue-6 evidence library for exact scenarios, limitations and current status.
+
+The macOS continuation also observed an empty Person Note while a previously selected mention remained as a mention-linked association after reload. Preserve provenance and distinguish current evidence from history when clarifying correction and visibility. A safety-copy warning opened generic Settings in the observed context; a selected Event mention was clearly distinguished from attendance in the sampled Event and Person views.

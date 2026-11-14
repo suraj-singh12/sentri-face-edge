@@ -178,3 +178,7 @@ The source ledger is the independent missed-scope checklist. Unrun loading/failu
 ## macOS completion pass 2 — safety continuation B
 
 Follow [recovery gate](journeys/J01.md), [model preparation](journeys/J32.md), [Check a Photo](journeys/J06.md), [queue grouping](journeys/J08.md), [Encounter discard](journeys/J33.md), [face correction and erase](journeys/J11.md), [backup import](journeys/J22.md), [administrator guard](journeys/J20.md), and [session interruption](journeys/J24.md). See [new findings](findings.md) and the [additional discovered path](discovered-branches.csv). The audit remains in progress.
+
+## Pass 2 continuation C
+
+See [duplicate attachment refusal and cancellation](journeys/J17.md), [mentioned versus present Event evidence](journeys/J10.md), [Person Note correction and retained link](journeys/J29.md), and [safety warning navigation](journeys/J24.md). [Activity filtering/export](journeys/J23.md) is documented with private originals. This is an in-progress continuation.

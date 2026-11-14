@@ -177,3 +177,19 @@ Explicit Relations Include/Exclude selected states; Reference Only origin, cap a
 **Why → direction:** Low-level implementation detail is difficult to act on and can expose local layout in shared screenshots. Offer a concise failure and retry, with controlled technical details when needed.
 
 **Reuse → tradeoffs:** Reuse setup validation and error handling; preserve diagnostic detail in appropriately protected support channels.
+
+## F20 Empty Person Note retains hidden mention-linked association — P1 evidence correction
+
+**Problem → runtime evidence:** In [J29](journeys/J29.md), an explicitly selected synthetic Person mention was saved. Clearing the entire note and saving made Overview say “No notes added,” while Associations still showed the other Person as “Mention-linked 1 evidence,” including after reload. No removal control for the selected mention was visible in the tested drawer.
+
+**Why → direction:** An operator cannot see or correct this remaining link from the empty note presentation. Investigate intended history versus active evidence and provide explicit, traceable correction controls and clear status.
+
+**Reuse → tradeoffs:** Reuse selected mention IDs, note revision guards and evidence provenance; do not erase history or equate a mention with attendance. The exact backend retention semantics are not inferred from this UI observation.
+
+## F21 Safety warning opens generic Settings — P2 navigation
+
+**Problem → runtime evidence:** From a Person profile, the safety-copy warning’s Settings button opened License & activation; a second selection was required to reach Backups & restore ([J24](journeys/J24.md)).
+
+**Why → direction:** The urgent warning does not take the operator directly to the relevant recovery context in this observed navigation state. Consider retaining a specific destination while honoring permissions.
+
+**Reuse → tradeoffs:** Reuse existing Settings navigation and backup readiness checks; restricted roles must receive a meaningful explanation rather than an inaccessible action.

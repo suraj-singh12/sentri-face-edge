@@ -46,3 +46,7 @@ The current machine-readable semantic summary supersedes the historical pass-one
 ## Pass 2 continuation B
 
 Current original source-contract totals: **291 PASS, 76 PARTIAL, 131 NOT RUN, 9 BLOCKED, 2 FAIL / 509**. One additional discovered Encounter discard path is tracked separately in [discovered-branches.csv](discovered-branches.csv), without changing the original denominator. Actual ONNX zero-face evidence uses generated non-photographic input; multiple-face qualification remains open. Non-owner model setup was not established: the authenticated application API refused the attempted fixture with `models_required`. All remaining NOT RUN rows are outstanding work, not assumed blockers.
+
+## Pass 2 continuation C
+
+The current original 509-contract ledger is **299 PASS, 79 PARTIAL, 119 NOT RUN, 9 BLOCKED, 3 FAIL**. Additional discovered Encounter discard remains tracked separately. The third FAIL is the observed Person Note mention correction path; active versus historical link semantics require engineering investigation. Duplicate attachment validation, retry refusal, reload and cancel were tested; an actual backend planning failure remains partial. Technical log evidence is private.

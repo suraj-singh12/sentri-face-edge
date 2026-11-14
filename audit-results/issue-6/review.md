@@ -219,3 +219,7 @@ The pass-two browser viewport captures were individually reviewed for synthetic-
 ## Pass 2 continuation B — multidisciplinary review
 
 A single-click pending Encounter discard is inconsistent with guarded group/session removal. A synthetic face remained recoverable after two erase failures following ownership corrections; this qualifies one reproducible functional defect, not all erase scenarios. Recovery destination refusal led to a screen requiring browser reload to return. A live backend restart produced an authorization toast until browser reload. Keyboard Escape and return focus were observed for one archive dialog only; VoiceOver, broader focus order, contrast and natural idle expiry remain unqualified. ONNX zero-face input is generated and non-photographic; multiple-face and photographic accuracy remain open. Exact-role, setup, evidence and interruption gaps remain in the ledger.
+
+## Pass 2 continuation C — evidence and navigation
+
+A selected note mention remained visible as a mention-linked association after all note text was cleared and the profile reloaded. This demonstrates a mismatch in the tested correction path, while intended historical retention remains unresolved. A selected Event mention was separately presented from participant evidence and filtered correctly. A duplicate-media attachment was safely rejected and cancelled; no claim about stale-target failure. The safety warning opened generic License settings from the tested context. Technical Activity log captures and export are private.

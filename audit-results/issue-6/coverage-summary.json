@@ -20,12 +20,12 @@
   "source_task_denominator": 60,
   "source_branch_state_contract_denominator": 509,
   "semantic_workflows_assessed_by_this_tool": 0,
-  "eligible_capture_records": 354,
+  "eligible_capture_records": 385,
   "rejected_capture_counts": {
-    "private_without_public_derivative": 42,
+    "private_without_public_derivative": 49,
     "unsafe_original_basename": 1,
     "capture_or_snapshot_missing": 6
   },
-  "candidate_evidence_relations": 3056,
+  "candidate_evidence_relations": 3318,
   "privacy": "Raw snapshots, local paths, account content and private originals are never exported. Sanitized derivatives explicitly marked."
 }
