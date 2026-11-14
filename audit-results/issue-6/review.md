@@ -223,3 +223,7 @@ A single-click pending Encounter discard is inconsistent with guarded group/sess
 ## Pass 2 continuation C — evidence and navigation
 
 A selected note mention remained visible as a mention-linked association after all note text was cleared and the profile reloaded. This demonstrates a mismatch in the tested correction path, while intended historical retention remains unresolved. A selected Event mention was separately presented from participant evidence and filtered correctly. A duplicate-media attachment was safely rejected and cancelled; no claim about stale-target failure. The safety warning opened generic License settings from the tested context. Technical Activity log captures and export are private.
+
+## Pass 2 continuation D — guarded and cross-feature review
+
+Manual-association cancellation preserved prior evidence and repeated requests returned the same evidence ID. Library deletion confirmation and cancellation worked on a disposable Person. Viewer and Technician restrictions were observed, with path-bearing system details kept private. Existing and fresh merges were refused for survivor conflict; an attempted identical placeholder name hit the actual uniqueness guard, so supported revert was not manufactured. The integrity report showed no findings but does not negate observed UI correction/erase issues. A persisted preferred profile photo initially disagreed with the header in the sampled fresh session.

@@ -4,22 +4,22 @@
   "source_tasks": 60,
   "source_branch_contracts": 509,
   "branch_counts": {
-    "PASS": 299,
-    "NOT RUN": 119,
-    "PARTIAL": 79,
+    "PASS": 308,
+    "NOT RUN": 112,
+    "PARTIAL": 76,
     "BLOCKED": 9,
-    "FAIL": 3
+    "FAIL": 4
   },
   "task_counts": {
-    "PARTIAL": 55,
-    "PASS": 2,
-    "FAIL": 3
+    "PARTIAL": 53,
+    "PASS": 3,
+    "FAIL": 4
   },
-  "branch_pass_percentage": 58.74,
-  "branch_exercised_percentage": 74.85,
+  "branch_pass_percentage": 60.51,
+  "branch_exercised_percentage": 76.23,
   "tasks_with_executed_evidence": 60,
   "task_exercised_percentage": 100.0,
-  "fully_covered_task_percentage": 3.33,
+  "fully_covered_task_percentage": 5.0,
   "private_genuine_supplement": {
     "journey": "J41",
     "scope": "Existing reviewed one-Person distinct enrollment/query pair, admitted real ONNX, final saved profile and graceful restart",

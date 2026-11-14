@@ -14276,5 +14276,1529 @@
     "publication": "ORIGINAL unmodified full capture",
     "public_file": "screenshots/UX-06/UX-06_J29_Step-12_Pass2-Mention-link-persists-after-reload.png",
     "public_sha256": "7894d3a57febadb34ebc832b1ce8bef134ac399a5b3a947f9d1981d00ff347a5"
+  },
+  {
+    "file": "UX-08_J12_Step-07_Pass2-Add-manual-association-open.png",
+    "ux": "UX-08",
+    "journey": "J12",
+    "step": 7,
+    "state": "Pass2-Add-manual-association-open",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:21:34.653571+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "e7c679089c1b7268bf802cce738dba3520832bd5bd72a1bdc6cca4cd83ebf12d",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0442",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J12_Step-07_Pass2-Add-manual-association-open.png",
+    "public_sha256": "e7c679089c1b7268bf802cce738dba3520832bd5bd72a1bdc6cca4cd83ebf12d"
+  },
+  {
+    "file": "UX-08_J12_Step-08_Pass2-Add-manual-selected.png",
+    "ux": "UX-08",
+    "journey": "J12",
+    "step": 8,
+    "state": "Pass2-Add-manual-selected",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:21:41.004392+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "f404502d3262352a8f9dbf6d5745632b39df4998afa14735f215c6069390e4b9",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0443",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J12_Step-08_Pass2-Add-manual-selected.png",
+    "public_sha256": "f404502d3262352a8f9dbf6d5745632b39df4998afa14735f215c6069390e4b9"
+  },
+  {
+    "file": "UX-08_J12_Step-09_Pass2-Add-manual-cancelled.png",
+    "ux": "UX-08",
+    "journey": "J12",
+    "step": 9,
+    "state": "Pass2-Add-manual-cancelled",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:21:41.690203+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "a8bf8ddbe886cc6dfd0c2b69c4831d8611449b769cdf35ebc2a7dd963161e410",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0444",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J12_Step-09_Pass2-Add-manual-cancelled.png",
+    "public_sha256": "a8bf8ddbe886cc6dfd0c2b69c4831d8611449b769cdf35ebc2a7dd963161e410"
+  },
+  {
+    "file": "UX-08_J12_Step-10_Pass2-Manual-beta-added.png",
+    "ux": "UX-08",
+    "journey": "J12",
+    "step": 10,
+    "state": "Pass2-Manual-beta-added",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:22:30.597722+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "439fa644f36b9c81ca8ad00fd48ec232b0145a1da8619519fdb342289c515489",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0445",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J12_Step-10_Pass2-Manual-beta-added.png",
+    "public_sha256": "439fa644f36b9c81ca8ad00fd48ec232b0145a1da8619519fdb342289c515489"
+  },
+  {
+    "file": "UX-08_J12_Step-11_Pass2-Duplicate-manual-selection.png",
+    "ux": "UX-08",
+    "journey": "J12",
+    "step": 11,
+    "state": "Pass2-Duplicate-manual-selection",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:23:03.871836+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "e8f6c1af321b3bbacfb9c31e28ba64482c5b7acae4a8d6d12f00a21c2cfe799c",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0446",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J12_Step-11_Pass2-Duplicate-manual-selection.png",
+    "public_sha256": "e8f6c1af321b3bbacfb9c31e28ba64482c5b7acae4a8d6d12f00a21c2cfe799c"
+  },
+  {
+    "file": "UX-08_J12_Step-12_Pass2-Duplicate-manual-result.png",
+    "ux": "UX-08",
+    "journey": "J12",
+    "step": 12,
+    "state": "Pass2-Duplicate-manual-result",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:23:05.137194+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "030c05b05c2dde02a9965bce73c76e76b7c03ab61a83788d867ae61fb83b027e",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0447",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J12_Step-12_Pass2-Duplicate-manual-result.png",
+    "public_sha256": "030c05b05c2dde02a9965bce73c76e76b7c03ab61a83788d867ae61fb83b027e"
+  },
+  {
+    "file": "UX-08_J12_Step-13_Pass2-Repeated-manual-still-one-evidence.png",
+    "ux": "UX-08",
+    "journey": "J12",
+    "step": 13,
+    "state": "Pass2-Repeated-manual-still-one-evidence",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:23:46.569357+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "3c535188a50faf2c8876483517a615fce526ea753fbecf6b1a5378695612ebb6",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0448",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J12_Step-13_Pass2-Repeated-manual-still-one-evidence.png",
+    "public_sha256": "3c535188a50faf2c8876483517a615fce526ea753fbecf6b1a5378695612ebb6"
+  },
+  {
+    "file": "UX-05_J14_Step-04_Pass2-Library-more-actions-open.png",
+    "ux": "UX-05",
+    "journey": "J14",
+    "step": 4,
+    "state": "Pass2-Library-more-actions-open",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:24:21.794051+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "18734c1d9bf6bad0cd267ca60f24e08f8c05e279d1cbb7df34bb292523a81145",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0449",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J14_Step-04_Pass2-Library-more-actions-open.png",
+    "public_sha256": "18734c1d9bf6bad0cd267ca60f24e08f8c05e279d1cbb7df34bb292523a81145"
+  },
+  {
+    "file": "UX-08_J14_Step-05_Pass2-Library-delete-confirmation.png",
+    "ux": "UX-08",
+    "journey": "J14",
+    "step": 5,
+    "state": "Pass2-Library-delete-confirmation",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:24:31.877132+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "42bd1adac0cec9097b0adcd156528c88b3bd740f917d0260b7ef8634b67d785b",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0450",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J14_Step-05_Pass2-Library-delete-confirmation.png",
+    "public_sha256": "42bd1adac0cec9097b0adcd156528c88b3bd740f917d0260b7ef8634b67d785b"
+  },
+  {
+    "file": "UX-08_J14_Step-06_Pass2-Library-delete-invalid-phrase.png",
+    "ux": "UX-08",
+    "journey": "J14",
+    "step": 6,
+    "state": "Pass2-Library-delete-invalid-phrase",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:24:32.555520+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "560ba20a325c016ca2d24d628642f03825b183f935fd6321c891ab8f3261b3c3",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0451",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J14_Step-06_Pass2-Library-delete-invalid-phrase.png",
+    "public_sha256": "560ba20a325c016ca2d24d628642f03825b183f935fd6321c891ab8f3261b3c3"
+  },
+  {
+    "file": "UX-05_J14_Step-07_Pass2-Library-delete-cancelled.png",
+    "ux": "UX-05",
+    "journey": "J14",
+    "step": 7,
+    "state": "Pass2-Library-delete-cancelled",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:24:33.540971+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "9f3efc36c3482044006056aa0968338b501165b96bf9635e46f35b7a3065d33b",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0452",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J14_Step-07_Pass2-Library-delete-cancelled.png",
+    "public_sha256": "9f3efc36c3482044006056aa0968338b501165b96bf9635e46f35b7a3065d33b"
+  },
+  {
+    "file": "UX-09_J07_Step-17_Pass2-Events-before-contrasting-date.png",
+    "ux": "UX-09",
+    "journey": "J07",
+    "step": 17,
+    "state": "Pass2-Events-before-contrasting-date",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:24:53.402150+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "46b9ef9cb346f42cf47df6926051f89c381a88459db008f307dab84586dc5a97",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0453",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-09/UX-09_J07_Step-17_Pass2-Events-before-contrasting-date.png",
+    "public_sha256": "46b9ef9cb346f42cf47df6926051f89c381a88459db008f307dab84586dc5a97"
+  },
+  {
+    "file": "UX-09_J07_Step-18_Pass2-Events-date-filter-excludes-older.png",
+    "ux": "UX-09",
+    "journey": "J07",
+    "step": 18,
+    "state": "Pass2-Events-date-filter-excludes-older",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:24:54.950846+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "18a33f432f4289e6ea2e1af17708e484feb01a08cfb3dd965038e430b97ff5f1",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0454",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-09/UX-09_J07_Step-18_Pass2-Events-date-filter-excludes-older.png",
+    "public_sha256": "18a33f432f4289e6ea2e1af17708e484feb01a08cfb3dd965038e430b97ff5f1"
+  },
+  {
+    "file": "UX-09_J07_Step-19_Pass2-Events-location-filter-excludes-others.png",
+    "ux": "UX-09",
+    "journey": "J07",
+    "step": 19,
+    "state": "Pass2-Events-location-filter-excludes-others",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:25:22.975751+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "9a75dc43ff82385d7625c2d7c05f07cfa56bdb4fc3245904db7c876881bebabc",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0455",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-09/UX-09_J07_Step-19_Pass2-Events-location-filter-excludes-others.png",
+    "public_sha256": "9a75dc43ff82385d7625c2d7c05f07cfa56bdb4fc3245904db7c876881bebabc"
+  },
+  {
+    "file": "UX-09_J07_Step-20_Pass2-Events-to-date-excludes-newer.png",
+    "ux": "UX-09",
+    "journey": "J07",
+    "step": 20,
+    "state": "Pass2-Events-to-date-excludes-newer",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:25:37.208490+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "3275ad766c3a9963423b366f67367791ece732753f782aebf3547a2a48e146cf",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0456",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-09/UX-09_J07_Step-20_Pass2-Events-to-date-excludes-newer.png",
+    "public_sha256": "3275ad766c3a9963423b366f67367791ece732753f782aebf3547a2a48e146cf"
+  },
+  {
+    "file": "UX-01_J20_Step-21_Pass2-Viewer-settings-not-visible.png",
+    "ux": "UX-01",
+    "journey": "J20",
+    "step": 21,
+    "state": "Pass2-Viewer-settings-not-visible",
+    "role": "Viewer",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:26:18.426093+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "2870cd6e4e3c9d4e75a4eb8519d718ca9cd159854d6e71f2d3a8cbc97946331d",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "fixture_context": "Dedicated disposable Viewer authority; restricted role",
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0457",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-01/UX-01_J20_Step-21_Pass2-Viewer-settings-not-visible.png",
+    "public_sha256": "2870cd6e4e3c9d4e75a4eb8519d718ca9cd159854d6e71f2d3a8cbc97946331d"
+  },
+  {
+    "file": "UX-13_J23_Step-15_Pass2-Technician-safety-copy-owner-required.png",
+    "ux": "UX-13",
+    "journey": "J23",
+    "step": 15,
+    "state": "Pass2-Technician-safety-copy-owner-required",
+    "role": "Technician",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:26:53.562272+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "e9afa77d4b5eeeb20bef04740fcfd29fd50d493d2c6dfedda66e5934cff174f5",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "fixture_context": "Dedicated disposable Technician account; synthetic mode; system details withheld for paths and model declarations",
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0458",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J23_Step-16_Pass2-Admin-change-safety-folder-open.png",
+    "ux": "UX-13",
+    "journey": "J23",
+    "step": 16,
+    "state": "Pass2-Admin-change-safety-folder-open",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:27:10.075421+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "e5c0ef83228552127c6322cbadab0be2060d9edcac615730463aa599d9ad26c6",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0459",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J23_Step-17_Pass2-Admin-safety-folder-invalid.png",
+    "ux": "UX-13",
+    "journey": "J23",
+    "step": 17,
+    "state": "Pass2-Admin-safety-folder-invalid",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:27:10.752834+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "ce23ff0fbf95f8211e5fcf437641f834cf6dd2e4f9cea2bff89fd3fb5bd17815",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0460",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J23_Step-18_Pass2-Admin-safety-folder-refused.png",
+    "ux": "UX-13",
+    "journey": "J23",
+    "step": 18,
+    "state": "Pass2-Admin-safety-folder-after-submission-toast-expired",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:27:24.138393+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "d08b40157d673be38a5508b68aa6b260418691f3736a499c604d17dfdd8b4235",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0461",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J23_Step-19_Pass2-Admin-safety-folder-cancelled.png",
+    "ux": "UX-13",
+    "journey": "J23",
+    "step": 19,
+    "state": "Pass2-Admin-safety-folder-cancelled",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:27:25.051749+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "3d7f253527016132542c611e46ea3d00007c9bd6d65c47a935f74f43c1951c2d",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0462",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J23_Step-20_Pass2-Admin-safety-folder-error-toast.png",
+    "ux": "UX-13",
+    "journey": "J23",
+    "step": 20,
+    "state": "Pass2-Admin-safety-folder-error-toast",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:27:52.622571+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "d08b40157d673be38a5508b68aa6b260418691f3736a499c604d17dfdd8b4235",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0463",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J21_Step-04_Pass2-Integrity-start-post-corrections.png",
+    "ux": "UX-13",
+    "journey": "J21",
+    "step": 4,
+    "state": "Pass2-Integrity-start-post-corrections",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:28:04.745921+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "42b3c4b4a121005c0487bf6ae836d2211c14385935e8be17ddc6c2c19affdfcd",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0464",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J21_Step-04_Pass2-Integrity-start-post-corrections.png",
+    "public_sha256": "42b3c4b4a121005c0487bf6ae836d2211c14385935e8be17ddc6c2c19affdfcd"
+  },
+  {
+    "file": "UX-13_J21_Step-05_Pass2-Integrity-passes-after-corrections.png",
+    "ux": "UX-13",
+    "journey": "J21",
+    "step": 5,
+    "state": "Pass2-Integrity-passes-after-corrections",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:28:20.864213+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "210f566d6b25963529de4a4d9ec1c056926946aa3baee4a57abdd5c8910428b2",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0465",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J21_Step-05_Pass2-Integrity-passes-after-corrections.png",
+    "public_sha256": "210f566d6b25963529de4a4d9ec1c056926946aa3baee4a57abdd5c8910428b2"
+  },
+  {
+    "file": "UX-13_J28_Step-03_Pass2-Guarded-merge-history-loaded.png",
+    "ux": "UX-13",
+    "journey": "J28",
+    "step": 3,
+    "state": "Pass2-Guarded-merge-history-loaded",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:28:34.352255+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "887056d26206408b47d878804b7ab275e9fab3b79f2ed33238492049002b5a1b",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0466",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J28_Step-03_Pass2-Guarded-merge-history-loaded.png",
+    "public_sha256": "887056d26206408b47d878804b7ab275e9fab3b79f2ed33238492049002b5a1b"
+  },
+  {
+    "file": "UX-13_J28_Step-04_Pass2-Existing-merge-revert-refused.png",
+    "ux": "UX-13",
+    "journey": "J28",
+    "step": 4,
+    "state": "Pass2-Existing-merge-revert-refused",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:28:50.309392+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "1719cfe916fc38f14ace4c187616ef1e1379969b224acada29dfdc8780967fdb",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0467",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J28_Step-04_Pass2-Existing-merge-revert-refused.png",
+    "public_sha256": "1719cfe916fc38f14ace4c187616ef1e1379969b224acada29dfdc8780967fdb"
+  },
+  {
+    "file": "UX-07_J27_Step-06_Pass2-Revert-source-form.png",
+    "ux": "UX-07",
+    "journey": "J27",
+    "step": 6,
+    "state": "Pass2-Revert-source-form",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:29:23.650552+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "e73462f9a4d34df2e8e216d749f1aa80cf3fe9a7528396ed7f240cc954a6b14a",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0468",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-07/UX-07_J27_Step-06_Pass2-Revert-source-form.png",
+    "public_sha256": "e73462f9a4d34df2e8e216d749f1aa80cf3fe9a7528396ed7f240cc954a6b14a"
+  },
+  {
+    "file": "UX-05_J27_Step-07_Pass2-Revert-source-created.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 7,
+    "state": "Pass2-Revert-source-created",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:29:40.587723+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "bef03461a941a61d77466c21852e28c61145ec276a8044b30607e437e4d62ed2",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0469",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-07_Pass2-Revert-source-created.png",
+    "public_sha256": "bef03461a941a61d77466c21852e28c61145ec276a8044b30607e437e4d62ed2"
+  },
+  {
+    "file": "UX-05_J27_Step-08_Pass2-Revert-survivor-created.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 8,
+    "state": "Pass2-Revert-survivor-created",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:29:42.960146+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "edb3863e7a12edc881481586f8970b91cd8132252bc94472c562cab8d76ea6c8",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0470",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-08_Pass2-Revert-survivor-created.png",
+    "public_sha256": "edb3863e7a12edc881481586f8970b91cd8132252bc94472c562cab8d76ea6c8"
+  },
+  {
+    "file": "UX-08_J27_Step-09_Pass2-Revert-merge-confirmation.png",
+    "ux": "UX-08",
+    "journey": "J27",
+    "step": 9,
+    "state": "Pass2-Revert-merge-confirmation",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:30:14.051568+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "99f4fad8fb121076cf702b365347132f157216fdc0ed4e27e905821346a34fa8",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0471",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J27_Step-09_Pass2-Revert-merge-confirmation.png",
+    "public_sha256": "99f4fad8fb121076cf702b365347132f157216fdc0ed4e27e905821346a34fa8"
+  },
+  {
+    "file": "UX-05_J27_Step-10_Pass2-Revert-merge-completed.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 10,
+    "state": "Pass2-Revert-merge-completed",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:30:30.971818+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "e87cb2d37a1d0cd84cfc7d65d5b308d547a07d3d97adfe690ba263846c92e057",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0472",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-10_Pass2-Revert-merge-completed.png",
+    "public_sha256": "e87cb2d37a1d0cd84cfc7d65d5b308d547a07d3d97adfe690ba263846c92e057"
+  },
+  {
+    "file": "UX-13_J27_Step-11_Pass2-Fresh-merge-history.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 11,
+    "state": "Pass2-Fresh-merge-history",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:30:44.749967+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "96c8076135365a6b472f6d1f0f100e0bb1f91c406630741a2e22c5218d268910",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0473",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-11_Pass2-Fresh-merge-history.png",
+    "public_sha256": "96c8076135365a6b472f6d1f0f100e0bb1f91c406630741a2e22c5218d268910"
+  },
+  {
+    "file": "UX-13_J27_Step-12_Pass2-Fresh-merge-revert-refused.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 12,
+    "state": "Pass2-Fresh-merge-revert-refused",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:30:59.392226+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "5a8dad5bec42421993f873b59922deb54c85a795b54f256053266a6ed10219b5",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0474",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-12_Pass2-Fresh-merge-revert-refused.png",
+    "public_sha256": "5a8dad5bec42421993f873b59922deb54c85a795b54f256053266a6ed10219b5"
+  },
+  {
+    "file": "UX-07_J27_Step-13_Pass2-Identical-revert-person-one-form.png",
+    "ux": "UX-07",
+    "journey": "J27",
+    "step": 13,
+    "state": "Pass2-Identical-revert-person-one-form",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:31:50.226667+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "9a56abc9a98fa458cf80396a055be78c159855985dc728e9235f5be96381b73b",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0475",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-07/UX-07_J27_Step-13_Pass2-Identical-revert-person-one-form.png",
+    "public_sha256": "9a56abc9a98fa458cf80396a055be78c159855985dc728e9235f5be96381b73b"
+  },
+  {
+    "file": "UX-07_J27_Step-14_Pass2-Identical-revert-person-two-form.png",
+    "ux": "UX-07",
+    "journey": "J27",
+    "step": 14,
+    "state": "Pass2-Identical-revert-person-two-form",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:32:05.465900+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "053a9878c9d3ca0bfcac2addc1d6a200ce2b27018a85b7b3f2a84786adc538b2",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0476",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-07/UX-07_J27_Step-14_Pass2-Identical-revert-person-two-form.png",
+    "public_sha256": "053a9878c9d3ca0bfcac2addc1d6a200ce2b27018a85b7b3f2a84786adc538b2"
+  },
+  {
+    "file": "UX-05_J27_Step-15_Pass2-Identical-person-submission-no-second-card.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 15,
+    "state": "Pass2-Identical-person-submission-no-second-card",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:32:24.067305+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "5d58338cb6fa5a1d11630b2f99657a55931ac20e626536447e4c1ec8e0cc2823",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0477",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-15_Pass2-Identical-person-submission-no-second-card.png",
+    "public_sha256": "5d58338cb6fa5a1d11630b2f99657a55931ac20e626536447e4c1ec8e0cc2823"
+  },
+  {
+    "file": "UX-07_J27_Step-16_Pass2-Edit-candidate-to-matching-name.png",
+    "ux": "UX-07",
+    "journey": "J27",
+    "step": 16,
+    "state": "Pass2-Edit-candidate-to-matching-name",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:32:40.396388+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "99e60156417c191565b23d4394a8bb821ca26190424871371f78db7bed074824",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0478",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-07/UX-07_J27_Step-16_Pass2-Edit-candidate-to-matching-name.png",
+    "public_sha256": "99e60156417c191565b23d4394a8bb821ca26190424871371f78db7bed074824"
+  },
+  {
+    "file": "UX-07_J27_Step-17_Pass2-Duplicate-name-edit-refused.png",
+    "ux": "UX-07",
+    "journey": "J27",
+    "step": 17,
+    "state": "Pass2-Duplicate-name-editor-remains-after-refusal",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:32:52.473112+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "ef09e66b8901c7b8c1237a56e5bf559346099e92b0762031022be4627c3bc5a7",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0479",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-07/UX-07_J27_Step-17_Pass2-Duplicate-name-edit-refused.png",
+    "public_sha256": "ef09e66b8901c7b8c1237a56e5bf559346099e92b0762031022be4627c3bc5a7"
+  },
+  {
+    "file": "UX-06_J27_Step-18_Pass2-Duplicate-name-edit-cancelled.png",
+    "ux": "UX-06",
+    "journey": "J27",
+    "step": 18,
+    "state": "Pass2-Duplicate-name-edit-cancelled",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:32:53.410790+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "c503b1ad19d434d4d9ba62bad99f21e99342100af1f86888995ff3acddafd868",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0480",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-06/UX-06_J27_Step-18_Pass2-Duplicate-name-edit-cancelled.png",
+    "public_sha256": "c503b1ad19d434d4d9ba62bad99f21e99342100af1f86888995ff3acddafd868"
+  },
+  {
+    "file": "UX-07_J27_Step-19_Pass2-Duplicate-name-error-toast.png",
+    "ux": "UX-07",
+    "journey": "J27",
+    "step": 19,
+    "state": "Pass2-Duplicate-name-error-toast",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:33:11.721401+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "22f3dc6f2a6af21f49bbc9feb4c246a0c646681f2594852c7b3cdd24fc945bdd",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0481",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-07/UX-07_J27_Step-19_Pass2-Duplicate-name-error-toast.png",
+    "public_sha256": "22f3dc6f2a6af21f49bbc9feb4c246a0c646681f2594852c7b3cdd24fc945bdd"
+  },
+  {
+    "file": "UX-06_J10_Step-09_Pass2-No-photo-profile-gallery-empty.png",
+    "ux": "UX-06",
+    "journey": "J10",
+    "step": 9,
+    "state": "Pass2-No-photo-profile-gallery-empty",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:33:45.063170+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "9404bcb061d86a8a083fd1dce9dc11edd8b12e7afaaf9a9df257569b740c3344",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0482",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-06/UX-06_J10_Step-09_Pass2-No-photo-profile-gallery-empty.png",
+    "public_sha256": "9404bcb061d86a8a083fd1dce9dc11edd8b12e7afaaf9a9df257569b740c3344"
+  },
+  {
+    "file": "UX-06_J10_Step-10_Pass2-Gallery-before-profile-photo-change.png",
+    "ux": "UX-06",
+    "journey": "J10",
+    "step": 10,
+    "state": "Pass2-Gallery-before-profile-photo-change",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:34:07.410214+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "244eabc2e4143b323b297c616a8cc5d25a2523f885c7cecd47007a6836bd6f7c",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0483",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-06/UX-06_J10_Step-10_Pass2-Gallery-before-profile-photo-change.png",
+    "public_sha256": "244eabc2e4143b323b297c616a8cc5d25a2523f885c7cecd47007a6836bd6f7c"
+  },
+  {
+    "file": "UX-06_J10_Step-11_Pass2-Gallery-second-photo-selected.png",
+    "ux": "UX-06",
+    "journey": "J10",
+    "step": 11,
+    "state": "Pass2-Gallery-second-photo-selected",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:34:08.179462+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "c4aa64394122791ef4803b05eef69983e898e29592d081e7f083da6300aed99d",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0484",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-06/UX-06_J10_Step-11_Pass2-Gallery-second-photo-selected.png",
+    "public_sha256": "c4aa64394122791ef4803b05eef69983e898e29592d081e7f083da6300aed99d"
+  },
+  {
+    "file": "UX-06_J10_Step-12_Pass2-Gallery-set-profile-photo.png",
+    "ux": "UX-06",
+    "journey": "J10",
+    "step": 12,
+    "state": "Pass2-Gallery-set-profile-photo",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:34:21.698656+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "0c8857718d50c91a624c846ea294a941dd62514fde2dd232a7601289ef73e63c",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0485",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-06/UX-06_J10_Step-12_Pass2-Gallery-set-profile-photo.png",
+    "public_sha256": "0c8857718d50c91a624c846ea294a941dd62514fde2dd232a7601289ef73e63c"
+  },
+  {
+    "file": "UX-06_J10_Step-13_Pass2-Profile-photo-after-new-session.png",
+    "ux": "UX-06",
+    "journey": "J10",
+    "step": 13,
+    "state": "Pass2-Profile-photo-after-new-session",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:35:06.404260+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "35fa81cea2954946258789083786e0445ad018e797e95c20b383926980c442d5",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0486",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-06/UX-06_J10_Step-13_Pass2-Profile-photo-after-new-session.png",
+    "public_sha256": "35fa81cea2954946258789083786e0445ad018e797e95c20b383926980c442d5"
+  },
+  {
+    "file": "UX-06_J10_Step-14_Pass2-Preferred-photo-persisted-badge.png",
+    "ux": "UX-06",
+    "journey": "J10",
+    "step": 14,
+    "state": "Pass2-Preferred-photo-persisted-badge",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:35:44.343938+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "849e7e1d517f20b75d2024f7fca11f56b29d584544f985eb5420564b042ec260",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0487",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-06/UX-06_J10_Step-14_Pass2-Preferred-photo-persisted-badge.png",
+    "public_sha256": "849e7e1d517f20b75d2024f7fca11f56b29d584544f985eb5420564b042ec260"
+  },
+  {
+    "file": "UX-06_J10_Step-15_Pass2-Overview-after-preferred-selection.png",
+    "ux": "UX-06",
+    "journey": "J10",
+    "step": 15,
+    "state": "Pass2-Overview-after-preferred-selection",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:35:45.045561+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "77bb887e53470d77b8cc9018c16cfc58abe0f2b42bfed32b0d7d986e6dd588bb",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0488",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-06/UX-06_J10_Step-15_Pass2-Overview-after-preferred-selection.png",
+    "public_sha256": "77bb887e53470d77b8cc9018c16cfc58abe0f2b42bfed32b0d7d986e6dd588bb"
+  },
+  {
+    "file": "UX-13_J27_Step-20_Pass2-Fresh-merge-refusal-visible.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 20,
+    "state": "Pass2-Fresh-merge-refusal-visible",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-14T04:38:52.612475+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "987d0af09ba7e02caed8dbc9549f7fe5934dd7d33967753ddaa0bcdf2e0d770b",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0489",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-20_Pass2-Fresh-merge-refusal-visible.png",
+    "public_sha256": "987d0af09ba7e02caed8dbc9549f7fe5934dd7d33967753ddaa0bcdf2e0d770b"
   }
 ]

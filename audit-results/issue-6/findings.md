@@ -193,3 +193,19 @@ Explicit Relations Include/Exclude selected states; Reference Only origin, cap a
 **Why → direction:** The urgent warning does not take the operator directly to the relevant recovery context in this observed navigation state. Consider retaining a specific destination while honoring permissions.
 
 **Reuse → tradeoffs:** Reuse existing Settings navigation and backup readiness checks; restricted roles must receive a meaningful explanation rather than an inaccessible action.
+
+## F22 Duplicate placeholder rename shows raw database constraint — P2 usability
+
+**Problem → runtime evidence:** Editing a synthetic no-photo Person to an existing placeholder name was refused with a raw `UNIQUE constraint failed` index message; the editor stayed open and Cancel preserved the original ([J27](journeys/J27.md)). The underlying uniqueness guard was not bypassed.
+
+**Why → direction:** A database index name does not explain the duplicate or how to recover. Translate the refusal into clear, actionable language while retaining server validation.
+
+**Reuse → tradeoffs:** Reuse Person edit validation and existing error handling; do not silently merge identities or disclose private information.
+
+## F23 Preferred profile photo is not initially shown — P2 visual / correctness
+
+**Problem → runtime evidence:** After setting synthetic photo 2 as the profile photo, the gallery returned to photo 1. In a fresh browser session the profile header still displayed photo 1; selecting photo 2 showed its persisted “Profile photo” badge and updated the header ([J10](journeys/J10.md)).
+
+**Why → direction:** The visible identity image conflicts with the saved preference until the operator selects the photo. Investigate default selection and make the saved representative and displayed header consistent.
+
+**Reuse → tradeoffs:** Reuse the representative-embedding authority and existing gallery selector; preserve distinct Reference Only and Encounter origins. This observation concerns the sampled synthetic profile.

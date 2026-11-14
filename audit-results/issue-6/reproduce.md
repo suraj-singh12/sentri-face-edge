@@ -29,3 +29,7 @@ Journey continuations J01/J03/J05/J06/J08/J09/J11/J13/J20/J22/J24/J32/J33/J34 re
 ## Pass 2 continuation C
 
 J17/J23/J15/J07/J10/J24/J04/J29 capture duplicate-attachment recovery, private activity filters/export, Event mentions, safety navigation, Person edit and note correction. Use only synthetic disposable records; do not publish activity logs or exports. The note-link observation must not be interpreted as permission to change historical authority.
+
+## Pass 2 continuation D
+
+J12/J14/J07/J20/J23/J21/J28/J27/J10 describe the synthetic manual-association, delete cancellation, contrasting filters, role gating, recovery destination refusal, integrity, guarded revert and profile-photo experiments. System details and recovery paths remain private. Do not bypass identity uniqueness or modify storage to force a supported revert.

@@ -50,3 +50,7 @@ Current original source-contract totals: **291 PASS, 76 PARTIAL, 131 NOT RUN, 9 
 ## Pass 2 continuation C
 
 The current original 509-contract ledger is **299 PASS, 79 PARTIAL, 119 NOT RUN, 9 BLOCKED, 3 FAIL**. Additional discovered Encounter discard remains tracked separately. The third FAIL is the observed Person Note mention correction path; active versus historical link semantics require engineering investigation. Duplicate attachment validation, retry refusal, reload and cancel were tested; an actual backend planning failure remains partial. Technical log evidence is private.
+
+## Pass 2 continuation D
+
+Original 509 source contracts: **308 PASS, 76 PARTIAL, 112 NOT RUN, 9 BLOCKED, 4 FAIL**. Additional discovered Encounter discard remains separate. The newly tested profile-photo preference persists as a gallery badge but is initially displayed inconsistently; the resulting FAIL is scoped to that synthetic profile. A fresh merge was refused by the real guarded-revert check; a supported prepared/successful revert is still NOT RUN.

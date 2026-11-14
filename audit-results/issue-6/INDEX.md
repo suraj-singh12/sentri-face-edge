@@ -182,3 +182,7 @@ Follow [recovery gate](journeys/J01.md), [model preparation](journeys/J32.md), [
 ## Pass 2 continuation C
 
 See [duplicate attachment refusal and cancellation](journeys/J17.md), [mentioned versus present Event evidence](journeys/J10.md), [Person Note correction and retained link](journeys/J29.md), and [safety warning navigation](journeys/J24.md). [Activity filtering/export](journeys/J23.md) is documented with private originals. This is an in-progress continuation.
+
+## Pass 2 continuation D
+
+See [manual association guards](journeys/J12.md), [library deletion confirmation](journeys/J14.md), [contrasting Event filters](journeys/J07.md), [recovery permissions](journeys/J23.md), [fresh merge revert refusal](journeys/J27.md), and [preferred photo persistence](journeys/J10.md). Current findings and gaps remain in the ledger; this is not audit completion.
