@@ -33,3 +33,7 @@ J17/J23/J15/J07/J10/J24/J04/J29 capture duplicate-attachment recovery, private a
 ## Pass 2 continuation D
 
 J12/J14/J07/J20/J23/J21/J28/J27/J10 describe the synthetic manual-association, delete cancellation, contrasting filters, role gating, recovery destination refusal, integrity, guarded revert and profile-photo experiments. System details and recovery paths remain private. Do not bypass identity uniqueness or modify storage to force a supported revert.
+
+## Pass 2 continuation E
+
+J08/J17/J19/J18 record generated non-biometric folder inputs, grouping and attachment recovery, Explore and Connections. Folder upload paths observed in requests are synthetic relative paths. Do not replace Reference Only media with Encounter authority or bypass the targeted-draft guard. The generated noise is for the source synthetic detector only and says nothing about real inference.

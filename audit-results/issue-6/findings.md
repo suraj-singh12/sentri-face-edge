@@ -209,3 +209,19 @@ Explicit Relations Include/Exclude selected states; Reference Only origin, cap a
 **Why → direction:** The visible identity image conflicts with the saved preference until the operator selects the photo. Investigate default selection and make the saved representative and displayed header consistent.
 
 **Reuse → tradeoffs:** Reuse the representative-embedding authority and existing gallery selector; preserve distinct Reference Only and Encounter origins. This observation concerns the sampled synthetic profile.
+
+## F24 Nested-folder grouping suggestion unavailable — P1 workflow
+
+**Problem → runtime evidence:** Two distinct synthetic subfolder paths were present in actual upload requests, and two face groups became ready, but Suggest grouping remained disabled on two uploads. Manual grouping succeeded ([J08](journeys/J08.md)).
+
+**Why → direction:** Operators cannot use the offered folder-based grouping aid in this observed source workflow and must reconstruct the grouping manually. Trace relative folder provenance through upload, scan and grouping before choosing an interaction change.
+
+**Reuse → tradeoffs:** Reuse the existing folder upload and grouping controller; suggestions remain proposals requiring operator confirmation. Do not infer that folder structure is authoritative Event truth.
+
+## F25 Reference attachment retry loses targeted controls — P1 recovery / functional
+
+**Problem → runtime evidence:** A Reference Only attachment is correctly refused and initially leaves a targeted draft. In two actual attempts, retry produced a different finalized-media error, after which Retry/Cancel disappeared and an empty Review Queue remained after reload ([J17](journeys/J17.md)). In the second attempt the targeted draft had survived a reload before retry.
+
+**Why → direction:** The operator loses the visible targeted recovery path after retry and receives inconsistent failure explanations. Investigate durable draft ownership and surface a clear recoverable state.
+
+**Reuse → tradeoffs:** Preserve the Reference/Encounter admission boundary and existing targeted retry/cancel authority. The screenshots establish UI behavior; they do not independently prove whether underlying session data was deleted.

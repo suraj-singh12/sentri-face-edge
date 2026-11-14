@@ -186,3 +186,7 @@ See [duplicate attachment refusal and cancellation](journeys/J17.md), [mentioned
 ## Pass 2 continuation D
 
 See [manual association guards](journeys/J12.md), [library deletion confirmation](journeys/J14.md), [contrasting Event filters](journeys/J07.md), [recovery permissions](journeys/J23.md), [fresh merge revert refusal](journeys/J27.md), and [preferred photo persistence](journeys/J10.md). Current findings and gaps remain in the ledger; this is not audit completion.
+
+## Pass 2 continuation E
+
+See [folder import, grouping and first Encounter](journeys/J08.md), [Reference-only attachment retry](journeys/J17.md), [Explore canvas controls](journeys/J19.md), and [Connections relationships and cluster](journeys/J18.md). The current source-contract counts and exact limitations are in [coverage](coverage.md); this is not audit completion.

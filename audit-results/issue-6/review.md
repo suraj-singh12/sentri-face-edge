@@ -227,3 +227,7 @@ A selected note mention remained visible as a mention-linked association after a
 ## Pass 2 continuation D — guarded and cross-feature review
 
 Manual-association cancellation preserved prior evidence and repeated requests returned the same evidence ID. Library deletion confirmation and cancellation worked on a disposable Person. Viewer and Technician restrictions were observed, with path-bearing system details kept private. Existing and fresh merges were refused for survivor conflict; an attempted identical placeholder name hit the actual uniqueness guard, so supported revert was not manufactured. The integrity report showed no findings but does not negate observed UI correction/erase issues. A persisted preferred profile photo initially disagreed with the header in the sampled fresh session.
+
+## Pass 2 continuation E — workflow and graph review
+
+Two actual nested-folder uploads retained distinct relative paths in requests, but the suggestion control stayed disabled; manual grouping and a finalized first Encounter worked. A Reference-only attachment draft survived reload before retry but its targeted controls disappeared after retry twice and did not return after reload. These are scoped runtime failures; underlying durable session cleanup is unverified. Explore pan/zoom/fit changed the actual camera; background click did not clear the selection, and source lacks a corresponding handler. Connections relationship and cluster drilldowns exposed evidence counts and limitations; pattern selection remains open.

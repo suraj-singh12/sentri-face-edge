@@ -54,3 +54,7 @@ The current original 509-contract ledger is **299 PASS, 79 PARTIAL, 119 NOT RUN,
 ## Pass 2 continuation D
 
 Original 509 source contracts: **308 PASS, 76 PARTIAL, 112 NOT RUN, 9 BLOCKED, 4 FAIL**. Additional discovered Encounter discard remains separate. The newly tested profile-photo preference persists as a gallery badge but is initially displayed inconsistently; the resulting FAIL is scoped to that synthetic profile. A fresh merge was refused by the real guarded-revert check; a supported prepared/successful revert is still NOT RUN.
+
+## Pass 2 continuation E
+
+Original 509 contracts: **324 PASS, 77 PARTIAL, 93 NOT RUN, 9 BLOCKED, 6 FAIL**. Additional discovered Encounter discard remains separate. Nested subfolder suggestion and a Reference-only attachment retry are newly observed FAILs; see [F24 and F25](findings.md). Explore background click did not clear selection, while Reset canvas did; source has no background-clear handler, so that original inventory contract remains PARTIAL pending clarification.
