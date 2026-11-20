@@ -4,9 +4,9 @@
   "source_tasks": 60,
   "source_branch_contracts": 509,
   "branch_counts": {
-    "PASS": 324,
-    "NOT RUN": 93,
-    "PARTIAL": 77,
+    "PASS": 334,
+    "NOT RUN": 81,
+    "PARTIAL": 79,
     "BLOCKED": 9,
     "FAIL": 6
   },
@@ -15,8 +15,8 @@
     "PASS": 3,
     "FAIL": 6
   },
-  "branch_pass_percentage": 63.65,
-  "branch_exercised_percentage": 79.96,
+  "branch_pass_percentage": 65.62,
+  "branch_exercised_percentage": 82.32,
   "tasks_with_executed_evidence": 60,
   "task_exercised_percentage": 100.0,
   "fully_covered_task_percentage": 5.0,
@@ -60,5 +60,5 @@
     "Windows packaged licensing/signing and installer acceptance are outside this macOS source execution.",
     "Private genuine source/data checks supplement but do not silently pass missing UI branch states."
   ],
-  "pass2_note": "Explicit mapped results only; original 509 contracts retained; discovered extra Encounter-discard path tracked separately."
+  "pass2_note": "Explicit mapped outcomes only; original 509 contracts and earlier failures retained. Pass 2 continuation F includes one note-create error followed by a separate success."
 }

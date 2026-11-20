@@ -128,3 +128,7 @@ The macOS continuation also observed an empty Person Note while a previously sel
 A sampled saved profile-photo preference retained its gallery badge but was not the image initially displayed on reopening; selected mention and historical evidence must remain clear independently of gallery presentation. Duplicate placeholder rename exposed a database constraint rather than a recovery-oriented message. Guarded merge-revert refusals were honored and successful revert remains unqualified.
 
 The current macOS synthetic audit also found distinct subfolder paths reaching upload while grouping suggestions remained disabled, and a Reference Only attachment retry after which targeted recovery controls disappeared. Preserve explicit Encounter confirmation and Reference provenance while investigating these failures; do not infer underlying data deletion from the UI alone.
+
+### Audit observation: interrupted Note-driven creation
+
+In one synthetic source run, creating a no-photo Person from a Note reached the application error boundary and lost the visible editor context; a separate retry succeeded. Preserve explicit identity and mention authority when investigating recoverability. The first request outcome and recurrence are not independently established. See [Issue #6 evidence F26](../audit-results/issue-6/findings.md).

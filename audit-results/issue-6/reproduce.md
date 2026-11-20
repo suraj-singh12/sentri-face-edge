@@ -37,3 +37,7 @@ J12/J14/J07/J20/J23/J21/J28/J27/J10 describe the synthetic manual-association, d
 ## Pass 2 continuation E
 
 J08/J17/J19/J18 record generated non-biometric folder inputs, grouping and attachment recovery, Explore and Connections. Folder upload paths observed in requests are synthetic relative paths. Do not replace Reference Only media with Encounter authority or bypass the targeted-draft guard. The generated noise is for the source synthetic detector only and says nothing about real inference.
+
+## Pass 2 continuation F
+
+Use generated non-photographic images in a disposable synthetic authority. For the cancellation path, use enough images to keep processing visible and select Cancel Processing. The Note creation error occurred once and a separate retry succeeded; its precise trigger and backend consequences remain unresolved. Continue from the existing execution plan, and preserve the original Pass 1 and later milestones.

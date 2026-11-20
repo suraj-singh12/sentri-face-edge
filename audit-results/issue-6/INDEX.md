@@ -190,3 +190,7 @@ See [manual association guards](journeys/J12.md), [library deletion confirmation
 ## Pass 2 continuation E
 
 See [folder import, grouping and first Encounter](journeys/J08.md), [Reference-only attachment retry](journeys/J17.md), [Explore canvas controls](journeys/J19.md), and [Connections relationships and cluster](journeys/J18.md). The current source-contract counts and exact limitations are in [coverage](coverage.md); this is not audit completion.
+
+## Pass 2 continuation F
+
+See [note creation and error recovery](journeys/J29.md), [processing cancellation and single-image review](journeys/J08.md), [Reference safeguards](journeys/J05.md), [merge refusal](journeys/J27.md), [archived graph node](journeys/J12.md), [archive and restore](journeys/J13.md), and [concurrent attachment guard](journeys/J17.md). [F26](findings.md) records the one observed note-creation error. This is an in-progress milestone.

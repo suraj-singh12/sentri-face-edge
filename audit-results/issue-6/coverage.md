@@ -58,3 +58,7 @@ Original 509 source contracts: **308 PASS, 76 PARTIAL, 112 NOT RUN, 9 BLOCKED, 4
 ## Pass 2 continuation E
 
 Original 509 contracts: **324 PASS, 77 PARTIAL, 93 NOT RUN, 9 BLOCKED, 6 FAIL**. Additional discovered Encounter discard remains separate. Nested subfolder suggestion and a Reference-only attachment retry are newly observed FAILs; see [F24 and F25](findings.md). Explore background click did not clear selection, while Reset canvas did; source has no background-clear handler, so that original inventory contract remains PARTIAL pending clarification.
+
+## Pass 2 continuation F
+
+The unchanged 509-contract denominator now contains 334 PASS, 79 PARTIAL, 81 NOT RUN, 9 BLOCKED and 6 FAIL. A successful retry and one earlier error are both preserved for no-photo Note creation. Concurrent correction refusal does not qualify the unobserved stale-attachment revision branch. See the [branch ledger](branch-coverage.csv) and [execution plan](pass2-execution-plan.csv).

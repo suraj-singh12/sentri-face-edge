@@ -225,3 +225,11 @@ Explicit Relations Include/Exclude selected states; Reference Only origin, cap a
 **Why → direction:** The operator loses the visible targeted recovery path after retry and receives inconsistent failure explanations. Investigate durable draft ownership and surface a clear recoverable state.
 
 **Reuse → tradeoffs:** Preserve the Reference/Encounter admission boundary and existing targeted retry/cancel authority. The screenshots establish UI behavior; they do not independently prove whether underlying session data was deleted.
+
+## F26 Note-driven Person creation reached an error boundary once — P1 workflow / observed functional failure
+
+**Problem → runtime evidence:** Creating a no-photo Person from an unmatched Note mention reached “SentriFace could not display this screen” and `Cannot read properties of undefined (reading 'name')`. Reload returned to sign-in; the first synthetic name was not found in People and the original profile showed no note. A separate creation with another name succeeded and its mention was saved ([J29](journeys/J29.md)). The first request response was not retained, and recurrence was not established.
+
+**Why → direction:** An unexpected full-screen interruption loses the visible editing context at an identity decision. Investigate the failing creation path and preserve recoverable draft context; verify backend consequences independently before asserting data integrity.
+
+**Reuse → tradeoffs:** Reuse the existing error boundary, Person creation and Note mention authority. Recovery must avoid duplicate Persons and must not convert literal text into an unconfirmed mention.

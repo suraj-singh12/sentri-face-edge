@@ -231,3 +231,7 @@ Manual-association cancellation preserved prior evidence and repeated requests r
 ## Pass 2 continuation E — workflow and graph review
 
 Two actual nested-folder uploads retained distinct relative paths in requests, but the suggestion control stayed disabled; manual grouping and a finalized first Encounter worked. A Reference-only attachment draft survived reload before retry but its targeted controls disappeared after retry twice and did not return after reload. These are scoped runtime failures; underlying durable session cleanup is unverified. Explore pan/zoom/fit changed the actual camera; background click did not clear the selection, and source lacks a corresponding handler. Connections relationship and cluster drilldowns exposed evidence counts and limitations; pattern selection remains open.
+
+## Pass 2 continuation F
+
+Fifty-five additional originals were reviewed for public synthetic-only content. One actual note creation failed at an error boundary; a separate attempt succeeded. The boundary claimed the database and photos were unchanged, but no request response or comprehensive database comparison was retained, so that claim is not independently verified. The historical graph node produced a restriction toast when activated; this does not establish complete accessibility. The active Attach review protected its Event against concurrent correction; a stale attachment revision remains untested.
