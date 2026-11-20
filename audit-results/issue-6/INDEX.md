@@ -173,7 +173,7 @@ Public originals contain only approved synthetic/non-sensitive material. Where p
 
 Start with [the reproduction guide](reproduce.md). Read [source-development instructions](../../docs/DEVELOPMENT_MODE.md), the actual launcher and [the source oracle](source-map.md). Use a dedicated disposable data authority and the repository's existing QA helpers. Follow each journey's named real controls in order; do not reuse private paths/identities from the operator environment. Audit-only [capture tooling](tooling/capture_host.py), [role sweep](tooling/role_sweep.py), [viewport sweep](tooling/viewport_sweep.py), [dense fixture](tooling/dense_fixture.py) and [genuine supplement](tooling/genuine_supplement.py) document the bounded harness. Genuine inputs require already authorized local files, never a download implied by this library.
 
-The source ledger is the independent missed-scope checklist. Unrun loading/failure/cancellation, role/license/recovery, photographic-volume and platform combinations remain visible there. No general VoiceOver, WCAG contrast, Windows lifecycle, production license activation, successful guarded merge-revert or full real-photo corpus qualification is inferred from this macOS baseline. Keep all exact limitations and review objections alongside visual evidence when planning the subsequent design phase. **Gate 1 remains open until remaining important contracts are resolved or explicitly accepted as constrained scope. Stop before redesign or implementation.**
+The source ledger is the independent missed-scope checklist. Unrun loading/failure/cancellation, role/license/recovery, photographic-volume and platform combinations remain visible there. No general VoiceOver, WCAG contrast, Windows lifecycle, production license activation or full real-photo corpus qualification is inferred from this macOS baseline. Keep all exact limitations and review objections alongside visual evidence when planning the subsequent design phase. **Gate 1 remains open until remaining important contracts are resolved or explicitly accepted as constrained scope. Stop before redesign or implementation.**
 
 ## macOS completion pass 2 — safety continuation B
 
@@ -198,3 +198,7 @@ See [note creation and error recovery](journeys/J29.md), [processing cancellatio
 ## Pass 2 continuation G
 
 See [no-photo cancellation and selected mention](journeys/J03.md), [Check a Photo validation](journeys/J06.md), [Person activity filter](journeys/J12.md), [Connections refresh](journeys/J18.md), and [Explore empty, Person and cluster proof](journeys/J19.md). The existing [duplicate attachment](journeys/J17.md) refusal has also been reconciled to its source contract. The audit remains in progress.
+
+## Pass 2 continuation H
+
+[Guarded merge revert](journeys/J27.md) now includes an actual supported synthetic plan, cancellation, confirmation, execution, integrity check, refreshed history, repeat refusal and restored profiles. This sampled success does not qualify arbitrary merge shapes. The audit remains in progress.

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
   "evidence_branch": "audit/issue-6-current-experience",
-  "sealed_at": "2026-11-20T15:37:35.764939+00:00",
+  "sealed_at": "2026-11-20T15:56:31.187845+00:00",
   "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
   "environment": {
     "os": "macOS 26.0 arm64 VM",
@@ -27,29 +27,29 @@
   "counts": {
     "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
     "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
-    "registered_capture_attempts": 624,
-    "accepted_capture_records": 621,
+    "registered_capture_attempts": 648,
+    "accepted_capture_records": 645,
     "rejected_attempts": 3,
-    "distinct_sampled_visual_state_keys": 618,
-    "public_images": 568,
-    "public_originals": 556,
+    "distinct_sampled_visual_state_keys": 642,
+    "public_images": 592,
+    "public_originals": 580,
     "public_sanitized_derivatives": 12,
     "private_only_accepted": 53,
     "private_genuine_images": 33,
     "runtime_journey_records": 36,
     "semantic_surface_families": 37,
-    "observed_titled_overlays": 54,
-    "observed_dialog_title_count": 38,
+    "observed_titled_overlays": 55,
+    "observed_dialog_title_count": 39,
     "source_task_contracts": 60,
     "source_task_status": {
-      "PARTIAL": 51,
-      "PASS": 3,
+      "PARTIAL": 50,
+      "PASS": 4,
       "FAIL": 6
     },
     "source_branch_contracts": 509,
     "source_branch_status": {
-      "PASS": 343,
-      "NOT RUN": 72,
+      "PASS": 346,
+      "NOT RUN": 69,
       "PARTIAL": 79,
       "BLOCKED": 9,
       "FAIL": 6
@@ -58,8 +58,8 @@
     "source_definition_sites": 832,
     "control_overlay_transition_definition_sites": 598,
     "candidate_presence": {
-      "NOT RUN": 288,
-      "PARTIAL": 310
+      "NOT RUN": 286,
+      "PARTIAL": 312
     },
     "counting_definitions": "Surfaces: explicit semantic families in surface-register.csv, not all state variants. Journeys: ordered J records, not source contracts. Branches:509 source contracts. Visual key:UX/state/role/kind/theme/viewport, excludes rejected attempts. Titled overlay count excludes unnamed popovers and tooltip definitions; see source oracle. Native and CSS captures are distinct evidence classes."
   },
@@ -68,23 +68,23 @@
   "files": [
     {
       "path": "audit-results/issue-6/INDEX.md",
-      "bytes": 19034,
-      "sha256": "b9ba44b0ddd900a6b0fb0354919aaf6b8da12e721c983a7ee083fbe00dc64d4a"
+      "bytes": 19323,
+      "sha256": "ba67fde6e5ab3739da8fcb9aa5e5c859d817a221b8eb14578b712a81e9a14a33"
     },
     {
       "path": "audit-results/issue-6/branch-coverage.csv",
-      "bytes": 288104,
-      "sha256": "c46e5b981e7ac4d992cbdcdd7392083d7766d5df93125db433b06a9553298e51"
+      "bytes": 289323,
+      "sha256": "c382322fdca6eeda06447fcb4841cf881efc9f6bfd9dce47b086f8789740b796"
     },
     {
       "path": "audit-results/issue-6/capture-register.json",
-      "bytes": 745922,
-      "sha256": "2cb3ca60c4c219e7c19c59dce681ca34548bb0eb0c0fadcdd657483fdc1c42cd"
+      "bytes": 775458,
+      "sha256": "507383bc3d0b791a4728f88e4a2532946814c909b8428063ac34717a9afa11d8"
     },
     {
       "path": "audit-results/issue-6/captured-overlays.csv",
-      "bytes": 20014,
-      "sha256": "bbb335954c3523da1f9b6a06edf89b740901ffacc51e961d372088d7a87dc6a6"
+      "bytes": 21302,
+      "sha256": "3faed3e1886ea3b1bb1cf82dc4d2be9e1f9615e28caeac818bd8a6b040820f3f"
     },
     {
       "path": "audit-results/issue-6/checks/dense-fixture-summary.json",
@@ -94,7 +94,7 @@
     {
       "path": "audit-results/issue-6/checks/library-validation.json",
       "bytes": 522,
-      "sha256": "4f1011b5393d4af4ec12aeefa66f3848f7a1cdc8275c5ad01fd100819ba384be"
+      "sha256": "4fcb9e875bcfb5701d252ad89c3bcc38d676afa8e1c469287b64dfa3bce4f8aa"
     },
     {
       "path": "audit-results/issue-6/checks/role-checks.json",
@@ -114,17 +114,17 @@
     {
       "path": "audit-results/issue-6/coverage-summary.json",
       "bytes": 1146,
-      "sha256": "579c681d8aa0da127cef1cb6f1a8b33df7fa24f8a6603e98c1ebaa811f87a578"
+      "sha256": "ecd6b195aef1cd4ccc022b968b579619fd5d03f5d37da8575507835793bf6a28"
     },
     {
       "path": "audit-results/issue-6/coverage.csv",
-      "bytes": 340496,
-      "sha256": "5c6e7a1f55c3da1e57291e23c965fc7b2dcf58e1d141b51b3c1aa47102c2e031"
+      "bytes": 341379,
+      "sha256": "c6bb9275187c6c15070faabf674f33e15d73198d722dec215859810103a75f34"
     },
     {
       "path": "audit-results/issue-6/coverage.md",
-      "bytes": 10718,
-      "sha256": "7e0895de24f8154b959f7628787e4c594fa9901e3f9199a98cbd51f41365fac2"
+      "bytes": 11190,
+      "sha256": "98fe2e933b5a62ee2ee505e6cf26ae8b55d5c6dfdc3b1cc19dbaaf4f35bd4eaa"
     },
     {
       "path": "audit-results/issue-6/discovered-branches.csv",
@@ -133,13 +133,13 @@
     },
     {
       "path": "audit-results/issue-6/evidence-candidates.csv",
-      "bytes": 2336773,
-      "sha256": "ca889179f9b59fcebe1d36c0f02d9b0252cd733ff45e0211e27d45d3e8e0e390"
+      "bytes": 2476739,
+      "sha256": "d19289c921a136180ba0cf5e6e4474fdc776bfe8d0827945f3ac083c184c8e08"
     },
     {
       "path": "audit-results/issue-6/execution-summary.json",
       "bytes": 1429,
-      "sha256": "e0b8c884a405e8d9474d56a863b195eeeeebcd34b1bb71d872bdff4473b34570"
+      "sha256": "581f877a1c562e9d7915ca05897c79496695f5d01780b460051c80c5cbd4c6a7"
     },
     {
       "path": "audit-results/issue-6/findings.md",
@@ -338,8 +338,8 @@
     },
     {
       "path": "audit-results/issue-6/journeys/J27.md",
-      "bytes": 12396,
-      "sha256": "ee274d2d69b4834a9f17e23406ec73d08be51867f5b1e42c960934d4a955cadc"
+      "bytes": 22963,
+      "sha256": "e800df11aeb338cd3e159b3d590b08d12be4a7e47324a4d883b115b391e53ffb"
     },
     {
       "path": "audit-results/issue-6/journeys/J28.md",
@@ -388,8 +388,8 @@
     },
     {
       "path": "audit-results/issue-6/pass2-execution-plan.csv",
-      "bytes": 96265,
-      "sha256": "ae41d3b72ea0b2cb4ca0e1d1eaa25b122ff55361a0127ff28f34c953bd10b305"
+      "bytes": 96538,
+      "sha256": "18f3f01a7c6da9f63401ec578c9ec511bd40cee5158e935546af070f47a68391"
     },
     {
       "path": "audit-results/issue-6/private-evidence-register.json",
@@ -398,8 +398,8 @@
     },
     {
       "path": "audit-results/issue-6/reproduce.md",
-      "bytes": 7298,
-      "sha256": "fb3a51dcb2d2d92ca968b140ab6899023ba7ce2619b5ddb44c57facec0a9e6c6"
+      "bytes": 7760,
+      "sha256": "76ca01aa2de8114aa4612a8a936a9fe9e30b39993a2367439b1289fd61ee5ea9"
     },
     {
       "path": "audit-results/issue-6/reuse-map.md",
@@ -408,8 +408,8 @@
     },
     {
       "path": "audit-results/issue-6/review.md",
-      "bytes": 57890,
-      "sha256": "78247483382110416add094e5ecc84a4e3726075830e4fb316d8655019c32083"
+      "bytes": 58361,
+      "sha256": "a5a210af5e1b6f73aaaab146d3ee5eba34a8b18d5b151458f1853e23416b974c"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-01_First-launch.png",
@@ -1387,6 +1387,46 @@
       "sha256": "a96f1fb060a95c7267bb65512a0b62d43dbd6d5932b232fbfc85de3b5dedba4d"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-25_Pass2-Safe-revert-first-person-before-create.png",
+      "bytes": 196807,
+      "sha256": "38a96fd1b836483b26ff6e9c45c04715129744683ca3493780068e1096f74d5a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-27_Pass2-Safe-revert-second-same-name-before-create.png",
+      "bytes": 196747,
+      "sha256": "fcc92c0ee8e49561f20fed6d2a3c0daf6b4e4c98cf4bc6dca30bf3d109345efa"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-28_Pass2-Safe-revert-two-same-name-profiles.png",
+      "bytes": 467180,
+      "sha256": "25845a4068b2a9e2183093706989e00ed367aed481b41a3defe6472e9b5ba0a5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-30_Pass2-Safe-revert-merge-result.png",
+      "bytes": 153919,
+      "sha256": "4624491a60075f746f6c9b9d3c13086b1cbb0c32120c009e6613b0e73951fc48"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-36_Pass2-Safe-revert-matched-observation-before-create.png",
+      "bytes": 189007,
+      "sha256": "5adb69a14a357713d6b2c88df2f573b6ec810f79e6b3dd7163329a18e4ef7354"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-38_Pass2-Safe-revert-matched-observation-merge-result.png",
+      "bytes": 140844,
+      "sha256": "8bcc0fde87f1af00dbcff16665d4d720406d626443b696806b7edb68a3e78594"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-46_Pass2-Safe-revert-both-profiles-restored.png",
+      "bytes": 361333,
+      "sha256": "6dfb235f620df6660e3136dd557964eeb8433b015559834657e979cb5a0120ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-48_Pass2-Safe-revert-both-profiles-after-refresh.png",
+      "bytes": 407084,
+      "sha256": "f985b31ddff63b27f0d5d4e30b4f8e3116a82f10c1e193a6df47b61b605c963b"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J29_Step-18_Pass2-After-error-people-library.png",
       "bytes": 455045,
       "sha256": "e77f876c4c3883dbb84cd416f7a685c76f4de1ee45fac2114cd3435d7bcc3229"
@@ -1625,6 +1665,11 @@
       "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J27_Step-23_Pass2-Reference-cap-source-preserved.png",
       "bytes": 427741,
       "sha256": "e76a7d94f92556662c8d819814d7472ad30774819af47c21365d3dd3c13e6f78"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J27_Step-35_Pass2-Safe-revert-two-enrolled-merge-result.png",
+      "bytes": 146500,
+      "sha256": "862b9f5c0021b997a3e140447cc2f9493254447d043f9994f6e390d5847d2079"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-04_Note-and-coobserved-independent.png",
@@ -1922,6 +1967,16 @@
       "sha256": "22f3dc6f2a6af21f49bbc9feb4c246a0c646681f2594852c7b3cdd24fc945bdd"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-26_Pass2-Safe-revert-first-person-enrolled-reference.png",
+      "bytes": 185799,
+      "sha256": "f5901acc2f3addb448317400ddf1277297527c9ede96fc035dee699c06993f5e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-33_Pass2-Safe-revert-second-person-enrolled.png",
+      "bytes": 244455,
+      "sha256": "5c1d3e425d32e1150d1ba2f0f57d47b3c9d88b430a901d4f6b1be1606bc7e065"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J28_Step-01_Context-only-person.png",
       "bytes": 387726,
       "sha256": "5e5262ad6857827c204d929e9aea32c0f187bcf7389d4ed17a87aabf6093d5c8"
@@ -2205,6 +2260,21 @@
       "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-22_Pass2-Reference-cap-merge-refusal.png",
       "bytes": 178210,
       "sha256": "41f840a36f804e0ff13af91d3aa9f618bffb10b60d4c67c7ffff4dd725671b5b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-29_Pass2-Safe-revert-same-profile-merge-confirm.png",
+      "bytes": 154604,
+      "sha256": "51460b2dd03ea056f0036200fd2df7a6949aa45ca03233e85be6ed018819f22b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-34_Pass2-Safe-revert-two-enrolled-before-merge.png",
+      "bytes": 147158,
+      "sha256": "e15da9476e7b1fc8b2c734060d57ba6a181a6b144a2281f345440f77913ff221"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-37_Pass2-Safe-revert-matched-observation-merge-confirm.png",
+      "bytes": 141530,
+      "sha256": "affca398497c48df2c56ec3e893c31ae987fef360376cb90aa3cf069455e24f2"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J28_Step-02_Tombstone-result.png",
@@ -3137,6 +3207,56 @@
       "sha256": "987d0af09ba7e02caed8dbc9549f7fe5934dd7d33967753ddaa0bcdf2e0d770b"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-31_Pass2-Safe-revert-history-committed.png",
+      "bytes": 330482,
+      "sha256": "23b823d18664fd5aeb178c5ce85cb54c169781afec678375af5d7dea1a6d918d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-32_Pass2-Safe-revert-eligibility-result.png",
+      "bytes": 338205,
+      "sha256": "062ea7b20293f212abc6d71d972191c34bbb3f0795e4eaf0991807ec65a85706"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-39_Pass2-Safe-revert-matched-merge-history.png",
+      "bytes": 294450,
+      "sha256": "b4cb314cc953934f620a186e5e8b8e71fac90b27e70e8caf4c4a0f1bb8835bae"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-40_Pass2-Safe-revert-matched-eligibility.png",
+      "bytes": 194005,
+      "sha256": "b9338a2d042beab158eac030edadadca04e6db3f75808319b258c14eed2e84c8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-41_Pass2-Safe-revert-invalid-confirmation.png",
+      "bytes": 197691,
+      "sha256": "9e75c94ba4fc5576cdf295fcf99717e68ceb96c6a0ff261fd30ef3ec1cd43dfc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-42_Pass2-Safe-revert-plan-canceled.png",
+      "bytes": 294149,
+      "sha256": "a5520e29634f8f2042908b9f6c4822bd7b2229123b98b606fe3e4f0ce0c9fe37"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-43_Pass2-Safe-revert-ready-to-execute.png",
+      "bytes": 197438,
+      "sha256": "6a8b1b6d6d45ea553c8e6a56c17eabcd4de2106f7b3ba359109b106c75cd8520"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-44_Pass2-Safe-revert-execution-result.png",
+      "bytes": 309343,
+      "sha256": "8df3fb179001f306596c660e0cc091c1a5a52ea76904f099e5536bbc29a53cf4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-45_Pass2-Safe-revert-refreshed-history.png",
+      "bytes": 302967,
+      "sha256": "e9364ed37ca93102759ac55d0c516fbb12d2e80ef0a2d70c391015b4fd03757d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-47_Pass2-Safe-revert-repeat-refusal.png",
+      "bytes": 307723,
+      "sha256": "d7b33a295ad9fe773c48870279bbfd77f73f483af99e306f375c75008dae6d63"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J28_Step-03_Pass2-Guarded-merge-history-loaded.png",
       "bytes": 347696,
       "sha256": "887056d26206408b47d878804b7ab275e9fab3b79f2ed33238492049002b5a1b"
@@ -3253,13 +3373,13 @@
     },
     {
       "path": "audit-results/issue-6/semantic-summary.json",
-      "bytes": 2756,
-      "sha256": "ac9d724605f9c692c517fbeec232356d3f15096bbeb7471a28fece754f34d4ff"
+      "bytes": 2736,
+      "sha256": "7b18d0d32dd031a53495cdf343a1eb8d1a5b8687516b240d3e29baecf2b9ac0f"
     },
     {
       "path": "audit-results/issue-6/source-branches.csv",
-      "bytes": 207753,
-      "sha256": "a20b6aa0d65cce8e0099b2c8f2d71150e0935a4bf0a501138c81a9d79b7ae9c3"
+      "bytes": 208489,
+      "sha256": "044a96873e3bbb76813ec430bab0593f5045325a3e3849d8b911b0e7e6fbc826"
     },
     {
       "path": "audit-results/issue-6/source-inventory.csv",
@@ -3268,8 +3388,8 @@
     },
     {
       "path": "audit-results/issue-6/source-journeys.csv",
-      "bytes": 68844,
-      "sha256": "1601cd49dfb322b22eb3c61cb9d626a110a6899d880590e00d03b89f52e46ef4"
+      "bytes": 69656,
+      "sha256": "3d9e07ffcaf6a1a5b4c1379ecca174bd78a603e5bf28dcdeebcb4e5611892cfd"
     },
     {
       "path": "audit-results/issue-6/source-map.md",
@@ -3288,8 +3408,8 @@
     },
     {
       "path": "audit-results/issue-6/task-coverage.csv",
-      "bytes": 69637,
-      "sha256": "b177fb41a3333e4c46ac254fe1c21dfab9a9359d8344055d24a1a1d9ac219210"
+      "bytes": 70449,
+      "sha256": "7ca142af3b6e96ae1425e870c687e4e84b2703719a2b556c2f611a422857945c"
     },
     {
       "path": "audit-results/issue-6/tooling/capture_host.py",

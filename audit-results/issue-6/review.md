@@ -239,3 +239,7 @@ Fifty-five additional originals were reviewed for public synthetic-only content.
 ## Pass 2 continuation G
 
 New public originals were individually reviewed for synthetic-only content. Three Check a Photo form frames retain a legacy filename saying “private” but their actual scrolled viewports contain no path; they are untouched originals. The preceding Event-details frame remains private. The Person proof view presented zero relationship/evidence summary counts while listing one relationship under its displayed scope and threshold; inspect the scope and count definitions before treating this as a functional mismatch. No exhaustive accessibility or macOS sign-off is inferred. The previously captured duplicate-finalized-media refusal was found absent from the semantic ledger and is now explicitly mapped.
+
+## Pass 2 continuation H
+
+A legitimate synthetic merge with identical initial observation values produced a supported P11-D plan and a successful revert; an earlier differing-time merge was correctly refused. The automatic People-list update was not yet reflected in step 46; after reopening, step 48 shows both profiles. Raw merge preview payloads contain private file paths and are excluded. No inference is made about all merges, stale plans, or platform acceptance.

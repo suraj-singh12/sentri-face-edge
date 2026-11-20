@@ -20121,5 +20121,773 @@
     "publication": "ORIGINAL unmodified full capture",
     "public_file": "screenshots/UX-12/UX-12_J19_Step-31_Pass2-Explore-cluster-supporting-proof.png",
     "public_sha256": "f44c01e32860139bc78ba06e7a538829bb80f8131b4544971f922f5c8d728c47"
+  },
+  {
+    "file": "UX-05_J27_Step-25_Pass2-Safe-revert-first-person-before-create.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 25,
+    "state": "Pass2-Safe-revert-first-person-before-create",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:40:46.295550+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "38a96fd1b836483b26ff6e9c45c04715129744683ca3493780068e1096f74d5a",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0625",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-25_Pass2-Safe-revert-first-person-before-create.png",
+    "public_sha256": "38a96fd1b836483b26ff6e9c45c04715129744683ca3493780068e1096f74d5a"
+  },
+  {
+    "file": "UX-07_J27_Step-26_Pass2-Safe-revert-first-person-enrolled-reference.png",
+    "ux": "UX-07",
+    "journey": "J27",
+    "step": 26,
+    "state": "Pass2-Safe-revert-first-person-enrolled-reference",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:41:32.908195+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "f5901acc2f3addb448317400ddf1277297527c9ede96fc035dee699c06993f5e",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0626",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-07/UX-07_J27_Step-26_Pass2-Safe-revert-first-person-enrolled-reference.png",
+    "public_sha256": "f5901acc2f3addb448317400ddf1277297527c9ede96fc035dee699c06993f5e"
+  },
+  {
+    "file": "UX-05_J27_Step-27_Pass2-Safe-revert-second-same-name-before-create.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 27,
+    "state": "Pass2-Safe-revert-second-same-name-before-create",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:41:40.139433+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "fcc92c0ee8e49561f20fed6d2a3c0daf6b4e4c98cf4bc6dca30bf3d109345efa",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0627",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-27_Pass2-Safe-revert-second-same-name-before-create.png",
+    "public_sha256": "fcc92c0ee8e49561f20fed6d2a3c0daf6b4e4c98cf4bc6dca30bf3d109345efa"
+  },
+  {
+    "file": "UX-05_J27_Step-28_Pass2-Safe-revert-two-same-name-profiles.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 28,
+    "state": "Pass2-Safe-revert-people-collection-before-merge-profiles-below-viewport",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:42:16.323670+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "25845a4068b2a9e2183093706989e00ed367aed481b41a3defe6472e9b5ba0a5",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0628",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-28_Pass2-Safe-revert-two-same-name-profiles.png",
+    "public_sha256": "25845a4068b2a9e2183093706989e00ed367aed481b41a3defe6472e9b5ba0a5"
+  },
+  {
+    "file": "UX-08_J27_Step-29_Pass2-Safe-revert-same-profile-merge-confirm.png",
+    "ux": "UX-08",
+    "journey": "J27",
+    "step": 29,
+    "state": "Pass2-Safe-revert-same-profile-merge-confirm",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:43:53.486486+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "51460b2dd03ea056f0036200fd2df7a6949aa45ca03233e85be6ed018819f22b",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0629",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J27_Step-29_Pass2-Safe-revert-same-profile-merge-confirm.png",
+    "public_sha256": "51460b2dd03ea056f0036200fd2df7a6949aa45ca03233e85be6ed018819f22b"
+  },
+  {
+    "file": "UX-05_J27_Step-30_Pass2-Safe-revert-merge-result.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 30,
+    "state": "Pass2-Safe-revert-first-merge-submission-loading",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:43:58.327743+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "4624491a60075f746f6c9b9d3c13086b1cbb0c32120c009e6613b0e73951fc48",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0630",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-30_Pass2-Safe-revert-merge-result.png",
+    "public_sha256": "4624491a60075f746f6c9b9d3c13086b1cbb0c32120c009e6613b0e73951fc48"
+  },
+  {
+    "file": "UX-13_J27_Step-31_Pass2-Safe-revert-history-committed.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 31,
+    "state": "Pass2-Safe-revert-history-committed",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:45:07.954115+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "23b823d18664fd5aeb178c5ce85cb54c169781afec678375af5d7dea1a6d918d",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0631",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-31_Pass2-Safe-revert-history-committed.png",
+    "public_sha256": "23b823d18664fd5aeb178c5ce85cb54c169781afec678375af5d7dea1a6d918d"
+  },
+  {
+    "file": "UX-13_J27_Step-32_Pass2-Safe-revert-eligibility-result.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 32,
+    "state": "Pass2-Safe-revert-eligibility-result",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:45:13.566380+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "062ea7b20293f212abc6d71d972191c34bbb3f0795e4eaf0991807ec65a85706",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0632",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-32_Pass2-Safe-revert-eligibility-result.png",
+    "public_sha256": "062ea7b20293f212abc6d71d972191c34bbb3f0795e4eaf0991807ec65a85706"
+  },
+  {
+    "file": "UX-07_J27_Step-33_Pass2-Safe-revert-second-person-enrolled.png",
+    "ux": "UX-07",
+    "journey": "J27",
+    "step": 33,
+    "state": "Pass2-Safe-revert-second-reference-confirmation-loading",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:46:30.512497+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "5c1d3e425d32e1150d1ba2f0f57d47b3c9d88b430a901d4f6b1be1606bc7e065",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0633",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-07/UX-07_J27_Step-33_Pass2-Safe-revert-second-person-enrolled.png",
+    "public_sha256": "5c1d3e425d32e1150d1ba2f0f57d47b3c9d88b430a901d4f6b1be1606bc7e065"
+  },
+  {
+    "file": "UX-08_J27_Step-34_Pass2-Safe-revert-two-enrolled-before-merge.png",
+    "ux": "UX-08",
+    "journey": "J27",
+    "step": 34,
+    "state": "Pass2-Safe-revert-two-enrolled-before-merge",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:47:24.751021+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "e15da9476e7b1fc8b2c734060d57ba6a181a6b144a2281f345440f77913ff221",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0634",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J27_Step-34_Pass2-Safe-revert-two-enrolled-before-merge.png",
+    "public_sha256": "e15da9476e7b1fc8b2c734060d57ba6a181a6b144a2281f345440f77913ff221"
+  },
+  {
+    "file": "UX-06_J27_Step-35_Pass2-Safe-revert-two-enrolled-merge-result.png",
+    "ux": "UX-06",
+    "journey": "J27",
+    "step": 35,
+    "state": "Pass2-Safe-revert-two-enrolled-merge-submission-loading",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:47:31.099283+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "862b9f5c0021b997a3e140447cc2f9493254447d043f9994f6e390d5847d2079",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0635",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-06/UX-06_J27_Step-35_Pass2-Safe-revert-two-enrolled-merge-result.png",
+    "public_sha256": "862b9f5c0021b997a3e140447cc2f9493254447d043f9994f6e390d5847d2079"
+  },
+  {
+    "file": "UX-05_J27_Step-36_Pass2-Safe-revert-matched-observation-before-create.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 36,
+    "state": "Pass2-Safe-revert-matched-observation-before-create",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:48:19.628122+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "5adb69a14a357713d6b2c88df2f573b6ec810f79e6b3dd7163329a18e4ef7354",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0636",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-36_Pass2-Safe-revert-matched-observation-before-create.png",
+    "public_sha256": "5adb69a14a357713d6b2c88df2f573b6ec810f79e6b3dd7163329a18e4ef7354"
+  },
+  {
+    "file": "UX-08_J27_Step-37_Pass2-Safe-revert-matched-observation-merge-confirm.png",
+    "ux": "UX-08",
+    "journey": "J27",
+    "step": 37,
+    "state": "Pass2-Safe-revert-matched-observation-merge-confirm",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:49:12.478717+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "affca398497c48df2c56ec3e893c31ae987fef360376cb90aa3cf069455e24f2",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0637",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-08/UX-08_J27_Step-37_Pass2-Safe-revert-matched-observation-merge-confirm.png",
+    "public_sha256": "affca398497c48df2c56ec3e893c31ae987fef360376cb90aa3cf069455e24f2"
+  },
+  {
+    "file": "UX-05_J27_Step-38_Pass2-Safe-revert-matched-observation-merge-result.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 38,
+    "state": "Pass2-Safe-revert-matched-merge-submission-loading",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:49:20.140884+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "8bcc0fde87f1af00dbcff16665d4d720406d626443b696806b7edb68a3e78594",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0638",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-38_Pass2-Safe-revert-matched-observation-merge-result.png",
+    "public_sha256": "8bcc0fde87f1af00dbcff16665d4d720406d626443b696806b7edb68a3e78594"
+  },
+  {
+    "file": "UX-13_J27_Step-39_Pass2-Safe-revert-matched-merge-history.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 39,
+    "state": "Pass2-Safe-revert-matched-merge-history",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:49:35.138425+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "b4cb314cc953934f620a186e5e8b8e71fac90b27e70e8caf4c4a0f1bb8835bae",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0639",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-39_Pass2-Safe-revert-matched-merge-history.png",
+    "public_sha256": "b4cb314cc953934f620a186e5e8b8e71fac90b27e70e8caf4c4a0f1bb8835bae"
+  },
+  {
+    "file": "UX-13_J27_Step-40_Pass2-Safe-revert-matched-eligibility.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 40,
+    "state": "Pass2-Safe-revert-matched-eligibility",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:49:39.385314+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "b9338a2d042beab158eac030edadadca04e6db3f75808319b258c14eed2e84c8",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0640",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-40_Pass2-Safe-revert-matched-eligibility.png",
+    "public_sha256": "b9338a2d042beab158eac030edadadca04e6db3f75808319b258c14eed2e84c8"
+  },
+  {
+    "file": "UX-13_J27_Step-41_Pass2-Safe-revert-invalid-confirmation.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 41,
+    "state": "Pass2-Safe-revert-invalid-confirmation",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:49:55.961133+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "9e75c94ba4fc5576cdf295fcf99717e68ceb96c6a0ff261fd30ef3ec1cd43dfc",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0641",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-41_Pass2-Safe-revert-invalid-confirmation.png",
+    "public_sha256": "9e75c94ba4fc5576cdf295fcf99717e68ceb96c6a0ff261fd30ef3ec1cd43dfc"
+  },
+  {
+    "file": "UX-13_J27_Step-42_Pass2-Safe-revert-plan-canceled.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 42,
+    "state": "Pass2-Safe-revert-plan-canceled",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:49:58.448293+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "a5520e29634f8f2042908b9f6c4822bd7b2229123b98b606fe3e4f0ce0c9fe37",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0642",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-42_Pass2-Safe-revert-plan-canceled.png",
+    "public_sha256": "a5520e29634f8f2042908b9f6c4822bd7b2229123b98b606fe3e4f0ce0c9fe37"
+  },
+  {
+    "file": "UX-13_J27_Step-43_Pass2-Safe-revert-ready-to-execute.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 43,
+    "state": "Pass2-Safe-revert-ready-to-execute",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:50:06.825603+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "6a8b1b6d6d45ea553c8e6a56c17eabcd4de2106f7b3ba359109b106c75cd8520",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0643",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-43_Pass2-Safe-revert-ready-to-execute.png",
+    "public_sha256": "6a8b1b6d6d45ea553c8e6a56c17eabcd4de2106f7b3ba359109b106c75cd8520"
+  },
+  {
+    "file": "UX-13_J27_Step-44_Pass2-Safe-revert-execution-result.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 44,
+    "state": "Pass2-Safe-revert-execution-result",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:50:13.307151+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "8df3fb179001f306596c660e0cc091c1a5a52ea76904f099e5536bbc29a53cf4",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0644",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-44_Pass2-Safe-revert-execution-result.png",
+    "public_sha256": "8df3fb179001f306596c660e0cc091c1a5a52ea76904f099e5536bbc29a53cf4"
+  },
+  {
+    "file": "UX-13_J27_Step-45_Pass2-Safe-revert-refreshed-history.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 45,
+    "state": "Pass2-Safe-revert-refreshed-history",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:50:35.754760+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "e9364ed37ca93102759ac55d0c516fbb12d2e80ef0a2d70c391015b4fd03757d",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0645",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-45_Pass2-Safe-revert-refreshed-history.png",
+    "public_sha256": "e9364ed37ca93102759ac55d0c516fbb12d2e80ef0a2d70c391015b4fd03757d"
+  },
+  {
+    "file": "UX-05_J27_Step-46_Pass2-Safe-revert-both-profiles-restored.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 46,
+    "state": "Pass2-Safe-revert-people-search-before-asynchronous-update",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:50:40.943737+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "6dfb235f620df6660e3136dd557964eeb8433b015559834657e979cb5a0120ba",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0646",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-46_Pass2-Safe-revert-both-profiles-restored.png",
+    "public_sha256": "6dfb235f620df6660e3136dd557964eeb8433b015559834657e979cb5a0120ba"
+  },
+  {
+    "file": "UX-13_J27_Step-47_Pass2-Safe-revert-repeat-refusal.png",
+    "ux": "UX-13",
+    "journey": "J27",
+    "step": 47,
+    "state": "Pass2-Safe-revert-repeat-refusal",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:51:07.754912+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "d7b33a295ad9fe773c48870279bbfd77f73f483af99e306f375c75008dae6d63",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0647",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J27_Step-47_Pass2-Safe-revert-repeat-refusal.png",
+    "public_sha256": "d7b33a295ad9fe773c48870279bbfd77f73f483af99e306f375c75008dae6d63"
+  },
+  {
+    "file": "UX-05_J27_Step-48_Pass2-Safe-revert-both-profiles-after-refresh.png",
+    "ux": "UX-05",
+    "journey": "J27",
+    "step": 48,
+    "state": "Pass2-Safe-revert-both-profiles-after-refresh",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-20T15:52:58.567283+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "f985b31ddff63b27f0d5d4e30b4f8e3116a82f10c1e193a6df47b61b605c963b",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0648",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-05/UX-05_J27_Step-48_Pass2-Safe-revert-both-profiles-after-refresh.png",
+    "public_sha256": "f985b31ddff63b27f0d5d4e30b4f8e3116a82f10c1e193a6df47b61b605c963b"
   }
 ]

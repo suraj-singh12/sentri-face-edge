@@ -45,3 +45,7 @@ Use generated non-photographic images in a disposable synthetic authority. For t
 ## Pass 2 continuation G
 
 J03, J06, J12, J18 and J19 describe new synthetic UI paths. The local source application can display an absolute upload path; withhold any capture that exposes one. The three published J06 form viewports were checked individually and have no visible path despite legacy filenames. Do not publish raw accessibility snapshots.
+
+## Pass 2 continuation H
+
+J27 documents a supported guarded revert using two same-name synthetic profiles with identical initial observation metadata, one with an approved generated Reference, created and merged through product controls. The earlier default observation times differed and were correctly refused. Use only disposable authorities; never force database state or weaken server preflight. A changed plan or dependent operation can still be refused.

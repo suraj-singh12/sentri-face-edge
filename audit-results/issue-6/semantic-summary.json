@@ -4,22 +4,22 @@
   "source_tasks": 60,
   "source_branch_contracts": 509,
   "branch_counts": {
-    "PASS": 343,
-    "NOT RUN": 72,
+    "PASS": 346,
+    "NOT RUN": 69,
     "PARTIAL": 79,
     "BLOCKED": 9,
     "FAIL": 6
   },
   "task_counts": {
-    "PARTIAL": 51,
-    "PASS": 3,
+    "PARTIAL": 50,
+    "PASS": 4,
     "FAIL": 6
   },
-  "branch_pass_percentage": 67.39,
-  "branch_exercised_percentage": 84.09,
+  "branch_pass_percentage": 67.98,
+  "branch_exercised_percentage": 84.68,
   "tasks_with_executed_evidence": 60,
   "task_exercised_percentage": 100.0,
-  "fully_covered_task_percentage": 5.0,
+  "fully_covered_task_percentage": 6.67,
   "private_genuine_supplement": {
     "journey": "J41",
     "scope": "Existing reviewed one-Person distinct enrollment/query pair, admitted real ONNX, final saved profile and graceful restart",
@@ -60,5 +60,5 @@
     "Windows packaged licensing/signing and installer acceptance are outside this macOS source execution.",
     "Private genuine source/data checks supplement but do not silently pass missing UI branch states."
   ],
-  "pass2_note": "Explicit observed outcomes; 509 source contracts retained. J17 finalized-media duplicate refusal was previously captured and corrected in the ledger in continuation G."
+  "pass2_note": "Explicit observed outcomes; 509 source contracts retained. Continuation H executes a supported guarded revert only for the tested synthetic shape."
 }

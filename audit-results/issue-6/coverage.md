@@ -29,7 +29,7 @@ At pass-one freeze (retained checkpoint `27a0532`), branch results were **256/50
 
 All individual gaps are enumerable in branch-coverage.csv and task-coverage.csv, with the required source capability and starting-state contract. **NOT RUN is work remaining, not an environment blocker.** Significant remaining work includes invalid authentication/sign-out/session expiry; change-password submit; invalid/failed model setup and non-owner gates; recovery setup/error/non-admin states; duplicate identity warnings and Check a Photo defer/discard/explicit-target interruptions; folder import and upload failure/retry; successful group discard after Event metadata; less common review conflicts; collection filter/sort alternatives; edit validation and selected Note mentions; merge reference-cap/conflict boundaries; full destructive/expiry history; Event filters and REASSIGN; all Connections facets/drilldown failures; account updates and backup deletion/error variants; integrity repair plans and successful guarded merge reversion; more tooltip/popover/focus branches and cross-feature refresh/context loss.
 
-The **11 BLOCKED** rows identify actual environment/input boundaries: seven packaged-license states, separate recovery-drive selection, and three absent suitable photographic zero/multiple-face prerequisites. Do not bypass source platform policy or manufacture frontend gates. A source-mode Business model option is selection evidence, not commercial entitlement or signed license activation. Critical/repair findings and safe merge-revert success are NOT RUN unless a real permitted fixture establishes the prerequisite.
+The **11 BLOCKED** rows identify actual environment/input boundaries: seven packaged-license states, separate recovery-drive selection, and three absent suitable photographic zero/multiple-face prerequisites. Do not bypass source platform policy or manufacture frontend gates. A source-mode Business model option is selection evidence, not commercial entitlement or signed license activation. At that checkpoint critical/repair findings and safe merge-revert success were NOT RUN; continuation H later establishes one supported synthetic revert, while integrity-repair findings remain unrun.
 
 The **FAIL** is J33's group discard offered before Event details: confirmation proceeds to a server refusal, with both pending groups preserved. Whole-session discard succeeds. This is an affordance/sequence failure, not lost identity authority.
 
@@ -53,7 +53,7 @@ The current original 509-contract ledger is **299 PASS, 79 PARTIAL, 119 NOT RUN,
 
 ## Pass 2 continuation D
 
-Original 509 source contracts: **308 PASS, 76 PARTIAL, 112 NOT RUN, 9 BLOCKED, 4 FAIL**. Additional discovered Encounter discard remains separate. The newly tested profile-photo preference persists as a gallery badge but is initially displayed inconsistently; the resulting FAIL is scoped to that synthetic profile. A fresh merge was refused by the real guarded-revert check; a supported prepared/successful revert is still NOT RUN.
+Original 509 source contracts: **308 PASS, 76 PARTIAL, 112 NOT RUN, 9 BLOCKED, 4 FAIL**. Additional discovered Encounter discard remains separate. The newly tested profile-photo preference persists as a gallery badge but is initially displayed inconsistently; the resulting FAIL is scoped to that synthetic profile. A fresh merge was refused by the real guarded-revert check; a supported prepared/successful revert was then NOT RUN; continuation H later executed one supported synthetic case.
 
 ## Pass 2 continuation E
 
@@ -66,3 +66,7 @@ The unchanged 509-contract denominator now contains 334 PASS, 79 PARTIAL, 81 NOT
 ## Pass 2 continuation G
 
 The unchanged 509 source contracts now contain 343 PASS, 79 PARTIAL, 72 NOT RUN, 9 BLOCKED and 6 FAIL. One PASS is a documented correction of the previously captured J17 duplicate-finalized-media refusal; the other eight reflect newly executed branches. See [the ledger](branch-coverage.csv).
+
+## Pass 2 continuation H
+
+The unchanged 509 source contracts now contain 346 PASS, 79 PARTIAL, 69 NOT RUN, 9 BLOCKED and 6 FAIL. Four of 60 task contracts are fully covered. The three newly passed branches cover one supported guarded merge-revert plan, confirmation/cancel and execution; arbitrary merge shapes remain outside that evidence.
