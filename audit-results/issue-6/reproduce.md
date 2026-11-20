@@ -41,3 +41,7 @@ J08/J17/J19/J18 record generated non-biometric folder inputs, grouping and attac
 ## Pass 2 continuation F
 
 Use generated non-photographic images in a disposable synthetic authority. For the cancellation path, use enough images to keep processing visible and select Cancel Processing. The Note creation error occurred once and a separate retry succeeded; its precise trigger and backend consequences remain unresolved. Continue from the existing execution plan, and preserve the original Pass 1 and later milestones.
+
+## Pass 2 continuation G
+
+J03, J06, J12, J18 and J19 describe new synthetic UI paths. The local source application can display an absolute upload path; withhold any capture that exposes one. The three published J06 form viewports were checked individually and have no visible path despite legacy filenames. Do not publish raw accessibility snapshots.

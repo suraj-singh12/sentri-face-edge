@@ -62,3 +62,7 @@ Original 509 contracts: **324 PASS, 77 PARTIAL, 93 NOT RUN, 9 BLOCKED, 6 FAIL**.
 ## Pass 2 continuation F
 
 The unchanged 509-contract denominator now contains 334 PASS, 79 PARTIAL, 81 NOT RUN, 9 BLOCKED and 6 FAIL. A successful retry and one earlier error are both preserved for no-photo Note creation. Concurrent correction refusal does not qualify the unobserved stale-attachment revision branch. See the [branch ledger](branch-coverage.csv) and [execution plan](pass2-execution-plan.csv).
+
+## Pass 2 continuation G
+
+The unchanged 509 source contracts now contain 343 PASS, 79 PARTIAL, 72 NOT RUN, 9 BLOCKED and 6 FAIL. One PASS is a documented correction of the previously captured J17 duplicate-finalized-media refusal; the other eight reflect newly executed branches. See [the ledger](branch-coverage.csv).

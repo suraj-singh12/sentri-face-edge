@@ -235,3 +235,7 @@ Two actual nested-folder uploads retained distinct relative paths in requests, b
 ## Pass 2 continuation F
 
 Fifty-five additional originals were reviewed for public synthetic-only content. One actual note creation failed at an error boundary; a separate attempt succeeded. The boundary claimed the database and photos were unchanged, but no request response or comprehensive database comparison was retained, so that claim is not independently verified. The historical graph node produced a restriction toast when activated; this does not establish complete accessibility. The active Attach review protected its Event against concurrent correction; a stale attachment revision remains untested.
+
+## Pass 2 continuation G
+
+New public originals were individually reviewed for synthetic-only content. Three Check a Photo form frames retain a legacy filename saying “private” but their actual scrolled viewports contain no path; they are untouched originals. The preceding Event-details frame remains private. The Person proof view presented zero relationship/evidence summary counts while listing one relationship under its displayed scope and threshold; inspect the scope and count definitions before treating this as a functional mismatch. No exhaustive accessibility or macOS sign-off is inferred. The previously captured duplicate-finalized-media refusal was found absent from the semantic ledger and is now explicitly mapped.

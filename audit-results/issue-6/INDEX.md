@@ -194,3 +194,7 @@ See [folder import, grouping and first Encounter](journeys/J08.md), [Reference-o
 ## Pass 2 continuation F
 
 See [note creation and error recovery](journeys/J29.md), [processing cancellation and single-image review](journeys/J08.md), [Reference safeguards](journeys/J05.md), [merge refusal](journeys/J27.md), [archived graph node](journeys/J12.md), [archive and restore](journeys/J13.md), and [concurrent attachment guard](journeys/J17.md). [F26](findings.md) records the one observed note-creation error. This is an in-progress milestone.
+
+## Pass 2 continuation G
+
+See [no-photo cancellation and selected mention](journeys/J03.md), [Check a Photo validation](journeys/J06.md), [Person activity filter](journeys/J12.md), [Connections refresh](journeys/J18.md), and [Explore empty, Person and cluster proof](journeys/J19.md). The existing [duplicate attachment](journeys/J17.md) refusal has also been reconciled to its source contract. The audit remains in progress.
