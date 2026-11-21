@@ -4,19 +4,19 @@
   "source_tasks": 60,
   "source_branch_contracts": 509,
   "branch_counts": {
-    "PASS": 346,
-    "NOT RUN": 69,
-    "PARTIAL": 79,
+    "PASS": 349,
+    "NOT RUN": 66,
+    "PARTIAL": 78,
     "BLOCKED": 9,
-    "FAIL": 6
+    "FAIL": 7
   },
   "task_counts": {
-    "PARTIAL": 50,
+    "PARTIAL": 49,
     "PASS": 4,
-    "FAIL": 6
+    "FAIL": 7
   },
-  "branch_pass_percentage": 67.98,
-  "branch_exercised_percentage": 84.68,
+  "branch_pass_percentage": 68.57,
+  "branch_exercised_percentage": 85.27,
   "tasks_with_executed_evidence": 60,
   "task_exercised_percentage": 100.0,
   "fully_covered_task_percentage": 6.67,
@@ -60,5 +60,5 @@
     "Windows packaged licensing/signing and installer acceptance are outside this macOS source execution.",
     "Private genuine source/data checks supplement but do not silently pass missing UI branch states."
   ],
-  "pass2_note": "Explicit observed outcomes; 509 source contracts retained. Continuation H executes a supported guarded revert only for the tested synthetic shape."
+  "pass2_note": "Explicit observed outcomes; 509 source contracts retained. Continuation I adds dense pagination and a genuine synthetic missing-location pattern; Connections overview pagination has a misleading empty result."
 }

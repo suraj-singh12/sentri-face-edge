@@ -202,3 +202,7 @@ See [no-photo cancellation and selected mention](journeys/J03.md), [Check a Phot
 ## Pass 2 continuation H
 
 [Guarded merge revert](journeys/J27.md) now includes an actual supported synthetic plan, cancellation, confirmation, execution, integrity check, refreshed history, repeat refusal and restored profiles. This sampled success does not qualify arbitrary merge shapes. The audit remains in progress.
+
+## Pass 2 continuation I
+
+Follow [Explore pagination](journeys/J19.md), [Connections pagination and measured pattern](journeys/J18.md), [Event correction](journeys/J15.md), and [Event next/previous](journeys/J07.md). New [F27 and F28](findings.md) document misleading World count labeling and a misleading page-two cluster empty state. The audit remains in progress.

@@ -20889,5 +20889,483 @@
     "publication": "ORIGINAL unmodified full capture",
     "public_file": "screenshots/UX-05/UX-05_J27_Step-48_Pass2-Safe-revert-both-profiles-after-refresh.png",
     "public_sha256": "f985b31ddff63b27f0d5d4e30b4f8e3116a82f10c1e193a6df47b61b605c963b"
+  },
+  {
+    "file": "UX-12_J19_Step-32_Pass2-Dense-explore-first-page.png",
+    "ux": "UX-12",
+    "journey": "J19",
+    "step": 32,
+    "state": "Pass2-Dense-explore-first-page",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:09:07.758015+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "d1be73580f75f08dd58e06ca08c469fc840a17b63e843d09b50dc4db13b245a2",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0649",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-12/UX-12_J19_Step-32_Pass2-Dense-explore-first-page.png",
+    "public_sha256": "d1be73580f75f08dd58e06ca08c469fc840a17b63e843d09b50dc4db13b245a2"
+  },
+  {
+    "file": "UX-12_J19_Step-33_Pass2-Dense-explore-second-page.png",
+    "ux": "UX-12",
+    "journey": "J19",
+    "step": 33,
+    "state": "Pass2-Dense-explore-second-page",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:09:09.735895+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "013a69ef314301f604725dd42e9fa56a27ec5195c0d85630dccfdea9c07c0fc4",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0650",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-12/UX-12_J19_Step-33_Pass2-Dense-explore-second-page.png",
+    "public_sha256": "013a69ef314301f604725dd42e9fa56a27ec5195c0d85630dccfdea9c07c0fc4"
+  },
+  {
+    "file": "UX-12_J18_Step-27_Pass2-Dense-connections-first-page.png",
+    "ux": "UX-12",
+    "journey": "J18",
+    "step": 27,
+    "state": "Pass2-Dense-connections-first-page",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:09:41.734755+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "2c4922974c5c7133a13d928f19b14e93325a10be16987dacfbf6f657028da7df",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0651",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-12/UX-12_J18_Step-27_Pass2-Dense-connections-first-page.png",
+    "public_sha256": "2c4922974c5c7133a13d928f19b14e93325a10be16987dacfbf6f657028da7df"
+  },
+  {
+    "file": "UX-12_J18_Step-28_Pass2-Dense-connections-next-page.png",
+    "ux": "UX-12",
+    "journey": "J18",
+    "step": 28,
+    "state": "Pass2-Dense-connections-next-page",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:09:43.460509+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "36d612a600cc7646dc9564c57b17c0e12553714bcbbe5b6b25ff187ae155273c",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0652",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-12/UX-12_J18_Step-28_Pass2-Dense-connections-next-page.png",
+    "public_sha256": "36d612a600cc7646dc9564c57b17c0e12553714bcbbe5b6b25ff187ae155273c"
+  },
+  {
+    "file": "UX-12_J18_Step-29_Pass2-Dense-connections-pagination-reset.png",
+    "ux": "UX-12",
+    "journey": "J18",
+    "step": 29,
+    "state": "Pass2-Dense-connections-pagination-reset",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:10:16.422573+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "b9b4344e920fda337536467ad620908322c8c562e476d42c952333785877fe7a",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0653",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-12/UX-12_J18_Step-29_Pass2-Dense-connections-pagination-reset.png",
+    "public_sha256": "b9b4344e920fda337536467ad620908322c8c562e476d42c952333785877fe7a"
+  },
+  {
+    "file": "UX-12_J18_Step-30_Pass2-Dense-cluster-relationships-28.png",
+    "ux": "UX-12",
+    "journey": "J18",
+    "step": 30,
+    "state": "Pass2-Dense-cluster-relationships-28",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:14:51.530167+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "c1c5f00beb32288ba629d416caad4ca4112bc3ccc6807760cb45fe8fc05c34a0",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0654",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-12/UX-12_J18_Step-30_Pass2-Dense-cluster-relationships-28.png",
+    "public_sha256": "c1c5f00beb32288ba629d416caad4ca4112bc3ccc6807760cb45fe8fc05c34a0"
+  },
+  {
+    "file": "UX-02_J06_Step-24_Pass2-Dense-missing-location-event-private.png",
+    "ux": "UX-02",
+    "journey": "J06",
+    "step": 24,
+    "state": "Pass2-Dense-missing-location-event-private",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:15:38.777001+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "e7a76f9ccb4be46f80aed6cc6771ed72af121aa9bafb47f93e54d2c5ac9fa444",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0655",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-10_J15_Step-22_Pass2-Dense-event-location-cleared-before-correction.png",
+    "ux": "UX-10",
+    "journey": "J15",
+    "step": 22,
+    "state": "Pass2-Dense-event-location-cleared-before-correction",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:19:38.941094+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "1665f21e2c2311563c53cc9183b229ed68346cb57fa783f764d01b8c6d08c4ff",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0656",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-10/UX-10_J15_Step-22_Pass2-Dense-event-location-cleared-before-correction.png",
+    "public_sha256": "1665f21e2c2311563c53cc9183b229ed68346cb57fa783f764d01b8c6d08c4ff"
+  },
+  {
+    "file": "UX-10_J15_Step-23_Pass2-Dense-event-location-correction-result.png",
+    "ux": "UX-10",
+    "journey": "J15",
+    "step": 23,
+    "state": "Pass2-Dense-event-location-correction-result",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:19:41.283449+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "981dc27be969963bdae24a9274be079983ddfda6532b27d8b770eb67d4e42cc3",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0657",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-10/UX-10_J15_Step-23_Pass2-Dense-event-location-correction-result.png",
+    "public_sha256": "981dc27be969963bdae24a9274be079983ddfda6532b27d8b770eb67d4e42cc3"
+  },
+  {
+    "file": "UX-12_J18_Step-31_Pass2-Dense-connections-measured-pattern.png",
+    "ux": "UX-12",
+    "journey": "J18",
+    "step": 31,
+    "state": "Pass2-Dense-connections-measured-pattern",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:20:32.363856+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "0e3bf36763fc5f7c02a8001f72d9c81c5310f2e8a26aeb133fb21fa795154269",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0658",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-12/UX-12_J18_Step-31_Pass2-Dense-connections-measured-pattern.png",
+    "public_sha256": "0e3bf36763fc5f7c02a8001f72d9c81c5310f2e8a26aeb133fb21fa795154269"
+  },
+  {
+    "file": "UX-12_J18_Step-32_Pass2-Dense-connections-pattern-selected.png",
+    "ux": "UX-12",
+    "journey": "J18",
+    "step": 32,
+    "state": "Pass2-Dense-connections-pattern-selected",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:20:33.069463+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "4f36a9c7ed3557d268325f5a9184bb94827d27194ea089f257adb94d6e97d437",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0659",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-12/UX-12_J18_Step-32_Pass2-Dense-connections-pattern-selected.png",
+    "public_sha256": "4f36a9c7ed3557d268325f5a9184bb94827d27194ea089f257adb94d6e97d437"
+  },
+  {
+    "file": "UX-09_J07_Step-21_Pass2-Dense-events-first-page.png",
+    "ux": "UX-09",
+    "journey": "J07",
+    "step": 21,
+    "state": "Pass2-Dense-event-detail-before-return",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:23:12.421618+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "3f396ffc30a63c5ffe3432840b768b6a05855b12d3228c8c237ee0ff53a87250",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0660",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-09/UX-09_J07_Step-21_Pass2-Dense-events-first-page.png",
+    "public_sha256": "3f396ffc30a63c5ffe3432840b768b6a05855b12d3228c8c237ee0ff53a87250"
+  },
+  {
+    "file": "UX-09_J07_Step-22_Pass2-Dense-events-first-page-ready.png",
+    "ux": "UX-09",
+    "journey": "J07",
+    "step": 22,
+    "state": "Pass2-Dense-events-first-page-ready",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:23:37.134527+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "a23bee2a03aa94b3e333aebbd186d3fff13561e1fc375a3e17da9ac1d51a3a52",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0661",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-09/UX-09_J07_Step-22_Pass2-Dense-events-first-page-ready.png",
+    "public_sha256": "a23bee2a03aa94b3e333aebbd186d3fff13561e1fc375a3e17da9ac1d51a3a52"
+  },
+  {
+    "file": "UX-09_J07_Step-23_Pass2-Dense-events-second-page.png",
+    "ux": "UX-09",
+    "journey": "J07",
+    "step": 23,
+    "state": "Pass2-Dense-events-second-page",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:23:39.194598+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "bf186514402d41b1531cd92e90e5c39150bdcb9975d89bfdc2d265e6000d2d1e",
+    "scroll": {
+      "x": 0,
+      "y": 280
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0662",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-09/UX-09_J07_Step-23_Pass2-Dense-events-second-page.png",
+    "public_sha256": "bf186514402d41b1531cd92e90e5c39150bdcb9975d89bfdc2d265e6000d2d1e"
+  },
+  {
+    "file": "UX-09_J07_Step-24_Pass2-Dense-events-previous-page.png",
+    "ux": "UX-09",
+    "journey": "J07",
+    "step": 24,
+    "state": "Pass2-Dense-events-previous-page",
+    "role": "Administrator",
+    "kind": "synthetic dense authority",
+    "fixture_context": "Disposable dense authority initially prepared by existing QA tooling with 30 synthetic People, 30 synthetic Events and no media; after J06 step 24, actual UI created one synthetic photo Event and J15 corrected its location to unknown.",
+    "captured_at": "2026-11-21T16:23:53.302667+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "1775ae262a3b8fce121c038a363e5a4b0bd37354b0b42ed013b568e1fd58ffff",
+    "scroll": {
+      "x": 0,
+      "y": 280
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0663",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-09/UX-09_J07_Step-24_Pass2-Dense-events-previous-page.png",
+    "public_sha256": "1775ae262a3b8fce121c038a363e5a4b0bd37354b0b42ed013b568e1fd58ffff"
   }
 ]

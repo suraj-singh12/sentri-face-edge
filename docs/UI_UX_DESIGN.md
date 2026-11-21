@@ -132,3 +132,7 @@ The current macOS synthetic audit also found distinct subfolder paths reaching u
 ### Audit observation: interrupted Note-driven creation
 
 In one synthetic source run, creating a no-photo Person from a Note reached the application error boundary and lost the visible editor context; a separate retry succeeded. Preserve explicit identity and mention authority when investigating recoverability. The first request outcome and recurrence are not independently established. See [Issue #6 evidence F26](../audit-results/issue-6/findings.md).
+
+### Audit observation: World counts and pages
+
+Dense synthetic runtime evidence shows that a location-facet value can appear above a missing-Event caption, and a later Overview page can use a scope-wide empty-cluster message despite a nonzero cluster total. Distinguish the measure, unit, scope and current page when evaluating future designs; preserve authoritative bounded reads. See [F27 and F28](../audit-results/issue-6/findings.md).

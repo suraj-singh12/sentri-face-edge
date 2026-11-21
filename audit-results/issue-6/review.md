@@ -243,3 +243,7 @@ New public originals were individually reviewed for synthetic-only content. Thre
 ## Pass 2 continuation H
 
 A legitimate synthetic merge with identical initial observation values produced a supported P11-D plan and a successful revert; an earlier differing-time merge was correctly refused. The automatic People-list update was not yet reflected in step 46; after reopening, step 48 shows both profiles. Raw merge preview payloads contain private file paths and are excluded. No inference is made about all merges, stale plans, or platform acceptance.
+
+## Pass 2 continuation I
+
+The existing dense fixture provides 30 synthetic People and 30 Events without photographic media; one generated-image Event was subsequently created and corrected using product controls. Page-two Connections claims no cluster in scope while the scope total and page one show one. Its location summary shows the facet count as the large value but the missing-event count as the only visible caption. These are observed presentation defects, not claims that the stored data is corrupt. A cluster relationship page returned all 28 items at once; nested pagination remains unqualified.

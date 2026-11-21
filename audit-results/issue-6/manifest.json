@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
   "evidence_branch": "audit/issue-6-current-experience",
-  "sealed_at": "2026-11-20T15:56:31.187845+00:00",
+  "sealed_at": "2026-11-21T16:37:53.651553+00:00",
   "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
   "environment": {
     "os": "macOS 26.0 arm64 VM",
@@ -27,14 +27,14 @@
   "counts": {
     "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
     "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
-    "registered_capture_attempts": 648,
-    "accepted_capture_records": 645,
+    "registered_capture_attempts": 663,
+    "accepted_capture_records": 660,
     "rejected_attempts": 3,
-    "distinct_sampled_visual_state_keys": 642,
-    "public_images": 592,
-    "public_originals": 580,
+    "distinct_sampled_visual_state_keys": 657,
+    "public_images": 606,
+    "public_originals": 594,
     "public_sanitized_derivatives": 12,
-    "private_only_accepted": 53,
+    "private_only_accepted": 54,
     "private_genuine_images": 33,
     "runtime_journey_records": 36,
     "semantic_surface_families": 37,
@@ -42,24 +42,24 @@
     "observed_dialog_title_count": 39,
     "source_task_contracts": 60,
     "source_task_status": {
-      "PARTIAL": 50,
+      "PARTIAL": 49,
       "PASS": 4,
-      "FAIL": 6
+      "FAIL": 7
     },
     "source_branch_contracts": 509,
     "source_branch_status": {
-      "PASS": 346,
-      "NOT RUN": 69,
-      "PARTIAL": 79,
+      "PASS": 349,
+      "NOT RUN": 66,
+      "PARTIAL": 78,
       "BLOCKED": 9,
-      "FAIL": 6
+      "FAIL": 7
     },
     "roles_sampled": 5,
     "source_definition_sites": 832,
     "control_overlay_transition_definition_sites": 598,
     "candidate_presence": {
-      "NOT RUN": 286,
-      "PARTIAL": 312
+      "NOT RUN": 281,
+      "PARTIAL": 317
     },
     "counting_definitions": "Surfaces: explicit semantic families in surface-register.csv, not all state variants. Journeys: ordered J records, not source contracts. Branches:509 source contracts. Visual key:UX/state/role/kind/theme/viewport, excludes rejected attempts. Titled overlay count excludes unnamed popovers and tooltip definitions; see source oracle. Native and CSS captures are distinct evidence classes."
   },
@@ -68,23 +68,23 @@
   "files": [
     {
       "path": "audit-results/issue-6/INDEX.md",
-      "bytes": 19323,
-      "sha256": "ba67fde6e5ab3739da8fcb9aa5e5c859d817a221b8eb14578b712a81e9a14a33"
+      "bytes": 19691,
+      "sha256": "9559d55fad440880663a8d0c5417ad9b07071349f2b2504ed187286825592bed"
     },
     {
       "path": "audit-results/issue-6/branch-coverage.csv",
-      "bytes": 289323,
-      "sha256": "c382322fdca6eeda06447fcb4841cf881efc9f6bfd9dce47b086f8789740b796"
+      "bytes": 290157,
+      "sha256": "e14b7d0037c0f1175b8ac8f6ba625c286c53f80a910ae2661af2ba74e82bc5e4"
     },
     {
       "path": "audit-results/issue-6/capture-register.json",
-      "bytes": 775458,
-      "sha256": "507383bc3d0b791a4728f88e4a2532946814c909b8428063ac34717a9afa11d8"
+      "bytes": 795136,
+      "sha256": "27f81ca91b0abad4a27627f9927716d3794740fcc5711272d6e3e616155a9541"
     },
     {
       "path": "audit-results/issue-6/captured-overlays.csv",
-      "bytes": 21302,
-      "sha256": "3faed3e1886ea3b1bb1cf82dc4d2be9e1f9615e28caeac818bd8a6b040820f3f"
+      "bytes": 21397,
+      "sha256": "7e37644b9ce23de87b7a723efcea18250c491ad16fef444cb7dbfc7b3b3f68b0"
     },
     {
       "path": "audit-results/issue-6/checks/dense-fixture-summary.json",
@@ -94,7 +94,7 @@
     {
       "path": "audit-results/issue-6/checks/library-validation.json",
       "bytes": 522,
-      "sha256": "4fcb9e875bcfb5701d252ad89c3bcc38d676afa8e1c469287b64dfa3bce4f8aa"
+      "sha256": "49ccf9d87f4e1c7da821528be440260ca6cfeefe9364b36c73e2e51210392bef"
     },
     {
       "path": "audit-results/issue-6/checks/role-checks.json",
@@ -114,17 +114,17 @@
     {
       "path": "audit-results/issue-6/coverage-summary.json",
       "bytes": 1146,
-      "sha256": "ecd6b195aef1cd4ccc022b968b579619fd5d03f5d37da8575507835793bf6a28"
+      "sha256": "e87184b9cbf13c448a33601f127b9f5789f4ddaaea19c730d51356cb2aa109d1"
     },
     {
       "path": "audit-results/issue-6/coverage.csv",
-      "bytes": 341379,
-      "sha256": "c6bb9275187c6c15070faabf674f33e15d73198d722dec215859810103a75f34"
+      "bytes": 344509,
+      "sha256": "eb3b027b8ab40394b258247b4202d769c3b86bf9a461dc20d69e3d254122286b"
     },
     {
       "path": "audit-results/issue-6/coverage.md",
-      "bytes": 11190,
-      "sha256": "98fe2e933b5a62ee2ee505e6cf26ae8b55d5c6dfdc3b1cc19dbaaf4f35bd4eaa"
+      "bytes": 11662,
+      "sha256": "95f2bfc2d3cf886b89ca2f00a921f5beee2f54961623fcf58edfb3c72a734614"
     },
     {
       "path": "audit-results/issue-6/discovered-branches.csv",
@@ -133,18 +133,18 @@
     },
     {
       "path": "audit-results/issue-6/evidence-candidates.csv",
-      "bytes": 2476739,
-      "sha256": "d19289c921a136180ba0cf5e6e4474fdc776bfe8d0827945f3ac083c184c8e08"
+      "bytes": 2545170,
+      "sha256": "e187163a2b7a809876a6b298b68f353e6153698afce742125d57691b2f2cde2a"
     },
     {
       "path": "audit-results/issue-6/execution-summary.json",
       "bytes": 1429,
-      "sha256": "581f877a1c562e9d7915ca05897c79496695f5d01780b460051c80c5cbd4c6a7"
+      "sha256": "ae369752fc618dd9ece835c589c7c9bd5612d7a964591b1d45767cedb50926cf"
     },
     {
       "path": "audit-results/issue-6/findings.md",
-      "bytes": 25989,
-      "sha256": "62e84af25d2b97fb08b063b516bf067e2a7189c8d4b2988670c8451131b5469e"
+      "bytes": 28031,
+      "sha256": "f306e7f757a7def8d67b4ea1c795d6d908df08bec3327368b3069fc42d38d341"
     },
     {
       "path": "audit-results/issue-6/fixtures/invalid-image.png",
@@ -233,13 +233,13 @@
     },
     {
       "path": "audit-results/issue-6/journeys/J06.md",
-      "bytes": 15904,
-      "sha256": "239bf59638a7e6a790734ff835c10c2ea16dbae8cd164900ab49254e3818843b"
+      "bytes": 17010,
+      "sha256": "0566798387aac8eb92446694b4516cd011939ceef606aa71a66b7084eb1c640b"
     },
     {
       "path": "audit-results/issue-6/journeys/J07.md",
-      "bytes": 12843,
-      "sha256": "c5a7cdd43aeaeb4319e9af7e3d1b71bb9bc3ebaab06b808ca1326ab67d2ec6c0"
+      "bytes": 14889,
+      "sha256": "b1db5482b286886abaae7b67727d897349feb7230694d5b53bb34250aa6b8bd2"
     },
     {
       "path": "audit-results/issue-6/journeys/J08.md",
@@ -278,8 +278,8 @@
     },
     {
       "path": "audit-results/issue-6/journeys/J15.md",
-      "bytes": 12955,
-      "sha256": "bbe7d5933a099894b115c9dea1fc65e5b6dc0a7cea166a71ef9071484bdbbdde"
+      "bytes": 14497,
+      "sha256": "1bbf9cf999051fe21df525ad19b5a7ab1ad8ef834139122bc25f3483ce65ee42"
     },
     {
       "path": "audit-results/issue-6/journeys/J16.md",
@@ -293,13 +293,13 @@
     },
     {
       "path": "audit-results/issue-6/journeys/J18.md",
-      "bytes": 16010,
-      "sha256": "f9f502ef615ffd81814867c3d182e5fb68f857559474b527087faba99f82f533"
+      "bytes": 19303,
+      "sha256": "cf5857e4f1d7f6721c8a3c886dc3444bc94f79ae3bf2fc1d91f0a71ee404f997"
     },
     {
       "path": "audit-results/issue-6/journeys/J19.md",
-      "bytes": 17071,
-      "sha256": "80f2ebc5a96fbb7523c2f8018987fe818c1f0dca894a2c4f461ee53c87ae98dc"
+      "bytes": 18352,
+      "sha256": "ef102090274cab66fb39c96e1be211f8d9fbb6599b6934d8c0476bc5d29accda"
     },
     {
       "path": "audit-results/issue-6/journeys/J20.md",
@@ -388,8 +388,8 @@
     },
     {
       "path": "audit-results/issue-6/pass2-execution-plan.csv",
-      "bytes": 96538,
-      "sha256": "18f3f01a7c6da9f63401ec578c9ec511bd40cee5158e935546af070f47a68391"
+      "bytes": 96872,
+      "sha256": "e49009e8d5e6d0550a1f10df03c8f12e3dca7cc5b154c0a58478818f41ba479a"
     },
     {
       "path": "audit-results/issue-6/private-evidence-register.json",
@@ -398,8 +398,8 @@
     },
     {
       "path": "audit-results/issue-6/reproduce.md",
-      "bytes": 7760,
-      "sha256": "76ca01aa2de8114aa4612a8a936a9fe9e30b39993a2367439b1289fd61ee5ea9"
+      "bytes": 8223,
+      "sha256": "70aa07ea3283451bed291a884c83dc67d49502c34ada78997a181de726e2ef03"
     },
     {
       "path": "audit-results/issue-6/reuse-map.md",
@@ -408,8 +408,8 @@
     },
     {
       "path": "audit-results/issue-6/review.md",
-      "bytes": 58361,
-      "sha256": "a5a210af5e1b6f73aaaab146d3ee5eba34a8b18d5b151458f1853e23416b974c"
+      "bytes": 58970,
+      "sha256": "b2971e7e3e48e701d4e3922789068eeebd7e852137ee182aa0f6dc00e506dca4"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-01_First-launch.png",
@@ -2347,6 +2347,26 @@
       "sha256": "3275ad766c3a9963423b366f67367791ece732753f782aebf3547a2a48e146cf"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-21_Pass2-Dense-events-first-page.png",
+      "bytes": 605348,
+      "sha256": "3f396ffc30a63c5ffe3432840b768b6a05855b12d3228c8c237ee0ff53a87250"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-22_Pass2-Dense-events-first-page-ready.png",
+      "bytes": 465492,
+      "sha256": "a23bee2a03aa94b3e333aebbd186d3fff13561e1fc375a3e17da9ac1d51a3a52"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-23_Pass2-Dense-events-second-page.png",
+      "bytes": 400918,
+      "sha256": "bf186514402d41b1531cd92e90e5c39150bdcb9975d89bfdc2d265e6000d2d1e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-24_Pass2-Dense-events-previous-page.png",
+      "bytes": 393610,
+      "sha256": "1775ae262a3b8fce121c038a363e5a4b0bd37354b0b42ed013b568e1fd58ffff"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J15_Step-09_Pass2-Single-participant-event.png",
       "bytes": 421449,
       "sha256": "967ed5219b3343bdf6ee26676dcd7fe34d12a29bb0feb3e6643ecd863cd3f47a"
@@ -2550,6 +2570,16 @@
       "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-21_Pass2-Event-mention-saved-not-participant.png",
       "bytes": 877203,
       "sha256": "69ba4bef65b685172d9e4110be1daca1e660cc7c56cb06d1c2d4d352a3383e4f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-22_Pass2-Dense-event-location-cleared-before-correction.png",
+      "bytes": 217719,
+      "sha256": "1665f21e2c2311563c53cc9183b229ed68346cb57fa783f764d01b8c6d08c4ff"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-23_Pass2-Dense-event-location-correction-result.png",
+      "bytes": 606889,
+      "sha256": "981dc27be969963bdae24a9274be079983ddfda6532b27d8b770eb67d4e42cc3"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J16_Step-01_Stale-correction-refused.png",
@@ -2812,6 +2842,36 @@
       "sha256": "a0a26c73d9d6004cca90e95711490634fe2536708c080fe48cbe08a0eee28258"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-27_Pass2-Dense-connections-first-page.png",
+      "bytes": 457640,
+      "sha256": "2c4922974c5c7133a13d928f19b14e93325a10be16987dacfbf6f657028da7df"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-28_Pass2-Dense-connections-next-page.png",
+      "bytes": 422922,
+      "sha256": "36d612a600cc7646dc9564c57b17c0e12553714bcbbe5b6b25ff187ae155273c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-29_Pass2-Dense-connections-pagination-reset.png",
+      "bytes": 457626,
+      "sha256": "b9b4344e920fda337536467ad620908322c8c562e476d42c952333785877fe7a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-30_Pass2-Dense-cluster-relationships-28.png",
+      "bytes": 433416,
+      "sha256": "c1c5f00beb32288ba629d416caad4ca4112bc3ccc6807760cb45fe8fc05c34a0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-31_Pass2-Dense-connections-measured-pattern.png",
+      "bytes": 430332,
+      "sha256": "0e3bf36763fc5f7c02a8001f72d9c81c5310f2e8a26aeb133fb21fa795154269"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-32_Pass2-Dense-connections-pattern-selected.png",
+      "bytes": 430717,
+      "sha256": "4f36a9c7ed3557d268325f5a9184bb94827d27194ea089f257adb94d6e97d437"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-01_Connections-overview.png",
       "bytes": 374756,
       "sha256": "0d0ee9a59c37acb633de302e66ffe24c9faf55e6ed8e6801c11b7a63515c0f4f"
@@ -2925,6 +2985,16 @@
       "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-31_Pass2-Explore-cluster-supporting-proof.png",
       "bytes": 171803,
       "sha256": "f44c01e32860139bc78ba06e7a538829bb80f8131b4544971f922f5c8d728c47"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-32_Pass2-Dense-explore-first-page.png",
+      "bytes": 298630,
+      "sha256": "d1be73580f75f08dd58e06ca08c469fc840a17b63e843d09b50dc4db13b245a2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-33_Pass2-Dense-explore-second-page.png",
+      "bytes": 279561,
+      "sha256": "013a69ef314301f604725dd42e9fa56a27ec5195c0d85630dccfdea9c07c0fc4"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-01_License-runtime-status.png",
@@ -3373,13 +3443,13 @@
     },
     {
       "path": "audit-results/issue-6/semantic-summary.json",
-      "bytes": 2736,
-      "sha256": "7b18d0d32dd031a53495cdf343a1eb8d1a5b8687516b240d3e29baecf2b9ac0f"
+      "bytes": 2798,
+      "sha256": "1b65bfa8b3fa616529565a88ebbfc239e47a5faba2149003eac2c5003a689fb8"
     },
     {
       "path": "audit-results/issue-6/source-branches.csv",
-      "bytes": 208489,
-      "sha256": "044a96873e3bbb76813ec430bab0593f5045325a3e3849d8b911b0e7e6fbc826"
+      "bytes": 208838,
+      "sha256": "9a062a779c7ad0bb6c5af0d2597ae99d067aa24456ad9c8d6f7033fe9d280cfc"
     },
     {
       "path": "audit-results/issue-6/source-inventory.csv",
@@ -3388,8 +3458,8 @@
     },
     {
       "path": "audit-results/issue-6/source-journeys.csv",
-      "bytes": 69656,
-      "sha256": "3d9e07ffcaf6a1a5b4c1379ecca174bd78a603e5bf28dcdeebcb4e5611892cfd"
+      "bytes": 70279,
+      "sha256": "147190fcc9021194edef4207992182ce7d35e0d335cae7fd62a6b62bc68f5fcd"
     },
     {
       "path": "audit-results/issue-6/source-map.md",
@@ -3408,8 +3478,8 @@
     },
     {
       "path": "audit-results/issue-6/task-coverage.csv",
-      "bytes": 70449,
-      "sha256": "7ca142af3b6e96ae1425e870c687e4e84b2703719a2b556c2f611a422857945c"
+      "bytes": 71068,
+      "sha256": "37fc6a499705e3129c5f31728de9c507709ae4aa0d5a308d6f7b5cbec01ebabc"
     },
     {
       "path": "audit-results/issue-6/tooling/capture_host.py",
@@ -3458,8 +3528,8 @@
     },
     {
       "path": "docs/UI_UX_DESIGN.md",
-      "bytes": 24178,
-      "sha256": "82fdce5cc8f32a13de5ed42ad8f2635fd2fe9968beb5a2911639a4170a927019"
+      "bytes": 24618,
+      "sha256": "0a7601acebd1f7b8cbeb2d00377d34d2888893d29aa574c9bdd7a730e2c9f30e"
     }
   ],
   "hash_scope": "SHA-256 over unchanged file bytes; excludes manifest itself, its checksum and Python cache. Evidence commit and archive verification are external receipts to avoid circular identifiers.",

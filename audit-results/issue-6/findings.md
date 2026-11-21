@@ -233,3 +233,19 @@ Explicit Relations Include/Exclude selected states; Reference Only origin, cap a
 **Why → direction:** An unexpected full-screen interruption loses the visible editing context at an identity decision. Investigate the failing creation path and preserve recoverable draft context; verify backend consequences independently before asserting data integrity.
 
 **Reuse → tradeoffs:** Reuse the existing error boundary, Person creation and Note mention authority. Recovery must avoid duplicate Persons and must not convert literal text into an unconfirmed mention.
+
+## F27 World location summary pairs different measures — P1 information clarity / confirmed presentation defect
+
+**Problem → runtime evidence:** In the dense scope, the fifth summary tile shows a large `4` above the caption “1 events missing location”; the selected measured pattern states that one of 31 Events lacks location ([J18](journeys/J18.md)). Source defines the large value as the count of location facets, while the displayed caption is the missing-Event count.
+
+**Why → direction:** Two different measures are visually coupled without identifying the large number, inviting an operator to read four as the number of missing Events. Label both values and units explicitly and preserve the distinction between facets and data-quality counts.
+
+**Reuse → tradeoffs:** Reuse the existing World summary and backend totals. A clearer label must preserve the distinction between absent counts and zero, and should not turn data quality into a risk inference.
+
+## F28 Connections page two makes a misleading scope-wide empty claim — P1 workflow / confirmed presentation defect
+
+**Problem → runtime evidence:** In an all-time synthetic scope with one cluster, Overview page one displays that cluster. After Next authoritative page, the summary still reports one cluster while the cluster panel says “No qualifying backend cluster summaries exist in this scope” ([J18](journeys/J18.md)). Reset returns to page one and the cluster. No Previous control was observed on the second page; Reset also resets scope filters.
+
+**Why → direction:** Page-local absence is expressed as a scope-wide absence of evidence, which can mislead an operator reviewing connections. Make the empty message reflect the current page and provide a clear way back while preserving applied scope.
+
+**Reuse → tradeoffs:** Reuse the bounded World controller and authoritative totals/cursors; keep the revision-bound semantics and do not infer cluster membership from pagination. The underlying records were not shown to be deleted or corrupted.

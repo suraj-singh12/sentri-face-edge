@@ -49,3 +49,7 @@ J03, J06, J12, J18 and J19 describe new synthetic UI paths. The local source app
 ## Pass 2 continuation H
 
 J27 documents a supported guarded revert using two same-name synthetic profiles with identical initial observation metadata, one with an approved generated Reference, created and merged through product controls. The earlier default observation times differed and were correctly refused. Use only disposable authorities; never force database state or weaken server preflight. A changed plan or dependent operation can still be refused.
+
+## Pass 2 continuation I
+
+Use the existing dense synthetic authority and its QA fixture; do not use operator data. World Explore and Connections each have more than one People page. For the measured-pattern case, create and finalize a generated-image Event through the normal workflow, then clear its location in Correct Encounter. Connections displays the resulting missing-location data-quality measurement. A path-bearing Check a Photo frame remains private.
