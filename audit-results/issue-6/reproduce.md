@@ -65,3 +65,5 @@ Continuation M: import a generated scene already finalized in the disposable aut
 Continuation N: use a disposable source authority without portable backups; Settings → Backups & restore shows the empty state. Create a first portable backup; immediately capture a second Create Backup to sample its brief progress state and then the verified result. Keep backup artifacts private.
 
 Continuation O: use a fresh dedicated source authority. Submit an empty owner form, then a deliberately invalid account name with a temporary test password; correct the name and immediately capture submission. Keep all credential-bearing frames and raw accessibility snapshots private.
+
+Continuation P: create a Viewer on a dedicated disposable authority in synthetic source mode; stop it and launch the same authority with `./run.sh onnx` with no models installed. Sign in as Viewer to see the owner gate, then sign out and sign in as owner. Do not use or modify operator model files.

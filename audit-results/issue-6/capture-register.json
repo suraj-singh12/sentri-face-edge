@@ -22969,5 +22969,127 @@
       "height": 900
     },
     "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-00_J32_Step-21_Pass2-Viewer-missing-model-gate-private.png",
+    "ux": "UX-00",
+    "journey": "J32",
+    "step": 21,
+    "state": "Pass2-Viewer-missing-model-gate-private",
+    "role": "Viewer",
+    "kind": "source ONNX model setup; no inference",
+    "fixture_context": "Fresh disposable source ONNX model setup authority; existing authorized local models; no inference in setup frames",
+    "captured_at": "2026-11-21T17:56:43.632905+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "6b56a95935a338829f58af0960b02600fc7324498d9ed1085368ac004cffe853",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0717",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-00_J32_Step-22_Pass2-Viewer-missing-model-gate.png",
+    "ux": "UX-00",
+    "journey": "J32",
+    "step": 22,
+    "state": "Pass2-Viewer-missing-model-gate",
+    "role": "Viewer",
+    "kind": "source ONNX model setup; no inference",
+    "fixture_context": "Fresh disposable source ONNX model setup authority; existing authorized local models; no inference in setup frames",
+    "captured_at": "2026-11-21T17:57:18.600137+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "adbb0b446c954275add7a15f63a539424edcd7cd19505b30ffeb12311d8e7106",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0718",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-00/UX-00_J32_Step-22_Pass2-Viewer-missing-model-gate.png",
+    "public_sha256": "adbb0b446c954275add7a15f63a539424edcd7cd19505b30ffeb12311d8e7106"
+  },
+  {
+    "file": "UX-00_J32_Step-23_Pass2-Viewer-model-gate-signout.png",
+    "ux": "UX-00",
+    "journey": "J32",
+    "step": 23,
+    "state": "Pass2-Viewer-model-gate-signout",
+    "role": "Viewer",
+    "kind": "source ONNX model setup; no inference",
+    "fixture_context": "Fresh disposable source ONNX model setup authority; existing authorized local models; no inference in setup frames",
+    "captured_at": "2026-11-21T17:57:19.642397+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "cc55353949d163831a20b821c3a216118313e727e29a8973dfd68594ac72abbf",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0719",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-00_J32_Step-24_Pass2-Owner-missing-model-gate-private.png",
+    "ux": "UX-00",
+    "journey": "J32",
+    "step": 24,
+    "state": "Pass2-Owner-missing-model-gate-private",
+    "role": "Administrator",
+    "kind": "source ONNX model setup; no inference",
+    "fixture_context": "Fresh disposable source ONNX model setup authority; existing authorized local models; no inference in setup frames",
+    "captured_at": "2026-11-21T17:57:45.399504+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "0227517c7cea045b0bfa6e85e5b13d3c14162fb61c75f5fd70cc502dd6fd91bc",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0720",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
   }
 ]

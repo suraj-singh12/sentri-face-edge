@@ -88,3 +88,5 @@ Continuation M qualifies finalized-media exclusion and the Review Photos low-qua
 Continuation N qualifies empty portable-backup state and creating feedback. Current source contracts: 359 PASS, 78 PARTIAL, 56 NOT RUN, 9 BLOCKED, 7 FAIL of 509. The distinct separate-drive safety copy remains unqualified.
 
 Continuation O qualifies invalid owner account refusal and submitting-disabled feedback on a fresh disposable source authority. Current contracts: 361 PASS, 78 PARTIAL, 54 NOT RUN, 9 BLOCKED, 7 FAIL of 509.
+
+Continuation P qualifies the non-owner model gate using a Viewer created through the UI and an unconfigured source ONNX launch. Current contracts: 362 PASS, 78 PARTIAL, 53 NOT RUN, 9 BLOCKED, 7 FAIL of 509. No model was downloaded or run.

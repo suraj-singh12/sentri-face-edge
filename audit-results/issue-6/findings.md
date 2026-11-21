@@ -249,3 +249,11 @@ Explicit Relations Include/Exclude selected states; Reference Only origin, cap a
 **Why → direction:** Page-local absence is expressed as a scope-wide absence of evidence, which can mislead an operator reviewing connections. Make the empty message reflect the current page and provide a clear way back while preserving applied scope.
 
 **Reuse → tradeoffs:** Reuse the bounded World controller and authoritative totals/cursors; keep the revision-bound semantics and do not infer cluster membership from pagination. The underlying records were not shown to be deleted or corrupted.
+
+## F29 Non-owner model gate gives an unavailable instruction — P2 interaction / confirmed wording inconsistency
+
+**Problem → evidence:** A Viewer with missing models sees “Choose both model files below to finish setup” immediately above **The owner account is needed**; no file-selection controls are available ([J32](journeys/J32.md#macos-completion-pass-2--continuation-p-non-owner-model-gate)). Sign-out and owner sign-in reach the actual setup controls.
+
+**Why → direction:** The first instruction asks a restricted operator to perform an unavailable action. Give the Viewer a role-specific instruction and retain an obvious sign-out/return path.
+
+**Reuse → tradeoffs:** Reuse the existing owner gate and capability-derived rendering; preserve backend authorization and supplier-license messaging. This is a communication issue, not a demonstrated permission bypass.

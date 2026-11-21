@@ -220,3 +220,5 @@ Follow [Explore pagination](journeys/J19.md), [Connections pagination and measur
 [First backup and creation progress](journeys/J22.md#macos-completion-pass-2--continuation-n-first-backup-and-creation-progress) adds a disposable-authority empty state, transient capture and verified outcome.
 
 [Fresh owner setup validation and submission](journeys/J01.md#macos-completion-pass-2--continuation-o-fresh-owner-validation-and-submission) includes the actual required-field message and private refusal/loading evidence.
+
+[Viewer model setup gate and owner return](journeys/J32.md#macos-completion-pass-2--continuation-p-non-owner-model-gate) is now qualified; [F29](findings.md#f29-non-owner-model-gate-gives-an-unavailable-instruction--p2-interaction--confirmed-wording-inconsistency) records conflicting wording.

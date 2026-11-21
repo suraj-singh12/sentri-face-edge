@@ -4,9 +4,9 @@
   "source_tasks": 60,
   "source_branch_contracts": 509,
   "branch_counts": {
-    "PASS": 361,
+    "PASS": 362,
     "PARTIAL": 78,
-    "NOT RUN": 54,
+    "NOT RUN": 53,
     "BLOCKED": 9,
     "FAIL": 7
   },
@@ -15,8 +15,8 @@
     "PARTIAL": 48,
     "FAIL": 7
   },
-  "branch_pass_percentage": 70.92,
-  "branch_exercised_percentage": 87.62,
+  "branch_pass_percentage": 71.12,
+  "branch_exercised_percentage": 87.82,
   "tasks_with_executed_evidence": 60,
   "task_exercised_percentage": 100.0,
   "fully_covered_task_percentage": 8.33,
@@ -60,5 +60,5 @@
     "Windows packaged licensing/signing and installer acceptance are outside this macOS source execution.",
     "Private genuine source/data checks supplement but do not silently pass missing UI branch states."
   ],
-  "pass2_note": "Explicit observed outcomes; original 509 source contracts retained. Fresh owner account refusal and submitting state verified on a disposable source authority."
+  "pass2_note": "Explicit observed outcomes; original 509 source contracts retained. Viewer owner-required model gate verified on same disposable authority in source ONNX mode."
 }
