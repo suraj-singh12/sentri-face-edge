@@ -86,3 +86,5 @@ Continuation L qualifies the proof-only duplicate hint, existing-Person choice a
 Continuation M qualifies finalized-media exclusion and the Review Photos low-quality decision on disposable synthetic inputs. Current contracts: 357 PASS, 78 PARTIAL, 58 NOT RUN, 9 BLOCKED, 7 FAIL of 509.
 
 Continuation N qualifies empty portable-backup state and creating feedback. Current source contracts: 359 PASS, 78 PARTIAL, 56 NOT RUN, 9 BLOCKED, 7 FAIL of 509. The distinct separate-drive safety copy remains unqualified.
+
+Continuation O qualifies invalid owner account refusal and submitting-disabled feedback on a fresh disposable source authority. Current contracts: 361 PASS, 78 PARTIAL, 54 NOT RUN, 9 BLOCKED, 7 FAIL of 509.

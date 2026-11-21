@@ -63,3 +63,5 @@ Continuation L: use the generated [proof-only duplicate fixture](fixtures/proof-
 Continuation M: import a generated scene already finalized in the disposable authority and observe exclusion; discard that session. Import the distinct [queue quality fixture](fixtures/queue-poor-synthetic.png), group, enter synthetic Event details and choose a low-quality decision before completion.
 
 Continuation N: use a disposable source authority without portable backups; Settings → Backups & restore shows the empty state. Create a first portable backup; immediately capture a second Create Backup to sample its brief progress state and then the verified result. Keep backup artifacts private.
+
+Continuation O: use a fresh dedicated source authority. Submit an empty owner form, then a deliberately invalid account name with a temporary test password; correct the name and immediately capture submission. Keep all credential-bearing frames and raw accessibility snapshots private.

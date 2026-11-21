@@ -4,22 +4,22 @@
   "source_tasks": 60,
   "source_branch_contracts": 509,
   "branch_counts": {
-    "PASS": 359,
-    "NOT RUN": 56,
+    "PASS": 361,
     "PARTIAL": 78,
+    "NOT RUN": 54,
     "BLOCKED": 9,
     "FAIL": 7
   },
   "task_counts": {
-    "PARTIAL": 49,
-    "PASS": 4,
+    "PASS": 5,
+    "PARTIAL": 48,
     "FAIL": 7
   },
-  "branch_pass_percentage": 70.53,
-  "branch_exercised_percentage": 87.23,
+  "branch_pass_percentage": 70.92,
+  "branch_exercised_percentage": 87.62,
   "tasks_with_executed_evidence": 60,
   "task_exercised_percentage": 100.0,
-  "fully_covered_task_percentage": 6.67,
+  "fully_covered_task_percentage": 8.33,
   "private_genuine_supplement": {
     "journey": "J41",
     "scope": "Existing reviewed one-Person distinct enrollment/query pair, admitted real ONNX, final saved profile and graceful restart",
@@ -60,5 +60,5 @@
     "Windows packaged licensing/signing and installer acceptance are outside this macOS source execution.",
     "Private genuine source/data checks supplement but do not silently pass missing UI branch states."
   ],
-  "pass2_note": "Explicit observed outcomes; original 509 source contracts retained. Empty backup state and transient backup creation captured on disposable recovery authority."
+  "pass2_note": "Explicit observed outcomes; original 509 source contracts retained. Fresh owner account refusal and submitting state verified on a disposable source authority."
 }
