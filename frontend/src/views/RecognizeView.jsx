@@ -237,7 +237,7 @@ export function RecognizeView({
               <Surface
                 step="1"
                 title="Input Image"
-                subtitle={recognition?.inputPath || "Upload or select a photo to recognize"}
+                subtitle={recognition?.inputPath ? "Uploaded photo" : "Upload or select a photo to recognize"}
                 action={(
                   <Group gap="sm" wrap="nowrap">
                     {recognition && <Button variant="default" leftSection={<IconFolder size={18} />} onClick={onLoadAnother}>Load Another</Button>}
@@ -624,7 +624,7 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, re
       {selected && (
         <Box className="recognition-face-details">
           <Group justify="space-between" align="center" gap="xs" wrap="nowrap">
-            <Text size="xs" c="dimmed">{best?.staged_new ? "New Person · pending completion" : accepted && !resolved ? "Reloading saved decision" : unknown ? "No person met the recognition threshold." : `ID ${best.person_id}`}</Text>
+            <Text size="xs" c="dimmed">{best?.staged_new ? "New Person · pending completion" : accepted && !resolved ? "Reloading saved decision" : unknown ? "No person met the recognition threshold." : "Existing person"}</Text>
             <Button size="compact-xs" variant="subtle" leftSection={<IconUsers size={14} />} disabled={!canAdd || accepted} onClick={onBrowse}>Browse People</Button>
           </Group>
           <Group grow mt="xs">

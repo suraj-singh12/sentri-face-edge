@@ -83,7 +83,7 @@ test('accepted recognition identity comes from operator resolution, never an unr
       assert.match(html,/>Deferred</);
       if (name !== 'Proposal A') assert.doesNotMatch(summary,/>Proposal A</);
       if (new_person_name) assert.match(html,/New Person · pending completion/);
-      else assert.match(html,new RegExp(`ID ${person_id}`));
+      else { assert.match(html,/Existing person/); assert.doesNotMatch(html,new RegExp(`ID ${person_id}`)); }
     }
   }
 });

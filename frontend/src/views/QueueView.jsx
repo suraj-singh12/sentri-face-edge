@@ -339,10 +339,10 @@ function EncounterGrouping({ media, onConfirm, onExclude }) {
     {usable.length === 0 && <Text size="sm" c="orange">No usable photos remain for a new Encounter.</Text>}
     {mode === "multiple" && usable.length > 0 && <Group gap="xs">{buckets.map((bucket, index) => <Badge key={index} color={bucket.some((item) => item.face_count === undefined || item.face_count > 0) ? "teal" : "red"} variant="light">Encounter {index + 1}: {bucket.length} photo{bucket.length === 1 ? "" : "s"}</Badge>)}</Group>}
     <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-      {ordered.map((item) => <Card withBorder key={item.media_id} className="queue-encounter-media-card" data-conflict={Boolean(item.finalized_encounter) || undefined} data-removed={Boolean(item.excluded || item.finalized_encounter) || undefined}>
-        <Group justify="space-between" align="flex-start"><Badge color={item.finalized_encounter ? "red" : item.excluded ? "gray" : "teal"} variant="light">{item.finalized_encounter ? "Already finalized — excluded" : item.excluded ? "Removed" : "Ready"}</Badge>{!item.finalized_encounter && <ActionIcon aria-label={`Remove photo ${String(item.media_path).split("/").pop()}`} color="red" variant="subtle" disabled={busy || item.excluded} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, true); } finally { setBusy(false); } }}><IconX size={17} /></ActionIcon>}</Group>
+      {ordered.map((item, index) => <Card withBorder key={item.media_id} className="queue-encounter-media-card" data-conflict={Boolean(item.finalized_encounter) || undefined} data-removed={Boolean(item.excluded || item.finalized_encounter) || undefined}>
+        <Group justify="space-between" align="flex-start"><Badge color={item.finalized_encounter ? "red" : item.excluded ? "gray" : "teal"} variant="light">{item.finalized_encounter ? "Already finalized — excluded" : item.excluded ? "Removed" : "Ready"}</Badge>{!item.finalized_encounter && <ActionIcon aria-label={`Remove photo ${index + 1}`} color="red" variant="subtle" disabled={busy || item.excluded} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, true); } finally { setBusy(false); } }}><IconX size={17} /></ActionIcon>}</Group>
         <Image src={mediaUrl(item.media_path)} h={145} fit="contain" alt="Queued media" />
-        <Text size="xs" truncate mt="xs">{String(item.media_path).split("/").pop()}</Text>
+        <Text size="xs" truncate mt="xs">Photo {index + 1}</Text>
         {item.finalized_encounter && <Text size="xs" c="red" mt="xs">In finalized Encounter {item.finalized_encounter.occasion || item.finalized_encounter.observation_id} {item.finalized_encounter.observed_at ? `· ${item.finalized_encounter.observed_at}` : ""}</Text>}
         {item.excluded && !item.finalized_encounter && <Button size="compact-xs" variant="subtle" disabled={busy} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, false); } finally { setBusy(false); } }}>Restore photo</Button>}
         {mode === "multiple" && !item.excluded && !item.finalized_encounter && <Select mt="xs" label="Encounter" value={String(Math.min(encounterCount, Number(assignment[item.media_id] || (usable.findIndex((candidate) => candidate.media_id === item.media_id) % encounterCount) + 1)))} onChange={(value) => setAssignment((current) => ({ ...current, [item.media_id]: Number(value) }))} data={buckets.map((_, index) => ({ value: String(index + 1), label: `Encounter ${index + 1}` }))} />}
@@ -453,7 +453,7 @@ function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder,
             onChange={onSelectSession}
             data={(sessions || []).map((session) => ({
               value: session.session_id,
-              label: `${session.session_id.slice(0, 8)} | ${session.face_count} face${session.face_count === 1 ? "" : "s"}`,
+              label: `${session.created_at ? new Date(session.created_at).toLocaleString() : "Upload session"} · ${session.face_count} face${session.face_count === 1 ? "" : "s"}`,
             }))}
             allowDeselect={false}
           />

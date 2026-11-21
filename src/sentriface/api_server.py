@@ -3006,10 +3006,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             "detector_input_size": config.detector_input_size,
             "batch_size": config.batch_size,
             "prefer_small_models": config.prefer_small_models,
-            "models": {
-                "detector": config.detector_model.name,
-                "recognizer": config.recognizer_model.name,
-            },
+            "models": _model_file_names(config, self.server.runtime),
             "offline_enforcement": {
                 "loopback_only": True,
                 "source_runtime_admitted": bool(getattr(self.server, "source_runtime_admitted", False)),
@@ -3719,6 +3716,15 @@ def _required(payload: dict[str, Any], key: str) -> str:
     if value is None or str(value).strip() == "":
         raise KeyError(f"Missing required field: {key}")
     return str(value)
+
+
+SYNTHETIC_MODEL_LABEL = "None (synthetic development mode)"
+
+
+def _model_file_names(config: Any, runtime: str) -> dict[str, str]:
+    if runtime != "onnx":
+        return {"detector": SYNTHETIC_MODEL_LABEL, "recognizer": SYNTHETIC_MODEL_LABEL}
+    return {"detector": config.detector_model.name, "recognizer": config.recognizer_model.name}
 
 
 def _attribution_name(actor: dict | None) -> str:
@@ -5433,8 +5439,7 @@ def _support_diagnostic_report(server: SentriFaceApiServer) -> dict[str, Any]:
         },
         "models": {
             "ready": server.models_available(),
-            "detector": config.detector_model.name,
-            "recognizer": config.recognizer_model.name,
+            **_model_file_names(config, server.runtime),
             "usage": {
                 "usage_basis": server.model_usage.get("usage_basis", "unknown"),
                 "terms_version": server.model_usage.get("terms_version", ""),
