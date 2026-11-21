@@ -210,3 +210,5 @@ Follow [Explore pagination](journeys/J19.md), [Connections pagination and measur
 [Activity log pagination](journeys/J23.md#macos-completion-pass-2--continuation-j-activity-pagination) was exercised using disposable sign-in events; populated log captures remain private.
 
 [Person Event filter continuation](journeys/J10.md#macos-completion-pass-2--continuation-j-person-event-filters) records matching and excluded results; originals remain private.
+
+[Low-quality acceptance](journeys/J34.md#macos-completion-pass-2--continuation-k-accept-the-quality-warning) records the full simulated decision and resulting profile; [early interruption](journeys/J06.md#macos-completion-pass-2--continuation-k-refresh-with-event-details-pending) records a separate refresh sample. Originals are private.

@@ -22,7 +22,7 @@
   "semantic_workflows_assessed_by_this_tool": 0,
   "eligible_capture_records": 599,
   "rejected_capture_counts": {
-    "private_without_public_derivative": 66,
+    "private_without_public_derivative": 74,
     "unsafe_original_basename": 1,
     "capture_or_snapshot_missing": 6
   },

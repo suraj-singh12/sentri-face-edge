@@ -78,3 +78,5 @@ The unchanged 509 source contracts now contain 349 PASS, 78 PARTIAL, 66 NOT RUN,
 Continuation J qualifies Activity log next/previous on 13 generated sign-in/startup events. Source contracts: 350 PASS, 78 PARTIAL, 65 NOT RUN, 9 BLOCKED, 7 FAIL of 509.
 
 Continuation J also qualified the Person Event date, location, context and search filter contract on contrasting synthetic Events. Current source contracts: 351 PASS, 78 PARTIAL, 64 NOT RUN, 9 BLOCKED, 7 FAIL of 509.
+
+Continuation K qualifies the explicit low-quality acceptance alternative with a generated synthetic input. Current contracts: 352 PASS, 78 PARTIAL, 63 NOT RUN, 9 BLOCKED, 7 FAIL of 509. Refresh in the initial Event dialog was sampled but does not fully qualify all interruption stages.

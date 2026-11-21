@@ -55,3 +55,5 @@ J27 documents a supported guarded revert using two same-name synthetic profiles 
 Use the existing dense synthetic authority and its QA fixture; do not use operator data. World Explore and Connections each have more than one People page. For the measured-pattern case, create and finalize a generated-image Event through the normal workflow, then clear its location in Correct Encounter. Connections displays the resulting missing-location data-quality measurement. A path-bearing Check a Photo frame remains private.
 
 Continuation J: on a disposable authority, create more than 10 Activity entries by signing in through the UI, choose page size 10 and use Next and Previous. Populated logs are private.
+
+Continuation K: use a generated 12×12 flat non-photographic PNG in source synthetic mode, enter synthetic Event details and select the explicit low-quality acceptance choice. Complete a disposable synthetic Person decision and inspect recognition coverage. Do not treat this as real biometric inference.
