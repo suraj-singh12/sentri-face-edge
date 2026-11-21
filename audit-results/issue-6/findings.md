@@ -257,3 +257,11 @@ Explicit Relations Include/Exclude selected states; Reference Only origin, cap a
 **Why → direction:** The first instruction asks a restricted operator to perform an unavailable action. Give the Viewer a role-specific instruction and retain an obvious sign-out/return path.
 
 **Reuse → tradeoffs:** Reuse the existing owner gate and capability-derived rendering; preserve backend authorization and supplier-license messaging. This is a communication issue, not a demonstrated permission bypass.
+
+## F30 Restarted service can be presented as unavailable when session has expired — P1 recovery / confirmed feedback defect
+
+**Problem → evidence:** After a controlled stop of the disposable source server, the connection warning was appropriate. After the server reported startup, Refresh continued showing “SentriFace is not responding”; a toast separately said “SentriFace session authorization is required” and the actual `/api/profile` response was HTTP 401. Reload returned to sign-in and a fresh sign-in restored the shell ([J02](journeys/J02.md#macos-completion-pass-2--continuation-q-service-interruption-and-session-recovery)).
+
+**Why → direction:** The suggested Refresh action cannot resolve this expired-session condition, and the persistent banner directs the operator to diagnose a server that is responding; the separate transient toast identifies an authorization requirement without an obvious sign-in action. Distinguish authentication expiry from connection failure and provide a clear reauthentication path while preserving unsaved-work safeguards.
+
+**Reuse → tradeoffs:** Reuse existing session and connection error handling and the sign-in flow; keep authorization checks intact. The sample does not establish every disconnect or restart scenario.

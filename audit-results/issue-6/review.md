@@ -249,3 +249,5 @@ A legitimate synthetic merge with identical initial observation values produced 
 The existing dense fixture provides 30 synthetic People and 30 Events without photographic media; one generated-image Event was subsequently created and corrected using product controls. Page-two Connections claims no cluster in scope while the scope total and page one show one. Its location summary shows the facet count as the large value but the missing-event count as the only visible caption. These are observed presentation defects, not claims that the stored data is corrupt. A cluster relationship page returned all 28 items at once; nested pagination remains unqualified.
 
 Continuation P: the non-owner model gate enforces its owner boundary in the sampled UI. Its generic alert nevertheless directs the Viewer to choose controls they cannot see (F29); this does not establish a backend permission bypass.
+
+Continuation Q: after a controlled source-server restart, a stale session produced 401 but the shell continued to prescribe Refresh as if the server were down; reloading and signing in recovered. This is bounded to the tested macOS source runtime (F30).

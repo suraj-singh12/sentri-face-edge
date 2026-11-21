@@ -90,3 +90,5 @@ Continuation N qualifies empty portable-backup state and creating feedback. Curr
 Continuation O qualifies invalid owner account refusal and submitting-disabled feedback on a fresh disposable source authority. Current contracts: 361 PASS, 78 PARTIAL, 54 NOT RUN, 9 BLOCKED, 7 FAIL of 509.
 
 Continuation P qualifies the non-owner model gate using a Viewer created through the UI and an unconfigured source ONNX launch. Current contracts: 362 PASS, 78 PARTIAL, 53 NOT RUN, 9 BLOCKED, 7 FAIL of 509. No model was downloaded or run.
+
+Continuation Q qualifies the connection-unavailable notice and refresh error on a controlled disposable-server outage. The already-settled refresh capture does not qualify the loading/disabled branch. Current contracts: 364 PASS, 78 PARTIAL, 51 NOT RUN, 9 BLOCKED, 7 FAIL of 509.

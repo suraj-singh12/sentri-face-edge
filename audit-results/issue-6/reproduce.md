@@ -67,3 +67,5 @@ Continuation N: use a disposable source authority without portable backups; Sett
 Continuation O: use a fresh dedicated source authority. Submit an empty owner form, then a deliberately invalid account name with a temporary test password; correct the name and immediately capture submission. Keep all credential-bearing frames and raw accessibility snapshots private.
 
 Continuation P: create a Viewer on a dedicated disposable authority in synthetic source mode; stop it and launch the same authority with `./run.sh onnx` with no models installed. Sign in as Viewer to see the owner gate, then sign out and sign in as owner. Do not use or modify operator model files.
+
+Continuation Q: with a signed-in synthetic source application on a disposable authority, stop only its source server and click Refresh. Restart the same server, wait for its startup message, retry Refresh, then reload and sign in. Record the actual response and do not interpret a stale-session 401 as server downtime.

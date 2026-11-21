@@ -23091,5 +23091,227 @@
       "height": 900
     },
     "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-01_J02_Step-09_Pass2-Connection-before-service-stop.png",
+    "ux": "UX-01",
+    "journey": "J02",
+    "step": 9,
+    "state": "Pass2-Connection-before-service-stop",
+    "role": "Administrator",
+    "kind": "synthetic source authority",
+    "fixture_context": "Dedicated disposable source authority; controlled service stop and restart; no operator data.",
+    "captured_at": "2026-11-21T18:02:52.273038+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "39294a91ea6d6d42031ac1b67a75159857c3dd379f83259c7c619bae8e9ee2a5",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0721",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-01/UX-01_J02_Step-09_Pass2-Connection-before-service-stop.png",
+    "public_sha256": "39294a91ea6d6d42031ac1b67a75159857c3dd379f83259c7c619bae8e9ee2a5"
+  },
+  {
+    "file": "UX-01_J02_Step-10_Pass2-Connection-refresh-service-stopped.png",
+    "ux": "UX-01",
+    "journey": "J02",
+    "step": 10,
+    "state": "Pass2-Connection-refresh-service-stopped",
+    "role": "Administrator",
+    "kind": "synthetic source authority",
+    "fixture_context": "Dedicated disposable source authority; controlled service stop and restart; no operator data.",
+    "captured_at": "2026-11-21T18:03:26.654553+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "2a81feb4a1754c8d8a2207d7ce5099c5f3cb4885e281379551dccc23160d99db",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0722",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-01/UX-01_J02_Step-10_Pass2-Connection-refresh-service-stopped.png",
+    "public_sha256": "2a81feb4a1754c8d8a2207d7ce5099c5f3cb4885e281379551dccc23160d99db"
+  },
+  {
+    "file": "UX-01_J02_Step-11_Pass2-Connection-service-restarted-refresh.png",
+    "ux": "UX-01",
+    "journey": "J02",
+    "step": 11,
+    "state": "Pass2-Connection-service-restarted-refresh",
+    "role": "Administrator",
+    "kind": "synthetic source authority",
+    "fixture_context": "Dedicated disposable source authority; controlled service stop and restart; no operator data.",
+    "captured_at": "2026-11-21T18:04:22.199067+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "85849e8431ad97314c0827e8a6ff2a6bfcf876119a17156ace7df162a7874bbc",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0723",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-01/UX-01_J02_Step-11_Pass2-Connection-service-restarted-refresh.png",
+    "public_sha256": "85849e8431ad97314c0827e8a6ff2a6bfcf876119a17156ace7df162a7874bbc"
+  },
+  {
+    "file": "UX-01_J02_Step-12_Pass2-Connection-refresh-after-startup-ready.png",
+    "ux": "UX-01",
+    "journey": "J02",
+    "step": 12,
+    "state": "Pass2-Connection-refresh-after-startup-ready",
+    "role": "Administrator",
+    "kind": "synthetic source authority",
+    "fixture_context": "Dedicated disposable source authority; controlled service stop and restart; no operator data.",
+    "captured_at": "2026-11-21T18:05:03.948366+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "6f8984fecbfe3512c377ffeead92919d2697a471f95fa549a45bafcf06f08700",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0724",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-01/UX-01_J02_Step-12_Pass2-Connection-refresh-after-startup-ready.png",
+    "public_sha256": "6f8984fecbfe3512c377ffeead92919d2697a471f95fa549a45bafcf06f08700"
+  },
+  {
+    "file": "UX-01_J02_Step-13_Pass2-Connection-reload-after-restart-private.png",
+    "ux": "UX-01",
+    "journey": "J02",
+    "step": 13,
+    "state": "Pass2-Connection-reload-after-restart-private",
+    "role": "Administrator",
+    "kind": "synthetic source authority",
+    "fixture_context": "Dedicated disposable source authority; controlled service stop and restart; no operator data.",
+    "captured_at": "2026-11-21T18:05:57.701992+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "89d6ff89322f368aae44bac4dba7cad5f22779ca4c10dcca0d3ce92cbc729a48",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0725",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-01_J02_Step-14_Pass2-Connection-resigned-after-restart.png",
+    "ux": "UX-01",
+    "journey": "J02",
+    "step": 14,
+    "state": "Pass2-Connection-resigned-after-restart",
+    "role": "Administrator",
+    "kind": "synthetic source authority",
+    "fixture_context": "Dedicated disposable source authority; controlled service stop and restart; no operator data.",
+    "captured_at": "2026-11-21T18:06:21.346509+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "ea850fde17578247c829be97704dc42c16ad42a2fa7df57fa6042b289cd2702b",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0726",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-01/UX-01_J02_Step-14_Pass2-Connection-resigned-after-restart.png",
+    "public_sha256": "ea850fde17578247c829be97704dc42c16ad42a2fa7df57fa6042b289cd2702b"
+  },
+  {
+    "file": "UX-01_J02_Step-15_Pass2-Connection-refresh-immediate.png",
+    "ux": "UX-01",
+    "journey": "J02",
+    "step": 15,
+    "state": "Pass2-Connection-refresh-already-settled",
+    "role": "Administrator",
+    "kind": "synthetic source authority",
+    "fixture_context": "Dedicated disposable source authority; controlled service stop and restart; no operator data.",
+    "captured_at": "2026-11-21T18:06:51.012472+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "8e527336b7bb1626766fe27e0f65d70cbbffc9871c1f54e5a3f2f60703ecd262",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0727",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-01/UX-01_J02_Step-15_Pass2-Connection-refresh-immediate.png",
+    "public_sha256": "8e527336b7bb1626766fe27e0f65d70cbbffc9871c1f54e5a3f2f60703ecd262"
   }
 ]

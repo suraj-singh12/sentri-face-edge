@@ -222,3 +222,5 @@ Follow [Explore pagination](journeys/J19.md), [Connections pagination and measur
 [Fresh owner setup validation and submission](journeys/J01.md#macos-completion-pass-2--continuation-o-fresh-owner-validation-and-submission) includes the actual required-field message and private refusal/loading evidence.
 
 [Viewer model setup gate and owner return](journeys/J32.md#macos-completion-pass-2--continuation-p-non-owner-model-gate) is now qualified; [F29](findings.md#f29-non-owner-model-gate-gives-an-unavailable-instruction--p2-interaction--confirmed-wording-inconsistency) records conflicting wording.
+
+[Service interruption and reauthentication recovery](journeys/J02.md#macos-completion-pass-2--continuation-q-service-interruption-and-session-recovery) records the warning, restart and sign-in path; [F30](findings.md#f30-restarted-service-can-be-presented-as-unavailable-when-session-has-expired--p1-recovery--confirmed-feedback-defect) explains the 401 feedback mismatch.
