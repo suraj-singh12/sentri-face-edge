@@ -13,10 +13,9 @@ import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { CountrySelect } from "./CountrySelect.jsx";
 import { mediaUrl } from "../utils.js";
 
-export function RecognitionFollowupForm({ values, people = [], confirmed, onChange, onSubmit, onClear, embedded = false, showAddedBy = false, addFaceOnly = false }) {
+export function RecognitionFollowupForm({ values, people = [], confirmed, onChange, onSubmit, onClear, embedded = false, addFaceOnly = false }) {
   if (addFaceOnly) return <Card withBorder radius="md" mt="md" p="sm"><form onSubmit={onSubmit}><Stack gap="sm"><Text fw={800}>Add Face to {values.name}</Text><Text size="sm" c="dimmed">This adds a reference face to the existing Person. It creates no Encounter or sighting.</Text><Button type="submit" disabled={confirmed}>Confirm Add Face</Button></Stack></form></Card>;
   const isNew = values.action === "new";
-  const needsAddedBy = isNew || showAddedBy;
   const mentionQuery = activeMentionQuery(values.notes);
   const mentionSuggestions = mentionQuery.length < 3 ? [] : people.filter((person) => (
     person.person_id !== values.personId
@@ -35,7 +34,6 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
           {isNew && <CountrySelect value={values.country} onChange={(value) => onChange("country", value)} />}
           {isNew && <Select required label="Tag" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />}
           <NumberInput required min={0} step={1} label="With how many individuals" leftSection={<IconUsers size={18} />} placeholder="Select count" value={values.individualCount} onChange={(value) => onChange("individualCount", value)} />
-          {needsAddedBy && <TextInput required label="Added by" placeholder="Your Name" value={values.addedBy} onChange={(event) => onChange("addedBy", event.target.value)} />}
         </SimpleGrid>
         <Paper withBorder p="xs"><Text size="sm" fw={700}>Inherited Encounter</Text><Text size="sm">{values.eventOccasion || "Unknown occasion"} · {values.date || "Unknown date"} · {values.timePrecision === "unknown" ? "Unknown time" : `${values.time || ""}${values.endTime ? `–${values.endTime}` : ""}${values.timePrecision === "approximate" ? " (approximate)" : ""}`} · {values.placeSeen || "Unknown location"} · {values.eventContext || "unknown"}</Text></Paper>
         <Textarea

@@ -22,12 +22,13 @@ class AuthenticationApiTest(unittest.TestCase):
             cookie = self._login_cookie(server, "owner", PASSWORD)
             status, created, _ = self._request(server, "POST", "/api/person-create", {
                 "name": "Profile Entry", "rank": "Visitor", "country": "India",
-                "importance": "Regular", "added_by": "Owner",
+                "importance": "Regular", "added_by": "Someone Else",
                 "seen_date": "2026-09-23", "seen_time": "10:00",
                 "place_seen": "Office", "individual_count": 0,
                 "event_occasion": "Visit", "operation_id": str(uuid4()),
             }, cookie=cookie)
             self.assertEqual(status, 200, created)
+            self.assertEqual(created["person"]["metadata"]["added_by"], "Owner")
             person_id = created["person"]["person_id"]
             # People and recognition use the same URL; a fresh direct request
             # exercises the reload path without relying on frontend state.

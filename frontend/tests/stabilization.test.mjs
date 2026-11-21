@@ -69,9 +69,10 @@ test("Event popup confirms before person resolution and keeps person fields", ()
   assert.match(queue, /activeEncounter\?\.phase === "EVENT" && eventDetails\?\.reviewId !== activeEncounter\.review_id/);
   assert.match(read("../src/hooks/useQueueController.js"), /\/api\/queue-encounter-event/);
   assert.match(read("../src/hooks/useQueueController.js"), /setQueueEvent\(null\);\s*setQueueEventDraft\(null\);/);
-  for (const field of ["Rank", "Name", "Tag", "Added by", "Sighting Notes", "With how many individuals"]) {
+  for (const field of ["Rank", "Name", "Tag", "Sighting Notes", "With how many individuals"]) {
     assert.ok(personForm.includes(field), field);
   }
+  assert.doesNotMatch(personForm, /label="Added by"/);
   assert.match(personForm, /Inherited Encounter/);
   assert.doesNotMatch(personForm, /<TextInput[^>]*label="Date"/);
   assert.doesNotMatch(personForm, /<Textarea label="Event notes"/);

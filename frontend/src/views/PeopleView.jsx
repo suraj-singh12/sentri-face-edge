@@ -2199,7 +2199,6 @@ function PlaceholderPersonFields({ values, onChange, people }) {
         <TextInput required label="Place Seen" leftSection={<IconMapPin size={18} />} placeholder="e.g., Office, Gate A, Reception, Building C" value={values.placeSeen} onChange={(event) => update("placeSeen", event.currentTarget.value)} />
         <NumberInput required min={0} step={1} label="With how many individuals" leftSection={<IconUsers size={18} />} placeholder="Select count" value={values.individualCount} onChange={(value) => update("individualCount", value)} />
         <TextInput required label="Event/Occasion" leftSection={<IconCalendar size={18} />} placeholder="e.g., Meeting, Visit, Delivery, Staff Interaction, Security Check" value={values.eventOccasion} onChange={(event) => update("eventOccasion", event.currentTarget.value)} />
-        <TextInput required label="Added by" placeholder="Your Name" value={values.addedBy} onChange={(event) => update("addedBy", event.currentTarget.value)} />
       </SimpleGrid>
       <Textarea
         autosize

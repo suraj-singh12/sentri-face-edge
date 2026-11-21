@@ -1707,7 +1707,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     "stored_size": saved_path.stat().st_size,
                 })
                 return
-            payload = self._read_json()
+            payload = _with_authenticated_attribution(self._read_json(), self._operation_actor())
             if parsed.path == "/api/license/activate":
                 if set(payload) != {"token"}:
                     raise InputValidationError(
@@ -2419,7 +2419,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         "country": _required(payload, "country").strip(),
                         "importance": _required(payload, "importance").strip(),
                         "tags": [str(tag).strip() for tag in tags if str(tag).strip()],
-                        "added_by": _required(payload, "added_by"),
+                        "added_by": _attribution_name(self._operation_actor()) or _required(payload, "added_by"),
                         "initial_observation": {
                             "seen_date": _required(payload, "seen_date"),
                             "seen_time": _required(payload, "seen_time"),
@@ -3719,6 +3719,23 @@ def _required(payload: dict[str, Any], key: str) -> str:
     if value is None or str(value).strip() == "":
         raise KeyError(f"Missing required field: {key}")
     return str(value)
+
+
+def _attribution_name(actor: dict | None) -> str:
+    return str((actor or {}).get("display_name") or (actor or {}).get("username") or "")
+
+
+def _with_authenticated_attribution(payload: Any, actor: dict | None) -> Any:
+    """"Added by" always names the signed-in account, never a client-typed value."""
+    name = _attribution_name(actor)
+    if not name or not isinstance(payload, dict):
+        return payload
+    if "added_by" in payload:
+        payload["added_by"] = name
+    detail = payload.get("recognition_detail")
+    if isinstance(detail, dict) and "added_by" in detail:
+        detail["added_by"] = name
+    return payload
 
 
 def _review_detail_payload(payload: dict[str, Any]) -> dict[str, Any]:
