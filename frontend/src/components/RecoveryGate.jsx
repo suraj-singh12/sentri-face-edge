@@ -29,6 +29,7 @@ export function RecoveryGate({ user, logout, children }) {
   const [working, setWorking] = useState(false);
   const [riskAccepted, setRiskAccepted] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState("");
+  const [sharesDataDrive, setSharesDataDrive] = useState(false);
   const [configuredReadiness, setConfiguredReadiness] = useState(null);
   const [destinations, setDestinations] = useState([]);
   const [manualOpen, setManualOpen] = useState(false);
@@ -71,6 +72,7 @@ export function RecoveryGate({ user, logout, children }) {
     try {
       const result = await apiPost("/api/recovery/configure", { destination });
       setRecoveryCode(result.recovery_code || "");
+      setSharesDataDrive(Boolean(result.destination_shares_data_drive));
       setConfiguredReadiness(result.readiness || null);
     } catch (caught) {
       setError(caught.message);
@@ -124,6 +126,7 @@ export function RecoveryGate({ user, logout, children }) {
               <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Do not lose this code">
                   You cannot restore your backup without this code.
               </Alert>
+              {sharesDataDrive ? <SameDriveWarning /> : null}
               <Group wrap="nowrap">
                 <Code block fz="md" style={{ flex: 1, overflowWrap: "anywhere" }}>{recoveryCode}</Code>
                 <Button variant="light" leftSection={<IconCopy size={16} />} onClick={copyRecoveryCode}>Copy</Button>
@@ -177,7 +180,7 @@ export function RecoveryGate({ user, logout, children }) {
                 <TextInput
                   label="Folder location"
                   description="Use a folder on a separate or removable drive—not on this computer's main drive."
-                  placeholder={navigator.userAgent.includes("Windows") ? "E:\\SentriFace Backup" : "/Volumes/Backup Drive/SentriFace Backup"}
+                  placeholder={backupFolderPlaceholder()}
                   value={destination}
                   onChange={(event) => setDestination(event.currentTarget.value)}
                 />
@@ -217,5 +220,19 @@ export function RecoveryGate({ user, logout, children }) {
         </Stack>
       </Card>
     </Center>
+  );
+}
+
+export function backupFolderPlaceholder(userAgent = globalThis.navigator?.userAgent || "") {
+  if (userAgent.includes("Windows")) return "E:\\SentriFace Backup";
+  if (userAgent.includes("Mac")) return "/Volumes/Backup Drive/SentriFace Backup";
+  return "/media/backup-drive/SentriFace Backup";
+}
+
+export function SameDriveWarning() {
+  return (
+    <Alert color="yellow" icon={<IconAlertTriangle size={18} />} title="This folder is on the same drive as your SentriFace data">
+      If this drive fails, the safety copy is lost too. Choose a folder on a separate or removable drive in Settings when you can.
+    </Alert>
   );
 }

@@ -56,3 +56,11 @@ test('deferred Encounter groups stay recoverable while other groups are pending'
   assert.match(html,/1 deferred/);
   assert.match(html,/Review deferred now \(1\)/);
 });
+
+test('safety-copy folder hints match the platform and same-drive copies are flagged', async () => {
+  const { backupFolderPlaceholder, SameDriveWarning } = await server.ssrLoadModule('/src/components/RecoveryGate.jsx');
+  assert.equal(backupFolderPlaceholder('Mozilla/5.0 (Windows NT 10.0)'), 'E:\\SentriFace Backup');
+  assert.match(backupFolderPlaceholder('Mozilla/5.0 (Macintosh; Intel Mac OS X)'), /^\/Volumes\//);
+  assert.match(backupFolderPlaceholder('Mozilla/5.0 (X11; Linux x86_64)'), /^\/media\//);
+  assert.match(render(SameDriveWarning,{}),/same drive as your SentriFace data/);
+});

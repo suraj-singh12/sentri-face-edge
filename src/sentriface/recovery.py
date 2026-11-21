@@ -74,6 +74,13 @@ def available_recovery_destinations() -> list[dict[str, str]]:
     return sorted(choices, key=lambda item: item["label"].casefold())
 
 
+def _shares_volume(first: Path, second: Path) -> bool:
+    try:
+        return first.stat().st_dev == second.stat().st_dev
+    except OSError:
+        return False
+
+
 def _require_local_destination(destination: Path) -> None:
     """Reject recovery targets that are visibly backed by a network share."""
     raw = str(destination)
@@ -185,6 +192,7 @@ class RecoveryService:
             "configured": bool(destination_value and self._load_code()),
             "destination": destination_value,
             "destination_available": bool(destination and destination.is_dir()),
+            "destination_shares_data_drive": bool(destination and _shares_volume(destination, self.data_dir)),
             "recovery_kit_present": bool(destination and (destination / RECOVERY_KIT_NAME).is_file()),
             "last_external_backup": datetime.fromtimestamp(exports[0].stat().st_mtime, timezone.utc).isoformat(timespec="seconds") if exports else "",
             "last_external_backup_path": str(exports[0]) if exports else "",
