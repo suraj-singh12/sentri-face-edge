@@ -39,6 +39,9 @@ export default function SentriFaceApp() {
         fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
         headings: { fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" },
         radius: { md: rem(8), lg: rem(8) },
+        components: {
+          PasswordInput: { defaultProps: { visibilityToggleButtonProps: { tabIndex: 0, "aria-label": "Show or hide password" } } },
+        },
       }}
     >
       <Notifications position="bottom-right" />
@@ -88,7 +91,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
         <Group h="100%" px="xl" justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap" miw={0} className="brand-lockup">
             <img src="/sentriface-icon-64.png" alt="" className="brand-icon" aria-hidden="true" />
-            <Box miw={0}>
+            <Box miw={0} className="brand-text">
               <Title order={2} size="h3" className="brand-title">SentriFace <Text span inherit c="teal.4">Edge</Text></Title>
               <Text size="xs" c="dimmed" truncate>{profileLine(state.profile)}</Text>
             </Box>

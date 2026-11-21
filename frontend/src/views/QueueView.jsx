@@ -928,7 +928,7 @@ function QueueGroupReview({
           <ActionIcon variant="default" size="lg" aria-label="Back to review queue" onClick={onBack}><IconArrowLeft size={18} /></ActionIcon>
           <Box>
             <Group gap="xs">
-              <Title order={2} size="h3">Review {group.group_id}</Title>
+              <Title order={2} size="h3">Review this group</Title>
               <Badge color="teal" variant="light">{group.faces.length} photo{group.faces.length === 1 ? "" : "s"}</Badge>
             </Group>
             <Text size="sm" c="dimmed">Decide which photos belong to the suggested person.</Text>
