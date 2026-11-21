@@ -49,7 +49,7 @@ The common frontend mutation boundary reconciles retained finalized reads and us
 
 Terminal scan cancellation publishes its response after cleanup. Guarded lifecycle commands perform early admission before backup and transaction-bound revalidation afterward. Linux source recovery uses persistent encrypted, authority-bound, owner-only custody selected before the retention worker starts, plus the existing verified recovery-kit startup path. OS-vault custody and packaged policy remain unchanged. System Details distinguishes running source ONNX from unverified packaged OS isolation.
 
-Targeted qualification and final verification are recorded in `IMPLEMENTATION_PLAN.md`. This is Batch 3.5 implementation, not the subsequent three-phase clean-room reaudit or release acceptance. World vNext and Batch 4 remain unimplemented.
+Targeted qualification and final verification are recorded in `IMPLEMENTATION_PLAN.md`. This is Batch 3.5 implementation, not the subsequent three-phase clean-room reaudit or release acceptance. World vNext and Batch 4 were unimplemented at that checkpoint; they were later delivered as World intelligence #3 and the Explore | Connections UI (#13, #31).
 
 Final qualification: backend 676 passed / 47 skipped / 135 subtests; frontend 118 passed; build/diff check passed. Supported fresh-authority recovery/import/restore and restart preserved all compared effective domains and 34 assets/99 bindings. Completed-review path relocation is scoped to the disposable restore transaction with non-path comparison and guard reinstatement; live immutability is unchanged. Exact Event-form detachment remains unconfirmed, although stale face-selection refresh was reproduced and repaired. Full clean-room reaudit remains a separate next run.
 

@@ -8,6 +8,8 @@
 
 **Release limits:** Real ONNX and bounded QA are accepted, not full photographic-volume, actual power loss, installed current-artifact Windows lifecycle or signed release qualification. All merge and `main` boundaries in [AGENTS.md](../AGENTS.md) remain binding.
 
+**Follow-up integration (2026-11-22):** a takeover audit of `release-v2.0.0-hardening` at `b457f0a` produced #35 (docs/setup sync), #36 (workflow and UI defects) and #37 (maintainability). By operator instruction, their issue branches start from and open PRs into `v2-hardening-followups`, where CI also runs. Baseline there: backend 959 passed / 56 skipped / 137 subtests; frontend 141 passed. Linux synthetic prerequisites are in [DEVELOPMENT_MODE](DEVELOPMENT_MODE.md#linux-synthetic-development).
+
 Earlier dated sections below are historical checkpoints, not active instructions.
 
 ## Historical handoff — 2026-10-29 (superseded)
@@ -24,7 +26,7 @@ Batch 3.7 was committed as `555433f082dc39112bd815dddf3a8f35791f2f4b` (schema v3
 
 Normal different photos independently infer E1/E2; the earlier fixture manually reused `(1,0)`. Exact-vector dedup remains legitimate but cannot collapse source identity. Encounter reassignment never transfers Reference ownership. Conflicting shared-row current canonical owners derive recognition exclusion; source active state/count/history remain intact. Do not restore the old global-embedding interpretation or serialize a mutable conflict flag.
 
-Canonical contributor reading order remains AGENTS → docs/README → IMPLEMENTATION_PLAN → PROJECT_OVERVIEW → ARCHITECTURE_STATE → DOMAIN_MODEL → FEATURES_BY_TAB → ARCHITECTURE_EXPLANATION → this handoff. Exact final verification/qualification and first failures are recorded in `/workspace/scratch/sentriface-batch37/REPORT.md`; prior partial evidence is preserved separately there. Future work must retain encryption, immutable source history, registry-owned authenticated closure and protected Linux source recovery custody.
+Canonical contributor reading order remains AGENTS → docs/README → IMPLEMENTATION_PLAN → PROJECT_OVERVIEW → ARCHITECTURE_STATE → DOMAIN_MODEL → FEATURES_BY_TAB → ARCHITECTURE_EXPLANATION → this handoff. Exact final verification/qualification and first failures were recorded in an external Batch 3.7 report that is not retained in Git; the summaries here and in IMPLEMENTATION_PLAN are the durable record. Future work must retain encryption, immutable source history, registry-owned authenticated closure and protected Linux source recovery custody.
 
 **Final Batch 3.7 pre-commit qualification (code now pushed):** backend 736 passed / 47 skipped / 137 subtests; frontend 124 passed; production build, Python compile and diff checks passed. Real CPU ONNX/Chromium exercised both shared Reference entry points, admission rejection, cap/lifecycle, canonical merge, cross-role guards, permissions and retained Attach ownership. A supported encrypted backup restored into a completely fresh authority and normal restart preserved domain truth. Supported graph rebuild passed with unchanged Reference state and occurrence projection. Exact evidence, first failures and scope limits remain in the external Batch 3.7 report.
 
@@ -38,7 +40,7 @@ Baseline verified clean on `release-v2.0.0-hardening` at `1ea2a38d10be0da4c00fea
 
 Merge retires affected canonical standing-manual collisions deterministically inside its transaction, retaining raw history and IDs. Recognition displays full server-staged operator decisions rather than stale proposals; candidate browsing fixes nested PersonSummary access. No schema, World algorithm, recognition model/threshold or packaged custody change.
 
-Verification: 694 backend passed / 47 skipped / 135 subtests; 120 frontend passed; production build passed. Earlier focused setup failures and browser action/response-capture limitations are preserved in `/workspace/scratch/sentriface-batch36/`. Real complex rebuild succeeded; fresh supported recovery-kit import/Restore Safely, original administrator login and ordinary restored restart succeeded. Domain/assets/current reads match after declared physical-path, precondition-token and photo tie-order normalization; supported journals are the only durable authority additions. Secrets/kit/export remain in separate private directories.
+Verification: 694 backend passed / 47 skipped / 135 subtests; 120 frontend passed; production build passed. Earlier focused setup failures and browser action/response-capture limitations were kept in an external Batch 3.6 directory that is not retained in Git. Real complex rebuild succeeded; fresh supported recovery-kit import/Restore Safely, original administrator login and ordinary restored restart succeeded. Domain/assets/current reads match after declared physical-path, precondition-token and photo tie-order normalization; supported journals are the only durable authority additions. Secrets/kit/export remain in separate private directories.
 
 At that checkpoint the next gate was a separately frozen clean-room reaudit; its uncommitted qualification was not Windows packaged release acceptance. Previous batch sections below are historical checkpoints.
 
@@ -49,7 +51,7 @@ Starting branch/baseline: `release-v2.0.0-hardening`, `cf8c847337735dc7d1acc4b18
 
 Preserve the canonical effective frame-support helper, durable face decision distinctions, explicit Person enrollment contract, common read reconciliation, archived historical profile capability, cancellation cleanup ordering and lifecycle preflight/revalidation. Do not replace active/effective evidence reads with historical generations or compact provenance. Linux source recovery uses the same source eligibility/storage boundary, a private encrypted recovery-code record, and validated recovery-kit key admission. Normal OS custody/packaged enforcement is unchanged. Select source recovery at construction before background workers, never as a late replacement. Preserve the staged-only completed-review media-relocation transaction and reinstated live guard. Standalone completion retries retain the original operation ID.
 
-Qualification artifacts are outside tracked source at `/workspace/scratch/sentriface-batch3-5/`; credentials/recovery codes there are private qualification data and must not be printed, screenshotted or committed. The original clean-room evidence remains separate. World scoring/clustering, note scope distinctions, draft isolation, idempotency, permissions, recognition models and release packaging remain protected.
+Qualification artifacts were kept outside tracked source and are not retained in Git; credentials/recovery codes there were private qualification data and must not be printed, screenshotted or committed. The original clean-room evidence remains separate. World scoring/clustering, note scope distinctions, draft isolation, idempotency, permissions, recognition models and release packaging remain protected.
 
 This is the shortest safe path for an engineer or coding agent taking over the
 current 2.0.0 release work. It is an orientation guide, not a replacement for the

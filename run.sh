@@ -1,7 +1,8 @@
 #!/bin/zsh
 
-# macOS source-development entry point. This intentionally has a different
-# authority root from the installed product so both can run on the same Mac.
+# macOS/Linux source-development entry point (Windows uses run.ps1). It
+# intentionally uses a different authority root from the installed product so
+# both can run on the same machine.
 set -euo pipefail
 
 PROJECT_DIR="${0:A:h}"
@@ -10,6 +11,7 @@ PYTHON="$VENV_DIR/bin/python"
 DEV_DATA_DIR="${SENTRIFACE_DEV_DATA_DIR:-$HOME/Library/Application Support/SentriFace-Dev}"
 DEFAULT_DEV_DATA_DIR="$HOME/Library/Application Support/SentriFace-Dev"
 PRODUCTION_DATA_DIR="$HOME/Library/Application Support/SentriFace"
+LINUX_PRODUCTION_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/sentriface"
 MODE="${1:-dev}"
 
 usage() {
@@ -26,7 +28,7 @@ not be the installed-product SentriFace data directory.
 EOF
 }
 
-if [[ "$DEV_DATA_DIR:A" == "$PRODUCTION_DATA_DIR:A" ]]; then
+if [[ "$DEV_DATA_DIR:A" == "$PRODUCTION_DATA_DIR:A" || "$DEV_DATA_DIR:A" == "$LINUX_PRODUCTION_DATA_DIR:A" ]]; then
   print -u2 "Refusing to use the installed-product data directory for source development."
   exit 2
 fi
@@ -116,7 +118,11 @@ fi
 
 print "SentriFace source mode: $MODE"
 print "Source-development data: $DEV_DATA_DIR"
-print "Installed-product data remains separate: $PRODUCTION_DATA_DIR"
+INSTALLED_DATA_DIR="$PRODUCTION_DATA_DIR"
+if [[ "$OSTYPE" == linux* ]]; then
+  INSTALLED_DATA_DIR="$LINUX_PRODUCTION_DATA_DIR"
+fi
+print "Installed-product data remains separate: $INSTALLED_DATA_DIR"
 
 case "$MODE" in
   dev)
