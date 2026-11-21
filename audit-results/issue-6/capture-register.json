@@ -22567,5 +22567,253 @@
       "height": 900
     },
     "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-00_J01_Step-12_Pass2-Recovery-authority-no-separate-drive-private.png",
+    "ux": "UX-00",
+    "journey": "J01",
+    "step": 12,
+    "state": "Pass2-Recovery-authority-no-separate-drive-private",
+    "role": "Administrator",
+    "kind": "synthetic recovery authority",
+    "fixture_context": "Fresh disposable synthetic recovery authority; Viewer at step 10; no operator data",
+    "captured_at": "2026-11-21T17:38:16.987471+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "8284115835fec1e844341157d96f76033a4aa6988a17c18361f7dce434d29a08",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0704",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J22_Step-19_Pass2-Recovery-authority-backup-empty-private.png",
+    "ux": "UX-13",
+    "journey": "J22",
+    "step": 19,
+    "state": "Pass2-Recovery-authority-backup-empty-private",
+    "role": "Administrator",
+    "kind": "synthetic recovery authority",
+    "fixture_context": "Disposable source-mode recovery authority created for Issue 6 pass 2",
+    "captured_at": "2026-11-21T17:38:39.587777+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "7c092baf773354ef50d9a5b4ea90a6356e44673bc10651ba48b1522d72babfad",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0705",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J22_Step-20_Pass2-Recovery-authority-no-backups.png",
+    "ux": "UX-13",
+    "journey": "J22",
+    "step": 20,
+    "state": "Pass2-Recovery-authority-no-backups",
+    "role": "Administrator",
+    "kind": "synthetic recovery authority",
+    "fixture_context": "Disposable source-mode recovery authority created for Issue 6 pass 2",
+    "captured_at": "2026-11-21T17:39:08.400214+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "7c092baf773354ef50d9a5b4ea90a6356e44673bc10651ba48b1522d72babfad",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0706",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J22_Step-20_Pass2-Recovery-authority-no-backups.png",
+    "public_sha256": "7c092baf773354ef50d9a5b4ea90a6356e44673bc10651ba48b1522d72babfad"
+  },
+  {
+    "file": "UX-13_J22_Step-21_Pass2-Recovery-authority-first-backup-ready.png",
+    "ux": "UX-13",
+    "journey": "J22",
+    "step": 21,
+    "state": "Pass2-Recovery-authority-first-backup-ready",
+    "role": "Administrator",
+    "kind": "synthetic recovery authority",
+    "fixture_context": "Disposable source-mode recovery authority created for Issue 6 pass 2",
+    "captured_at": "2026-11-21T17:39:29.490887+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "3f942e2a1f4743982af8697b098ebaab1815f15352b960e3c531027d9f522905",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0707",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J22_Step-21_Pass2-Recovery-authority-first-backup-ready.png",
+    "public_sha256": "3f942e2a1f4743982af8697b098ebaab1815f15352b960e3c531027d9f522905"
+  },
+  {
+    "file": "UX-13_J22_Step-22_Pass2-Recovery-authority-restore-dialog-private.png",
+    "ux": "UX-13",
+    "journey": "J22",
+    "step": 22,
+    "state": "Pass2-Recovery-authority-restore-dialog-private",
+    "role": "Administrator",
+    "kind": "synthetic recovery authority",
+    "fixture_context": "Disposable source-mode recovery authority created for Issue 6 pass 2",
+    "captured_at": "2026-11-21T17:39:30.304135+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "12ef52e7cd0630ce0006ba3d523fdeb9ea03de657f47ddda52badff3ca0a8c35",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0708",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J22_Step-23_Pass2-Recovery-authority-restore-canceled-private.png",
+    "ux": "UX-13",
+    "journey": "J22",
+    "step": 23,
+    "state": "Pass2-Recovery-authority-restore-canceled-private",
+    "role": "Administrator",
+    "kind": "synthetic recovery authority",
+    "fixture_context": "Disposable source-mode recovery authority created for Issue 6 pass 2",
+    "captured_at": "2026-11-21T17:39:50.324982+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "8e449bffc9c589e286e00cda160e2be6d5450406035f5d79e1fb61935f3c9395",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0709",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-13_J22_Step-24_Pass2-Recovery-authority-create-immediate-private.png",
+    "ux": "UX-13",
+    "journey": "J22",
+    "step": 24,
+    "state": "Pass2-Recovery-authority-create-immediate",
+    "role": "Administrator",
+    "kind": "synthetic recovery authority",
+    "fixture_context": "Disposable source-mode recovery authority",
+    "captured_at": "2026-11-21T17:40:29.376481+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "549f87aaf1b1999d1d11c1adc6a23a56e7046a00adc2f7afbde7fe5050cc28c2",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0710",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J22_Step-24_Pass2-Recovery-authority-create-immediate-private.png",
+    "public_sha256": "549f87aaf1b1999d1d11c1adc6a23a56e7046a00adc2f7afbde7fe5050cc28c2"
+  },
+  {
+    "file": "UX-13_J22_Step-25_Pass2-Recovery-authority-second-backup-ready.png",
+    "ux": "UX-13",
+    "journey": "J22",
+    "step": 25,
+    "state": "Pass2-Recovery-authority-second-backup-ready",
+    "role": "Administrator",
+    "kind": "synthetic recovery authority",
+    "fixture_context": "Disposable source-mode recovery authority created for Issue 6 pass 2",
+    "captured_at": "2026-11-21T17:41:00.592962+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "80cfc26c9e80fcd1d53a0fb8696d7cbc2f371a6b22244a7887a5e001d8cf1f86",
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "capture_id": "CAP-0711",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "ORIGINAL unmodified full capture",
+    "public_file": "screenshots/UX-13/UX-13_J22_Step-25_Pass2-Recovery-authority-second-backup-ready.png",
+    "public_sha256": "80cfc26c9e80fcd1d53a0fb8696d7cbc2f371a6b22244a7887a5e001d8cf1f86"
   }
 ]

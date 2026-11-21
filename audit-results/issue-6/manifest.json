@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
   "evidence_branch": "audit/issue-6-current-experience",
-  "sealed_at": "2026-11-21T17:33:11.156775+00:00",
+  "sealed_at": "2026-11-21T17:42:29.880737+00:00",
   "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
   "environment": {
     "os": "macOS 26.0 arm64 VM",
@@ -27,14 +27,14 @@
   "counts": {
     "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
     "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
-    "registered_capture_attempts": 703,
-    "accepted_capture_records": 700,
+    "registered_capture_attempts": 711,
+    "accepted_capture_records": 708,
     "rejected_attempts": 3,
-    "distinct_sampled_visual_state_keys": 697,
-    "public_images": 606,
-    "public_originals": 594,
+    "distinct_sampled_visual_state_keys": 705,
+    "public_images": 610,
+    "public_originals": 598,
     "public_sanitized_derivatives": 12,
-    "private_only_accepted": 94,
+    "private_only_accepted": 98,
     "private_genuine_images": 33,
     "runtime_journey_records": 36,
     "semantic_surface_families": 37,
@@ -48,8 +48,8 @@
     },
     "source_branch_contracts": 509,
     "source_branch_status": {
-      "PASS": 357,
-      "NOT RUN": 58,
+      "PASS": 359,
+      "NOT RUN": 56,
       "PARTIAL": 78,
       "BLOCKED": 9,
       "FAIL": 7
@@ -68,23 +68,23 @@
   "files": [
     {
       "path": "audit-results/issue-6/INDEX.md",
-      "bytes": 20837,
-      "sha256": "c7e6a793f6b9338e19bc52e33121a889a53077b344569dbd9c2d0c23479f82f6"
+      "bytes": 21048,
+      "sha256": "2c8a6d89ef0eaefdf25207c484a884c56968afd18668695d0e2fd8e509c2c94f"
     },
     {
       "path": "audit-results/issue-6/branch-coverage.csv",
-      "bytes": 292852,
-      "sha256": "fc63643d63ce7ac35865dd34195440f0a906064d6c2a4d1c9208d2ee159bb600"
+      "bytes": 293510,
+      "sha256": "21bfeb17464a94a8166b2113d83f5d98469ecec1d44f82a1804f3082c15b8706"
     },
     {
       "path": "audit-results/issue-6/capture-register.json",
-      "bytes": 835494,
-      "sha256": "403307c9417f05e6702fe2126c5bdb48a9e4b17ce5a9280549bffea8491eb478"
+      "bytes": 844084,
+      "sha256": "f1a8a1357b532f40ece4f68e609ee612a52ee85448f7c8f7bc325327dc88bab6"
     },
     {
       "path": "audit-results/issue-6/captured-overlays.csv",
-      "bytes": 21826,
-      "sha256": "f1bcbb8fcd41ec879c9064c7463c25f631addf176177a25f8c6fc8fe53bad304"
+      "bytes": 21844,
+      "sha256": "f95517dd07853221cb73c7b5a61d4e374d9dfcb00d48b7a96f805b0f6364ba08"
     },
     {
       "path": "audit-results/issue-6/checks/dense-fixture-summary.json",
@@ -94,7 +94,7 @@
     {
       "path": "audit-results/issue-6/checks/library-validation.json",
       "bytes": 522,
-      "sha256": "49ccf9d87f4e1c7da821528be440260ca6cfeefe9364b36c73e2e51210392bef"
+      "sha256": "7a499c934b11d7a4ae2e952c59d941685332425ef604c9293e9d848c87b265ad"
     },
     {
       "path": "audit-results/issue-6/checks/role-checks.json",
@@ -113,18 +113,18 @@
     },
     {
       "path": "audit-results/issue-6/coverage-summary.json",
-      "bytes": 1146,
-      "sha256": "2e3764aacf4e4ceb6369bc50cbc1cd0d2d1867a523104619565edf9cc402e936"
+      "bytes": 1147,
+      "sha256": "62272b6b453f5fc55f014b0041d183fd9dfc501ae4683bcd71c7087d48eb3c77"
     },
     {
       "path": "audit-results/issue-6/coverage.csv",
       "bytes": 344509,
-      "sha256": "eb3b027b8ab40394b258247b4202d769c3b86bf9a461dc20d69e3d254122286b"
+      "sha256": "ed95c3cf4bb306dbad0d42f2920dfc0b3798e9cfb0de74dfecc36f16584eb3fa"
     },
     {
       "path": "audit-results/issue-6/coverage.md",
-      "bytes": 12875,
-      "sha256": "6f577c15a5102e8c935699408d5bfe20ca402cb521370c4f16590f1a7c257675"
+      "bytes": 13099,
+      "sha256": "825cbe6ce6817034322149678150e87a6cf62fa62d27a26aa4938e0d713ae8fe"
     },
     {
       "path": "audit-results/issue-6/discovered-branches.csv",
@@ -133,13 +133,13 @@
     },
     {
       "path": "audit-results/issue-6/evidence-candidates.csv",
-      "bytes": 2545170,
-      "sha256": "e187163a2b7a809876a6b298b68f353e6153698afce742125d57691b2f2cde2a"
+      "bytes": 2555004,
+      "sha256": "d3dc28ef1bf7c69662e9a2b3f614d0ac2615080242b4d215c89c1e2c47356d0f"
     },
     {
       "path": "audit-results/issue-6/execution-summary.json",
       "bytes": 1429,
-      "sha256": "f3a37f0395e60b5869a7dbea7eb1fe26e5380417e7cf0712b0a782d95897c6fa"
+      "sha256": "549467cc6b093e53b892fee84366ce2ed71c05222a24cc95b85726a8d6bb9d48"
     },
     {
       "path": "audit-results/issue-6/findings.md",
@@ -218,8 +218,8 @@
     },
     {
       "path": "audit-results/issue-6/journeys/J01.md",
-      "bytes": 8374,
-      "sha256": "892400027628ab4628a03c40906ffae068e0ac1fe238f5b110aab6939876b31a"
+      "bytes": 8727,
+      "sha256": "77d25403da16e9b44635782c65897169e392b8ada25faf2b1c8e15cc755b0cae"
     },
     {
       "path": "audit-results/issue-6/journeys/J02.md",
@@ -323,8 +323,8 @@
     },
     {
       "path": "audit-results/issue-6/journeys/J22.md",
-      "bytes": 13347,
-      "sha256": "fa0c5c65296d654bed1072667d6bcc10c6c82079cdb06a97d38ab8630b3b4ae4"
+      "bytes": 15320,
+      "sha256": "5031eb840f84a1db48b90434b71c24db0a869a7cb1cb5db58b5b60edb452de43"
     },
     {
       "path": "audit-results/issue-6/journeys/J23.md",
@@ -398,8 +398,8 @@
     },
     {
       "path": "audit-results/issue-6/pass2-execution-plan.csv",
-      "bytes": 98108,
-      "sha256": "fa001de88e07e40b347f546d857c9c9abd8f3e98662d421f470337368ffc6cbe"
+      "bytes": 98444,
+      "sha256": "cf6746153a5a654541761150c338c03610dbd3bf5b99d3447334ec9a4c71ed4f"
     },
     {
       "path": "audit-results/issue-6/private-evidence-register.json",
@@ -408,8 +408,8 @@
     },
     {
       "path": "audit-results/issue-6/reproduce.md",
-      "bytes": 9418,
-      "sha256": "7097f025894bfad75b41a0906f3650c4e3df524d7d01f4affa37e84d75944087"
+      "bytes": 9720,
+      "sha256": "48a9b3ae92a8ca18cc6843ec3929e8c3089c1b97f7ea4c5e4cd3c1d000cce026"
     },
     {
       "path": "audit-results/issue-6/reuse-map.md",
@@ -3192,6 +3192,26 @@
       "sha256": "ea78d9abbc7d034aea5feca744622ff74a0ffcf6a349f4c161e9e5e58b3db0a6"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-20_Pass2-Recovery-authority-no-backups.png",
+      "bytes": 289586,
+      "sha256": "7c092baf773354ef50d9a5b4ea90a6356e44673bc10651ba48b1522d72babfad"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-21_Pass2-Recovery-authority-first-backup-ready.png",
+      "bytes": 303980,
+      "sha256": "3f942e2a1f4743982af8697b098ebaab1815f15352b960e3c531027d9f522905"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-24_Pass2-Recovery-authority-create-immediate-private.png",
+      "bytes": 302945,
+      "sha256": "549f87aaf1b1999d1d11c1adc6a23a56e7046a00adc2f7afbde7fe5050cc28c2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-25_Pass2-Recovery-authority-second-backup-ready.png",
+      "bytes": 316612,
+      "sha256": "80cfc26c9e80fcd1d53a0fb8696d7cbc2f371a6b22244a7887a5e001d8cf1f86"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J23_Step-04_Log-search-empty.png",
       "bytes": 297335,
       "sha256": "9d41645eca7a2b6b05c9196fb0b604eccacd7844f21d2ed9defe795727220e1e"
@@ -3453,13 +3473,13 @@
     },
     {
       "path": "audit-results/issue-6/semantic-summary.json",
-      "bytes": 2753,
-      "sha256": "5a9fe2629a885153485e2d08b3deb8bc68e7cb3894c31a3f98f4f81ff98c0745"
+      "bytes": 2749,
+      "sha256": "fac632e4de55fdd7ea8a78678a1c1f65720cf02e6aea887724dd0a911056e067"
     },
     {
       "path": "audit-results/issue-6/source-branches.csv",
-      "bytes": 210206,
-      "sha256": "1cd164bcd768d9aa6277419e549617c7d25e57ef2e94b234d5cb545e69ab0a2a"
+      "bytes": 210575,
+      "sha256": "13e7ee7102a2470c38d6a519f425a8ce0d9b8eb5d857567bcc6e03c4f37a4eeb"
     },
     {
       "path": "audit-results/issue-6/source-inventory.csv",
@@ -3468,8 +3488,8 @@
     },
     {
       "path": "audit-results/issue-6/source-journeys.csv",
-      "bytes": 71695,
-      "sha256": "654c7993eb0c5c9aac8088059e1b1f54055f1368c54b768081d29b49d6b79a76"
+      "bytes": 71998,
+      "sha256": "567abdefe4ce368740cc2f65b54493a8a9b2cb3e3dd694d962fcb6ea8e7da8b3"
     },
     {
       "path": "audit-results/issue-6/source-map.md",
@@ -3488,8 +3508,8 @@
     },
     {
       "path": "audit-results/issue-6/task-coverage.csv",
-      "bytes": 72484,
-      "sha256": "71c210d51bfa56fbcd68f4a8ff5ec33f8e57b5b559cef676c7362c1f3aa45e73"
+      "bytes": 72787,
+      "sha256": "3d267df5a54a196e9e6f421811b181e442d39bc1f266063ccf6d3a4d85f43aa1"
     },
     {
       "path": "audit-results/issue-6/tooling/capture_host.py",

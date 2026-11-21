@@ -216,3 +216,5 @@ Follow [Explore pagination](journeys/J19.md), [Connections pagination and measur
 [Proof-only duplicate warning and both choices](journeys/J34.md#macos-completion-pass-2--continuation-l-proof-only-duplicate-hint-and-choices) were exercised with a new generated fixture; originals remain private.
 
 [Review Photos finalized-media exclusion and low-quality choice](journeys/J08.md#macos-completion-pass-2--continuation-m-finalized-media-exclusion-and-low-quality-choice) records both sequences; originals remain private.
+
+[First backup and creation progress](journeys/J22.md#macos-completion-pass-2--continuation-n-first-backup-and-creation-progress) adds a disposable-authority empty state, transient capture and verified outcome.

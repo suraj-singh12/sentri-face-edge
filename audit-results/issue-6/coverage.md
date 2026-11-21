@@ -84,3 +84,5 @@ Continuation K qualifies the explicit low-quality acceptance alternative with a 
 Continuation L qualifies the proof-only duplicate hint, existing-Person choice and explicit new-Person override using a generated synthetic fixture. Current source contracts: 355 PASS, 78 PARTIAL, 60 NOT RUN, 9 BLOCKED, 7 FAIL of 509. An earlier fixture was separately refused as Reference Only material; the guard was respected.
 
 Continuation M qualifies finalized-media exclusion and the Review Photos low-quality decision on disposable synthetic inputs. Current contracts: 357 PASS, 78 PARTIAL, 58 NOT RUN, 9 BLOCKED, 7 FAIL of 509.
+
+Continuation N qualifies empty portable-backup state and creating feedback. Current source contracts: 359 PASS, 78 PARTIAL, 56 NOT RUN, 9 BLOCKED, 7 FAIL of 509. The distinct separate-drive safety copy remains unqualified.

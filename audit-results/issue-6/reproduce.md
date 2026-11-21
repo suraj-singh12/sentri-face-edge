@@ -61,3 +61,5 @@ Continuation K: use a generated 12×12 flat non-photographic PNG in source synth
 Continuation L: use the generated [proof-only duplicate fixture](fixtures/proof-duplicate-synthetic.png) on a fresh disposable synthetic authority. Create a Person as proof-only, then use the same generated scene in separate synthetic Events to exercise the existing-profile hint, reuse and explicit override. Never use Reference Only material as an occurrence upload or bypass the admission guard.
 
 Continuation M: import a generated scene already finalized in the disposable authority and observe exclusion; discard that session. Import the distinct [queue quality fixture](fixtures/queue-poor-synthetic.png), group, enter synthetic Event details and choose a low-quality decision before completion.
+
+Continuation N: use a disposable source authority without portable backups; Settings → Backups & restore shows the empty state. Create a first portable backup; immediately capture a second Create Backup to sample its brief progress state and then the verified result. Keep backup artifacts private.
