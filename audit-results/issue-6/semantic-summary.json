@@ -4,8 +4,8 @@
   "source_tasks": 60,
   "source_branch_contracts": 509,
   "branch_counts": {
-    "PASS": 355,
-    "NOT RUN": 60,
+    "PASS": 357,
+    "NOT RUN": 58,
     "PARTIAL": 78,
     "BLOCKED": 9,
     "FAIL": 7
@@ -15,8 +15,8 @@
     "PASS": 4,
     "FAIL": 7
   },
-  "branch_pass_percentage": 69.74,
-  "branch_exercised_percentage": 86.44,
+  "branch_pass_percentage": 70.14,
+  "branch_exercised_percentage": 86.84,
   "tasks_with_executed_evidence": 60,
   "task_exercised_percentage": 100.0,
   "fully_covered_task_percentage": 6.67,
@@ -60,5 +60,5 @@
     "Windows packaged licensing/signing and installer acceptance are outside this macOS source execution.",
     "Private genuine source/data checks supplement but do not silently pass missing UI branch states."
   ],
-  "pass2_note": "Explicit observed outcomes; original 509 source contracts retained. Proof-only duplicate hint, reuse and override tested with generated synthetic fixture; originals private."
+  "pass2_note": "Explicit observed outcomes; original 509 source contracts retained. Review Photos finalized-image exclusion and poor-quality choice verified with synthetic inputs."
 }

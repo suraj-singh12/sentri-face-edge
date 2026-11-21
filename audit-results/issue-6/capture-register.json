@@ -22267,5 +22267,305 @@
       "height": 900
     },
     "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-03_J08_Step-62_Pass2-Already-finalized-media-excluded-private.png",
+    "ux": "UX-03",
+    "journey": "J08",
+    "step": 62,
+    "state": "Pass2-Already-finalized-media-excluded-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:29:13.027452+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "b52a92c672fde85f2d7165f6673758c7738aabe60831fead3ef6a4ea8b7a9615",
+    "scroll": {
+      "x": 0,
+      "y": 4
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0694",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-03_J08_Step-63_Pass2-Excluded-session-discard-confirm-private.png",
+    "ux": "UX-03",
+    "journey": "J08",
+    "step": 63,
+    "state": "Pass2-Excluded-session-discard-confirm-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:29:14.053128+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "748005a03a3aeda94df04f9717e786c6cff4ff1e3a32bba8e093d4d590ec4cc0",
+    "scroll": {
+      "x": 0,
+      "y": 4
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0695",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-03_J08_Step-64_Pass2-Excluded-session-discarded-private.png",
+    "ux": "UX-03",
+    "journey": "J08",
+    "step": 64,
+    "state": "Pass2-Excluded-session-discarded-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:29:33.649179+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "2180f36787348ff0810df666479cf873e6febd7b9273e32de364eb874ab2d5a3",
+    "scroll": {
+      "x": 0,
+      "y": 4
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0696",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-03_J08_Step-65_Pass2-Queue-poor-upload-private.png",
+    "ux": "UX-03",
+    "journey": "J08",
+    "step": 65,
+    "state": "Pass2-Queue-poor-upload-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:30:38.176738+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "0a2e23b94900ce5e7196da988252d6e3a7af58ddb804dd8e55404bab3fdec9b9",
+    "scroll": {
+      "x": 0,
+      "y": 4
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0697",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-04_J08_Step-66_Pass2-Queue-poor-form-private.png",
+    "ux": "UX-04",
+    "journey": "J08",
+    "step": 66,
+    "state": "Pass2-Queue-poor-form-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:31:10.513840+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "fe06acde7c6a6fd34fa30d007fb6a3b65b2ccb0af0f9a9eccf706fa720baf4c5",
+    "scroll": {
+      "x": 0,
+      "y": 690
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0698",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-04_J08_Step-67_Pass2-Queue-poor-choice-open-private.png",
+    "ux": "UX-04",
+    "journey": "J08",
+    "step": 67,
+    "state": "Pass2-Queue-poor-choice-open-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:31:37.641997+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "15365033dedd2aac54eeeceac41c6a5d9a3136f0c6700f85fd2981b1cd846d82",
+    "scroll": {
+      "x": 0,
+      "y": 690
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0699",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-04_J08_Step-68_Pass2-Queue-poor-accept-prepared-private.png",
+    "ux": "UX-04",
+    "journey": "J08",
+    "step": 68,
+    "state": "Pass2-Queue-poor-accept-prepared-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:31:49.284940+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "c82ab30cb8a9ff96add0293a937cec48a4dd07610560426a9b14fd591668277f",
+    "scroll": {
+      "x": 0,
+      "y": 690
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0700",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-04_J08_Step-69_Pass2-Queue-poor-decision-outcome-private.png",
+    "ux": "UX-04",
+    "journey": "J08",
+    "step": 69,
+    "state": "Pass2-Queue-poor-decision-outcome-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:31:51.117707+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "6057fcce6f7c9bdca52fb5495dafe0b33544b716641fafd4b2317bc885c4b8a1",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0701",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-04_J08_Step-70_Pass2-Queue-poor-relations-private.png",
+    "ux": "UX-04",
+    "journey": "J08",
+    "step": 70,
+    "state": "Pass2-Queue-poor-relations-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:32:08.365010+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "92bcb21d5d7418bec546706f9569e5f6aa2477b1ae902c6f6b691bd6e3a6c5e7",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0702",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
+  },
+  {
+    "file": "UX-04_J08_Step-71_Pass2-Queue-poor-review-completed-private.png",
+    "ux": "UX-04",
+    "journey": "J08",
+    "step": 71,
+    "state": "Pass2-Queue-poor-review-completed-private",
+    "role": "Administrator",
+    "kind": "synthetic",
+    "captured_at": "2026-11-21T17:32:18.006379+00:00",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "device_scale_factor": 1,
+    "theme": "light",
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "sha256": "c9ddcc284328d5717267e50a2624d323252a630418e024110fcfceaec1b2c8d0",
+    "scroll": {
+      "x": 0,
+      "y": 80
+    },
+    "capture_surface": "full browser content viewport; not stitched; OS chrome excluded",
+    "fixture_context": "Dedicated disposable source dev authority; non-sensitive synthetic identities and generated image bytes; whole-image detector/hash embedder",
+    "capture_id": "CAP-0703",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 900
+    },
+    "publication": "PRIVATE"
   }
 ]
