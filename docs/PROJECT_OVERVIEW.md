@@ -14,14 +14,14 @@ Reference identity/lifecycle are independent of Encounter assignments and Person
 
 Normal multi-photo history, integrity checking, graph rebuild and backup restore now agree on registered source provenance. Reusing an enrolled face does not replace the photograph belonging to a later occurrence. Alias merge retains distinct manual history while retiring redundant current standing assertions. Accepted recognition cards confirm the operator's saved selection rather than the model's original proposal.
 
-A fresh real ONNX/encrypted authority with lifecycle, quality, correction, note, alias and multi-photo history passed supported rebuild, encrypted export, fresh recovery-kit import/restore, original-administrator authentication and ordinary restart. Detailed comparisons, first-run verification and bounded limits are owned by IMPLEMENTATION_PLAN. Schema remains v32; World vNext/Batch 4 and current signed Windows release acceptance remain future work.
+A fresh real ONNX/encrypted authority with lifecycle, quality, correction, note, alias and multi-photo history passed supported rebuild, encrypted export, fresh recovery-kit import/restore, original-administrator authentication and ordinary restart. Detailed comparisons, first-run verification and bounded limits are owned by IMPLEMENTATION_PLAN. Schema remains v32; World vNext/Batch 4 was later delivered as World intelligence #3; current signed Windows release acceptance remains future work.
 
 
 ## Historical Batch 3.5 coherence checkpoint
 
 Equivalent finalized history now converges on one canonical pair-support interpretation: the effective participants share a valid Encounter frame or they are same-Encounter only. Merging aliases, correcting identities/participants, changing Relations, restarting and rebuilding cannot change that factual interpretation merely by choosing a different raw row. Historical generations remain provenance, while current evidence/read projections use effective active authority.
 
-Standalone enrollment targets an existing Person explicitly; recognition suggestions remain proposals. Skip is deferred, not accepted, and Discard is final negative. Archived People remain historical but have a reachable authorized profile/Restore arc. A common successful-mutation boundary reconciles retained People/Event reads and existing graph/World views. Linux source recovery extends only explicitly admitted unpackaged source custody; encrypted storage, verified backup/recovery and packaged safety remain intact. World vNext and Batch 4 are still future work.
+Standalone enrollment targets an existing Person explicitly; recognition suggestions remain proposals. Skip is deferred, not accepted, and Discard is final negative. Archived People remain historical but have a reachable authorized profile/Restore arc. A common successful-mutation boundary reconciles retained People/Event reads and existing graph/World views. Linux source recovery extends only explicitly admitted unpackaged source custody; encrypted storage, verified backup/recovery and packaged safety remain intact. World vNext/Batch 4 was future work at this checkpoint and was later delivered as #3.
 
 ## Current product: managing finalized Encounters (Batch 3)
 
@@ -29,7 +29,7 @@ Global Events now provides compact occurrence rows and a detail page with effect
 
 Person Profile Photos shows unique managed media and durable face origins; accepted-face media references preserve the actual Encounter photo when an embedding vector is reused; multiple faces in one image do not create duplicate photo tiles. Events includes PRESENT, MENTIONED, and BOTH with navigation to the same detail. Sightings describes confirmed participation; an Event Note mention alone is not attendance or a face. Associations shows independent co-observation, directed note, and Manual Association evidence, with explicit manual create/retire actions. Separate requests for the same active canonical manual assertion reuse one evidence item; removing it leaves other evidence intact. Deleted people remain named historical tombstones while active selection/recognition continues to exclude them.
 
-One occurrence may contain many images: media count is not recurrence. Events remain outside World topology, and Event Note mentions have no relationship/World effect. World vNext and Encounter Split/Merge remain future work. Earlier dated Batch 2 sections describe their historical checkpoint; the current implementation and verification are owned by the tracker and architecture-state documents.
+One occurrence may contain many images: media count is not recurrence. Events remain outside World topology, and Event Note mentions have no relationship/World effect. World vNext was later delivered as World intelligence #3 with the Explore | Connections UI; Encounter Split/Merge remains future work. Earlier dated Batch 2 sections describe their historical checkpoint; the current implementation and verification are owned by the tracker and architecture-state documents.
 
 
 ## Why this document exists

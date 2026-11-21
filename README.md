@@ -16,7 +16,7 @@ The application uses Python, React, ONNX Runtime CPU, SQLite/SQLCipher and a loc
 
 ## Get started
 
-**Requirements:** Git and **Python 3.12**. The supported source workflow runs on macOS and Windows; Linux has a source-development path. Node.js is needed when rebuilding/testing the frontend, not for an ordinary source launch.
+**Requirements:** Git and **Python 3.12**. The supported source workflow runs on macOS and Windows; Linux has a source-development path. Node.js is needed when rebuilding/testing the frontend, not for an ordinary source launch. On Linux, `./run.sh` also needs `zsh` and a running Secret Service keyring (for example GNOME Keyring); see [Linux synthetic development](docs/DEVELOPMENT_MODE.md#linux-synthetic-development).
 
 ```bash
 git clone https://github.com/suraj-singh12/sentri-face-edge.git

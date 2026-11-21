@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import shutil
+import subprocess
 import sys
 import types
 
@@ -36,6 +38,26 @@ def test_source_launcher_bootstraps_only_when_needed_and_has_safe_reset() -> Non
     assert '"$DEV_DATA_DIR:A" != "$DEFAULT_DEV_DATA_DIR:A"' in launcher
     assert 'reset_macos_dev_authority.py" "$DEV_DATA_DIR"' in launcher
 
+
+
+def test_source_launcher_refuses_linux_installed_product_directory(tmp_path) -> None:
+    launcher_path = Path(__file__).resolve().parents[1] / "run.sh"
+    launcher = launcher_path.read_text(encoding="utf-8")
+    assert 'LINUX_PRODUCTION_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/sentriface"' in launcher
+
+    zsh = shutil.which("zsh")
+    if os.name == "nt" or zsh is None:
+        pytest.skip("launcher execution requires zsh")
+    data_home = tmp_path / "share"
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path),
+        "XDG_DATA_HOME": str(data_home),
+        "SENTRIFACE_DEV_DATA_DIR": str(data_home / "sentriface"),
+    }
+    result = subprocess.run([zsh, str(launcher_path), "help"], env=env, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 2
+    assert "Refusing to use the installed-product data directory" in result.stderr
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX UID/ownership reset behavior")
 def test_reset_removes_readonly_dev_bundle_and_only_dev_keys(tmp_path, monkeypatch) -> None:

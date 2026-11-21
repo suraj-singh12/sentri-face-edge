@@ -12,10 +12,12 @@ on:
     branches:
       - main
       - release-v2.0.0-hardening
+      - v2-hardening-followups
   pull_request:
     branches:
       - main
       - release-v2.0.0-hardening
+      - v2-hardening-followups
 
 permissions:
   contents: read

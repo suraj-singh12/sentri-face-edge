@@ -7,10 +7,52 @@ operator-accepted and merged into `release-v2.0.0-hardening` through their
 respective PRs (#23, #28, #29 and #30). Their executed macOS browser,
 ONNX, correction, merge and recovery evidence remains **bounded**; full
 photographic-volume, installed Windows lifecycle and release signing are
-separate qualifications. The issue-linked, unmerged World UI PR #32 /
-issue #31 changes the opening selector to **Explore | Connections**;
+separate qualifications. World UI issue #31 (merged in PR #32) changed the
+opening selector to **Explore | Connections**;
 the API default remains `view=CURRENT`. Reuse the launch and QA commands
 below without treating historical results as acceptance of a new commit.
+
+## Linux synthetic development
+
+Linux has a source-development path; it is not a packaged product target.
+Besides Git and Python 3.12, `./run.sh` needs:
+
+- **zsh**: `run.sh` is a zsh script.
+- **A Secret Service keyring on a D-Bus session** (for example GNOME Keyring).
+  Synthetic `dev` mode keeps the database key in the operating-system key vault.
+  Without one, startup stops with *"The operating-system key vault is
+  unavailable"*. There is no plaintext fallback, by design.
+
+Desktop sessions usually already provide both. On a headless or CI-like machine, a
+disposable session keyring is enough for synthetic development:
+
+```bash
+sudo apt-get install zsh gnome-keyring libsecret-tools dbus-x11
+eval "$(dbus-launch --sh-syntax)"
+printf '%s' "$DEV_KEYRING_PASSWORD" | gnome-keyring-daemon --unlock --components=secrets >/dev/null
+printf '%s' "$DEV_KEYRING_PASSWORD" | gnome-keyring-daemon --start --components=secrets >/dev/null
+./run.sh dev
+```
+
+Use a throwaway `DEV_KEYRING_PASSWORD`; that keyring then only protects disposable
+development data. The default development authority on Linux is still
+`~/Library/Application Support/SentriFace-Dev`, the same layout as macOS. It
+remains the only directory that `./run.sh reset` removes. Set
+`SENTRIFACE_DEV_DATA_DIR` to keep disposable data elsewhere. The launcher refuses
+both installed-product locations, `~/Library/Application Support/SentriFace` and
+`${XDG_DATA_HOME:-~/.local/share}/sentriface`.
+
+**Dependency versions:** `run.sh` and CI install the newest versions allowed by
+`pyproject.toml`. The Windows release environment is pinned separately in
+`requirements-release.lock`. To reproduce the release versions in the source
+environment, install with the lock as a constraint file:
+
+```bash
+.venv312/bin/python -m pip install -c requirements-release.lock -e ".[test]"
+```
+
+This was checked on Linux with Python 3.12; it resolves loguru 0.7.3,
+numpy 1.26.4, onnxruntime 1.28.0 and opencv-python-headless 4.11.0.86.
 
 ## Linux explicit source ONNX and recovery
 
