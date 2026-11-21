@@ -863,7 +863,8 @@ export function useQueueController({
       ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
       : session));
     setQueueReviewStats((current) => ({ ...current, skippedGroups: 0 }));
-    showToast(`Restored ${payload.resumed} skipped group(s)`);
+    if (activeEncounter) await loadQueueEncounters(queueSessionId);
+    showToast(`Restored ${payload.resumed} deferred group${payload.resumed === 1 ? "" : "s"}`);
   };
 
   const queueRejectSuggestedMatch = async () => {

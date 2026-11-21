@@ -1,4 +1,4 @@
-import { resolvedRecognitionPerson } from "../reviewState.js";
+import { finalDecision, resolvedRecognitionPerson } from "../reviewState.js";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -98,6 +98,11 @@ export function RecognizeView({
   const selectedMatch = resolvedRecognitionPerson(recognition?.faceResolutions?.[selectedFace?.index], selectedFace?.matches)
     || selectedManualMatch || selectedFace?.matches?.[0] || null;
   const selectedAccepted = recognitionAcceptedFaces.includes(selectedFace?.index);
+  const reviewFaces = recognition?.faces || [];
+  const undecidedCount = reviewFaces.filter((face) => !finalDecision(recognitionFaceDecisions[face.index])).length;
+  const completeHint = recognitionReviewReady || !reviewFaces.length ? ""
+    : undecidedCount ? `${undecidedCount} face${undecidedCount === 1 ? " still needs" : "s still need"} Accept or Discard. Skipped faces stay undecided.`
+      : "Every face is discarded, so there is nothing to save. Use Clear to finish with this photo.";
   const selectedIsKnown = Boolean(selectedManualMatch || (selectedFace?.decision !== "unknown" && selectedMatch?.is_known));
   const selectedIsBad = selectedFace?.quality?.status === "bad";
   const imageSrc = recognition?.inputPath ? mediaUrl(recognition.inputPath) : null;
@@ -216,7 +221,7 @@ export function RecognizeView({
 
   return (
     <>
-      <EncounterDetailsModal opened={Boolean(recognition?.faces?.length && !recognition?.encounterMetadata && !targetPerson)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} />
+      <EncounterDetailsModal opened={Boolean(recognition?.faces?.length && !recognition?.encounterMetadata && !targetPerson)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} onClose={onClear} />
       <input ref={recognizeFileRef} className="hidden-file" type="file" accept="image/*" onChange={onRecognizeFile} />
       {targetPerson && (
         <Alert color="blue" title={`Adding a photograph to ${targetPerson.name}`} icon={<IconUserCheck size={18} />} mb="md">
@@ -381,6 +386,7 @@ export function RecognizeView({
             >
               {targetPerson ? "Finish enrollment" : "Complete Review"}
             </Button>
+            {!targetPerson && completeHint && <Text className="recognize-complete-hint" size="xs" c="dimmed" role="status">{completeHint}</Text>}
             </>
           ) : null}
         </Stack>

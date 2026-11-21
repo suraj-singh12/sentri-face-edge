@@ -160,6 +160,65 @@ class QueueEncounterApiTest(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=2)
 
+    def test_deferred_group_can_be_resumed_while_other_groups_are_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            server = create_server(port=0, data_dir=Path(temp) / "data", runtime="dev", debug=False)
+            server._test_admin_cookie = bootstrap_admin_cookie(server)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                store = server.engine.store
+                session = store.create_init_session("/managed/deferred")
+                media = [f"/managed/deferred-{index}.jpg" for index in range(3)]
+                store.save_init_session_media(session.session_id, media)
+                dimensions = server.engine.config.embedding_dim
+                store.save_init_faces([InitFace(
+                    init_face_id=f"deferred-face-{index}", session_id=session.session_id,
+                    group_id=f"deferred-group-{index}", source_image=path,
+                    face=DetectedFace(FaceBox(1, 1, 10, 10, 0.9), 0.9),
+                    vector=tuple(1.0 if axis == index else 0.0 for axis in range(dimensions)),
+                    quality=QualityReport(QualityStatus.GOOD, 0.9),
+                ) for index, path in enumerate(media)])
+                _, snapshot = self._request(server, "GET", f"/api/queue-encounters?session_id={session.session_id}")
+                _, planned = self._request(server, "POST", "/api/queue-encounters-plan", {
+                    "session_id": session.session_id, "media_groups": [[item["media_id"] for item in snapshot["media"]]],
+                })
+                review_id = planned["reviews"][0]["review_id"]
+                self._request(server, "POST", "/api/queue-encounter-event", {
+                    "review_id": review_id,
+                    "event_details": {"date": "2026-09-28", "time_precision": "unknown", "event_occasion": "Meeting"},
+                })
+                status, _ = self._request(server, "POST", "/api/queue-encounter-decision", {
+                    "review_id": review_id, "face_ids": ["deferred-face-0"], "decision": "ACCEPT_NEW_PERSON",
+                    "new_person_key": "deferred-person-0", "new_person_name": "Person 0",
+                })
+                self.assertEqual(status, 200)
+                _, groups = self._request(server, "GET", f"/api/queue-groups?session_id={session.session_id}")
+                deferred = next(group for group in groups["groups"] if any(
+                    face["init_face_id"] == "deferred-face-1" for face in group["faces"]
+                ))
+                status, skipped = self._request(server, "POST", "/api/queue-skip", {
+                    "session_id": session.session_id, "group_id": deferred["group_id"],
+                })
+                self.assertEqual((status, skipped["resumed"]), (200, 0))
+                status, resumed = self._request(server, "POST", "/api/queue-resume-skipped", {"session_id": session.session_id})
+                self.assertEqual((status, resumed["resumed"]), (200, 1))
+                statuses = {group["group_id"]: group["status"] for group in resumed["groups"]}
+                self.assertEqual(statuses[deferred["group_id"]], "pending")
+                for index in (1, 2):
+                    status, _ = self._request(server, "POST", "/api/queue-encounter-decision", {
+                        "review_id": review_id, "face_ids": [f"deferred-face-{index}"], "decision": "ACCEPT_NEW_PERSON",
+                        "new_person_key": f"deferred-person-{index}", "new_person_name": f"Person {index}",
+                    })
+                    self.assertEqual(status, 200)
+                status, ready = self._request(server, "POST", "/api/queue-encounter-identities-complete", {"review_id": review_id})
+                self.assertEqual(status, 200)
+                self.assertEqual(ready["review"]["phase"], "RELATIONS")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
     @staticmethod
     def _request(server, method: str, path: str, payload: dict | None = None) -> tuple[int, dict]:
         body = json.dumps(payload).encode("utf-8") if payload is not None else None

@@ -127,7 +127,7 @@ export function QueueView({
   const [groupPendingDiscard, setGroupPendingDiscard] = useState(null);
   return (
     <>
-      <EncounterDetailsModal opened={Boolean(queueSelectedGroup && activeEncounter?.phase === "EVENT" && eventDetails?.reviewId !== activeEncounter.review_id)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} />
+      <EncounterDetailsModal opened={Boolean(queueSelectedGroup && activeEncounter?.phase === "EVENT" && eventDetails?.reviewId !== activeEncounter.review_id)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} onClose={onBack} />
       <Modal opened={proofOnlyDuplicateCandidates.length > 0} onClose={() => {}} title="Possible existing profile" centered>
         <Stack gap="md">
           <Text size="sm">A proof-only face may match an existing Person. It was not used in normal recognition.</Text>
@@ -591,10 +591,13 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
                     </Group>
                   </Card>
                 );
-              }) : <EmptyCard text={skippedGroups.length ? "Deferred groups will return after other groups are resolved." : "No groups match this filter."} />}
+              }) : <EmptyCard text={skippedGroups.length ? "Deferred groups return automatically once the other groups are decided, or review them now." : "No groups match this filter."} />}
             </Stack>
           </Box>
-          <Text size="sm" c="dimmed">Showing {visibleGroups.length} of {pendingGroups.length} pending groups{skippedGroups.length ? ` · ${skippedGroups.length} deferred` : ""}</Text>
+          <Group justify="space-between" gap="sm">
+            <Text size="sm" c="dimmed">Showing {visibleGroups.length} of {pendingGroups.length} pending groups{skippedGroups.length ? ` · ${skippedGroups.length} deferred` : ""}</Text>
+            {encounterReview && skippedGroups.length > 0 && <Button size="xs" variant="default" leftSection={<IconRefresh size={15} />} onClick={onResumeSkipped}>Review deferred now ({skippedGroups.length})</Button>}
+          </Group>
         </>
       )}
     </Stack>
