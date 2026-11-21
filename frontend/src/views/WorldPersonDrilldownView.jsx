@@ -165,7 +165,7 @@ function HeaderFact({ label, value }) {
 function ClusterMemberships({ memberships }) {
   return (
     <Stack gap="xs" p="sm">
-      <Box><Text fw={800}>Current World clusters</Text><Text size="10px" c="dimmed">Backend-derived, revision-bound memberships</Text></Box>
+      <Box><Text fw={800}>Current World clusters</Text><Text size="10px" c="dimmed">Groups this person belongs to, based on current evidence</Text></Box>
       <Divider />
       {!memberships.length ? <Text size="xs" c="dimmed">No cluster memberships exist in this effective World scope.</Text> : memberships.map((membership) => (
         <Box key={membership.cluster_id} className="world-person-membership">

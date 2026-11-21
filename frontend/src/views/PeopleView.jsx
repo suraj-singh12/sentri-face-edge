@@ -76,8 +76,7 @@ import {
   mediaUrl,
   personProfile,
   personAllows,
-  requirePersonContract,
-} from "../utils.js";
+  requirePersonContract, plural } from "../utils.js";
 export function PeopleView({
   canEdit = false,
   canDestroy = false,
@@ -1419,7 +1418,7 @@ function PeopleGalleryView({
                 <Text size="sm">{eventDateTime(event)} · {event.location || "Location unknown"} · {event.context}</Text>
                 {!!event.sighting_notes?.length && <Text size="sm">Sighting note: {event.sighting_notes.join(" · ")}</Text>}
                 {event.person_status !== "PRESENT" && event.event_notes && <Text size="sm">Event Note: {event.event_notes}</Text>}
-                <Text size="xs" c="dimmed">{event.person_media?.length || 0} observed media · {event.participant_ids?.length || 0} participants</Text>
+                <Text size="xs" c="dimmed">{event.person_media?.length || 0} observed media · {plural(event.participant_ids?.length || 0, "participant")}</Text>
               </Paper>
             ))}
             {!personEvents.events?.length && <Text c="dimmed">No matching Events.</Text>}

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Badge, Box, Button, Card, FileButton, Group, Image, Select, SimpleGrid, Stack, Text, TextInput, Title, UnstyledButton } from "@mantine/core";
-import { mediaUrl } from "../utils.js";
+import { mediaUrl, plural } from "../utils.js";
 
 import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { EncounterManagementModal } from "../components/EncounterManagementModal.jsx";
@@ -55,7 +55,7 @@ export function EventsView({ page, detail, people = [], onQuery, onOpen, onClose
           <Text size="sm">{eventDateTime(event)} · {event.location || "Location unknown"}</Text>
           <Text size="sm">Participants: {event.participants?.map((person) => person.name).join(", ") || "None recorded"}</Text>
           {!!event.mentioned_people?.length && <Text size="sm">Mentioned: {event.mentioned_people.map((person) => person.name).join(", ")}</Text>}
-          <Text size="xs" c="dimmed">{event.participant_ids?.length || 0} participants · {event.media_count} media · {event.mentioned_person_ids?.length || 0} mentions</Text>
+          <Text size="xs" c="dimmed">{plural(event.participant_ids?.length || 0, "participant")} · {event.media_count} media · {plural(event.mentioned_person_ids?.length || 0, "mention")}</Text>
         </UnstyledButton>
       ))}
       </Stack>

@@ -68,9 +68,12 @@ export function tabLabel(view) {
 }
 
 export function formatSeenDateTime(detail) {
-  const date = detail.date || "-";
-  const time = detail.time || "-";
-  return `${date} & ${time}`;
+  const date = detail.date || "Date unknown";
+  return detail.time ? `${date}, ${detail.time}` : `${date} · Time unknown`;
+}
+
+export function plural(count, noun) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 export function galleryImages(payload) {

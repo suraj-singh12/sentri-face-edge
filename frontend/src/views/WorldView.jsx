@@ -416,7 +416,7 @@ function WorldCollection({ data, collection, onInspect, onOpenCluster, selected 
 function WorldOverview({ data, onInspect, onOpenCluster, selected }) {
   return (
     <Box className="world-overview-grid">
-      <WorldSection title="Ranked people" subtitle="Canonical people ordered by the backend" count={data.pagination.PEOPLE?.total_count}>
+      <WorldSection title="Ranked people" subtitle="People in this scope, ranked by evidence" count={data.pagination.PEOPLE?.total_count}>
         <PeopleList people={data.people} onInspect={onInspect} selected={selected} />
       </WorldSection>
       <Stack gap="sm" className="world-overview-secondary">
@@ -445,7 +445,7 @@ function WorldSection({ title, subtitle, count, children }) {
 }
 
 function PeopleList({ people, onInspect, selected }) {
-  if (!people.length) return <WorldEmpty title="No people in this scope" detail="The backend returned a complete empty people page." />;
+  if (!people.length) return <WorldEmpty title="No people in this scope" detail="No one in this scope has qualifying evidence yet." />;
   return <Stack gap={0}>{people.map((person) => (
     <button key={person.canonical_person_id} type="button" className="world-row world-person-row" data-selected={selected?.type === "person" && selected.value.canonical_person_id === person.canonical_person_id} onClick={() => onInspect({ type: "person", value: person })}>
       <ThemeIcon size={32} radius="xl" color={person.lifecycle_state === "ACTIVE" ? "teal" : "gray"} variant="light"><IconUsers size={16} /></ThemeIcon>
@@ -468,7 +468,7 @@ function PeopleList({ people, onInspect, selected }) {
 }
 
 function ClusterGrid({ clusters, onOpenCluster, selected, compact = false }) {
-  if (!clusters.length) return <WorldEmpty title="No evidence-connected clusters" detail="No qualifying backend cluster summaries exist in this scope." />;
+  if (!clusters.length) return <WorldEmpty title="No evidence-connected clusters" detail="No group of people is connected by enough evidence in this scope." />;
   return <SimpleGrid cols={compact ? 1 : { base: 1, md: 2 }} spacing={0}>{clusters.map((cluster) => (
     <button key={cluster.cluster_id} type="button" className="world-row world-cluster-row" onClick={() => onOpenCluster(cluster)}>
       <span className="world-row-main">
@@ -482,7 +482,7 @@ function ClusterGrid({ clusters, onOpenCluster, selected, compact = false }) {
 }
 
 function RelationshipList({ relationships, onInspect, selected }) {
-  if (!relationships.length) return <WorldEmpty title="No typed relationships" detail="The backend returned no aggregate relationships for this scope." />;
+  if (!relationships.length) return <WorldEmpty title="No typed relationships" detail="No relationships have been recorded in this scope." />;
   return <Stack gap={0}>{relationships.map((relationship) => (
     <button key={relationship.relationship_id} type="button" className="world-row world-relationship-row" data-selected={selected?.type === "relationship" && selected.value.relationship_id === relationship.relationship_id} onClick={() => onInspect({ type: "relationship", value: relationship })}>
       <ThemeIcon size={30} variant="light" color="blue"><IconRoute size={15} /></ThemeIcon>
@@ -513,9 +513,9 @@ function WorldInspector({ item, onOpenPerson }) {
   if (!item) return (
     <Stack gap="xs" p="sm">
       <Text fw={800}>World inspector</Text>
-      <Text size="sm" c="dimmed">Select a person, cluster, relationship, or pattern to see the backend explanation and factual factors.</Text>
+      <Text size="sm" c="dimmed">Select a person, cluster, relationship, or pattern to see why it appears and the facts behind it.</Text>
       <Divider />
-      <Text size="xs" c="dimmed">World shows measured scope intelligence. Cluster membership and ranking are revision-bound backend results.</Text>
+      <Text size="xs" c="dimmed">World summarizes recorded evidence in this scope. Groups and rankings update when the evidence changes.</Text>
     </Stack>
   );
   const value = item.value;

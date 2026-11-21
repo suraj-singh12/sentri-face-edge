@@ -984,7 +984,7 @@ test("World Person view renders scoped header, authoritative memberships, relati
   assert.match(view, /person\.analytics_state === "LOADED"/);
   assert.match(view, /Scoped analytics not loaded/);
   assert.match(view, /root\.cluster_memberships/);
-  assert.match(view, /revision-bound memberships/);
+  assert.match(view, /Groups this person belongs to, based on current evidence/);
   assert.match(view, /not organizations or affiliations/);
   assert.match(view, /relationship\.directionality/);
   assert.match(view, /relationship\.strength_basis/);

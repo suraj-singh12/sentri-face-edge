@@ -931,6 +931,8 @@ class SentriFaceApiServer(ThreadingHTTPServer):
 
 
 class SentriFaceApiHandler(SimpleHTTPRequestHandler):
+    server_version = "SentriFace"
+    sys_version = ""
     server: SentriFaceApiServer
     auth_user: AuthUser | None = None
     pending_auth_cookie: str | None = None

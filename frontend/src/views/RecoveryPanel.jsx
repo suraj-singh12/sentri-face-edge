@@ -71,7 +71,7 @@ export function RecoveryPanel({ state, actions }) {
         <Group justify="space-between" align="flex-start">
           <Box>
             <Text fw={800}>Guarded merge revert</Text>
-            <Text size="sm" c="dimmed">Recent normalized merges are not assumed reversible. Select one and ask P11-D to prove eligibility.</Text>
+            <Text size="sm" c="dimmed">Recent merges cannot always be undone. Select one to check whether it can be safely reversed.</Text>
           </Box>
           <Button
             variant="default"

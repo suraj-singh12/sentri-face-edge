@@ -64,3 +64,11 @@ test('safety-copy folder hints match the platform and same-drive copies are flag
   assert.match(backupFolderPlaceholder('Mozilla/5.0 (X11; Linux x86_64)'), /^\/media\//);
   assert.match(render(SameDriveWarning,{}),/same drive as your SentriFace data/);
 });
+
+test('counts pluralize and unknown times read as unknown', async () => {
+  const { plural, formatSeenDateTime } = await server.ssrLoadModule('/src/utils.js');
+  assert.equal(plural(1, 'participant'), '1 participant');
+  assert.equal(plural(2, 'participant'), '2 participants');
+  assert.equal(formatSeenDateTime({ date: '2026-11-21' }), '2026-11-21 · Time unknown');
+  assert.equal(formatSeenDateTime({ date: '2026-11-21', time: '10:30' }), '2026-11-21, 10:30');
+});
