@@ -3740,9 +3740,9 @@ def _with_authenticated_attribution(payload: Any, actor: dict | None) -> Any:
         return payload
     if "added_by" in payload:
         payload["added_by"] = name
-    detail = payload.get("recognition_detail")
-    if isinstance(detail, dict) and "added_by" in detail:
-        detail["added_by"] = name
+    for nested in payload.values():
+        if isinstance(nested, dict) and "added_by" in nested:
+            nested["added_by"] = name
     return payload
 
 

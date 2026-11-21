@@ -227,3 +227,21 @@ class AuthenticationApiTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuthenticatedAttributionTest(unittest.TestCase):
+    def test_nested_added_by_fields_name_the_signed_in_account(self):
+        from sentriface.api_server import _with_authenticated_attribution
+
+        payload = {
+            "added_by": "Typed",
+            "recognition_detail": {"added_by": ""},
+            "new_person_metadata": {"rank": "R", "added_by": ""},
+            "notes": "keep",
+        }
+        result = _with_authenticated_attribution(payload, {"display_name": "Owner", "username": "owner"})
+        self.assertEqual(result["added_by"], "Owner")
+        self.assertEqual(result["recognition_detail"]["added_by"], "Owner")
+        self.assertEqual(result["new_person_metadata"]["added_by"], "Owner")
+        self.assertEqual(result["new_person_metadata"]["rank"], "R")
+        self.assertEqual(result["notes"], "keep")
