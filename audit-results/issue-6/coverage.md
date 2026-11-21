@@ -74,3 +74,7 @@ The unchanged 509 source contracts now contain 346 PASS, 79 PARTIAL, 69 NOT RUN,
 ## Pass 2 continuation I
 
 The unchanged 509 source contracts now contain 349 PASS, 78 PARTIAL, 66 NOT RUN, 9 BLOCKED and 7 FAIL. Four of 60 task contracts are fully covered. Connections overview pagination is FAIL because its page-two cluster empty message contradicts the scope total and earlier page; navigation itself advanced and Reset returned to page one. The independently created missing-location Event supports a measured pattern, not a general inference claim.
+
+Continuation J qualifies Activity log next/previous on 13 generated sign-in/startup events. Source contracts: 350 PASS, 78 PARTIAL, 65 NOT RUN, 9 BLOCKED, 7 FAIL of 509.
+
+Continuation J also qualified the Person Event date, location, context and search filter contract on contrasting synthetic Events. Current source contracts: 351 PASS, 78 PARTIAL, 64 NOT RUN, 9 BLOCKED, 7 FAIL of 509.

@@ -206,3 +206,7 @@ See [no-photo cancellation and selected mention](journeys/J03.md), [Check a Phot
 ## Pass 2 continuation I
 
 Follow [Explore pagination](journeys/J19.md), [Connections pagination and measured pattern](journeys/J18.md), [Event correction](journeys/J15.md), and [Event next/previous](journeys/J07.md). New [F27 and F28](findings.md) document misleading World count labeling and a misleading page-two cluster empty state. The audit remains in progress.
+
+[Activity log pagination](journeys/J23.md#macos-completion-pass-2--continuation-j-activity-pagination) was exercised using disposable sign-in events; populated log captures remain private.
+
+[Person Event filter continuation](journeys/J10.md#macos-completion-pass-2--continuation-j-person-event-filters) records matching and excluded results; originals remain private.
