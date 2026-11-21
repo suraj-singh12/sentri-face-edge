@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
   "evidence_branch": "audit/issue-6-current-experience",
-  "sealed_at": "2026-11-21T17:18:10.934266+00:00",
+  "sealed_at": "2026-11-21T17:26:15.455424+00:00",
   "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
   "environment": {
     "os": "macOS 26.0 arm64 VM",
@@ -27,19 +27,19 @@
   "counts": {
     "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
     "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
-    "registered_capture_attempts": 680,
-    "accepted_capture_records": 677,
+    "registered_capture_attempts": 693,
+    "accepted_capture_records": 690,
     "rejected_attempts": 3,
-    "distinct_sampled_visual_state_keys": 674,
+    "distinct_sampled_visual_state_keys": 687,
     "public_images": 606,
     "public_originals": 594,
     "public_sanitized_derivatives": 12,
-    "private_only_accepted": 71,
+    "private_only_accepted": 84,
     "private_genuine_images": 33,
     "runtime_journey_records": 36,
     "semantic_surface_families": 37,
-    "observed_titled_overlays": 55,
-    "observed_dialog_title_count": 39,
+    "observed_titled_overlays": 56,
+    "observed_dialog_title_count": 40,
     "source_task_contracts": 60,
     "source_task_status": {
       "PARTIAL": 49,
@@ -48,8 +48,8 @@
     },
     "source_branch_contracts": 509,
     "source_branch_status": {
-      "PASS": 352,
-      "NOT RUN": 63,
+      "PASS": 355,
+      "NOT RUN": 60,
       "PARTIAL": 78,
       "BLOCKED": 9,
       "FAIL": 7
@@ -68,23 +68,23 @@
   "files": [
     {
       "path": "audit-results/issue-6/INDEX.md",
-      "bytes": 20400,
-      "sha256": "0ce628e49c8457c7739c7895e93445f44c6376ee4e47e0ee5999f5b1e1803e84"
+      "bytes": 20615,
+      "sha256": "a05ef1e2dc886931dd71bf1af4f86f053ae931d22e61a7a3782c8283d4b8165c"
     },
     {
       "path": "audit-results/issue-6/branch-coverage.csv",
-      "bytes": 291401,
-      "sha256": "65339f0888acae8f498f37e02eeb9dcf3afebe98f17be03a43c1fb947e2f0351"
+      "bytes": 292161,
+      "sha256": "b85eef1b46f2e0468dbe6090ba5ff314683e792131bbb1ebe673cefe87b753d5"
     },
     {
       "path": "audit-results/issue-6/capture-register.json",
-      "bytes": 812195,
-      "sha256": "884d7043afd1ad1c860a92c735c084faa1d179095ec7334e14e0972128f08014"
+      "bytes": 825437,
+      "sha256": "e8af043d9a12db6a6930e88dae64b8bcda88967be9da614cdf247cc98a4cc3a3"
     },
     {
       "path": "audit-results/issue-6/captured-overlays.csv",
-      "bytes": 21463,
-      "sha256": "44f9c7e66624c080ed1ac3278d1aaade004381b7a21132730f41b90b3d725a4c"
+      "bytes": 21623,
+      "sha256": "0d1da9a466e74935819cd4d7207e32c6c94879e01360efebab5341436d226ba1"
     },
     {
       "path": "audit-results/issue-6/checks/dense-fixture-summary.json",
@@ -114,7 +114,7 @@
     {
       "path": "audit-results/issue-6/coverage-summary.json",
       "bytes": 1146,
-      "sha256": "81f853d149327c9b61aec63de654ec50e19abebf79c8f7c06b37da6e4f0c4dc2"
+      "sha256": "6c0cf431978cead7118729d674b0cbfc2ae377f332b43fd540ac3af1ba761ebc"
     },
     {
       "path": "audit-results/issue-6/coverage.csv",
@@ -123,8 +123,8 @@
     },
     {
       "path": "audit-results/issue-6/coverage.md",
-      "bytes": 12338,
-      "sha256": "c3ecf7771bb445f1ec92a9a1a03805affbebc09b8b369b3f745073d6f7d6cf80"
+      "bytes": 12669,
+      "sha256": "7d84a1904043c5efe08cc79909ad34ff5c02a9a463a57d17ae05ba160b268275"
     },
     {
       "path": "audit-results/issue-6/discovered-branches.csv",
@@ -139,7 +139,7 @@
     {
       "path": "audit-results/issue-6/execution-summary.json",
       "bytes": 1429,
-      "sha256": "d4553206050350063bd4442d3355eb4727b831634ee95de878f4ea7d741033e0"
+      "sha256": "fb21238081dee8de4c9d228cf78f89c8f79a6f5bd7b2c662b8d202171d3001fe"
     },
     {
       "path": "audit-results/issue-6/findings.md",
@@ -160,6 +160,11 @@
       "path": "audit-results/issue-6/fixtures/poor-synthetic.png",
       "bytes": 128,
       "sha256": "9ef04dadd822ac0478a0177df338d35df3161bcf8345d234a6386916203cb3e6"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/proof-duplicate-synthetic.png",
+      "bytes": 76,
+      "sha256": "1bb91daec53d2172e3098c2341ca0e6dd616795c3739793fbeed6452965c9844"
     },
     {
       "path": "audit-results/issue-6/fixtures/synthetic-1.png",
@@ -373,8 +378,8 @@
     },
     {
       "path": "audit-results/issue-6/journeys/J34.md",
-      "bytes": 12015,
-      "sha256": "fcf1f24690e2f9f5e4a909be0f964fe3e777b046d3a8828c6c90181bf6b02658"
+      "bytes": 13784,
+      "sha256": "62016bb6d59e8a8f958e74dc95b857962e7528c0e551ad0f6bc897db5c1a5e3f"
     },
     {
       "path": "audit-results/issue-6/journeys/J40.md",
@@ -388,8 +393,8 @@
     },
     {
       "path": "audit-results/issue-6/pass2-execution-plan.csv",
-      "bytes": 97496,
-      "sha256": "0ce5b89ee180daed851e68e796ef0541f2dbd2148c8057714fb7104b22d758b0"
+      "bytes": 97795,
+      "sha256": "0ffb941970d3b166caf42340e1a724b1f6f59edb190d7b90a85ba35568a17c93"
     },
     {
       "path": "audit-results/issue-6/private-evidence-register.json",
@@ -398,8 +403,8 @@
     },
     {
       "path": "audit-results/issue-6/reproduce.md",
-      "bytes": 8715,
-      "sha256": "503bdff70d429c815819d9fbd20456b09fccb34fb3b9eb97e2c717104069fe8c"
+      "bytes": 9115,
+      "sha256": "11f0f9aeca238465eea508ffbf8b6c114e11699109ff03b96342347f754d5783"
     },
     {
       "path": "audit-results/issue-6/reuse-map.md",
@@ -3443,13 +3448,13 @@
     },
     {
       "path": "audit-results/issue-6/semantic-summary.json",
-      "bytes": 2752,
-      "sha256": "35a62cc0701057c66554dd7db2a6b550a5c4962fc481caa2c4ee7aa297a2d13e"
+      "bytes": 2763,
+      "sha256": "60f0abe12256a7fc06fe3859c3fc16337ba9adacde1707280cdc6212fb85df1d"
     },
     {
       "path": "audit-results/issue-6/source-branches.csv",
-      "bytes": 209572,
-      "sha256": "b970ccc6a23efb87b1122f89d1032d6e8081b55514ebba62b540afd545f3295c"
+      "bytes": 209849,
+      "sha256": "e0cdb45cb3be5fef29e2cd3ea7b0ef16eb25703936a4c70891be9020cda7af87"
     },
     {
       "path": "audit-results/issue-6/source-inventory.csv",
@@ -3458,8 +3463,8 @@
     },
     {
       "path": "audit-results/issue-6/source-journeys.csv",
-      "bytes": 70885,
-      "sha256": "cce3fdc55d94e252e65900d5ec96a1ca2220b17508f2202d279d9462cf8c88d1"
+      "bytes": 71324,
+      "sha256": "e7d7d1afa7816a6717ab87cdc840129b4f6a3be2af84fc08c66766197f71abf8"
     },
     {
       "path": "audit-results/issue-6/source-map.md",
@@ -3478,8 +3483,8 @@
     },
     {
       "path": "audit-results/issue-6/task-coverage.csv",
-      "bytes": 71674,
-      "sha256": "905c8696ff884e83d5657cac1648c12979159e03feaccad588802b4b701eaefc"
+      "bytes": 72113,
+      "sha256": "1bb5872818fa9425ba6f5bfcf21cc25ee56fabb60692af0df7f1a6539e098cdc"
     },
     {
       "path": "audit-results/issue-6/tooling/capture_host.py",

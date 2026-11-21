@@ -80,3 +80,5 @@ Continuation J qualifies Activity log next/previous on 13 generated sign-in/star
 Continuation J also qualified the Person Event date, location, context and search filter contract on contrasting synthetic Events. Current source contracts: 351 PASS, 78 PARTIAL, 64 NOT RUN, 9 BLOCKED, 7 FAIL of 509.
 
 Continuation K qualifies the explicit low-quality acceptance alternative with a generated synthetic input. Current contracts: 352 PASS, 78 PARTIAL, 63 NOT RUN, 9 BLOCKED, 7 FAIL of 509. Refresh in the initial Event dialog was sampled but does not fully qualify all interruption stages.
+
+Continuation L qualifies the proof-only duplicate hint, existing-Person choice and explicit new-Person override using a generated synthetic fixture. Current source contracts: 355 PASS, 78 PARTIAL, 60 NOT RUN, 9 BLOCKED, 7 FAIL of 509. An earlier fixture was separately refused as Reference Only material; the guard was respected.

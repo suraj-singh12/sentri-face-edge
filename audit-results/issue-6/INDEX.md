@@ -212,3 +212,5 @@ Follow [Explore pagination](journeys/J19.md), [Connections pagination and measur
 [Person Event filter continuation](journeys/J10.md#macos-completion-pass-2--continuation-j-person-event-filters) records matching and excluded results; originals remain private.
 
 [Low-quality acceptance](journeys/J34.md#macos-completion-pass-2--continuation-k-accept-the-quality-warning) records the full simulated decision and resulting profile; [early interruption](journeys/J06.md#macos-completion-pass-2--continuation-k-refresh-with-event-details-pending) records a separate refresh sample. Originals are private.
+
+[Proof-only duplicate warning and both choices](journeys/J34.md#macos-completion-pass-2--continuation-l-proof-only-duplicate-hint-and-choices) were exercised with a new generated fixture; originals remain private.

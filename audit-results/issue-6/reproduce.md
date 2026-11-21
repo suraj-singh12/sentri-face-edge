@@ -57,3 +57,5 @@ Use the existing dense synthetic authority and its QA fixture; do not use operat
 Continuation J: on a disposable authority, create more than 10 Activity entries by signing in through the UI, choose page size 10 and use Next and Previous. Populated logs are private.
 
 Continuation K: use a generated 12×12 flat non-photographic PNG in source synthetic mode, enter synthetic Event details and select the explicit low-quality acceptance choice. Complete a disposable synthetic Person decision and inspect recognition coverage. Do not treat this as real biometric inference.
+
+Continuation L: use the generated [proof-only duplicate fixture](fixtures/proof-duplicate-synthetic.png) on a fresh disposable synthetic authority. Create a Person as proof-only, then use the same generated scene in separate synthetic Events to exercise the existing-profile hint, reuse and explicit override. Never use Reference Only material as an occurrence upload or bypass the admission guard.
