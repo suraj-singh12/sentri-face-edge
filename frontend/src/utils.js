@@ -180,6 +180,7 @@ export function requiredFieldErrors(values, fields) {
 export function backupReminderDue(lastDataChange, backups = []) {
   const changed = Date.parse(lastDataChange || "");
   if (Number.isNaN(changed)) return false;
-  const latest = Math.max(...backups.map((backup) => Date.parse(backup.created_at || "")).filter((value) => !Number.isNaN(value)), -Infinity);
+  const usable = backups.filter((backup) => backup.complete !== false && backup.restorable !== false);
+  const latest = Math.max(...usable.map((backup) => Date.parse(backup.created_at || "")).filter((value) => !Number.isNaN(value)), -Infinity);
   return changed > latest;
 }

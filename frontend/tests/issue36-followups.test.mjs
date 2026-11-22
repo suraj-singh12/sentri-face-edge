@@ -70,5 +70,7 @@ test('backup reminder appears only when data changed after the latest backup', (
   assert.equal(backupReminderDue('2026-11-21T15:00:00+00:00', backups), false);
   assert.equal(backupReminderDue('2026-11-21T15:00:00+00:00', []), true);
   assert.equal(backupReminderDue('', backups), false);
+  assert.equal(backupReminderDue('2026-11-21T15:00:00+00:00', [{ created_at: '2026-11-21T21:00:00+05:30', complete: false }]), true);
+  assert.equal(backupReminderDue('2026-11-21T15:00:00+00:00', [{ created_at: '2026-11-21T21:00:00+05:30', restorable: false }]), true);
   assert.match(source('SentriFaceApp.jsx'), /You have changes since your last backup/);
 });
