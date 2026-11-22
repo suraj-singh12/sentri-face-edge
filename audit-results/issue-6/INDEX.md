@@ -239,3 +239,5 @@ Follow [Explore pagination](journeys/J19.md), [Connections pagination and measur
 ## Pass 3 — current source 677bb61 (six mandatory flow families)
 
 Pass 3 audits [`677bb61`](https://github.com/suraj-singh12/sentri-face-edge/commit/677bb61e8e9d659db95123871bb2e011cf663a79) on `v2-hardening-followups` (PRs #38–#41) on Linux headless Chromium with a disposable synthetic authority. Journeys [J42](journeys/J42.md)–[J52](journeys/J52.md) cover multi-face photos, backup/restore, roles, change password and account lifecycle, Encounter corrections, and archive/delete history. New findings [F31–F40](findings.md#pass-3--current-source-677bb61-linux-chromium-synthetic); F04, F06, F08, F09, F11 and F30 revalidated as still present. Pass 3 captures are registered with `pass_id: Pass 3` in the [capture register](capture-register.json); credential-bearing frames stay private. Earlier passes remain evidence for `b457f0a` only.
+
+**Verdict, top ten, design-system review, roadmap and release gaps:** [assessment.md](assessment.md). **Browser regressions (tests only):** [PR #42](https://github.com/suraj-singh12/sentri-face-edge/pull/42).

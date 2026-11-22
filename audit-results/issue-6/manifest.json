@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
   "evidence_branch": "audit/issue-6-current-experience",
-  "sealed_at": "2026-11-22T19:00:56.124395+00:00",
+  "sealed_at": "2026-11-22T19:12:16.265919+00:00",
   "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
   "environment": {
     "os": "macOS 26.0 arm64 VM",
@@ -68,8 +68,13 @@
   "files": [
     {
       "path": "audit-results/issue-6/INDEX.md",
-      "bytes": 23665,
-      "sha256": "bef01bb4ae50a83b0f14e86285d7acc00f46532865348d201d9315e873f4384e"
+      "bytes": 23875,
+      "sha256": "4cfa67e69734abe532c7828aeacdb3fe73ec9ba8535743cfce7f54017c3bf164"
+    },
+    {
+      "path": "audit-results/issue-6/assessment.md",
+      "bytes": 11703,
+      "sha256": "631ee701bf88250ac183813851560aae9baac797a2001fabff445df04432875c"
     },
     {
       "path": "audit-results/issue-6/branch-coverage.csv",
