@@ -80,7 +80,6 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       setActiveView,
       worldApiGet: api.apiGet,
       refreshAll: appData.refreshAll,
-      loadBackups: appData.loadBackups,
       reloadAppData: appData.reloadAppData,
       configureRecovery: appData.configureRecovery,
       loadPeople: appData.loadPeople,
