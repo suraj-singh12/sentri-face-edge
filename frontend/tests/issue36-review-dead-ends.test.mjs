@@ -78,3 +78,15 @@ test('Review photos confirmation no longer requires a typed Added by', () => {
   assert.doesNotMatch(source, /Required: Added by/);
   assert.doesNotMatch(source, /\["addedBy", "Added by"\]/);
 });
+
+test('Review deferred now reloads Encounter-filtered groups so decided faces stay out of the queue', () => {
+  const source=readFileSync(new URL('../src/hooks/useQueueController.js', import.meta.url),'utf8');
+  const resume=source.slice(source.indexOf('const queueResumeSkipped'), source.indexOf('const queueRejectSuggestedMatch'));
+  assert.match(resume,/if \(activeEncounter\) \{\s*selectedGroupIdRef\.current = "";\s*setQueueSelectedGroupId\(""\);\s*await loadQueueGroups\(queueSessionId\);\s*\} else setQueueGroups\(payload\.groups\);/);
+});
+
+test('Review photos session card does not show the raw session ID', () => {
+  const source=readFileSync(new URL('../src/views/QueueView.jsx', import.meta.url),'utf8');
+  assert.doesNotMatch(source,/>\{sessionId\}</);
+  assert.match(source,/aria-label="Copy session ID"/);
+});

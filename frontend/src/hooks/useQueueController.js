@@ -857,12 +857,16 @@ export function useQueueController({
   const queueResumeSkipped = async () => {
     if (!queueSessionId) return;
     const payload = await apiPost("/api/queue-resume-skipped", { session_id: queueSessionId });
-    setQueueGroups(payload.groups);
+    // The resume response lists every session group; with an active Encounter only its undecided faces belong in the queue.
+    if (activeEncounter) {
+      selectedGroupIdRef.current = "";
+      setQueueSelectedGroupId("");
+      await loadQueueGroups(queueSessionId);
+    } else setQueueGroups(payload.groups);
     setQueueSessions((current) => current.map((session) => session.session_id === queueSessionId
       ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
       : session));
     setQueueReviewStats((current) => ({ ...current, skippedGroups: 0 }));
-    if (activeEncounter) await loadQueueEncounters(queueSessionId);
     showToast(`Restored ${payload.resumed} deferred group${payload.resumed === 1 ? "" : "s"}`);
   };
 
