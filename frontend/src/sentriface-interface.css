@@ -1919,13 +1919,6 @@ button {
   min-height: 32px;
 }
 
-.queue-session-id {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  user-select: all;
-}
-
 .queue-processing-error {
   border-color: color-mix(in srgb, var(--mantine-color-red-6) 48%, var(--mantine-color-default-border));
   background: color-mix(in srgb, var(--mantine-color-red-9) 8%, var(--mantine-color-body));

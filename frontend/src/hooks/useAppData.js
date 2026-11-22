@@ -377,7 +377,6 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     encounterDetail,
     backups,
     lastDataChange,
-    loadBackups,
     backupModalOpen,
     backupCreating,
     backupImporting,

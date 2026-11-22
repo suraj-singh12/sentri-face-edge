@@ -457,7 +457,6 @@ function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder,
             }))}
             allowDeselect={false}
           />
-          <Text size="xs" c="dimmed" mt="xs" className="queue-session-id">{sessionId}</Text>
           <Group mt="xs" grow gap="xs" wrap="nowrap">
             <Button size="xs" variant="default" leftSection={<IconRefresh size={14} />} onClick={onRefresh}>Refresh</Button>
             <Button size="xs" variant="light" color="red" leftSection={<IconTrash size={14} />} onClick={onDiscardSession}>Discard session</Button>
