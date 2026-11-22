@@ -1,0 +1,64 @@
+{
+  "description": "Shared Check a photo completion rule. Every face needs a final decision (accept or EXCLUDE; SKIP is undecided) and at least one face must be accepted. backend_error: the error complete_photo_review raises, or null when it completes. frontend_ready: recognitionReviewReady enables Complete Review. Both sides must agree.",
+  "cases": [
+    {
+      "name": "no faces",
+      "decisions": [],
+      "backend_error": "Every detected face requires a final decision before completion",
+      "frontend_ready": false
+    },
+    {
+      "name": "one undecided",
+      "decisions": [
+        null,
+        "ACCEPT_NEW_PERSON"
+      ],
+      "backend_error": "Every detected face requires a final decision before completion",
+      "frontend_ready": false
+    },
+    {
+      "name": "one skipped",
+      "decisions": [
+        "SKIP",
+        "ACCEPT_EXISTING_PERSON"
+      ],
+      "backend_error": "Every detected face requires a final decision before completion",
+      "frontend_ready": false
+    },
+    {
+      "name": "all skipped",
+      "decisions": [
+        "SKIP",
+        "SKIP"
+      ],
+      "backend_error": "Every detected face requires a final decision before completion",
+      "frontend_ready": false
+    },
+    {
+      "name": "all discarded",
+      "decisions": [
+        "EXCLUDE",
+        "EXCLUDE"
+      ],
+      "backend_error": "A completed review requires at least one accepted person",
+      "frontend_ready": false
+    },
+    {
+      "name": "discard and accept new",
+      "decisions": [
+        "EXCLUDE",
+        "ACCEPT_NEW_PERSON"
+      ],
+      "backend_error": null,
+      "frontend_ready": true
+    },
+    {
+      "name": "accept existing",
+      "decisions": [
+        "ACCEPT_EXISTING_PERSON"
+      ],
+      "backend_error": null,
+      "frontend_ready": true
+    }
+  ]
+}
