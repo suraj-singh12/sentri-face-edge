@@ -186,7 +186,8 @@ $DependencyFiles = @(
     "pyproject.toml",
     "requirements-runtime.txt",
     "requirements-test.txt",
-    "requirements-index.txt"
+    "requirements-index.txt",
+    "requirements-release.lock"
 )
 $FingerprintMaterial = foreach ($file in $DependencyFiles) {
     $digest = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
@@ -212,7 +213,7 @@ if (Test-Path -LiteralPath $FingerprintFile -PathType Leaf) {
 }
 if (-not $DependenciesReady) {
     Write-Host "Installing or updating repository development dependencies..."
-    & $Python -m pip install -e ".[test]"
+    & $Python -m pip install -c requirements-release.lock -e ".[test]"
     if ($LASTEXITCODE -ne 0) {
         throw "Installing repository development dependencies failed."
     }

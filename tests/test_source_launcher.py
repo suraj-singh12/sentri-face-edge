@@ -31,7 +31,7 @@ def test_source_launcher_bootstraps_only_when_needed_and_has_safe_reset() -> Non
     assert "for candidate in python3.12 python3; do" in launcher
     assert "python3.11" not in launcher
     assert ".sentriface-dependencies.sha256" in launcher
-    assert 'pip install -e ".[test]"' in launcher
+    assert 'pip install -c requirements-release.lock -e ".[test]"' in launcher
     assert "Type RESET-DEV to continue" in launcher
     assert "reset is available only for the default SentriFace-Dev data directory" in launcher
     assert 'DEFAULT_DEV_DATA_DIR="$HOME/Library/Application Support/SentriFace-Dev"' in launcher

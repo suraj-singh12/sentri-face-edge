@@ -11,6 +11,18 @@ export default defineConfig({
   },
   build: {
     outDir: "../src/sentriface/ui_static",
-    emptyOutDir: true
+    emptyOutDir: true,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: "vendor-react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: "vendor-mantine", test: /node_modules[\\/]@mantine[\\/]/ },
+            { name: "vendor-icons", test: /node_modules[\\/]@tabler[\\/]/ },
+            { name: "world", test: /src[\\/](views[\\/](World|ClusterDrilldown)[^\\/]*|utils[\\/]world|hooks[\\/]useWorldController)/ }
+          ]
+        }
+      }
+    }
   }
 });

@@ -551,6 +551,12 @@ SQL reads, transactional writes, canonical resolution, journal coupling,
 projection queries, integrity fingerprints, and storage-level validation. The
 current schema version is 32.
 
+Module-level helpers are split by area into `sqlite_constants.py`,
+`sqlite_helpers.py`, `sqlite_migrations.py`, `sqlite_world.py` and
+`sqlite_repair.py` in the same package. `sqlite_store.py` re-exports every
+moved name, so existing imports and test patch targets keep working. Helpers
+that look up a patched name stay in `sqlite_store.py`.
+
 SQL writes belong here or behind a service that delegates to this boundary.
 React components and API handlers must never become alternative persistence
 engines.
@@ -808,7 +814,9 @@ SentriFaceEdge/
 │   ├── contracts.py                 component and storage protocols
 │   ├── engine.py                    application and recognition boundary
 │   ├── api_server.py                loopback API, authz, UI serving
+│   ├── api_payloads.py              response payload builders (re-exported by api_server)
 │   ├── storage/sqlite_store.py      schema, migrations, SQL authority
+│   ├── storage/sqlite_*.py          helpers, migrations, World reads, repair
 │   ├── components/                  ONNX/dev/image/index components
 │   ├── *_service.py                 domain, backup, recovery services
 │   ├── auth.py                      local accounts, roles, sessions

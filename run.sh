@@ -106,13 +106,13 @@ if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3,
   exit 2
 fi
 
-DEPENDENCY_FINGERPRINT="$(shasum -a 256 pyproject.toml | awk '{print $1}')"
+DEPENDENCY_FINGERPRINT="$(cat pyproject.toml requirements-release.lock | shasum -a 256 | awk '{print $1}')"
 FINGERPRINT_FILE="$VENV_DIR/.sentriface-dependencies.sha256"
 if [[ ! -f "$FINGERPRINT_FILE" ]] \
   || [[ "$(<"$FINGERPRINT_FILE")" != "$DEPENDENCY_FINGERPRINT" ]] \
   || ! "$PYTHON" -c 'import cv2, onnxruntime, pytest, sentriface, sqlcipher3' >/dev/null 2>&1; then
   print "Installing or updating repository development dependencies..."
-  "$PYTHON" -m pip install -e ".[test]"
+  "$PYTHON" -m pip install -c requirements-release.lock -e ".[test]"
   print -r -- "$DEPENDENCY_FINGERPRINT" > "$FINGERPRINT_FILE"
 fi
 

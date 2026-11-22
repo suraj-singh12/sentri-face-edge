@@ -126,7 +126,7 @@ must not be edited by hand.
 | --- | --- |
 | Domain records | `src/sentriface/models.py` |
 | Storage contract | `src/sentriface/contracts.py::IdentityStore` |
-| SQLCipher store and migrations | `src/sentriface/storage/sqlite_store.py::SQLiteIdentityStore` |
+| SQLCipher store and migrations | `src/sentriface/storage/sqlite_store.py::SQLiteIdentityStore` (helpers in `storage/sqlite_*.py`, re-exported) |
 | Recognition/application boundary | `src/sentriface/engine.py::FaceEngine` |
 | Loopback API, auth, and route policy | `src/sentriface/api_server.py` |
 | Identity lifecycle and merge | `src/sentriface/{identity_service,merge_service,revert_service}.py` |
