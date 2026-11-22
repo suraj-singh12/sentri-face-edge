@@ -59,6 +59,22 @@ class PortableBackupApiTest(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=5)
 
+    def test_backup_list_reports_last_committed_data_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            server = create_server(port=0, data_dir=Path(temp) / "data", runtime="dev", debug=False)
+            server._test_admin_cookie = bootstrap_admin_cookie(server)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                status, listed = self._json_request(server, "GET", "/api/backups")
+                self.assertEqual(status, 200)
+                self.assertEqual(listed["last_data_change"], server.engine.store.latest_committed_operation_at())
+                self.assertIsInstance(listed["last_data_change"], str)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
     def test_encrypted_download_import_and_wrong_password_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             server = create_server(port=0, data_dir=Path(temp) / "data", runtime="dev", debug=False)

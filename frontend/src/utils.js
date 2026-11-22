@@ -68,9 +68,12 @@ export function tabLabel(view) {
 }
 
 export function formatSeenDateTime(detail) {
-  const date = detail.date || "-";
-  const time = detail.time || "-";
-  return `${date} & ${time}`;
+  const date = detail.date || "Date unknown";
+  return detail.time ? `${date}, ${detail.time}` : `${date} · Time unknown`;
+}
+
+export function plural(count, noun) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 export function galleryImages(payload) {
@@ -157,4 +160,27 @@ function entryFile(entry) {
 
 function readEntries(reader) {
   return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+}
+
+const EVENT_CONTEXT_LABELS = { ordinary: "Ordinary / small", public: "Public / group", unknown: "Unknown" };
+
+export function eventContextLabel(context) {
+  return EVENT_CONTEXT_LABELS[context] || "Unknown";
+}
+
+export function requiredFieldErrors(values, fields) {
+  const errors = {};
+  for (const [key, label] of fields) {
+    const value = values?.[key];
+    if (value === null || value === undefined || !String(value).trim()) errors[key] = `${label} is required`;
+  }
+  return errors;
+}
+
+export function backupReminderDue(lastDataChange, backups = []) {
+  const changed = Date.parse(lastDataChange || "");
+  if (Number.isNaN(changed)) return false;
+  const usable = backups.filter((backup) => backup.complete !== false && backup.restorable !== false);
+  const latest = Math.max(...usable.map((backup) => Date.parse(backup.created_at || "")).filter((value) => !Number.isNaN(value)), -Infinity);
+  return changed > latest;
 }

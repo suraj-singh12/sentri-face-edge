@@ -699,8 +699,8 @@ function compareEventsNewestFirst(left, right) {
 function inferLevel(event) {
   const eventName = String(event.event || "").toLowerCase();
   const message = JSON.stringify(event).toLowerCase();
-  if (eventName.includes("error") || message.includes("error") || message.includes("not found") || message.includes("no acceptable")) return "error";
   if (eventName === "input-rejected") return "warning";
+  if (eventName.includes("error") || message.includes("error") || message.includes("not found") || message.includes("no acceptable")) return "error";
   if (eventName.includes("warn")) return "warning";
   if (eventName.includes("recognize") && Number(event.faces || 0) > 0) return "success";
   return "info";

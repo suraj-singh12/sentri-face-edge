@@ -65,6 +65,7 @@ import {
 
 import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
 import { CountrySelect } from "../components/CountrySelect.jsx";
+import { SavedLocationInput } from "../components/SavedLocationInput.jsx";
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { PersonGraphView } from "./PersonGraphView.jsx";
 import { RecognitionReferences } from "./RecognitionReferences.jsx";
@@ -76,8 +77,7 @@ import {
   mediaUrl,
   personProfile,
   personAllows,
-  requirePersonContract,
-} from "../utils.js";
+  requirePersonContract, plural, requiredFieldErrors } from "../utils.js";
 export function PeopleView({
   canEdit = false,
   canDestroy = false,
@@ -128,6 +128,8 @@ export function PeopleView({
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
   const [placeholderBusy, setPlaceholderBusy] = useState(false);
   const [placeholderValues, setPlaceholderValues] = useState(() => newPlaceholderValues());
+  const [placeholderErrorsState, setPlaceholderErrors] = useState({});
+  useEffect(() => { if (!placeholderOpen) setPlaceholderErrors({}); }, [placeholderOpen]);
   const resultsRef = useRef(null);
   const normalizedQuery = query.trim().toLowerCase();
   const collectionKey = filter === "archived" ? "historical" : "active";
@@ -344,9 +346,11 @@ export function PeopleView({
         size="xl"
         centered
       >
-        <form onSubmit={async (event) => {
+        <form noValidate onSubmit={async (event) => {
           event.preventDefault();
-          if (placeholderBusy || !placeholderValues.name.trim()) return;
+          const missing = placeholderErrors(placeholderValues);
+          setPlaceholderErrors(missing);
+          if (placeholderBusy || Object.keys(missing).length) return;
           setPlaceholderBusy(true);
           try {
             await onCreateIdentifiedPerson(placeholderValues);
@@ -360,10 +364,10 @@ export function PeopleView({
             <Alert color="orange" title="This creates an identity without a face" icon={<IconUserPlus size={18} />}>
               No photograph or biometric data will be stored. Add only observation details you actually know; a face can be enrolled later.
             </Alert>
-            <PlaceholderPersonFields values={placeholderValues} onChange={setPlaceholderValues} people={people} />
+            <PlaceholderPersonFields values={placeholderValues} onChange={setPlaceholderValues} people={people} errors={placeholderErrorsState} onFieldChange={(field) => setPlaceholderErrors((current) => ({ ...current, [field]: undefined }))} />
             <Group justify="flex-end">
               <Button type="button" variant="default" disabled={placeholderBusy} onClick={() => setPlaceholderOpen(false)}>Cancel</Button>
-              <Button type="submit" loading={placeholderBusy} disabled={!placeholderValues.name.trim()}>Create person</Button>
+              <Button type="submit" loading={placeholderBusy}>Create person</Button>
             </Group>
           </Stack>
         </form>
@@ -1041,6 +1045,8 @@ function PeopleGalleryView({
   const [notePlaceholderOpen, setNotePlaceholderOpen] = useState(false);
   const [notePlaceholderBusy, setNotePlaceholderBusy] = useState(false);
   const [notePlaceholderValues, setNotePlaceholderValues] = useState(() => newPlaceholderValues());
+  const [notePlaceholderErrors, setNotePlaceholderErrors] = useState({});
+  useEffect(() => { if (!notePlaceholderOpen) setNotePlaceholderErrors({}); }, [notePlaceholderOpen]);
   const lifecycleStatus = normalizedPerson.lifecycle_status;
   const archived = lifecycleStatus !== "ACTIVE";
   const canRestore = lifecycleStatus === "ARCHIVED";
@@ -1077,6 +1083,8 @@ function PeopleGalleryView({
     && activeMentionQuery.length >= 3
     && !noteMentionHasExactPerson;
   const [editValues, setEditValues] = useState(summaryProfile);
+  const [editErrors, setEditErrors] = useState({});
+  useEffect(() => { if (!editOpen) setEditErrors({}); }, [editOpen]);
 
   useEffect(() => {
     setActiveTab("overview");
@@ -1136,9 +1144,15 @@ function PeopleGalleryView({
     JSON.stringify(payload.person.tags || payload.person.metadata?.tags || []),
   ]);
 
-  const updateEditValue = (field, value) => setEditValues((current) => ({ ...current, [field]: value }));
+  const updateEditValue = (field, value) => {
+    setEditErrors((current) => ({ ...current, [field]: undefined }));
+    setEditValues((current) => ({ ...current, [field]: value }));
+  };
   const saveEdit = async (event) => {
     event.preventDefault();
+    const missing = requiredFieldErrors(editValues, PROFILE_REQUIRED);
+    setEditErrors(missing);
+    if (Object.keys(missing).length) return;
     try {
       if (await onSave(editValues)) setEditOpen(false);
     } catch (error) {
@@ -1351,7 +1365,6 @@ function PeopleGalleryView({
             <Badge variant="outline">{latestSightingLabel}</Badge>
             {payload.person.is_placeholder && <Badge color="gray" variant="light">No ordinary recognition sample</Badge>}
           </Group>
-          <Text size="xs" c="dimmed" mt="sm">ID: {payload.person.person_id}</Text>
         </Box>
         <Card withBorder radius="md" p="sm" className="people-profile-notes">
           <Text size="sm" fw={800} mb="xs">Notes</Text>
@@ -1419,7 +1432,7 @@ function PeopleGalleryView({
                 <Text size="sm">{eventDateTime(event)} · {event.location || "Location unknown"} · {event.context}</Text>
                 {!!event.sighting_notes?.length && <Text size="sm">Sighting note: {event.sighting_notes.join(" · ")}</Text>}
                 {event.person_status !== "PRESENT" && event.event_notes && <Text size="sm">Event Note: {event.event_notes}</Text>}
-                <Text size="xs" c="dimmed">{event.person_media?.length || 0} observed media · {event.participant_ids?.length || 0} participants</Text>
+                <Text size="xs" c="dimmed">{event.person_media?.length || 0} observed media · {plural(event.participant_ids?.length || 0, "participant")}</Text>
               </Paper>
             ))}
             {!personEvents.events?.length && <Text c="dimmed">No matching Events.</Text>}
@@ -1446,9 +1459,9 @@ function PeopleGalleryView({
       </Tabs>
 
       <Drawer opened={editOpen} onClose={() => setEditOpen(false)} position="right" size={380} title="Edit Person" className="people-edit-drawer">
-        <form onSubmit={saveEdit}>
+        <form onSubmit={saveEdit} noValidate>
           <Stack>
-            <PeopleEditableFields values={editValues} onChange={updateEditValue} />
+            <PeopleEditableFields values={editValues} errors={editErrors} onChange={updateEditValue} />
             <Group justify="flex-end" mt="md">
               <Button variant="default" type="button" onClick={() => setEditOpen(false)}>Cancel</Button>
               <Button type="submit">Save Changes</Button>
@@ -1528,9 +1541,11 @@ function PeopleGalleryView({
         size="xl"
         centered
       >
-        <form onSubmit={async (event) => {
+        <form noValidate onSubmit={async (event) => {
           event.preventDefault();
-          if (notePlaceholderBusy || !notePlaceholderValues.name.trim()) return;
+          const missing = placeholderErrors(notePlaceholderValues);
+          setNotePlaceholderErrors(missing);
+          if (notePlaceholderBusy || Object.keys(missing).length) return;
           setNotePlaceholderBusy(true);
           try {
             const createdPerson = await onCreateIdentifiedPerson(notePlaceholderValues);
@@ -1547,10 +1562,10 @@ function PeopleGalleryView({
             <Alert color="orange" title="This creates an unknown identity" icon={<IconUserPlus size={18} />}>
               This person will have no photograph or biometric data. Create the profile only when tracking their known details, habits, patterns, or relationships is useful. A face can be added later.
             </Alert>
-            <PlaceholderPersonFields values={notePlaceholderValues} onChange={setNotePlaceholderValues} people={people} />
+            <PlaceholderPersonFields values={notePlaceholderValues} onChange={setNotePlaceholderValues} people={people} errors={notePlaceholderErrors} onFieldChange={(field) => setNotePlaceholderErrors((current) => ({ ...current, [field]: undefined }))} />
             <Group justify="flex-end">
               <Button type="button" variant="default" disabled={notePlaceholderBusy} onClick={() => setNotePlaceholderOpen(false)}>Cancel</Button>
-              <Button type="submit" color="orange" loading={notePlaceholderBusy} disabled={!notePlaceholderValues.name.trim()}>
+              <Button type="submit" color="orange" loading={notePlaceholderBusy}>
                 Create profile without photo
               </Button>
             </Group>
@@ -1985,7 +2000,7 @@ function AssociationIdentity({ person }) {
             <Badge size="xs" color="gray">{lifecycleStatusLabel(person.lifecycle_status)}</Badge>
           )}
         </Group>
-        <Text size="xs" c="dimmed" truncate>{rank} · {country} · ID {String(person.person_id || "").slice(0, 8)} · {person.embedding_count || 0} photos</Text>
+        <Text size="xs" c="dimmed" truncate>{rank} · {country} · {plural(person.embedding_count || 0, "photo")}</Text>
       </Box>
     </Group>
   );
@@ -2014,7 +2029,7 @@ function PeopleProfileChanges({ activity, currentProfile }) {
           <CurrentInfoRow icon={IconGlobe} label="Country" value={currentProfile.country || "-"} />
           <CurrentInfoRow icon={IconFlag} label="Tag" value={currentProfile.importance || "-"} pill={importanceColor(currentProfile.importance)} />
           <Divider />
-          <CurrentInfoRow icon={IconRefresh} label="Last Activity" value={activeHistory?.createdAt || "-"} subvalue={`By ${activeHistory?.editor || "System"}`} />
+          <CurrentInfoRow icon={IconRefresh} label="Last Activity" value={compactChangeDate(activeHistory?.createdAt)} subvalue={`By ${activeHistory?.editor || "System"}`} />
         </Stack>
       </Card>
       <Card withBorder radius="md" className="people-profile-panel people-change-history-panel">
@@ -2172,7 +2187,17 @@ function newPlaceholderValues(name = "") {
   };
 }
 
-function PlaceholderPersonFields({ values, onChange, people }) {
+const PLACEHOLDER_REQUIRED = [
+  ["rank", "Rank"], ["name", "Name"], ["country", "Country"], ["importance", "Tag"], ["date", "Date"], ["time", "Time"],
+  ["placeSeen", "Place seen"], ["individualCount", "Number of individuals"], ["eventOccasion", "Event/occasion"],
+];
+const PROFILE_REQUIRED = [["rank", "Rank"], ["name", "Name"], ["country", "Country"], ["importance", "Tag"]];
+
+export function placeholderErrors(values) {
+  return requiredFieldErrors(values, PLACEHOLDER_REQUIRED);
+}
+
+function PlaceholderPersonFields({ values, onChange, people, errors = {}, onFieldChange }) {
   const mentionQuery = noteMentionQuery(values.notes);
   const suggestions = useMemo(() => {
     if (mentionQuery.length < 3) return [];
@@ -2184,22 +2209,21 @@ function PlaceholderPersonFields({ values, onChange, people }) {
         .some((value) => String(value).toLocaleLowerCase().includes(normalized))
     )).slice(0, 6);
   }, [mentionQuery, people]);
-  const update = (field, value) => onChange((current) => ({ ...current, [field]: value }));
+  const update = (field, value) => { onFieldChange?.(field); onChange((current) => ({ ...current, [field]: value })); };
 
   return (
     <Stack gap="md">
       <Text fw={800}>Add New Person Details</Text>
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
-        <TextInput required autoFocus label="Rank" value={values.rank} onChange={(event) => update("rank", event.currentTarget.value)} />
-        <TextInput required label="Name" value={values.name} onChange={(event) => update("name", event.currentTarget.value)} />
-        <CountrySelect value={values.country} onChange={(value) => update("country", value)} />
-        <Select required label="Tag" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => update("importance", value)} />
-        <TextInput required label="Date" type="date" leftSection={<IconCalendar size={18} />} value={values.date} onChange={(event) => update("date", event.currentTarget.value)} />
-        <TextInput required label="Time" type="time" leftSection={<IconCalendar size={18} />} value={values.time} onChange={(event) => update("time", event.currentTarget.value)} />
-        <TextInput required label="Place Seen" leftSection={<IconMapPin size={18} />} placeholder="e.g., Office, Gate A, Reception, Building C" value={values.placeSeen} onChange={(event) => update("placeSeen", event.currentTarget.value)} />
-        <NumberInput required min={0} step={1} label="With how many individuals" leftSection={<IconUsers size={18} />} placeholder="Select count" value={values.individualCount} onChange={(value) => update("individualCount", value)} />
-        <TextInput required label="Event/Occasion" leftSection={<IconCalendar size={18} />} placeholder="e.g., Meeting, Visit, Delivery, Staff Interaction, Security Check" value={values.eventOccasion} onChange={(event) => update("eventOccasion", event.currentTarget.value)} />
-        <TextInput required label="Added by" placeholder="Your Name" value={values.addedBy} onChange={(event) => update("addedBy", event.currentTarget.value)} />
+        <TextInput required autoFocus label="Rank" error={errors.rank} value={values.rank} onChange={(event) => update("rank", event.currentTarget.value)} />
+        <TextInput required label="Name" error={errors.name} value={values.name} onChange={(event) => update("name", event.currentTarget.value)} />
+        <CountrySelect error={errors.country} value={values.country} onChange={(value) => update("country", value)} />
+        <Select required label="Tag" error={errors.importance} data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => update("importance", value)} />
+        <TextInput required label="Date" error={errors.date} type="date" leftSection={<IconCalendar size={18} />} value={values.date} onChange={(event) => update("date", event.currentTarget.value)} />
+        <TextInput required label="Time" error={errors.time} type="time" leftSection={<IconCalendar size={18} />} value={values.time} onChange={(event) => update("time", event.currentTarget.value)} />
+        <SavedLocationInput required error={errors.placeSeen} label="Place Seen" leftSection={<IconMapPin size={18} />} placeholder="e.g., Office, Gate A, Reception, Building C" value={values.placeSeen || ""} onChange={(value) => update("placeSeen", value)} />
+        <NumberInput required min={0} step={1} label="With how many individuals" error={errors.individualCount} leftSection={<IconUsers size={18} />} placeholder="Select count" value={values.individualCount} onChange={(value) => update("individualCount", value)} />
+        <TextInput required label="Event/Occasion" error={errors.eventOccasion} leftSection={<IconCalendar size={18} />} placeholder="e.g., Meeting, Visit, Delivery, Staff Interaction, Security Check" value={values.eventOccasion} onChange={(event) => update("eventOccasion", event.currentTarget.value)} />
       </SimpleGrid>
       <Textarea
         autosize
@@ -2451,13 +2475,13 @@ function compactChangeDate(value) {
   });
 }
 
-function PeopleEditableFields({ values, onChange }) {
+function PeopleEditableFields({ values, onChange, errors = {} }) {
   return (
     <SimpleGrid cols={{ base: 1, sm: 2 }}>
-      <TextInput required label="Rank" value={values.rank} onChange={(event) => onChange("rank", event.target.value)} />
-      <TextInput required label="Name" value={values.name} onChange={(event) => onChange("name", event.target.value)} />
-      <CountrySelect value={values.country} onChange={(value) => onChange("country", value)} />
-      <Select required label="Tag" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />
+      <TextInput required label="Rank" error={errors.rank} value={values.rank} onChange={(event) => onChange("rank", event.target.value)} />
+      <TextInput required label="Name" error={errors.name} value={values.name} onChange={(event) => onChange("name", event.target.value)} />
+      <CountrySelect error={errors.country} value={values.country} onChange={(value) => onChange("country", value)} />
+      <Select required label="Tag" error={errors.importance} data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />
       <Box style={{ gridColumn: "1 / -1" }}>
         <TagsInput
           label="Tags"
@@ -2468,7 +2492,6 @@ function PeopleEditableFields({ values, onChange }) {
           maxTags={20}
         />
       </Box>
-      <TextInput required label="Edited by" placeholder="Your name" value={values.editorName || ""} onChange={(event) => onChange("editorName", event.target.value)} />
     </SimpleGrid>
   );
 }

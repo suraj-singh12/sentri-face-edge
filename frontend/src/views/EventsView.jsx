@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Badge, Box, Button, Card, FileButton, Group, Image, Select, SimpleGrid, Stack, Text, TextInput, Title, UnstyledButton } from "@mantine/core";
-import { mediaUrl } from "../utils.js";
+import { mediaUrl, plural } from "../utils.js";
 
 import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { EncounterManagementModal } from "../components/EncounterManagementModal.jsx";
@@ -51,11 +51,11 @@ export function EventsView({ page, detail, people = [], onQuery, onOpen, onClose
       <Stack gap={0}>
       {(page?.events || []).map((event) => (
         <UnstyledButton key={event.observation_id} onClick={() => onOpen(event.observation_id)} className="encounter-list-row">
-          <Group justify="space-between"><Text fw={800}>{event.occasion || "Unnamed Event"}</Text><Badge variant="light">{contextLabel(event.context)}</Badge></Group>
+          <Group justify="space-between"><Text fw={800}>{event.occasion || "Unnamed Event"}</Text><Badge variant="light" tt="none">{contextLabel(event.context)}</Badge></Group>
           <Text size="sm">{eventDateTime(event)} · {event.location || "Location unknown"}</Text>
           <Text size="sm">Participants: {event.participants?.map((person) => person.name).join(", ") || "None recorded"}</Text>
           {!!event.mentioned_people?.length && <Text size="sm">Mentioned: {event.mentioned_people.map((person) => person.name).join(", ")}</Text>}
-          <Text size="xs" c="dimmed">{event.participant_ids?.length || 0} participants · {event.media_count} media · {event.mentioned_person_ids?.length || 0} mentions</Text>
+          <Text size="xs" c="dimmed">{plural(event.participant_ids?.length || 0, "participant")} · {event.media_count} media · {plural(event.mentioned_person_ids?.length || 0, "mention")}</Text>
         </UnstyledButton>
       ))}
       </Stack>
@@ -110,7 +110,7 @@ function EncounterDetail({ detail, people, onClose, canAttach, canCorrect, onCor
   };
   return <Stack gap="md" className="encounter-detail">
     <Group justify="space-between"><Title order={2}>{detail.occasion || "Unnamed Encounter"}</Title><Button variant="default" onClick={onClose}>Back to Events</Button></Group>
-    <Group gap="sm"><Text>{eventDateTime(detail)} · {detail.location || "Location unknown"}</Text><Badge variant="light">{contextLabel(detail.context)}</Badge></Group>
+    <Group gap="sm"><Text>{eventDateTime(detail)} · {detail.location || "Location unknown"}</Text><Badge variant="light" tt="none">{contextLabel(detail.context)}</Badge></Group>
     <Group gap="xs">
       {canAttach && <FileButton multiple accept="image/*" onChange={async (files) => { if (!files?.length) return; setBusy(true); setError(""); try { await onAttach(detail, files); } catch (failure) { setError(failure.message); } finally { setBusy(false); } }}>{(props) => <Button {...props} disabled={busy}>Attach Media</Button>}</FileButton>}
       {canCorrect && <><Button variant="default" onClick={() => open("metadata")}>Correct Encounter</Button><Button variant="default" onClick={() => open("participants")}>Correct Participants</Button><Button variant="default" onClick={() => open("relations")}>Correct Relations</Button></>}
@@ -119,7 +119,7 @@ function EncounterDetail({ detail, people, onClose, canAttach, canCorrect, onCor
     <Box><Text fw={700}>Participants ({detail.participants?.length || 0})</Text><Group gap="xs">{(detail.participants || []).map((p) => <Text key={p.person_id} size="sm">{p.name}{p.lifecycle_status && p.lifecycle_status !== "ACTIVE" ? ` (${p.lifecycle_status.toLowerCase()})` : ""}</Text>)}</Group></Box>
     <Box><Text fw={700}>Event Note</Text><Text style={{ whiteSpace: "pre-wrap" }}>{detail.event_notes || "No Event Note"}</Text><Text size="sm" c="dimmed">Selected mentions: {detail.mentioned_people?.map((p) => p.name).join(", ") || "None"}</Text></Box>
     <Box><Text fw={700}>Sighting Notes</Text>{detail.sighting_notes?.length ? detail.sighting_notes.map((note, index) => <Text key={index} size="sm">{names[note.person_id] || "Historical Person"}: {note.content}</Text>) : <Text size="sm" c="dimmed">None recorded</Text>}</Box>
-    <Box><Text fw={700}>Relations</Text>{(detail.relations || []).map((r) => <Group key={`${r.first_person_id}:${r.second_person_id}`} justify="space-between" className="encounter-list-row"><Text size="sm">{names[r.first_person_id]} · {names[r.second_person_id]}</Text><Group gap="xs"><Badge color={r.disposition === "INCLUDE" ? "teal" : "gray"}>{r.disposition}</Badge><Text size="xs" c="dimmed">{r.support === "SHARED_FRAME" ? "Shared frame" : "Same Encounter only"}</Text></Group></Group>)}{!detail.relations?.length && <Text size="sm" c="dimmed">No explicit pair decisions recorded.</Text>}</Box>
+    <Box><Text fw={700}>Relations</Text>{(detail.relations || []).map((r) => <Group key={`${r.first_person_id}:${r.second_person_id}`} justify="space-between" className="encounter-list-row"><Text size="sm">{names[r.first_person_id]} · {names[r.second_person_id]}</Text><Group gap="xs"><Badge color={r.disposition === "INCLUDE" ? "teal" : "gray"}>{r.disposition === "INCLUDE" ? "Included" : "Excluded"}</Badge><Text size="xs" c="dimmed">{r.support === "SHARED_FRAME" ? "Shared frame" : "Same Encounter only"}</Text></Group></Group>)}{!detail.relations?.length && <Text size="sm" c="dimmed">No explicit pair decisions recorded.</Text>}</Box>
     <Text fw={700}>All Encounter media ({detail.media?.length || 0})</Text>
     <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>{(detail.media || []).map((item) => <Box key={item.media_id}>{item.media_path ? <Image src={mediaUrl(item.media_path)} alt="Encounter media" fit="contain" mah={300} /> : <Text>Media unavailable</Text>}</Box>)}</SimpleGrid>
     <details><summary>Correction and provenance history</summary><Stack gap="xs" mt="sm">{(detail.history || []).map((entry) => <Box key={entry.operation_id} className="encounter-list-row"><Text size="xs" c="dimmed">{entry.created_at?.slice(0, 10)} · {entry.actor?.display_name || entry.actor?.username || "Operator"}</Text><Text size="sm">{historyDescription(entry, names)}</Text></Box>)}{detail.history_has_more && <Text size="xs">Showing the latest 100 operations.</Text>}</Stack></details>

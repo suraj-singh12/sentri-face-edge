@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button, Card, Group, Image, NumberInput, Paper, Select, SimpleGrid, Stack, Text, TextInput, Textarea, ThemeIcon } from "@mantine/core";
 import {
   IconCalendar,
@@ -11,12 +12,26 @@ import {
 
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
 import { CountrySelect } from "./CountrySelect.jsx";
-import { mediaUrl } from "../utils.js";
+import { eventContextLabel, mediaUrl, requiredFieldErrors } from "../utils.js";
 
-export function RecognitionFollowupForm({ values, people = [], confirmed, onChange, onSubmit, onClear, embedded = false, showAddedBy = false, addFaceOnly = false }) {
+export function followupErrors(values) {
+  return requiredFieldErrors(values, [
+    ...(values?.action === "new" ? [["rank", "Rank"], ["name", "Name"], ["country", "Country"], ["importance", "Tag"]] : []),
+    ["individualCount", "Number of individuals"],
+  ]);
+}
+
+export function RecognitionFollowupForm({ values, people = [], confirmed, onChange: change, onSubmit, onClear, embedded = false, addFaceOnly = false }) {
+  const [errors, setErrors] = useState({});
+  const onChange = (field, value) => { setErrors((current) => ({ ...current, [field]: undefined })); change(field, value); };
+  const submit = (event, ...rest) => {
+    const missing = followupErrors(values);
+    setErrors(missing);
+    if (Object.keys(missing).length) { event.preventDefault(); return; }
+    return onSubmit(event, ...rest);
+  };
   if (addFaceOnly) return <Card withBorder radius="md" mt="md" p="sm"><form onSubmit={onSubmit}><Stack gap="sm"><Text fw={800}>Add Face to {values.name}</Text><Text size="sm" c="dimmed">This adds a reference face to the existing Person. It creates no Encounter or sighting.</Text><Button type="submit" disabled={confirmed}>Confirm Add Face</Button></Stack></form></Card>;
   const isNew = values.action === "new";
-  const needsAddedBy = isNew || showAddedBy;
   const mentionQuery = activeMentionQuery(values.notes);
   const mentionSuggestions = mentionQuery.length < 3 ? [] : people.filter((person) => (
     person.person_id !== values.personId
@@ -26,18 +41,17 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
       .some((value) => String(value).toLocaleLowerCase().includes(mentionQuery.toLocaleLowerCase()))
   )).slice(0, 6);
   const form = (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={submit} noValidate>
       <Stack gap="xs">
         <Text fw={800}>{isNew ? "Add New Person Details" : "Existing Person Sighting"}</Text>
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" verticalSpacing="xs">
-          {isNew && <TextInput required label="Rank" value={values.rank} onChange={(event) => onChange("rank", event.target.value)} />}
-          {isNew && <TextInput required label="Name" value={values.name} onChange={(event) => onChange("name", event.target.value)} />}
-          {isNew && <CountrySelect value={values.country} onChange={(value) => onChange("country", value)} />}
-          {isNew && <Select required label="Tag" data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />}
-          <NumberInput required min={0} step={1} label="With how many individuals" leftSection={<IconUsers size={18} />} placeholder="Select count" value={values.individualCount} onChange={(value) => onChange("individualCount", value)} />
-          {needsAddedBy && <TextInput required label="Added by" placeholder="Your Name" value={values.addedBy} onChange={(event) => onChange("addedBy", event.target.value)} />}
+          {isNew && <TextInput required label="Rank" error={errors.rank} value={values.rank} onChange={(event) => onChange("rank", event.target.value)} />}
+          {isNew && <TextInput required label="Name" error={errors.name} value={values.name} onChange={(event) => onChange("name", event.target.value)} />}
+          {isNew && <CountrySelect error={errors.country} value={values.country} onChange={(value) => onChange("country", value)} />}
+          {isNew && <Select required label="Tag" error={errors.importance} data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />}
+          <NumberInput required min={0} step={1} label="With how many individuals" error={errors.individualCount} leftSection={<IconUsers size={18} />} placeholder="Select count" value={values.individualCount} onChange={(value) => onChange("individualCount", value)} />
         </SimpleGrid>
-        <Paper withBorder p="xs"><Text size="sm" fw={700}>Inherited Encounter</Text><Text size="sm">{values.eventOccasion || "Unknown occasion"} · {values.date || "Unknown date"} · {values.timePrecision === "unknown" ? "Unknown time" : `${values.time || ""}${values.endTime ? `–${values.endTime}` : ""}${values.timePrecision === "approximate" ? " (approximate)" : ""}`} · {values.placeSeen || "Unknown location"} · {values.eventContext || "unknown"}</Text></Paper>
+        <Paper withBorder p="xs"><Text size="sm" fw={700}>Inherited Encounter</Text><Text size="sm">{values.eventOccasion || "Occasion unknown"} · {values.date || "Date unknown"} · {values.timePrecision === "unknown" ? "Time unknown" : `${values.time || ""}${values.endTime ? `–${values.endTime}` : ""}${values.timePrecision === "approximate" ? " (approximate)" : ""}`} · {values.placeSeen || "Location unknown"} · {eventContextLabel(values.eventContext)} context</Text></Paper>
         <Textarea
           autosize
           minRows={2}
@@ -68,7 +82,7 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
                     : <ThemeIcon size={36} radius="xl" variant="light" color="gray"><IconUser size={19} /></ThemeIcon>}
                   <Stack gap={0} align="flex-start">
                     <Text size="sm" fw={700}>{person.name}</Text>
-                    <Text size="xs" c="dimmed">ID {String(person.person_id).slice(0, 8)} · {person.metadata?.rank || "No role"}</Text>
+                    <Text size="xs" c="dimmed">{[person.metadata?.rank || "No role", person.metadata?.country].filter(Boolean).join(" · ")}</Text>
                   </Stack>
                 </Group>
               </Paper>

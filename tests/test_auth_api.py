@@ -22,12 +22,13 @@ class AuthenticationApiTest(unittest.TestCase):
             cookie = self._login_cookie(server, "owner", PASSWORD)
             status, created, _ = self._request(server, "POST", "/api/person-create", {
                 "name": "Profile Entry", "rank": "Visitor", "country": "India",
-                "importance": "Regular", "added_by": "Owner",
+                "importance": "Regular", "added_by": "Someone Else",
                 "seen_date": "2026-09-23", "seen_time": "10:00",
                 "place_seen": "Office", "individual_count": 0,
                 "event_occasion": "Visit", "operation_id": str(uuid4()),
             }, cookie=cookie)
             self.assertEqual(status, 200, created)
+            self.assertEqual(created["person"]["metadata"]["added_by"], "Owner")
             person_id = created["person"]["person_id"]
             # People and recognition use the same URL; a fresh direct request
             # exercises the reload path without relying on frontend state.
@@ -226,3 +227,21 @@ class AuthenticationApiTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuthenticatedAttributionTest(unittest.TestCase):
+    def test_nested_added_by_fields_name_the_signed_in_account(self):
+        from sentriface.api_server import _with_authenticated_attribution
+
+        payload = {
+            "added_by": "Typed",
+            "recognition_detail": {"added_by": ""},
+            "new_person_metadata": {"rank": "R", "added_by": ""},
+            "notes": "keep",
+        }
+        result = _with_authenticated_attribution(payload, {"display_name": "Owner", "username": "owner"})
+        self.assertEqual(result["added_by"], "Owner")
+        self.assertEqual(result["recognition_detail"]["added_by"], "Owner")
+        self.assertEqual(result["new_person_metadata"]["added_by"], "Owner")
+        self.assertEqual(result["new_person_metadata"]["rank"], "R")
+        self.assertEqual(result["notes"], "keep")

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Box, Button, Card, Center, Group, Loader, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
 
 import { useApiClient } from "../hooks/useApiClient.js";
+import { requiredFieldErrors } from "../utils.js";
 
 export function AuthGate({ children }) {
   const { apiGet, apiPost, showToast } = useApiClient();
@@ -13,6 +14,8 @@ export function AuthGate({ children }) {
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const clearError = (field) => setFieldErrors((current) => ({ ...current, [field]: undefined }));
 
   const refresh = useCallback(async () => {
     try {
@@ -34,10 +37,13 @@ export function AuthGate({ children }) {
   const submit = async (event) => {
     event.preventDefault();
     setError("");
-    if (status?.setup_required && password !== confirmation) {
-      setError("Passwords do not match");
-      return;
-    }
+    const setup = Boolean(status?.setup_required);
+    const errors = requiredFieldErrors({ username, password, confirmation }, [
+      ["username", "Account name"], ["password", "Password"], ...(setup ? [["confirmation", "Password confirmation"]] : []),
+    ]);
+    if (setup && !errors.confirmation && password !== confirmation) errors.confirmation = "Passwords do not match";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
     setSubmitting(true);
     try {
       const next = await apiPost(status?.setup_required ? "/api/auth/signup" : "/api/auth/login", {
@@ -74,7 +80,7 @@ export function AuthGate({ children }) {
     return (
       <Center mih="100vh" p="md">
         <Card withBorder shadow="md" radius="lg" p="xl" w="100%" maw={460}>
-          <form onSubmit={submit}>
+          <form onSubmit={submit} noValidate>
             <Stack>
               <Group gap="sm" wrap="nowrap">
                 <img src="/sentriface-icon-64.png" alt="" className="auth-brand-icon" aria-hidden="true" />
@@ -89,10 +95,10 @@ export function AuthGate({ children }) {
                 </Alert>
               ) : null}
               {error ? <Alert color="red">{error}</Alert> : null}
-              <TextInput label="Account name" description={setup ? "You will use this name to sign in." : undefined} value={username} onChange={(event) => setUsername(event.currentTarget.value)} autoComplete="username" required />
+              <TextInput label="Account name" description={setup ? "You will use this name to sign in." : undefined} value={username} onChange={(event) => { setUsername(event.currentTarget.value); clearError("username"); }} error={fieldErrors.username} autoComplete="username" required />
               {setup ? <TextInput label="Your name (optional)" value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} autoComplete="name" /> : null}
-              <PasswordInput label="Password" description={setup ? "Use at least 12 characters." : undefined} value={password} onChange={(event) => setPassword(event.currentTarget.value)} autoComplete={setup ? "new-password" : "current-password"} required />
-              {setup ? <PasswordInput label="Confirm password" value={confirmation} onChange={(event) => setConfirmation(event.currentTarget.value)} autoComplete="new-password" required /> : null}
+              <PasswordInput label="Password" description={setup ? "Use at least 12 characters." : undefined} value={password} onChange={(event) => { setPassword(event.currentTarget.value); clearError("password"); }} error={fieldErrors.password} autoComplete={setup ? "new-password" : "current-password"} required />
+              {setup ? <PasswordInput label="Confirm password" value={confirmation} onChange={(event) => { setConfirmation(event.currentTarget.value); clearError("confirmation"); }} error={fieldErrors.confirmation} autoComplete="new-password" required /> : null}
               <Button type="submit" loading={submitting}>{setup ? "Create account" : "Sign in"}</Button>
             </Stack>
           </form>

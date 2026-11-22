@@ -653,14 +653,13 @@ export function useQueueController({
     event.preventDefault();
     const queueFollowup = followupRef.current && { ...followupRef.current };
     if (!queueFollowup?.faceIds?.length || !queueSelectedGroup) return;
-    for (const field of ["name", "rank", "country", "importance", "addedBy"]) queueFollowup[field] = String(queueFollowup[field] || "").trim();
-    const required = queueFollowup.action === "new" ? [["name", "Name"], ["rank", "Rank"], ["country", "Country"], ["importance", "Tag"], ["addedBy", "Added by"]] : [];
+    for (const field of ["name", "rank", "country", "importance"]) queueFollowup[field] = String(queueFollowup[field] || "").trim();
+    const required = queueFollowup.action === "new" ? [["name", "Name"], ["rank", "Rank"], ["country", "Country"], ["importance", "Tag"]] : [];
     const missing = required.filter(([field]) => !String(queueFollowup[field] || "").trim()).map(([, label]) => label);
     if (missing.length) { showToast(`Required: ${missing.join(", ")}`, "red"); return; }
     if (queueFollowup.individualCount === "" || !Number.isInteger(Number(queueFollowup.individualCount)) || Number(queueFollowup.individualCount) < 0) {
       showToast("Required: a non-negative whole individual count", "red"); return;
     }
-    if (!queueFollowup.addedBy) { showToast("Required: Added by", "red"); return; }
     if (queueFollowup.action === "new" && !createAnyway) {
       const duplicateCheck = await apiPost("/api/proof-only-duplicate-check", {
         session_id: queueSelectedGroup.session_id,
@@ -863,7 +862,8 @@ export function useQueueController({
       ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
       : session));
     setQueueReviewStats((current) => ({ ...current, skippedGroups: 0 }));
-    showToast(`Restored ${payload.resumed} skipped group(s)`);
+    if (activeEncounter) await loadQueueEncounters(queueSessionId);
+    showToast(`Restored ${payload.resumed} deferred group${payload.resumed === 1 ? "" : "s"}`);
   };
 
   const queueRejectSuggestedMatch = async () => {

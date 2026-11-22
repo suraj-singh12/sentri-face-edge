@@ -55,7 +55,7 @@ import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.j
 import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
 import { EmptyCard } from "../components/Shared.jsx";
-import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor, recognitionText } from "../utils.js";
+import { isNewPersonSuggestion, matchDisplay, mediaUrl, plural, qualityColor, recognitionText } from "../utils.js";
 import { browsePeopleCandidates, PROFILE_BROWSE_MODES } from "../utils/profileBrowse.js";
 
 export function QueueView({
@@ -127,7 +127,7 @@ export function QueueView({
   const [groupPendingDiscard, setGroupPendingDiscard] = useState(null);
   return (
     <>
-      <EncounterDetailsModal opened={Boolean(queueSelectedGroup && activeEncounter?.phase === "EVENT" && eventDetails?.reviewId !== activeEncounter.review_id)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} />
+      <EncounterDetailsModal opened={Boolean(queueSelectedGroup && activeEncounter?.phase === "EVENT" && eventDetails?.reviewId !== activeEncounter.review_id)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} onClose={onBack} />
       <Modal opened={proofOnlyDuplicateCandidates.length > 0} onClose={() => {}} title="Possible existing profile" centered>
         <Stack gap="md">
           <Text size="sm">A proof-only face may match an existing Person. It was not used in normal recognition.</Text>
@@ -269,7 +269,7 @@ export function QueueView({
         centered
       >
         <Text size="sm" c="dimmed">
-          This removes all {groupPendingDiscard?.faces?.length || 0} pending face{groupPendingDiscard?.faces?.length === 1 ? "" : "s"} in the group. Confirmed people are not affected.
+          {(groupPendingDiscard?.faces?.length || 0) === 1 ? "This removes the 1 pending face in this group." : `This removes all ${groupPendingDiscard?.faces?.length || 0} pending faces in this group.`} Confirmed people are not affected.
         </Text>
         <Group justify="flex-end" mt="lg">
           <Button variant="default" onClick={() => setGroupPendingDiscard(null)}>Cancel</Button>
@@ -339,10 +339,10 @@ function EncounterGrouping({ media, onConfirm, onExclude }) {
     {usable.length === 0 && <Text size="sm" c="orange">No usable photos remain for a new Encounter.</Text>}
     {mode === "multiple" && usable.length > 0 && <Group gap="xs">{buckets.map((bucket, index) => <Badge key={index} color={bucket.some((item) => item.face_count === undefined || item.face_count > 0) ? "teal" : "red"} variant="light">Encounter {index + 1}: {bucket.length} photo{bucket.length === 1 ? "" : "s"}</Badge>)}</Group>}
     <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-      {ordered.map((item) => <Card withBorder key={item.media_id} className="queue-encounter-media-card" data-conflict={Boolean(item.finalized_encounter) || undefined} data-removed={Boolean(item.excluded || item.finalized_encounter) || undefined}>
-        <Group justify="space-between" align="flex-start"><Badge color={item.finalized_encounter ? "red" : item.excluded ? "gray" : "teal"} variant="light">{item.finalized_encounter ? "Already finalized — excluded" : item.excluded ? "Removed" : "Ready"}</Badge>{!item.finalized_encounter && <ActionIcon aria-label={`Remove photo ${String(item.media_path).split("/").pop()}`} color="red" variant="subtle" disabled={busy || item.excluded} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, true); } finally { setBusy(false); } }}><IconX size={17} /></ActionIcon>}</Group>
+      {ordered.map((item, index) => <Card withBorder key={item.media_id} className="queue-encounter-media-card" data-conflict={Boolean(item.finalized_encounter) || undefined} data-removed={Boolean(item.excluded || item.finalized_encounter) || undefined}>
+        <Group justify="space-between" align="flex-start"><Badge color={item.finalized_encounter ? "red" : item.excluded ? "gray" : "teal"} variant="light">{item.finalized_encounter ? "Already finalized — excluded" : item.excluded ? "Removed" : "Ready"}</Badge>{!item.finalized_encounter && <ActionIcon aria-label={`Leave photo ${index + 1} out of this Encounter`} title="Leave this photo out of the Encounter. The photo file is not deleted." color="red" variant="subtle" disabled={busy || item.excluded} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, true); } finally { setBusy(false); } }}><IconX size={17} /></ActionIcon>}</Group>
         <Image src={mediaUrl(item.media_path)} h={145} fit="contain" alt="Queued media" />
-        <Text size="xs" truncate mt="xs">{String(item.media_path).split("/").pop()}</Text>
+        <Text size="xs" truncate mt="xs">Photo {index + 1}</Text>
         {item.finalized_encounter && <Text size="xs" c="red" mt="xs">In finalized Encounter {item.finalized_encounter.occasion || item.finalized_encounter.observation_id} {item.finalized_encounter.observed_at ? `· ${item.finalized_encounter.observed_at}` : ""}</Text>}
         {item.excluded && !item.finalized_encounter && <Button size="compact-xs" variant="subtle" disabled={busy} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, false); } finally { setBusy(false); } }}>Restore photo</Button>}
         {mode === "multiple" && !item.excluded && !item.finalized_encounter && <Select mt="xs" label="Encounter" value={String(Math.min(encounterCount, Number(assignment[item.media_id] || (usable.findIndex((candidate) => candidate.media_id === item.media_id) % encounterCount) + 1)))} onChange={(value) => setAssignment((current) => ({ ...current, [item.media_id]: Number(value) }))} data={buckets.map((_, index) => ({ value: String(index + 1), label: `Encounter ${index + 1}` }))} />}
@@ -453,7 +453,7 @@ function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder,
             onChange={onSelectSession}
             data={(sessions || []).map((session) => ({
               value: session.session_id,
-              label: `${session.session_id.slice(0, 8)} | ${session.face_count} face${session.face_count === 1 ? "" : "s"}`,
+              label: `${session.created_at ? new Date(session.created_at).toLocaleString() : "Upload session"} · ${session.face_count} face${session.face_count === 1 ? "" : "s"}`,
             }))}
             allowDeselect={false}
           />
@@ -591,10 +591,13 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
                     </Group>
                   </Card>
                 );
-              }) : <EmptyCard text={skippedGroups.length ? "Deferred groups will return after other groups are resolved." : "No groups match this filter."} />}
+              }) : <EmptyCard text={skippedGroups.length ? "Deferred groups return automatically once the other groups are decided, or review them now." : "No groups match this filter."} />}
             </Stack>
           </Box>
-          <Text size="sm" c="dimmed">Showing {visibleGroups.length} of {pendingGroups.length} pending groups{skippedGroups.length ? ` · ${skippedGroups.length} deferred` : ""}</Text>
+          <Group justify="space-between" gap="sm">
+            <Text size="sm" c="dimmed">Showing {visibleGroups.length} of {pendingGroups.length} pending groups{skippedGroups.length ? ` · ${skippedGroups.length} deferred` : ""}</Text>
+            {encounterReview && skippedGroups.length > 0 && <Button size="xs" variant="default" leftSection={<IconRefresh size={15} />} onClick={onResumeSkipped}>Review deferred now ({skippedGroups.length})</Button>}
+          </Group>
         </>
       )}
     </Stack>
@@ -925,7 +928,7 @@ function QueueGroupReview({
           <ActionIcon variant="default" size="lg" aria-label="Back to review queue" onClick={onBack}><IconArrowLeft size={18} /></ActionIcon>
           <Box>
             <Group gap="xs">
-              <Title order={2} size="h3">Review {group.group_id}</Title>
+              <Title order={2} size="h3">Review this group</Title>
               <Badge color="teal" variant="light">{group.faces.length} photo{group.faces.length === 1 ? "" : "s"}</Badge>
             </Group>
             <Text size="sm" c="dimmed">Decide which photos belong to the suggested person.</Text>
@@ -1000,7 +1003,7 @@ function QueueGroupReview({
         <Card withBorder radius="md" ref={followupRef} className="queue-followup-card followup-scroll-target">
           <Text fw={700}>{followup.name || "New person"}</Text>
           <Text size="xs" c="dimmed" mb="sm">{followup.faceIds.length} photo{followup.faceIds.length === 1 ? "" : "s"}</Text>
-          <RecognitionFollowupForm people={people} values={followup} confirmed={followupDone} onChange={onFollowupChange} onSubmit={onFollowupSubmit} onClear={onFollowupClear} embedded showAddedBy />
+          <RecognitionFollowupForm people={people} values={followup} confirmed={followupDone} onChange={onFollowupChange} onSubmit={onFollowupSubmit} onClear={onFollowupClear} embedded />
         </Card>
       )}
 
@@ -1009,8 +1012,8 @@ function QueueGroupReview({
           {best ? `Accept ${selectedCount} as ${best.name}` : "Choose a person to accept"}
         </Button>
         <Button variant="light" leftSection={<IconUserPlus size={18} />} onClick={() => { scrollToFollowup(); onNewPerson(); }} disabled={!selectedCount || accepted}>Create new person</Button>
-        <Button variant="light" color="red" leftSection={<IconTrash size={18} />} onClick={onDiscard} disabled={!selectedCount || accepted}>Discard selected</Button>
-        <Button variant="default" color="orange" leftSection={<IconX size={18} />} onClick={onRejectSuggestedMatch} disabled={!automaticKnown || automaticBest?.draft_created || Boolean(manualPerson) || accepted}>Reject suggested match</Button>
+        <Button variant="light" color="red" leftSection={<IconTrash size={18} />} onClick={onDiscard} disabled={!selectedCount || accepted} title="Removes only the selected faces from this group. Unselected faces stay.">{selectedCount ? `Discard ${plural(selectedCount, "selected face")}` : "Discard selected faces"}</Button>
+        <Button variant="default" color="orange" leftSection={<IconX size={18} />} onClick={onRejectSuggestedMatch} disabled={!automaticKnown || automaticBest?.draft_created || Boolean(manualPerson) || accepted} title="Stops suggesting this person for this group. No faces or people are deleted.">{automaticKnown && automaticBest?.name ? `Not ${automaticBest.name}` : "Reject suggested match"}</Button>
         <Button variant="subtle" color="gray" rightSection={<IconChevronRight size={17} />} onClick={onSkip} disabled={accepted}>Skip for now</Button>
       </Group>
 
@@ -1048,7 +1051,7 @@ function QueueIncomingGrid({ faces, selectedFaces, accepted, onToggleFace }) {
       {peek && <QueueFacePeek face={peek} />}
     </Modal>
     <SimpleGrid cols={{ base: 2, sm: 3 }} className="queue-photo-selection-grid">
-      {faces.map((face) => {
+      {faces.map((face, index) => {
         const selected = selectedFaces.includes(face.init_face_id);
         return (
           <Card
@@ -1059,7 +1062,7 @@ function QueueIncomingGrid({ faces, selectedFaces, accepted, onToggleFace }) {
             className="mantine-click-card queue-selection-card"
             data-selected={selected}
           >
-            <Box component="button" type="button" disabled={accepted} onClick={() => onToggleFace(face.init_face_id)} pos="relative" className="queue-selection-image" style={{ border: 0, padding: 0, background: "transparent", width: "100%", cursor: "pointer" }} aria-label={`Select face ${face.init_face_id}`}>
+            <Box component="button" type="button" disabled={accepted} onClick={() => onToggleFace(face.init_face_id)} pos="relative" className="queue-selection-image" style={{ border: 0, padding: 0, background: "transparent", width: "100%", cursor: "pointer" }} aria-label={`Select face ${index + 1}`}>
               <QueueFaceWithBox face={face} />
               <ThemeIcon className="queue-selection-check" color={selected ? "teal" : "gray"} radius="xl" size="sm">{selected ? <IconCheck size={14} /> : <IconX size={13} />}</ThemeIcon>
             </Box>
@@ -1136,7 +1139,7 @@ function QueueSuggestedMatch({ best, weakMatch, manual, onBrowse, onCompare }) {
               </Group>
             </Group>
             <Text size="xs" c="dimmed" mt={4}>
-              {best ? (best.draft ? "Pending Person in this Encounter" : `ID ${best.person_id}`) : weakMatch ? "The closest result did not meet the matching threshold." : "No candidate was found in People."}
+              {best ? (best.draft ? "Pending Person in this Encounter" : "Existing person in People") : weakMatch ? "The closest result did not meet the matching threshold." : "No candidate was found in People."}
             </Text>
           </Box>
           {best && !best.draft && <Button variant="default" fullWidth leftSection={<IconArrowsHorizontal size={17} />} onClick={onCompare}>View reference photos</Button>}

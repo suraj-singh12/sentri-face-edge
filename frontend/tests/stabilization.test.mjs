@@ -69,9 +69,10 @@ test("Event popup confirms before person resolution and keeps person fields", ()
   assert.match(queue, /activeEncounter\?\.phase === "EVENT" && eventDetails\?\.reviewId !== activeEncounter\.review_id/);
   assert.match(read("../src/hooks/useQueueController.js"), /\/api\/queue-encounter-event/);
   assert.match(read("../src/hooks/useQueueController.js"), /setQueueEvent\(null\);\s*setQueueEventDraft\(null\);/);
-  for (const field of ["Rank", "Name", "Tag", "Added by", "Sighting Notes", "With how many individuals"]) {
+  for (const field of ["Rank", "Name", "Tag", "Sighting Notes", "With how many individuals"]) {
     assert.ok(personForm.includes(field), field);
   }
+  assert.doesNotMatch(personForm, /label="Added by"/);
   assert.match(personForm, /Inherited Encounter/);
   assert.doesNotMatch(personForm, /<TextInput[^>]*label="Date"/);
   assert.doesNotMatch(personForm, /<Textarea label="Event notes"/);
@@ -124,7 +125,7 @@ test("Encounter grouping precedes identity cards and permits valid photos beside
   assert.match(queue, /const canSuggest = folders\.length > 1/);
   assert.match(queue, /title=\{canSuggest \? "Suggest Encounters from the uploaded folder structure"/);
   assert.match(queue, /data-conflict=\{Boolean\(item\.finalized_encounter\)/);
-  assert.match(queue, /aria-label=\{`Remove photo/);
+  assert.match(queue, /aria-label=\{`Leave photo/);
   assert.match(queue, /const usable = ordered\.filter\(\(item\) => !item\.excluded && !item\.finalized_encounter\)/);
   assert.match(queue, /disabled=\{!usable\.length \|\| !validBuckets/);
   assert.match(controller, /onPlanEncounters|planQueueEncounters/);

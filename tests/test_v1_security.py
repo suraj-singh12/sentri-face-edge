@@ -98,6 +98,7 @@ class V1SecurityTest(unittest.TestCase):
             ):
                 recovery = RecoveryService(data_dir, master_key, backups)
                 configured = recovery.configure(destination)
+                self.assertTrue(configured["destination_shares_data_drive"])
                 backup = recovery.automatic_backup_if_due()
                 self.assertIsNotNone(backup)
                 self.assertEqual(

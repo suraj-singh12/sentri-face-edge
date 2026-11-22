@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Alert, Badge, Box, Button, Card, Group, Modal, SimpleGrid, Stack, Text, TextInput, Title } from "@mantine/core";
+import { SameDriveWarning, backupFolderPlaceholder } from "../components/RecoveryGate.jsx";
 
 export function MachineProfilePanel({ profile, onConfigureRecovery, canConfigureRecovery = false }) {
   const [recoveryOpen, setRecoveryOpen] = useState(false);
@@ -92,17 +93,19 @@ export function MachineProfilePanel({ profile, onConfigureRecovery, canConfigure
         <Stack gap="xs" mt="md">
           <ProfileLine label="Destination" value={profile.recovery?.destination || "Not configured"} />
           <ProfileLine label="Destination available" value={profile.recovery?.destination_available ? "Yes" : "No"} />
+          <ProfileLine label="Separate drive" value={profile.recovery?.destination ? (profile.recovery?.destination_shares_data_drive ? "No — same drive as SentriFace data" : "Yes") : "-"} />
           <ProfileLine label="Recovery kit" value={profile.recovery?.recovery_kit_present ? "Present" : "Missing"} />
           <ProfileLine label="Last external backup" value={profile.recovery?.last_external_backup ? new Date(profile.recovery.last_external_backup).toLocaleString() : "None"} />
           <ProfileLine label="Retained external backups" value={`${profile.recovery?.external_backup_count || 0} / ${profile.recovery?.external_retention_limit || 10}`} />
         </Stack>
+        {profile.recovery?.destination_shares_data_drive ? <Box mt="md"><SameDriveWarning /></Box> : null}
         {canConfigureRecovery ? <Button mt="md" variant="light" onClick={() => setRecoveryOpen(true)}>Change safety-copy folder</Button> : <Text size="xs" c="dimmed" mt="md">The owner account is required to change the safety copy.</Text>}
       </Card>
 
       <Modal opened={recoveryOpen} onClose={() => setRecoveryOpen(false)} title="Change safety-copy folder" centered>
         <Stack>
           <Alert color="blue">Choose a folder on a separate or removable drive. SentriFace will save encrypted automatic backups there.</Alert>
-          <TextInput label="Folder location" value={destination} onChange={(event) => setDestination(event.currentTarget.value)} placeholder={navigator.userAgent.includes("Windows") ? "E:\\SentriFace Backup" : "/Volumes/Backup Drive/SentriFace Backup"} />
+          <TextInput label="Folder location" value={destination} onChange={(event) => setDestination(event.currentTarget.value)} placeholder={backupFolderPlaceholder()} />
           <Group justify="flex-end"><Button variant="default" onClick={() => setRecoveryOpen(false)}>Cancel</Button><Button loading={savingRecovery} disabled={!destination.trim()} onClick={configureRecovery}>Save safety copy</Button></Group>
         </Stack>
       </Modal>

@@ -9,7 +9,7 @@ import { RecoveryGate } from "./components/RecoveryGate.jsx";
 import { VIEWS } from "./constants.js";
 import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
 import { useLicenseController } from "./hooks/useLicenseController.js";
-import { profileLine, tabLabel } from "./utils.js";
+import { backupReminderDue, profileLine, tabLabel } from "./utils.js";
 import { DebugView } from "./views/DebugView.jsx";
 import { EventsView } from "./views/EventsView.jsx";
 import { PeopleView } from "./views/PeopleView.jsx";
@@ -39,6 +39,9 @@ export default function SentriFaceApp() {
         fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
         headings: { fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" },
         radius: { md: rem(8), lg: rem(8) },
+        components: {
+          PasswordInput: { defaultProps: { visibilityToggleButtonProps: { tabIndex: 0, "aria-label": "Show or hide password" } } },
+        },
       }}
     >
       <Notifications position="bottom-right" />
@@ -71,6 +74,15 @@ function SentriFaceShell({ user, logout, changePassword }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const canBackups = can("backups");
+  const showBackupReminder = canBackups && !licenseRestricted && backupReminderDue(state.lastDataChange, state.backups);
+  useEffect(() => {
+    if (!canBackups) return undefined;
+    const refreshBackups = () => actions.loadBackups({ silent: true, dedupe: false }).catch(() => {});
+    refreshBackups();
+    const timer = window.setInterval(refreshBackups, 120000);
+    return () => window.clearInterval(timer);
+  }, [canBackups, selectedView]);
   useEffect(() => {
     if (licenseRestricted && state.activeView !== "debug") actions.setActiveView("debug");
   }, [actions, licenseRestricted, state.activeView]);
@@ -88,7 +100,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
         <Group h="100%" px="xl" justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap" miw={0} className="brand-lockup">
             <img src="/sentriface-icon-64.png" alt="" className="brand-icon" aria-hidden="true" />
-            <Box miw={0}>
+            <Box miw={0} className="brand-text">
               <Title order={2} size="h3" className="brand-title">SentriFace <Text span inherit c="teal.4">Edge</Text></Title>
               <Text size="xs" c="dimmed" truncate>{profileLine(state.profile)}</Text>
             </Box>
@@ -172,6 +184,15 @@ function SentriFaceShell({ user, logout, changePassword }) {
               ) : null}
             >
               Your latest external backup is not available. The owner can check it under Settings.
+            </ShellNotice>
+          ) : null}
+          {showBackupReminder ? (
+            <ShellNotice
+              color="blue"
+              title="You have changes since your last backup"
+              action={<Button variant="subtle" size="compact-xs" loading={state.backupCreating} onClick={actions.requestBackup}>Back up now</Button>}
+            >
+              Back up now so a recent copy of your people, photos and events is safe.
             </ShellNotice>
           ) : null}
           {state.profile?.runtime === "dev" ? (

@@ -931,6 +931,8 @@ class SentriFaceApiServer(ThreadingHTTPServer):
 
 
 class SentriFaceApiHandler(SimpleHTTPRequestHandler):
+    server_version = "SentriFace"
+    sys_version = ""
     server: SentriFaceApiServer
     auth_user: AuthUser | None = None
     pending_auth_cookie: str | None = None
@@ -1498,7 +1500,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"events": events})
                 return
             if parsed.path == "/api/backups":
-                self._json({"backups": [_backup(record) for record in self.server.backups.list_backups()]})
+                self._json({
+                    "backups": [_backup(record) for record in self.server.backups.list_backups()],
+                    "last_data_change": self.server.engine.store.latest_committed_operation_at(),
+                })
                 return
             if parsed.path == "/api/queue-progress":
                 job_id = _query_value(parsed.query, "job_id")
@@ -1707,7 +1712,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     "stored_size": saved_path.stat().st_size,
                 })
                 return
-            payload = self._read_json()
+            payload = _with_authenticated_attribution(self._read_json(), self._operation_actor())
             if parsed.path == "/api/license/activate":
                 if set(payload) != {"token"}:
                     raise InputValidationError(
@@ -2366,7 +2371,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     rank=payload.get("rank"),
                     country=payload.get("country"),
                     importance=payload.get("importance"),
-                    editor_name=_required(payload, "editor_name"),
+                    editor_name=self.auth_user.display_name or self.auth_user.username,
                     tags=[str(tag) for tag in tags],
                     operation_id=_operation_id(payload),
                     actor=self._operation_actor(),
@@ -2419,7 +2424,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         "country": _required(payload, "country").strip(),
                         "importance": _required(payload, "importance").strip(),
                         "tags": [str(tag).strip() for tag in tags if str(tag).strip()],
-                        "added_by": _required(payload, "added_by"),
+                        "added_by": _attribution_name(self._operation_actor()) or _required(payload, "added_by"),
                         "initial_observation": {
                             "seen_date": _required(payload, "seen_date"),
                             "seen_time": _required(payload, "seen_time"),
@@ -3006,10 +3011,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             "detector_input_size": config.detector_input_size,
             "batch_size": config.batch_size,
             "prefer_small_models": config.prefer_small_models,
-            "models": {
-                "detector": config.detector_model.name,
-                "recognizer": config.recognizer_model.name,
-            },
+            "models": _model_file_names(config, self.server.runtime),
             "offline_enforcement": {
                 "loopback_only": True,
                 "source_runtime_admitted": bool(getattr(self.server, "source_runtime_admitted", False)),
@@ -3719,6 +3721,32 @@ def _required(payload: dict[str, Any], key: str) -> str:
     if value is None or str(value).strip() == "":
         raise KeyError(f"Missing required field: {key}")
     return str(value)
+
+
+SYNTHETIC_MODEL_LABEL = "None (synthetic development mode)"
+
+
+def _model_file_names(config: Any, runtime: str) -> dict[str, str]:
+    if runtime != "onnx":
+        return {"detector": SYNTHETIC_MODEL_LABEL, "recognizer": SYNTHETIC_MODEL_LABEL}
+    return {"detector": config.detector_model.name, "recognizer": config.recognizer_model.name}
+
+
+def _attribution_name(actor: dict | None) -> str:
+    return str((actor or {}).get("display_name") or (actor or {}).get("username") or "")
+
+
+def _with_authenticated_attribution(payload: Any, actor: dict | None) -> Any:
+    """"Added by" always names the signed-in account, never a client-typed value."""
+    name = _attribution_name(actor)
+    if not name or not isinstance(payload, dict):
+        return payload
+    if "added_by" in payload:
+        payload["added_by"] = name
+    for nested in payload.values():
+        if isinstance(nested, dict) and "added_by" in nested:
+            nested["added_by"] = name
+    return payload
 
 
 def _review_detail_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -5416,8 +5444,7 @@ def _support_diagnostic_report(server: SentriFaceApiServer) -> dict[str, Any]:
         },
         "models": {
             "ready": server.models_available(),
-            "detector": config.detector_model.name,
-            "recognizer": config.recognizer_model.name,
+            **_model_file_names(config, server.runtime),
             "usage": {
                 "usage_basis": server.model_usage.get("usage_basis", "unknown"),
                 "terms_version": server.model_usage.get("terms_version", ""),

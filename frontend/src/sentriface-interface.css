@@ -1599,6 +1599,10 @@ button {
   --shell-notice-color: var(--mantine-color-orange-6);
 }
 
+.shell-notice[data-color="blue"] {
+  --shell-notice-color: var(--mantine-color-blue-6);
+}
+
 .shell-notice-icon {
   color: var(--shell-notice-color);
 }
@@ -4513,4 +4517,28 @@ button.encounter-list-row:hover { background: var(--mantine-color-default-hover)
   .explore-inspector-metrics, .explore-inspector-section { grid-column: 1 / -1; }
   .explore-inspector-metrics { gap: 6px; }
   .explore-inspector-actions[data-person="true"] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: center; }
+}
+
+.world-row:focus-visible,
+.world-event-media-card:focus-visible,
+.world-evidence-media-card:focus-visible,
+.person-graph-node:focus-visible {
+  outline: 2px solid var(--mantine-color-teal-5);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .sentriface-header > .mantine-Group-root {
+    padding-inline: var(--mantine-spacing-sm);
+    gap: var(--mantine-spacing-xs);
+  }
+  .brand-lockup {
+    flex: 0 0 auto;
+  }
+  .brand-lockup .brand-text {
+    display: none;
+  }
+  .header-actions {
+    flex-shrink: 0;
+  }
 }

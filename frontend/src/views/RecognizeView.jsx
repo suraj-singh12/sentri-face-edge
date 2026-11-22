@@ -1,4 +1,4 @@
-import { resolvedRecognitionPerson } from "../reviewState.js";
+import { finalDecision, resolvedRecognitionPerson } from "../reviewState.js";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -98,6 +98,11 @@ export function RecognizeView({
   const selectedMatch = resolvedRecognitionPerson(recognition?.faceResolutions?.[selectedFace?.index], selectedFace?.matches)
     || selectedManualMatch || selectedFace?.matches?.[0] || null;
   const selectedAccepted = recognitionAcceptedFaces.includes(selectedFace?.index);
+  const reviewFaces = recognition?.faces || [];
+  const undecidedCount = reviewFaces.filter((face) => !finalDecision(recognitionFaceDecisions[face.index])).length;
+  const completeHint = recognitionReviewReady || !reviewFaces.length ? ""
+    : undecidedCount ? `${undecidedCount} face${undecidedCount === 1 ? " still needs" : "s still need"} Accept or Discard. Skipped faces stay undecided.`
+      : "Every face is discarded, so there is nothing to save. Use Clear to finish with this photo.";
   const selectedIsKnown = Boolean(selectedManualMatch || (selectedFace?.decision !== "unknown" && selectedMatch?.is_known));
   const selectedIsBad = selectedFace?.quality?.status === "bad";
   const imageSrc = recognition?.inputPath ? mediaUrl(recognition.inputPath) : null;
@@ -216,7 +221,7 @@ export function RecognizeView({
 
   return (
     <>
-      <EncounterDetailsModal opened={Boolean(recognition?.faces?.length && !recognition?.encounterMetadata && !targetPerson)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} />
+      <EncounterDetailsModal opened={Boolean(recognition?.faces?.length && !recognition?.encounterMetadata && !targetPerson)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} onClose={onClear} />
       <input ref={recognizeFileRef} className="hidden-file" type="file" accept="image/*" onChange={onRecognizeFile} />
       {targetPerson && (
         <Alert color="blue" title={`Adding a photograph to ${targetPerson.name}`} icon={<IconUserCheck size={18} />} mb="md">
@@ -232,7 +237,7 @@ export function RecognizeView({
               <Surface
                 step="1"
                 title="Input Image"
-                subtitle={recognition?.inputPath || "Upload or select a photo to recognize"}
+                subtitle={recognition?.inputPath ? "Uploaded photo" : "Upload or select a photo to recognize"}
                 action={(
                   <Group gap="sm" wrap="nowrap">
                     {recognition && <Button variant="default" leftSection={<IconFolder size={18} />} onClick={onLoadAnother}>Load Another</Button>}
@@ -381,6 +386,7 @@ export function RecognizeView({
             >
               {targetPerson ? "Finish enrollment" : "Complete Review"}
             </Button>
+            {!targetPerson && completeHint && <Text className="recognize-complete-hint" size="xs" c="dimmed" role="status">{completeHint}</Text>}
             </>
           ) : null}
         </Stack>
@@ -618,7 +624,7 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, re
       {selected && (
         <Box className="recognition-face-details">
           <Group justify="space-between" align="center" gap="xs" wrap="nowrap">
-            <Text size="xs" c="dimmed">{best?.staged_new ? "New Person · pending completion" : accepted && !resolved ? "Reloading saved decision" : unknown ? "No person met the recognition threshold." : `ID ${best.person_id}`}</Text>
+            <Text size="xs" c="dimmed">{best?.staged_new ? "New Person · pending completion" : accepted && !resolved ? "Reloading saved decision" : unknown ? "No person met the recognition threshold." : "Existing person"}</Text>
             <Button size="compact-xs" variant="subtle" leftSection={<IconUsers size={14} />} disabled={!canAdd || accepted} onClick={onBrowse}>Browse People</Button>
           </Group>
           <Group grow mt="xs">

@@ -1711,6 +1711,13 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             return _get_journal_operation(conn, operation_id)
 
+    def latest_committed_operation_at(self) -> str:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT MAX(created_at) AS latest FROM operation_journal WHERE status = 'COMMITTED'",
+            ).fetchone()
+            return str(row["latest"] or "") if row else ""
+
     def list_recent_operations(self, limit: int = 50) -> list[dict]:
         if limit < 1 or limit > 500:
             raise ValueError("Operation list limit must be between 1 and 500")
