@@ -814,6 +814,7 @@ SentriFaceEdge/
 │   ├── contracts.py                 component and storage protocols
 │   ├── engine.py                    application and recognition boundary
 │   ├── api_server.py                loopback API, authz, UI serving
+│   ├── api_payloads.py              response payload builders (re-exported by api_server)
 │   ├── storage/sqlite_store.py      schema, migrations, SQL authority
 │   ├── storage/sqlite_*.py          helpers, migrations, World reads, repair
 │   ├── components/                  ONNX/dev/image/index components
