@@ -42,17 +42,17 @@ remains the only directory that `./run.sh reset` removes. Set
 both installed-product locations, `~/Library/Application Support/SentriFace` and
 `${XDG_DATA_HOME:-~/.local/share}/sentriface`.
 
-**Dependency versions:** `run.sh` and CI install the newest versions allowed by
-`pyproject.toml`. The Windows release environment is pinned separately in
-`requirements-release.lock`. To reproduce the release versions in the source
-environment, install with the lock as a constraint file:
+**Dependency versions:** `run.sh`, `run.ps1` and the CI backend jobs install
+with `requirements-release.lock` as a pip constraint file, so source development
+uses the same versions as the Windows release (for example loguru 0.7.3,
+numpy 1.26.4, onnxruntime 1.28.0 and opencv-python-headless 4.11.0.86). Packages
+the lock does not list, such as Playwright for the `qa` extra, still resolve
+from `pyproject.toml`. Changing the lock re-runs the launcher's dependency
+install. To apply it to an existing environment by hand:
 
 ```bash
 .venv312/bin/python -m pip install -c requirements-release.lock -e ".[test]"
 ```
-
-This was checked on Linux with Python 3.12; it resolves loguru 0.7.3,
-numpy 1.26.4, onnxruntime 1.28.0 and opencv-python-headless 4.11.0.86.
 
 ## Linux explicit source ONNX and recovery
 
