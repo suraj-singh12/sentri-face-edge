@@ -1129,7 +1129,7 @@ test("World Event workspace renders authoritative overview and four bounded chil
   assert.match(view, /Provenance.*PROVENANCE/);
   assert.match(view, /Evidence.*EVIDENCE/);
   assert.match(view, /Media.*MEDIA/);
-  assert.match(view, /Backend-returned effective canonical participant/);
+  assert.match(view, /Seen in this event/);
   assert.match(view, /Raw → effective/);
   assert.match(view, /relationship_to_effective_identity/);
   assert.match(view, /item\.effective_endpoints/);

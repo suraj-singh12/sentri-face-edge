@@ -125,7 +125,7 @@ test("Encounter grouping precedes identity cards and permits valid photos beside
   assert.match(queue, /const canSuggest = folders\.length > 1/);
   assert.match(queue, /title=\{canSuggest \? "Suggest Encounters from the uploaded folder structure"/);
   assert.match(queue, /data-conflict=\{Boolean\(item\.finalized_encounter\)/);
-  assert.match(queue, /aria-label=\{`Remove photo/);
+  assert.match(queue, /aria-label=\{`Leave photo/);
   assert.match(queue, /const usable = ordered\.filter\(\(item\) => !item\.excluded && !item\.finalized_encounter\)/);
   assert.match(queue, /disabled=\{!usable\.length \|\| !validBuckets/);
   assert.match(controller, /onPlanEncounters|planQueueEncounters/);

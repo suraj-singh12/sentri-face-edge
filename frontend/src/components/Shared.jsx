@@ -412,14 +412,14 @@ function MatchIdentitySummary({ match }) {
           <Text size="xs" c="dimmed">{display.guidance}</Text>
         </Box>
         <Box>
-          <Text size="sm" c="dimmed">Group ID</Text>
+          <Text size="sm" c="dimmed">Person</Text>
           <Group gap={6} wrap="nowrap">
-            <Tooltip label={copied ? "Copied" : "Copy Group ID"}>
-              <ActionIcon size="sm" variant="subtle" color={copied ? "teal" : "gray"} onClick={copyGroupId} aria-label="Copy Group ID">
+            <Tooltip label={copied ? "Copied" : "Copy reference for support"}>
+              <ActionIcon size="sm" variant="subtle" color={copied ? "teal" : "gray"} onClick={copyGroupId} aria-label="Copy reference for support">
                 {copied ? <IconCheck size={15} /> : <IconCopy size={15} />}
               </ActionIcon>
             </Tooltip>
-            <Text size="xs" truncate>{match.person_id}</Text>
+            <Text size="xs" truncate>{match.name || "Existing person"}</Text>
           </Group>
         </Box>
       </Group>
@@ -444,7 +444,7 @@ function MatchIdentityPlaceholder() {
           <Text size="xs" c="dimmed">N/A</Text>
         </Box>
         <Box>
-          <Text size="sm">Group ID</Text>
+          <Text size="sm">Person</Text>
           <Text fw={800} c="teal.8">-</Text>
           <Text size="xs" c="dimmed">N/A</Text>
         </Box>

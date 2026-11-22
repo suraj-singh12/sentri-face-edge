@@ -228,7 +228,6 @@ export function usePeopleController({
       country: values.country,
       importance: values.importance,
       tags: values.tags || [],
-      editor_name: values.editorName,
       operation_id: operationId(),
     });
     await invalidatePersonGraph(result);

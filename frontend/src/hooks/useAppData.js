@@ -20,6 +20,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const encounterDetailRef = useRef(encounterDetail);
   encounterDetailRef.current = encounterDetail;
   const [backups, setBackups] = useState([]);
+  const [lastDataChange, setLastDataChange] = useState("");
   const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [backupCreating, setBackupCreating] = useState(false);
   const [backupImporting, setBackupImporting] = useState(false);
@@ -80,9 +81,10 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     return payload;
   }, [apiGet, canDestroy]);
   const loadBackups = useCallback(async (options = {}) => {
-    if (!canBackups) { setBackups([]); return { backups: [] }; }
+    if (!canBackups) { setBackups([]); setLastDataChange(""); return { backups: [] }; }
     const payload = await apiGet("/api/backups", options);
     setBackups(payload.backups || []);
+    setLastDataChange(payload.last_data_change || "");
     return payload;
   }, [apiGet, canBackups]);
   const refreshAll = useCallback(async (options = {}) => {
@@ -374,6 +376,8 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     encounters,
     encounterDetail,
     backups,
+    lastDataChange,
+    loadBackups,
     backupModalOpen,
     backupCreating,
     backupImporting,

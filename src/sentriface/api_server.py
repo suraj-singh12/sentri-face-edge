@@ -1500,7 +1500,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"events": events})
                 return
             if parsed.path == "/api/backups":
-                self._json({"backups": [_backup(record) for record in self.server.backups.list_backups()]})
+                self._json({
+                    "backups": [_backup(record) for record in self.server.backups.list_backups()],
+                    "last_data_change": self.server.engine.store.latest_committed_operation_at(),
+                })
                 return
             if parsed.path == "/api/queue-progress":
                 job_id = _query_value(parsed.query, "job_id")
@@ -2368,7 +2371,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     rank=payload.get("rank"),
                     country=payload.get("country"),
                     importance=payload.get("importance"),
-                    editor_name=_required(payload, "editor_name"),
+                    editor_name=self.auth_user.display_name or self.auth_user.username,
                     tags=[str(tag) for tag in tags],
                     operation_id=_operation_id(payload),
                     actor=self._operation_actor(),

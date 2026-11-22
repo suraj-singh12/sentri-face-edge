@@ -161,3 +161,25 @@ function entryFile(entry) {
 function readEntries(reader) {
   return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
 }
+
+const EVENT_CONTEXT_LABELS = { ordinary: "Ordinary / small", public: "Public / group", unknown: "Unknown" };
+
+export function eventContextLabel(context) {
+  return EVENT_CONTEXT_LABELS[context] || "Unknown";
+}
+
+export function requiredFieldErrors(values, fields) {
+  const errors = {};
+  for (const [key, label] of fields) {
+    const value = values?.[key];
+    if (value === null || value === undefined || !String(value).trim()) errors[key] = `${label} is required`;
+  }
+  return errors;
+}
+
+export function backupReminderDue(lastDataChange, backups = []) {
+  const changed = Date.parse(lastDataChange || "");
+  if (Number.isNaN(changed)) return false;
+  const latest = Math.max(...backups.map((backup) => Date.parse(backup.created_at || "")).filter((value) => !Number.isNaN(value)), -Infinity);
+  return changed > latest;
+}

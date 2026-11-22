@@ -149,7 +149,7 @@ function Participants({ items, page, selected, onSelect }) {
   return <ScrollArea.Autosize mah={535}><Stack gap={0}>{items.map((participant) => (
     <button key={participant.person_id} type="button" className="world-row world-event-participant-row" data-selected={selected?.type === "participant" && selected.value.person_id === participant.person_id} onClick={() => onSelect({ type: "participant", value: participant })}>
       <ThemeIcon size={34} radius="xl" variant="light" color="teal"><IconUser size={17} /></ThemeIcon>
-      <span className="world-row-main"><Text component="span" size="sm" fw={800}>{shortId(participant.person_id)}</Text><Text component="span" size="10px" c="dimmed">Backend-returned effective canonical participant</Text></span>
+      <span className="world-row-main"><Text component="span" size="sm" fw={800}>{participant.name || shortId(participant.person_id)}</Text><Text component="span" size="10px" c="dimmed">Seen in this event</Text></span>
       <Badge size="xs" variant="light" color="gray">Effective identity</Badge>
     </button>
   ))}</Stack></ScrollArea.Autosize>;

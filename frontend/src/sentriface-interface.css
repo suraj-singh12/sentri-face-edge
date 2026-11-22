@@ -1599,6 +1599,10 @@ button {
   --shell-notice-color: var(--mantine-color-orange-6);
 }
 
+.shell-notice[data-color="blue"] {
+  --shell-notice-color: var(--mantine-color-blue-6);
+}
+
 .shell-notice-icon {
   color: var(--shell-notice-color);
 }

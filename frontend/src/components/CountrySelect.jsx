@@ -1,10 +1,11 @@
 import { Select } from "@mantine/core";
 import { COUNTRY_OPTIONS, filterCountries } from "../countries.js";
 
-export function CountrySelect({ value, onChange, required = true }) {
+export function CountrySelect({ value, onChange, required = true, error }) {
   return (
     <Select
       required={required}
+      error={error}
       searchable
       label="Country"
       placeholder="Browse or search countries"
