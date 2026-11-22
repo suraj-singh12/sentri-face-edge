@@ -48,7 +48,7 @@ Archive and delete are identity states, not historical erasure. Archived people 
 
 - Domain dataclasses: `src/sentriface/models.py`
 - Storage protocol: `src/sentriface/contracts.py::IdentityStore`
-- SQLite implementation and inline schema migrations: `src/sentriface/storage/sqlite_store.py::SQLiteIdentityStore`
+- SQLite implementation and inline schema migrations: `src/sentriface/storage/sqlite_store.py::SQLiteIdentityStore` (module-level helpers split into `storage/sqlite_*.py` and re-exported from `sqlite_store`)
 - Application/service boundary: `src/sentriface/engine.py::FaceEngine`
 - Loopback HTTP API and authorization: `src/sentriface/api_server.py`
 - React application: `frontend/src/SentriFaceApp.jsx`, controllers in `frontend/src/hooks/`, views in `frontend/src/views/`
