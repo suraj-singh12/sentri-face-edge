@@ -265,3 +265,102 @@ Explicit Relations Include/Exclude selected states; Reference Only origin, cap a
 **Why → direction:** The suggested Refresh action cannot resolve this expired-session condition, and the persistent banner directs the operator to diagnose a server that is responding; the separate transient toast identifies an authorization requirement without an obvious sign-in action. Distinguish authentication expiry from connection failure and provide a clear reauthentication path while preserving unsaved-work safeguards.
 
 **Reuse → tradeoffs:** Reuse existing session and connection error handling and the sign-in flow; keep authorization checks intact. The sample does not establish every disconnect or restart scenario.
+
+## Pass 3 — current source `677bb61` (Linux Chromium, synthetic)
+
+Pass 3 audits [`677bb61e8e9d659db95123871bb2e011cf663a79`](https://github.com/suraj-singh12/sentri-face-edge/commit/677bb61e8e9d659db95123871bb2e011cf663a79) on `v2-hardening-followups` (includes merged PRs #38–#41) in a disposable synthetic source authority on Linux headless Chromium, 1440×900, light theme. J42–J44 use an audit-only multi-face detector seam ([tooling/multiface_server.py](tooling/multiface_server.py)) that splits generated images into vertical synthetic faces; it validates workflow and persistence only, never recognition. Every role named below was a separate real local sign-in.
+
+**Revalidated at `677bb61` (still present):** F04 toasts over Discard Face/Complete Review ([J43 step 6](journeys/J43.md)); F06 Viewer header Favorite enabled then refused while the More-menu item is disabled ([J47 steps 9–11](journeys/J47.md)); F08 stale correction without a reload action, now extended ([J49 steps 13–16](journeys/J49.md)); F09 duplicated import errors, including a misleading “Connection or operation error” title ([J45 steps 7 and 14](journeys/J45.md)); F11 truncated backup table and machine labels ([J45 steps 4 and 11](journeys/J45.md)); F30 restarted service reported as “not responding” ([J52](journeys/J52.md)).
+
+| Priority | Finding | Reach | Classification |
+|---|---|---|---|
+| P1 | [F31 Delete wording contradicts tombstone semantics](#f31-delete-wording-contradicts-tombstone-semantics) | Every Person delete | Confirmed misleading destructive language |
+| P1 | [F32 Deleted people are filed under Archived and dead-end](#f32-deleted-people-are-filed-under-archived-and-dead-end) | Every tombstoned Person | Confirmed lifecycle IA / accessibility defect |
+| P1 | [F34 Access changes leave stale sessions and generic sign-out](#f34-access-changes-leave-stale-sessions-and-generic-sign-out) | Disable, role change, password reset, restart | Confirmed feedback/recovery defect; backend revocation holds |
+| P1 | [F35 Required initial sighting of a no-photo Person is not surfaced](#f35-required-initial-sighting-of-a-no-photo-person-is-not-surfaced) | Every Add without photo | Candidate data-visibility defect; PARTIAL verification |
+| P2 | [F33 Role-restricted controls do not explain themselves](#f33-role-restricted-controls-do-not-explain-themselves) | Viewer, Operator, Technician; account creation | Confirmed affordance/communication issue; API holds |
+| P2 | [F36 Encounter corrections save silently and stale detail persists](#f36-encounter-corrections-save-silently-and-stale-detail-persists) | Every Encounter correction | Confirmed feedback/state issue; history correct |
+| P2 | [F37 Backup list duplicates imports and mislabels origin](#f37-backup-list-duplicates-imports-and-mislabels-origin) | Import, restore, backup reminder | Confirmed clarity issue; no wrong-restore claim |
+| P2 | [F38 Clear discards review decisions and looks enabled when disabled](#f38-clear-discards-review-decisions-and-looks-enabled-when-disabled) | Check a photo | Confirmed lost-work / visual-state defect |
+| P2 | [F39 Temporary account passwords are not temporary](#f39-temporary-account-passwords-are-not-temporary) | Every administrator-created account | Confirmed wording/policy mismatch; product decision |
+| P3 | [F40 Safety-copy banner is role-unaware](#f40-safety-copy-banner-is-role-unaware) | Every non-configured authority | Confirmed wording issue |
+
+## F31 Delete wording contradicts tombstone semantics
+
+**Problem → evidence (Custodian, J50 steps 10–12):** The confirmation is titled “Delete entire profile permanently?” with button “Delete entire profile”, while its body says “This tombstones the identity … Historical identity, sightings, relationships, and operation provenance remain represented.” The typed confirmation accepts only uppercase `DELETE` without saying so. The success toast exposes the raw safety-backup id `backup_…_before-person-permanent-delete-audit-bravo-…`. The Technician Activity log then records `person-purge … deleted: true, permanent: false` ([J47 step 22](journeys/J47.md)). After deletion the Encounter shows “Audit Bravo (deleted)” and the relationship remains ([J50 step 13](journeys/J50.md)), so the behavior is correct tombstoning.
+
+**Why → direction:** “Permanently” and “entire profile” describe erasure that does not happen, which both frightens careful operators and misinforms them about what history survives. Name the operation for what it does (for example “Delete person (keep history)”), state what leaves active use versus what remains historical, make the case rule explicit or case-insensitive, and describe the safety backup by date rather than id.
+
+**Reuse → tradeoffs:** Reuse the existing PeopleView delete modal, typed confirmation and backup-before-delete flow. Copy change only; the tombstone semantics in AGENTS.md must not change.
+
+## F32 Deleted people are filed under Archived and dead-end
+
+**Problem → evidence (Custodian, J50 steps 14–16):** After deletion, the People “Archived” collection lists the person with a `DELETED` badge, “Historical identity” and a disabled action; there is no profile entry. “Deleted Faces” is a different face-record collection. In the Person Graph the deleted node is an enabled, focusable button whose accessible name is “Audit Bravo is restricted by the backend (DELETED).” Activating it does nothing visible.
+
+**Why → direction:** Archive (reversible, restorable) and delete (tombstone) are different lifecycle states but share one collection, and the graph presents an actionable control with no result and developer wording. Give tombstoned identities their own clearly labelled historical view or filter; decide (operator decision) whether a read-only historical profile should open; render non-interactive graph nodes as `aria-disabled` with plain wording, or open read-only evidence.
+
+**Reuse → tradeoffs:** Reuse existing People collections, `HistoricalIdentity` status data, and graph node rendering. Archived nodes must stay non-clickable per AGENTS.md; whether deleted nodes may open read-only history is a product decision.
+
+## F33 Role-restricted controls do not explain themselves
+
+**Problem → evidence:** Technician Backups shows Import, every Restore and every Delete disabled with no reason; hovering a disabled Restore still shows “Restore this verified backup” ([J47 step 23](journeys/J47.md)). Viewer profile Manage faces/Edit/Archive and More-menu items are disabled without a reason ([J47 steps 9–12](journeys/J47.md)); Operator Event detail simply omits correction actions ([J47 step 16](journeys/J47.md)). When creating an account, the role picker shows bare role names; `ROLE_DESCRIPTIONS` are passed as option descriptions but never rendered ([J47 step 2](journeys/J47.md), `AccountsPanel.jsx`). The Custodian description “archive, delete, restore” refers to Person restore, not database restore, next to backup terms.
+
+**Why → direction:** Operators cannot tell a permission boundary from a broken control, and administrators assign roles without seeing what each allows. Use one shared pattern: disabled control plus a short role reason (“Requires Administrator”) in tooltip and accessible description; render role descriptions in the picker; clarify “Person restore”.
+
+**Reuse → tradeoffs:** Reuse the existing capability set, `ROLE_DESCRIPTIONS`, and Mantine Tooltip/description props. Backend authorization stays authoritative; this extends F06.
+
+## F34 Access changes leave stale sessions and generic sign-out
+
+**Problem → evidence (Administrator + second browser session, J51 steps 9–14):** Disabling a Viewer, changing an Operator to Viewer, or resetting a password revokes that user's sessions on the server (`auth.update_user` and `reset_password` revoke on any change). The affected open session keeps showing its old role, navigation (including Review photos) and cached data until its next request; Refresh then lands on sign-in with the generic toast “Connection or operation error”. Only a new sign-in explains “This account is disabled”. After a service restart, the same open sessions show “SentriFace is not responding — make sure SentriFace is still running, then click Refresh” although the server is up; only a full reload reaches sign-in ([J52 steps 1–4](journeys/J52.md); F30 revalidated).
+
+**Why → direction:** The user cannot tell whether the system failed, their access changed, or the service restarted, and unsaved work is lost without explanation. Map authentication-required responses to a dedicated “Your session ended” state with the reason where known (signed out by an administrator, password changed, service restarted) and a direct sign-in action; suppress the generic error toast for that case.
+
+**Reuse → tradeoffs:** `useApiClient.readResponse` already dispatches `sentriface-auth-required`; reuse it and the sign-in screen. Server revocation is correct and must stay.
+
+## F35 Required initial sighting of a no-photo Person is not surfaced
+
+**Problem → evidence (Custodian, J49 steps 7–8, J50 step 7):** “Add without photo” says “Add only observation details you actually know” but requires Rank, Name, Country, Tag, Date, Time, Place Seen, individual count and Event/Occasion. The API stores the sighting fields as `metadata.initial_observation` (`api_server.py` person-create), not as an Encounter. The entered sighting (“Placeholder seed”, Pune, 10:30) did not appear in the Person's Sightings, the Events list or Activity; only a later Encounter correction appeared.
+
+**Why → direction:** Operators are forced to supply (or invent) occurrence data that they then cannot see, which undermines trust and may create false records. Decide whether these fields are optional, are shown on the profile as an unverified initial note, or create a real sighting. **Verification is PARTIAL:** the profile was not inspected before the later correction, and stored metadata was not read through a UI surface.
+
+**Reuse → tradeoffs:** Reuse the existing Person create form and profile Overview. Any change touching occurrence authority is a domain decision, not a UI tweak.
+
+## F36 Encounter corrections save silently and stale detail persists
+
+**Problem → evidence (Custodian, J49):** Saving Correct Encounter with no changes closes silently yet appends “Encounter interpretation reviewed” history (step 3). Real corrections and participant additions also have no success feedback (steps 4, 12). Browser reload on a detail returns to the Events list (step 5) while re-clicking Events reopens the last detail (step 9). After a two-tab conflict, header Refresh does not reload the open detail; list and detail disagree (“(tab B)” versus “(corrected)”) until the user leaves and re-enters (steps 13–16). The relation choices appear as raw `INCLUDE`/`EXCLUDE` tokens (step 10).
+
+**Why → direction:** Corrections change historical interpretation, so the operator needs confirmation of exactly what changed, and the recovery action (Refresh) must actually refresh. Disable Save until something changed (or say “No changes”), show a success summary, reload the open detail on Refresh and on conflict, and use plain relation labels.
+
+**Reuse → tradeoffs:** Reuse `EncounterManagementModal`, the expected-revision conflict and existing toast system. Correction history semantics stay; this extends F08/F15.
+
+## F37 Backup list duplicates imports and mislabels origin
+
+**Problem → evidence (Administrator, J45; Technician, J47 step 23):** Importing the same encrypted export twice succeeds silently and creates two identical rows, both labelled “Manual backup” with the original creation time. The automatic pre-restore backup's card title is the raw reason `before-restore-backup_2026-11-22_18-19-25`; rows show raw backup ids. Restore confirmation names “the selected backup” without date, size or people count and uses a teal “Restore Safely” button. Right after restoring the newest backup, “You have changes since your last backup” reappears. A backup lists “2 people” while active People shows 1 (tombstoned counted, unexplained).
+
+**Why → direction:** During recovery, operators must identify the right backup quickly. Label origin (Manual, Imported, Automatic before restore/archive/delete), show date, size and counts in the confirmation, warn on duplicate import, and reset the reminder after restore.
+
+**Reuse → tradeoffs:** Reuse DebugView backup rows, existing backup metadata and the restore modal. Extends F11; backup verification and restore safety are unchanged.
+
+## F38 Clear discards review decisions and looks enabled when disabled
+
+**Problem → evidence (Administrator, J44 steps 3, 5–6):** With one face discarded and another undecided, Clear resets immediately with no confirmation; decisions are lost and reload does not recover them (nothing was persisted, which is correct). On the empty page Clear is disabled but renders with the same saturated red gradient as the enabled state because `.recognize-action--clear` has no disabled override (`sentriface-interface.css`).
+
+**Why → direction:** The most visually dominant control is a destructive one that silently drops work. Confirm Clear when decisions exist, and give the disabled state a distinct appearance.
+
+**Reuse → tradeoffs:** Reuse the existing discard-confirmation modal pattern and Mantine disabled styles. No persistence change.
+
+## F39 Temporary account passwords are not temporary
+
+**Problem → evidence (J47 steps 2 and 6):** Add account asks for a “Temporary password”. The Viewer signs in with it and is never asked to change it. Cancelling Change password keeps all three typed values when reopened ([J48](journeys/J48.md), step 5 private).
+
+**Why → direction:** The label implies a security control that does not exist. Either enforce change at first sign-in (product/security decision) or rename the field; clear password fields on cancel.
+
+**Reuse → tradeoffs:** Reuse the existing change-password modal. Enforcement would need a backend flag; that is an operator decision.
+
+## F40 Safety-copy banner is role-unaware
+
+**Problem → evidence:** With no external safety copy configured, every role sees “Your latest external backup is not available. The owner can check it under Settings.” The Administrator/owner sees it too, as do Custodian and Technician, who have Settings but not recovery configuration ([J44 step 1](journeys/J44.md), [J47 step 17](journeys/J47.md)). “Owner” is not one of the five role names, and “not available” is shown when no external backup ever existed.
+
+**Why → direction:** Tell the owner what to do, tell others who can do it, and distinguish “never configured” from “unavailable”. Relates to F21 and F29.
+
+**Reuse → tradeoffs:** Reuse the existing banner and capability set.

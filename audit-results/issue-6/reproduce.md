@@ -69,3 +69,7 @@ Continuation O: use a fresh dedicated source authority. Submit an empty owner fo
 Continuation P: create a Viewer on a dedicated disposable authority in synthetic source mode; stop it and launch the same authority with `./run.sh onnx` with no models installed. Sign in as Viewer to see the owner gate, then sign out and sign in as owner. Do not use or modify operator model files.
 
 Continuation Q: with a signed-in synthetic source application on a disposable authority, stop only its source server and click Refresh. Restart the same server, wait for its startup message, retry Refresh, then reload and sign in. Record the actual response and do not interpret a stale-session 401 as server downtime.
+
+## Pass 3 (Linux, 677bb61)
+
+Check out `v2-hardening-followups` at `677bb61`. On Linux, start a disposable Secret Service with `with-keyring.sh`-style D-Bus/gnome-keyring, then run `tooling/multiface_server.py --data-dir <fresh dir> --port 8765` (audit-only multi-face seam; omit it to use the normal whole-image synthetic detector). Run `capture_host.py -i` with `SENTRIFACE_AUDIT_SOURCE_SHA=677bb61e8e9d659db95123871bb2e011cf663a79`. After a server restart, reset the harness `X-SentriFace-Session` extra header to the new page token, or sign-in fails for harness reasons. Follow J42–J52. Promote with `tooling/pass3_promote.py --apply`.

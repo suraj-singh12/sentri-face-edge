@@ -92,3 +92,16 @@ Continuation O qualifies invalid owner account refusal and submitting-disabled f
 Continuation P qualifies the non-owner model gate using a Viewer created through the UI and an unconfigured source ONNX launch. Current contracts: 362 PASS, 78 PARTIAL, 53 NOT RUN, 9 BLOCKED, 7 FAIL of 509. No model was downloaded or run.
 
 Continuation Q qualifies the connection-unavailable notice and refresh error on a controlled disposable-server outage. The already-settled refresh capture does not qualify the loading/disabled branch. Current contracts: 364 PASS, 78 PARTIAL, 51 NOT RUN, 9 BLOCKED, 7 FAIL of 509.
+
+## Pass 3 — six mandatory flow families at 677bb61
+
+| Flow family | Journeys | Executed | Not run / blocked |
+|---|---|---|---|
+| Backup and restore | J45, J47 | Create, invalid plain/encrypted import, wrong/right passphrase, repeat import, restore cancel/success, safety backup, export, Technician create/export and disabled import/restore/delete | Interrupted restore, failure injection, cross-schema backup, restore after restart |
+| Roles and permissions | J47, J51 | Five roles signed in; navigation and key controls; disable, role change, admin reset | Exhaustive API denial matrix at 677bb61 (Pass 1 role checks cover `b457f0a`) |
+| Change password / account lifecycle | J48, J51, J52 | Short, mismatch, wrong current, cancel, success, old/new password, revoked sessions, restart | Lockout, emergency admin reset, idle session expiry |
+| Encounter corrections | J49, J50 | Metadata correction, no-op save, add participant with relation, history, two-tab conflict, reload, deleted participant display | Remove/reassign participant, full Correct Relations, restart; Split/Merge is #4 |
+| Archive / delete / history | J50 | Archive, cancel, archived profile, restore, tombstone, Encounter and graph history | Administrator restore of tombstone (not offered), Operator refusal beyond disabled controls |
+| Multi-face photos | J42–J44, J46 | 0/1/2/3 faces, new person, discard/skip, refresh mid-review, atomic completion, repeat proposal, same Person twice, cancel, Clear | Genuine ONNX multi-face: BLOCKED (no licensed models on this VM); ambiguous/poor-quality multi-face with real inference |
+
+Pass 3 does not change the 509-row source-branch denominators; it adds journey evidence at a newer source. Windows, macOS and screen-reader acceptance were not run in Pass 3.

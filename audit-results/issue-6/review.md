@@ -251,3 +251,10 @@ The existing dense fixture provides 30 synthetic People and 30 Events without ph
 Continuation P: the non-owner model gate enforces its owner boundary in the sampled UI. Its generic alert nevertheless directs the Viewer to choose controls they cannot see (F29); this does not establish a backend permission bypass.
 
 Continuation Q: after a controlled source-server restart, a stale session produced 401 but the shell continued to prescribe Refresh as if the server were down; reloading and signing in recovered. This is bounded to the tested macOS source runtime (F30).
+
+## Pass 3 — independent challenge (677bb61)
+
+- **Authority checks held.** No graph-affecting record before completion, participant deduplication, expected-revision refusal, server session revocation and tombstone history preservation all behaved correctly. Findings F31–F40 concern language, feedback, discoverability and state presentation, not data corruption.
+- **Downgraded or withdrawn.** F35 stays a candidate (PARTIAL): the profile was not read before the later correction. A “session authorization is required” sign-in failure after restart was caused by the capture harness pinning an old session header and is not reported. A Country mismatch (“British Indian Ocean Territory”) came from a substring selector, not the product.
+- **Synthetic limits.** J42–J44 use an audit-only detector seam; they prove workflow and persistence only.
+- **Evidence handling.** Nine Pass 3 frames are private: seven with filled password/passphrase fields, one mis-capture, one Manage dialog with a typed reset password.

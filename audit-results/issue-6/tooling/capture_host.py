@@ -26,7 +26,7 @@ def cap(ux,journey,state,role='Administrator',kind='synthetic',public=True):
     page.screenshot(path=str(path),full_page=False)
     paths=page.locator('p,code,pre').filter(has_text=re.compile(r'/Users/|/private/|/var/folders/|/Volumes/')).filter(visible=True)
     sensitive=paths.count()>0
-    record=dict(file=name,ux=ux,journey=journey,step=1+sum(r['journey']==journey for r in records),state=state,role=role,kind=kind,public_candidate=public and not sensitive,captured_at=datetime.now(timezone.utc).isoformat(),viewport=page.viewport_size,device_scale_factor=1,theme=page.locator('html').get_attribute('data-mantine-color-scheme'),source_sha='b457f0a723e845dd1a92a07a577072c85146c89a',sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+    record=dict(file=name,ux=ux,journey=journey,step=1+sum(r['journey']==journey for r in records),state=state,role=role,kind=kind,public_candidate=public and not sensitive,captured_at=datetime.now(timezone.utc).isoformat(),viewport=page.viewport_size,device_scale_factor=1,theme=page.locator('html').get_attribute('data-mantine-color-scheme'),source_sha=os.environ.get('SENTRIFACE_AUDIT_SOURCE_SHA','b457f0a723e845dd1a92a07a577072c85146c89a'),sha256=hashlib.sha256(path.read_bytes()).hexdigest())
     record['scroll']={'x':page.evaluate('window.scrollX'),'y':page.evaluate('window.scrollY')}
     if sensitive and public:
         name2=name.replace('.png','_SANITIZED.png')

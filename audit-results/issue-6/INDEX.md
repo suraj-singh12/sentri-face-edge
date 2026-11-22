@@ -160,6 +160,17 @@ Journeys: [J15](journeys/J15.md), [J17](journeys/J17.md), [J18](journeys/J18.md)
 | [J34](journeys/J34.md) | Invalid photo, quality warning and proof-only completion |
 | [J40](journeys/J40.md) | Native macOS window and scaling baseline |
 | [J41](journeys/J41.md) | Genuine ONNX supplement, private visual originals |
+| [J42](journeys/J42.md) | Pass 3: multi-face photo, refresh mid-review, atomic completion |
+| [J43](journeys/J43.md) | Pass 3: repeated photo and one Person on two faces |
+| [J44](journeys/J44.md) | Pass 3: zero/one/two faces, cancel and Clear |
+| [J45](journeys/J45.md) | Pass 3: backup create, invalid import, restore, export, re-import |
+| [J46](journeys/J46.md) | Pass 3: new-person form validation |
+| [J47](journeys/J47.md) | Pass 3: five roles, navigation and permissions |
+| [J48](journeys/J48.md) | Pass 3: change password lifecycle |
+| [J49](journeys/J49.md) | Pass 3: Encounter corrections and stale revision |
+| [J50](journeys/J50.md) | Pass 3: archive, restore, delete (tombstone) and history |
+| [J51](journeys/J51.md) | Pass 3: disable, role change, password reset with open sessions |
+| [J52](journeys/J52.md) | Pass 3: service restart with open sessions |
 
 ## Evidence classes, privacy and geometry
 
@@ -224,3 +235,7 @@ Follow [Explore pagination](journeys/J19.md), [Connections pagination and measur
 [Viewer model setup gate and owner return](journeys/J32.md#macos-completion-pass-2--continuation-p-non-owner-model-gate) is now qualified; [F29](findings.md#f29-non-owner-model-gate-gives-an-unavailable-instruction--p2-interaction--confirmed-wording-inconsistency) records conflicting wording.
 
 [Service interruption and reauthentication recovery](journeys/J02.md#macos-completion-pass-2--continuation-q-service-interruption-and-session-recovery) records the warning, restart and sign-in path; [F30](findings.md#f30-restarted-service-can-be-presented-as-unavailable-when-session-has-expired--p1-recovery--confirmed-feedback-defect) explains the 401 feedback mismatch.
+
+## Pass 3 — current source 677bb61 (six mandatory flow families)
+
+Pass 3 audits [`677bb61`](https://github.com/suraj-singh12/sentri-face-edge/commit/677bb61e8e9d659db95123871bb2e011cf663a79) on `v2-hardening-followups` (PRs #38–#41) on Linux headless Chromium with a disposable synthetic authority. Journeys [J42](journeys/J42.md)–[J52](journeys/J52.md) cover multi-face photos, backup/restore, roles, change password and account lifecycle, Encounter corrections, and archive/delete history. New findings [F31–F40](findings.md#pass-3--current-source-677bb61-linux-chromium-synthetic); F04, F06, F08, F09, F11 and F30 revalidated as still present. Pass 3 captures are registered with `pass_id: Pass 3` in the [capture register](capture-register.json); credential-bearing frames stay private. Earlier passes remain evidence for `b457f0a` only.

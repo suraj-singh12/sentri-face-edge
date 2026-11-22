@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
   "evidence_branch": "audit/issue-6-current-experience",
-  "sealed_at": "2026-11-21T18:09:02.505530+00:00",
+  "sealed_at": "2026-11-22T19:00:56.124395+00:00",
   "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
   "environment": {
     "os": "macOS 26.0 arm64 VM",
@@ -27,16 +27,16 @@
   "counts": {
     "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
     "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
-    "registered_capture_attempts": 727,
+    "registered_capture_attempts": 849,
     "accepted_capture_records": 724,
     "rejected_attempts": 3,
     "distinct_sampled_visual_state_keys": 721,
-    "public_images": 619,
+    "public_images": 732,
     "public_originals": 607,
     "public_sanitized_derivatives": 12,
     "private_only_accepted": 105,
     "private_genuine_images": 33,
-    "runtime_journey_records": 36,
+    "runtime_journey_records": 47,
     "semantic_surface_families": 37,
     "observed_titled_overlays": 57,
     "observed_dialog_title_count": 40,
@@ -68,8 +68,8 @@
   "files": [
     {
       "path": "audit-results/issue-6/INDEX.md",
-      "bytes": 21940,
-      "sha256": "202765af28376fe0406ff95f1a2708ed606c339eab74ac95df1dea9d2ea4b940"
+      "bytes": 23665,
+      "sha256": "bef01bb4ae50a83b0f14e86285d7acc00f46532865348d201d9315e873f4384e"
     },
     {
       "path": "audit-results/issue-6/branch-coverage.csv",
@@ -78,8 +78,8 @@
     },
     {
       "path": "audit-results/issue-6/capture-register.json",
-      "bytes": 861703,
-      "sha256": "ee465364e28a5d559eab03629b54c0ea8502592731665073c35723e5dc0f7e15"
+      "bytes": 966127,
+      "sha256": "e839f64b7ef0cefd4af8a42fa2d04df77468a4120bc29df551d7d1e827a318eb"
     },
     {
       "path": "audit-results/issue-6/captured-overlays.csv",
@@ -123,8 +123,8 @@
     },
     {
       "path": "audit-results/issue-6/coverage.md",
-      "bytes": 13828,
-      "sha256": "99e469b257751061a6cae6ad87ba4b8ae627006139a89e3c3817b12b196570c1"
+      "bytes": 15607,
+      "sha256": "110d2210c6f0a393800699533567d01647dc59b564ae72a499f791555eeb909e"
     },
     {
       "path": "audit-results/issue-6/discovered-branches.csv",
@@ -143,8 +143,8 @@
     },
     {
       "path": "audit-results/issue-6/findings.md",
-      "bytes": 30202,
-      "sha256": "0e05bc0aa8ce719102f996027a9a09dbd03ff9d32f76934da3aaeaf8bd9463e1"
+      "bytes": 45208,
+      "sha256": "f48def6254b49ca39c1d13cd4922cc1f972960621b4e3c60bd5661a22705b78d"
     },
     {
       "path": "audit-results/issue-6/fixtures/invalid-image.png",
@@ -397,6 +397,61 @@
       "sha256": "dc89a81f7d0df72ecfa7eb9f65025d82ce931cc6c36e4077439cf04584f44fd5"
     },
     {
+      "path": "audit-results/issue-6/journeys/J42.md",
+      "bytes": 4200,
+      "sha256": "51106f871ce424242ef90cfb3f438612447341435193ebfd4eae12c63c6e9c45"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J43.md",
+      "bytes": 3539,
+      "sha256": "62a63d5ab8acdd4073020401cd256ba3d6f39acd1d3072421a367a929e6df20b"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J44.md",
+      "bytes": 3046,
+      "sha256": "b1b771e337ea8f49f0be68b043e38cf62366eb96706e80c0b4c5c1838c21c81a"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J45.md",
+      "bytes": 6773,
+      "sha256": "0747a2d3a67c31c2925998f3f0d647848a2f5b6e4e788a9b18d93b3f2d783682"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J46.md",
+      "bytes": 1090,
+      "sha256": "6915aa619bb80ba4e71e227459ce13c0eedd2564e2f7ea480d5c08f556812a02"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J47.md",
+      "bytes": 8581,
+      "sha256": "666fe9e01715cbd5c1936c4ff9ac6d5afa91c78e38b317b549cc4ecaf418de80"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J48.md",
+      "bytes": 3395,
+      "sha256": "f6ff06a43494af4a5517ee60917c2016321cde317658e73021e7a2a81a7023e5"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J49.md",
+      "bytes": 7654,
+      "sha256": "7f8ae105c21c462581bf51c9e4337bc1acad3d7a642dc163c3c81fd949e8040d"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J50.md",
+      "bytes": 6490,
+      "sha256": "45abc38a0158cb1e692034b0861223df52039b9062905e45c4d372e90ecde7f8"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J51.md",
+      "bytes": 5855,
+      "sha256": "e22c0cbb9e9f6e6994afd166251c486471ef0fb70da732905bf6e5c0e7313584"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J52.md",
+      "bytes": 2351,
+      "sha256": "ce204656052a945112e2ff613c5af5dd97f3025b0419cfe4ce6a826cb1ca9693"
+    },
+    {
       "path": "audit-results/issue-6/pass2-execution-plan.csv",
       "bytes": 99337,
       "sha256": "6b49e0bc7fb1c0055de0d63d4c28d3d80f3cbae02a431d3c62d9ed54512309f5"
@@ -408,8 +463,8 @@
     },
     {
       "path": "audit-results/issue-6/reproduce.md",
-      "bytes": 10627,
-      "sha256": "2f48cf83d32f3a64acb5f7f5798ed3614857c24230ddf2924b01b36dc64aa22e"
+      "bytes": 11269,
+      "sha256": "8f459a15d7f28077ae99cdff9760ffb4ac1b36993d4d5641639cb6144a088071"
     },
     {
       "path": "audit-results/issue-6/reuse-map.md",
@@ -418,8 +473,8 @@
     },
     {
       "path": "audit-results/issue-6/review.md",
-      "bytes": 59459,
-      "sha256": "b72863030caeb230be7671222da55b0d919fec13adb877f8fdb3e30dc8daf461"
+      "bytes": 60485,
+      "sha256": "50ed46a612027ff66d418d13009f24d2765262e9114fa68c314ecd2cabda4cd0"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-01_First-launch.png",
@@ -672,6 +727,101 @@
       "sha256": "d810789ca379cae3aeffe0126398595d2c5e85aa42658ebec7145a0e68b9eff7"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-05_Signed-out.png",
+      "bytes": 373310,
+      "sha256": "d7eb42a7a7e2ee6191983d8d3c66a3537eeace3e7bf29e8dd9410d56028c65da"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-06_Viewer-first-sign-in.png",
+      "bytes": 332550,
+      "sha256": "73811f6206cfd6501ac419fd578d39a6ef46bd283656d86b5c5c30748ab14a94"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-07_Viewer-account-menu.png",
+      "bytes": 343005,
+      "sha256": "812e31a47d237119431f6735cf388d745acd769be7eb3837ee452b6eb5bf2ff9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-13_Operator-landing.png",
+      "bytes": 383494,
+      "sha256": "b5438df40cf173c48d6468ee3a0a04522a7d4c8d1b5515654d5c02774cfac129"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-17_Custodian-landing.png",
+      "bytes": 421257,
+      "sha256": "e72da3ffc0214e09d765e533de9963d2e9484241a3c1a316863dfda440c860df"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-18_Technician-home.png",
+      "bytes": 399342,
+      "sha256": "ed09812eca0bb658b4d451df1349720a05215bca3d55f87e6abfff0853bbcd43"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J48_Step-01_Change-password-open.png",
+      "bytes": 165246,
+      "sha256": "fe09dcbab1886218901afe740615b590f6a9c5fb7af0807529679834508211b4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J48_Step-06_Password-changed.png",
+      "bytes": 376862,
+      "sha256": "228729ff6dd33d92364c0f506b06ab896a8003d150e63f3a30f621ab237b535a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J48_Step-08_New-password-accepted.png",
+      "bytes": 378378,
+      "sha256": "04e8b01df4a47bc701182a1aadfd3d502a5edfab9f0d25bc4255a200f7ec0d5a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-09_Disabled-viewer-stale-session.png",
+      "bytes": 365408,
+      "sha256": "e4be61f0ff1d868a194c298791c4debb796e47a2a1d258c7b2b0a9daaee6e1b8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-10_Disabled-viewer-signin.png",
+      "bytes": 371389,
+      "sha256": "c7a294b85c0e1f44a54d363ae49e4f1fe86fcb2107f7d565cee6e9e824697af0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-11_Operator-session-after-role-change.png",
+      "bytes": 381224,
+      "sha256": "c57814d4c631d7de5d5cd9c1108afbeee3b4bd48f62c4a8b38653b34241f9fe2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-12_Operator-session-after-refresh.png",
+      "bytes": 378155,
+      "sha256": "bc902a0dd0ed1d7fbc4b9e1443561d33fd394439f5ed52d6d5ecfc288c16b6ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-13_Demoted-operator-signin.png",
+      "bytes": 378418,
+      "sha256": "d2b3b6aa9d669949856073e7f857d0ec8523f13f07e919738dab7275ea646174"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-14_Operator-after-admin-reset.png",
+      "bytes": 378155,
+      "sha256": "bc902a0dd0ed1d7fbc4b9e1443561d33fd394439f5ed52d6d5ecfc288c16b6ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J52_Step-01_Server-stopped-open-session.png",
+      "bytes": 454035,
+      "sha256": "3b03b5c162aa8708f3403759c8e86a383c112dfc8251d40e40c090498fac9ca0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J52_Step-02_After-restart-refresh.png",
+      "bytes": 456340,
+      "sha256": "0e7ee2eee72ef7fab781a12c22e4b24291d1aa03330187bef7e79779947ca2f0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J52_Step-03_After-restart-reload.png",
+      "bytes": 372383,
+      "sha256": "009e0478cdc31ced8e3f57bac74a4e17aecea43efedd61f032f0bfa1476af01b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J52_Step-04_Admin-after-restart-refresh.png",
+      "bytes": 254983,
+      "sha256": "cf181280ae750bcf283932157a121ad1b8ee46b3c3e9afc3acfc658a827dbb5f"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-03_Approximate-time-fields_SANITIZED.png",
       "bytes": 166318,
       "sha256": "9a5794a8c60904d7b158c417459c47e50498210b03265a7c15a273f98e9d29bd"
@@ -805,6 +955,116 @@
       "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J40_Step-03_Native-full-window-Recognition.png",
       "bytes": 321468,
       "sha256": "cd0d78165b175b1c9bd8e644214a5da607f691e7dd4a2fa944b3daf22db2bb01"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-01_Three-face-photo-loaded.png",
+      "bytes": 765251,
+      "sha256": "252fcefdcd63de90e5bb078d6c3c2bea3826a1e3a646f23c15ef52a18968e800"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-02_New-person-form-face-01.png",
+      "bytes": 159287,
+      "sha256": "102d08b922cdafc77fa6ffea6d3d30d5a58242af06b4be9749c50e3b685923fb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-03_Confirm-new-person-attempt.png",
+      "bytes": 156228,
+      "sha256": "a553b26874e1147547b9b1581dc693000d31388df25a7d0a3001928b75acdd15"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-04_Face-01-drafted-new-person.png",
+      "bytes": 672445,
+      "sha256": "aef326eff9e8879421f15e0073084d3f5293145b21632de4e610c4c96218876c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-05_Face-02-discarded-face-03-skipped.png",
+      "bytes": 686074,
+      "sha256": "30ba7ba73da28d1a5a62dc6938d3777b5843a9d70d95d8e0d1d10be0e22340cd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-06_After-browser-refresh-mid-review.png",
+      "bytes": 770618,
+      "sha256": "9735418281f6694656e0b20686c87334add659233afc003963b27a6ef4e1b0b6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-07_All-faces-decided-ready.png",
+      "bytes": 695320,
+      "sha256": "776d0a01e5c74758047c4cbd23693a42376875619062bf0e40add16bb0c222a7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-08_Review-completed.png",
+      "bytes": 335304,
+      "sha256": "c0b7a991e9e9eeef9d7800382254dcdd76c8527d40f2a6605bd5a8244fca2a87"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-01_Repeat-photo-proposals.png",
+      "bytes": 717368,
+      "sha256": "018227492218ee93029580615d8719fd89fb2b1263edcc7fe2d857461f98d1e1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-02_Browse-people-for-face-02.png",
+      "bytes": 248009,
+      "sha256": "a2316a7f98aaab862fa884ecb473d4365060ea16311058075fbe1ba46f2a7f08"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-03_Face-02-selected-same-person.png",
+      "bytes": 730406,
+      "sha256": "06b8feb48903ad8a7b22308cb5061a7abe3541c6d3d92febb6e2a83efd3119f0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-04_Same-person-accepted-twice-attempt.png",
+      "bytes": 178845,
+      "sha256": "a96d004b5883dd3e8ea6ec091d73f50e0aad0b50910a2386e6d00eef7782e1ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-05_Face-02-confirmed-same-person.png",
+      "bytes": 678675,
+      "sha256": "e9a627bde40d460933364ff4613dbaa3d7deabd5a34b5cd1e231c0c467f8a1e7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-06_Same-person-on-two-faces-ready.png",
+      "bytes": 707372,
+      "sha256": "b8be974c82e6d2272aa14fad1d2d441292ca59b76a625f8541b711db160c2a9c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-07_Same-person-two-faces-completed.png",
+      "bytes": 332716,
+      "sha256": "37533590e64634aba21b34ca0e23dfa0e0fe232929b86d3fef9b1bca21e4976d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-01_Zero-face-upload.png",
+      "bytes": 448042,
+      "sha256": "b489a6680a75444d5375823229b35e93472f8434c4e8c289cd7693921ab11f9e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-02_One-face-upload-event-details.png",
+      "bytes": 166918,
+      "sha256": "011da196c28f22c9e9c7085c45f598643a24888cd6bee80854c17d64cf5cc771"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-03_One-face-event-details-cancelled.png",
+      "bytes": 339484,
+      "sha256": "f9373c6ae50919e2af0ab4dcb9df631b5de6c193a3c87e9b626a123d7974d878"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-04_Two-face-proposals.png",
+      "bytes": 678252,
+      "sha256": "8b8466f877d744af6d60faccc2c2ee18eb489e93b7bbdd348749b675f43938cb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-05_Clear-mid-review.png",
+      "bytes": 339484,
+      "sha256": "f9373c6ae50919e2af0ab4dcb9df631b5de6c193a3c87e9b626a123d7974d878"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-06_After-clear-reload.png",
+      "bytes": 357760,
+      "sha256": "821db3e43010875ce4ba8432b84ba89559c2a42f1be09f3cf6fe1f5b39ca11ee"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J46_Step-01_New-person-confirm-blocked.png",
+      "bytes": 156903,
+      "sha256": "799bc73a9bc9d1abe56f8b861a90d396a18966338ea84d69553684c11b92849e"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-01_Queue-empty.png",
@@ -1512,6 +1772,41 @@
       "sha256": "54ecacbb9617029e22205531cb7cbf2c4185ac834e4ee57146e381f5f52285bd"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J47_Step-08_Viewer-people.png",
+      "bytes": 376843,
+      "sha256": "f39a46256034af0bdcce1febb5c866e08fdf945417a92b1b618d15da8d37ee12"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J49_Step-07_Add-without-photo-form.png",
+      "bytes": 175125,
+      "sha256": "951392e346f8d92473fba65166a879d1c788f2d5af72045de4a4f00c87c94c72"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J49_Step-08_Placeholder-created.png",
+      "bytes": 395175,
+      "sha256": "0c73f9ffbc0750755ae9e94a34b895bb47f05eb31dd7ed406e3953cc58a9cd9a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J49_Step-17_People-two-groups.png",
+      "bytes": 393404,
+      "sha256": "80bcae55d5d25bb714e895b93c573a8b28cb885584045b05e62cdb670370f60f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J49_Step-18_People-search-multi.png",
+      "bytes": 403151,
+      "sha256": "88ca831157a07ed8e5a68cdaddf640539bb0957c81c0f747c7efa828fa42aa4c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J50_Step-04_Archived-collection.png",
+      "bytes": 385776,
+      "sha256": "6a869dc5a2a46e8f1d04650c18d3db6d2af0f33dd6fcb4404347bf4849f5d418"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J50_Step-14_Archived-collection-after-delete.png",
+      "bytes": 386907,
+      "sha256": "11da06bb716dd9a58b06a0779e257bc28f211b6374f2f2b4fbdb7f078d79cc02"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J03_Step-12_Pass2-No-photo-create-mention-profile.png",
       "bytes": 386967,
       "sha256": "65f54babc42708ae36f44d1daf8464aaaa9b3bb5a49042bac00bf67fe8c28c7d"
@@ -1775,6 +2070,51 @@
       "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J34_Step-08_Proof-only-profile-no-usable-sample.png",
       "bytes": 388579,
       "sha256": "d83405f85206cfbdb6157b04e00261a27a1d35659809237a0acfb0989edb329e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-09_Viewer-profile.png",
+      "bytes": 396868,
+      "sha256": "7cbf0eeb16aee84822e32f33d7c19b3c225e58ebb8649e1cb199786b82d857d2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-10_Viewer-add-favorite-attempt.png",
+      "bytes": 401016,
+      "sha256": "e818b8f9200be9875559b44166b676b95290c8a2a5e93bf85901bedfe53b70d4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-11_Viewer-more-menu.png",
+      "bytes": 404680,
+      "sha256": "81e2840e65a0992e8db26c7b80ccaa83a79f4ba38be1d48ac8573d7b3fe3dc8c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-12_Viewer-manage-references.png",
+      "bytes": 189815,
+      "sha256": "92a51fe109328868404d3accba71af45a0242d1e5c667458ecc9d946d8afcd28"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-14_Operator-profile.png",
+      "bytes": 399573,
+      "sha256": "2c226fe78702f50d4e41545bcffb5cb51892f6c724d232c1d15226b8cf69abc3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J49_Step-19_Graph-after-add-participant.png",
+      "bytes": 507333,
+      "sha256": "400a2c4315e076e8787805c604dd2f382b70538ac2f1679322a1f1638dcfc18f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J50_Step-01_Where-am-i.png",
+      "bytes": 506135,
+      "sha256": "699ac99a1e01c313a8b9c90e36874db4acc32ea9cfdf05bf017b6215cc63b4e3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J50_Step-15_Graph-with-deleted-node.png",
+      "bytes": 511867,
+      "sha256": "2be5b089f7221ad913c748b3f85c66aea994c9a3cd82d5f31a2abcdaf3b10a6c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J50_Step-16_Deleted-node-click.png",
+      "bytes": 545695,
+      "sha256": "b1737576feaca0af6ff59e4b81c96159fb4370827573724c54ffd35fb408d47e"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J03_Step-02_Create-person-dialog.png",
@@ -2337,6 +2677,56 @@
       "sha256": "7b2fef88370bb3da5800edb7cbe9a901ef3aa6ac9c65aa2ce342b79535e2018e"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-02_Archive-confirmation.png",
+      "bytes": 185642,
+      "sha256": "dc0a2cfce43f69402abdaeb2a33bfaf3efdf76864c690f3c4f333e4d8846f5c4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-03_Archived-profile.png",
+      "bytes": 394161,
+      "sha256": "6768305c5c2849c976f0219d02fb61a1c1397770f93cdc66eb2ae6321fcf5881"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-05_Archived-person-profile.png",
+      "bytes": 395199,
+      "sha256": "3f2973d9011b4a4acce23559f4550d5f7d807ed2d312f84e1bea0e2c3dc26834"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-06_Archived-activity.png",
+      "bytes": 267382,
+      "sha256": "f6a5ab647ed90ed4f618b26b251b6202663664b6dbe4f4322b1416850df762d9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-07_Archived-sightings.png",
+      "bytes": 317682,
+      "sha256": "5840052bea0bf7a9b2ef4393e9c38774cf4b0c236b5c4ce30d690b86846f99a5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-08_Restore-confirmation.png",
+      "bytes": 121967,
+      "sha256": "c2bcaa97468b97a268562ab5eb8642928001d6a6180b4e82c4a5a02ee5dca220"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-09_Restored-profile.png",
+      "bytes": 318685,
+      "sha256": "1ef91d8559c7819e48472a274617ca9c74721691a31ccd00f59f06037bf2d28c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-10_Delete-confirmation.png",
+      "bytes": 137840,
+      "sha256": "2b3408e5a526cf37caaf6c4a80a6b6411c3324c515951957a3c42386e5f1ee01"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-11_Delete-armed.png",
+      "bytes": 138185,
+      "sha256": "7ea462e7628c7fdabcae4229fb7db94bce66d1a755a339814f16a8f957d8041d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-12_After-delete.png",
+      "bytes": 342817,
+      "sha256": "cb62317798fd858aedaa14a0083a3f0d4a7ec46a696ebf1d5e7434db053f888a"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-01_Events-list.png",
       "bytes": 436987,
       "sha256": "5da0f475bfbe4b5b7c94b53a6b8adef18a38429f6162d682d805d07ebda1f46d"
@@ -2495,6 +2885,36 @@
       "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J40_Step-05_Native-full-window-Events.png",
       "bytes": 339132,
       "sha256": "6a8f8640e49e2b680285fd36f7c969b00f03fe43a6720cf4dc1f272954ce9e6f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J47_Step-15_Operator-events.png",
+      "bytes": 435633,
+      "sha256": "9425c5326fc617275ed34396098ed4e755c9c72a5601fdee3c15824490ad7d7b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J47_Step-16_Operator-event-detail.png",
+      "bytes": 578005,
+      "sha256": "70e0d60381c0089a65ce94235b2f8261d56be105980908db8d2b8ee20a8e16c6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J49_Step-01_Custodian-event-detail.png",
+      "bytes": 582934,
+      "sha256": "577ec42ac06c6710f3e716abbded7d490ec6a9285423597b3cc125d974de27ac"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J49_Step-09_Events-after-placeholder.png",
+      "bytes": 584223,
+      "sha256": "321030fd88cece9074d241e7be8858515e73f349020ffb5c35603d59d884b64c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J49_Step-16_Events-list-after-stale.png",
+      "bytes": 455391,
+      "sha256": "984bd9b81aaa359c3e477d40e6c954b8993f0bef378ee5bacb99db13555f421c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J50_Step-13_Encounter-after-delete.png",
+      "bytes": 582240,
+      "sha256": "b714f387b646c5a0f44f0141e7aacd38a52f9ea5f3ade84bb0c0fcbdba94f6af"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J07_Step-03_Metadata-correction.png",
@@ -2690,6 +3110,61 @@
       "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-30_Pass2-Correction-after-attachment-discard.png",
       "bytes": 644189,
       "sha256": "27a0066b510ec6ba883e42a39c579c311061dc285178ed2ed2a8faefde3819ed"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-02_Correct-encounter-open.png",
+      "bytes": 199791,
+      "sha256": "5c10831f4508ac278799c16c30c7473b121c645d6e7b743f574f0491a486050d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-03_No-change-save.png",
+      "bytes": 582934,
+      "sha256": "577ec42ac06c6710f3e716abbded7d490ec6a9285423597b3cc125d974de27ac"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-04_Correction-saved-history.png",
+      "bytes": 585862,
+      "sha256": "d50c4c9c1e6f3c9c8e198081f36ae931befb72bdbca581178bec857311f74a11"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-05_After-reload.png",
+      "bytes": 454458,
+      "sha256": "e35446ac5a195bb236c9c7f0bddb2fa41746755811381632742dedd617fcecf4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-06_Correct-participants-open.png",
+      "bytes": 199450,
+      "sha256": "cd6e5390d8248d5a952223f435c64cfbb358d978aaa5e59bc9a9a81d4906c4a3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-10_Add-participant-relation-pending.png",
+      "bytes": 203777,
+      "sha256": "ba52cc998d3389b9824c2b73d51d2020992b0e9a890f2978d498994dd9fd5259"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-11_Add-participant-ready.png",
+      "bytes": 203944,
+      "sha256": "fb23ccff677a5e675d9b6954232054e060cd338e44895ea35228ddec283b2dbe"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-12_Add-participant-saved.png",
+      "bytes": 582347,
+      "sha256": "a3b1e36f714838fe8c753798b2b3f90c426a69c0dd6f355eacbbde3e41336e2d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-13_Stale-revision-conflict.png",
+      "bytes": 214275,
+      "sha256": "fb78a74fc9cbf81fffeffc68e51d8f2b56e32bcf5bf3bab7ff930485f94eb5c2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-14_Stale-after-cancel.png",
+      "bytes": 535471,
+      "sha256": "da9ec602919db490d5f59eed95aa26bb798aa59da3157b179c2399804d1faa44"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-15_After-header-refresh.png",
+      "bytes": 583503,
+      "sha256": "effaee60d4e33b91c73ac1e6a764aaf132913807f01edf10cc2d7bed0e97ee2f"
     },
     {
       "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-01_Explore-default-sparse.png",
@@ -3417,6 +3892,151 @@
       "sha256": "41866c466bfd8b0ed4de08608b7232b86cbcb2ebd1de4e4a2991f6ffd0935c9b"
     },
     {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-01_Settings-landing.png",
+      "bytes": 345715,
+      "sha256": "5944eebe68174c4e99eb50aab1adb01bd7ce4159c9921145bb47315b8de46a99"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-02_Backups-before-create.png",
+      "bytes": 301049,
+      "sha256": "a89f626e11e8a473be142f340272e156f25d1f799c6e7cf44f0effbf5a77fc64"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-03_Backup-creating.png",
+      "bytes": 297201,
+      "sha256": "20bf8c4a98a6b66723a00185d095aa194e97e8664763fcb9688c67013d34b29c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-04_Backup-created.png",
+      "bytes": 297201,
+      "sha256": "20bf8c4a98a6b66723a00185d095aa194e97e8664763fcb9688c67013d34b29c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-05_Import-corrupt-plain.png",
+      "bytes": 297670,
+      "sha256": "4e411b74a116f4d078437efc3a1450f87a2862da891c46107cf9ba664741e302"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-06_Import-encrypted-passphrase-dialog.png",
+      "bytes": 144765,
+      "sha256": "cb2a9b018c7cfab2e6dc3d128afb74d747430347acd41a580d9538513d09c8b1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-07_Import-corrupt-encrypted-result.png",
+      "bytes": 303056,
+      "sha256": "7cdef99c203556eb146b2cec54a333e37a9f247616b0cad2a2d5e444a5162c8d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-08_Restore-confirmation.png",
+      "bytes": 167644,
+      "sha256": "793c06f2b54026393df2151f0280ee432e54d095a8d932b2ff9f1f83088aef36"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-09_Restore-in-progress.png",
+      "bytes": 367635,
+      "sha256": "521d370d629328b2982c96c1633c2039a6ea829207dd5ea6cb24203da0563694"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-10_Restore-completed.png",
+      "bytes": 357760,
+      "sha256": "821db3e43010875ce4ba8432b84ba89559c2a42f1be09f3cf6fe1f5b39ca11ee"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-11_Backups-after-restore.png",
+      "bytes": 332038,
+      "sha256": "c8803f225554e37a2f5d297e6f3dbf81c85f4189e96648295aea3264e76dde5b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-12_Export-passphrase-dialog.png",
+      "bytes": 176850,
+      "sha256": "194388ca5885d8fed8b231b7d0a4f8bc6a00bf0e2f3a1b2f2cb084e291346b46"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-14_Import-valid-wrong-passphrase.png",
+      "bytes": 348778,
+      "sha256": "f4b450a0f49334de5c902a81609126edaa99130c44a0f90358143f66df5c3d8f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-15_Import-valid-right-passphrase.png",
+      "bytes": 350811,
+      "sha256": "4f84c23efe28dbf53e882b6ac8d35cf25e9cbcab725a9ff6a1ccd6796ac7870a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-16_Import-same-file-again.png",
+      "bytes": 364569,
+      "sha256": "3edfed8f9f1b75369b24724ba03d69685dac4b0bbcb94fedd8891ea944ef12f5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-01_User-accounts.png",
+      "bytes": 355661,
+      "sha256": "6b49514519a868913a245d071f7ddac66b764fef4d96b0ac871bf7ad34c75782"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-02_Role-options.png",
+      "bytes": 147093,
+      "sha256": "dec2cf413ad86eb0024ed35aa71f21f64d1edb3df011c6334660a4fee2552b37"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-04_Accounts-created.png",
+      "bytes": 324832,
+      "sha256": "fbc4913bf62a6d823a3fc93534624d4d1c349ff9fe318b969a698e8d68f372cd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-19_Technician-settings.png",
+      "bytes": 337890,
+      "sha256": "589bcbe26e9c070fcacd604c709d35d4d14cbaafda7a85f61d1750b2dc2b7c90"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-20_Technician-back-up-now.png",
+      "bytes": 131378,
+      "sha256": "1967cda021d94a590ecffa178c53dcc4141eda27a5f5997ae0a4746eb14f974c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-21_Technician-backups.png",
+      "bytes": 358937,
+      "sha256": "e237d912f934becb15fa1fa1a31acda088b3a03e8cdcbcb9a450be1111713f22"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-22_Technician-activity-log.png",
+      "bytes": 379523,
+      "sha256": "472448b83a8f9e8d4dd5da3a3d4b56201866d1b4262c4dfec93117db989d861a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-23_Technician-restore-disabled-hover.png",
+      "bytes": 357744,
+      "sha256": "09cab5364d7559402f3866b628c4afbed5cbb4c47803f098c63c055bdc4b5265"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-02_Accounts-list.png",
+      "bytes": 301791,
+      "sha256": "8fd2f1c6b5e573fc59835e5627aa49a62426c169922c30acaef6e36b204b9181"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-03_Manage-viewer.png",
+      "bytes": 159074,
+      "sha256": "6a95ebd3446bc02c5d3deb7604c6abc61ea5505045c69862b23f65ff36d69180"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-04_Disable-toggled.png",
+      "bytes": 159178,
+      "sha256": "338dde472dabdc009d46ff314fe3ce87c04531878fd80853552e8a544e5167a1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-05_Viewer-disabled.png",
+      "bytes": 261467,
+      "sha256": "1834487d279fd0aea27b198624ef979b10e49c87d342ad35bdbf7cc84cace50a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-06_Operator-role-change-pending.png",
+      "bytes": 159658,
+      "sha256": "2ba540946c5adf883e3e3354f31431f0acfc952e5e9dcb573ab07bc786cbb5d8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-08_Admin-password-reset-done.png",
+      "bytes": 163205,
+      "sha256": "ce88ee715807c8dc2e4dcbd0f643b3aff9520a4777fd7779c72a12194c82508c"
+    },
+    {
       "path": "audit-results/issue-6/screenshots/UX-14/UX-14_J18_Step-10_Nested-media-preview.png",
       "bytes": 546195,
       "sha256": "b602398df7975ac14e7da72247f9ab672f1ced865d49c16371417c91b0ab6c67"
@@ -3558,8 +4178,8 @@
     },
     {
       "path": "audit-results/issue-6/tooling/capture_host.py",
-      "bytes": 3696,
-      "sha256": "f68ada83ee11b4d31cd508556d007f1ce6e826cabf2028bccdf54819781a630d"
+      "bytes": 3742,
+      "sha256": "2e7e3c98237d4b60950daecad15a02f85860549632dd13908c61a30654e226b3"
     },
     {
       "path": "audit-results/issue-6/tooling/dense_fixture.py",
@@ -3575,6 +4195,21 @@
       "path": "audit-results/issue-6/tooling/genuine_supplement.py",
       "bytes": 3368,
       "sha256": "b7692477c8fb7184749cc5e088b5afac11b271f3d6366dbaa14f296d264be270"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/multiface_server.py",
+      "bytes": 1750,
+      "sha256": "11a2c88a3ad9d3e30c76429618604429d119d5e39d7e58d1252592097915d988"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/pass3_promote.py",
+      "bytes": 4475,
+      "sha256": "d66e6452d70883c5281f5d5819d4f110a44743ba2e5980eefcd011dcea0f8ba3"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/pass3_seal.py",
+      "bytes": 2913,
+      "sha256": "3db70d58e41fef3287f28bc50e23a8e77ee96cb50c810f59e735333eaff45a45"
     },
     {
       "path": "audit-results/issue-6/tooling/reconcile.py",
@@ -3608,5 +4243,25 @@
     }
   ],
   "hash_scope": "SHA-256 over unchanged file bytes; excludes manifest itself, its checksum and Python cache. Evidence commit and archive verification are external receipts to avoid circular identifiers.",
-  "privacy": "Public synthetic originals and explicitly marked sanitized derivatives only. Private untouched originals stay outside Git. No credentials, snapshots, databases, exports, models or raw logs included."
+  "privacy": "Public synthetic originals and explicitly marked sanitized derivatives only. Private untouched originals stay outside Git. No credentials, snapshots, databases, exports, models or raw logs included.",
+  "pass3": {
+    "source_sha": "677bb61e8e9d659db95123871bb2e011cf663a79",
+    "branch": "v2-hardening-followups",
+    "environment": "Linux (Ubuntu VM), headless Chromium via Playwright, 1440x900 CSS, DPR 1, light theme, dev synthetic source authority; audit-only multi-face seam for J42-J44",
+    "journeys": [
+      "J42",
+      "J43",
+      "J44",
+      "J45",
+      "J46",
+      "J47",
+      "J48",
+      "J49",
+      "J50",
+      "J51",
+      "J52"
+    ],
+    "public_images": 113,
+    "private_only": 9
+  }
 }
