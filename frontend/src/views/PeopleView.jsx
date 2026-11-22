@@ -2029,7 +2029,7 @@ function PeopleProfileChanges({ activity, currentProfile }) {
           <CurrentInfoRow icon={IconGlobe} label="Country" value={currentProfile.country || "-"} />
           <CurrentInfoRow icon={IconFlag} label="Tag" value={currentProfile.importance || "-"} pill={importanceColor(currentProfile.importance)} />
           <Divider />
-          <CurrentInfoRow icon={IconRefresh} label="Last Activity" value={activeHistory?.createdAt || "-"} subvalue={`By ${activeHistory?.editor || "System"}`} />
+          <CurrentInfoRow icon={IconRefresh} label="Last Activity" value={compactChangeDate(activeHistory?.createdAt)} subvalue={`By ${activeHistory?.editor || "System"}`} />
         </Stack>
       </Card>
       <Card withBorder radius="md" className="people-profile-panel people-change-history-panel">
