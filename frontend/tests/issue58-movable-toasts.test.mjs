@@ -7,6 +7,7 @@ import {
   TOAST_POSITION_KEY,
   placeToastStack,
   readSavedToastPosition,
+  saveToastPosition,
   toastPositionFromRect,
 } from "../src/utils/toastPlacement.js";
 
@@ -40,6 +41,10 @@ test("unreadable or missing saved positions fall back to the default", () => {
   assert.equal(readSavedToastPosition(memory("not json")), null);
   assert.equal(readSavedToastPosition(memory('{"x":"a","y":1}')), null);
   assert.deepEqual(readSavedToastPosition(memory('{"x":4,"y":-1}')), { x: 1, y: 0 });
+  const blocked = { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); }, removeItem() { throw new Error("denied"); } };
+  assert.equal(readSavedToastPosition(blocked), null);
+  assert.doesNotThrow(() => saveToastPosition({ x: 0, y: 0 }, blocked));
+  assert.doesNotThrow(() => saveToastPosition(null, blocked));
 });
 
 test("the stack never overlaps an open dialog when there is room", () => {
@@ -63,7 +68,7 @@ test("with no free space the stack stays put and the dialog is drawn above it", 
   assert.equal(place.top, 84);
   assert.equal(place.dialog, true);
   const [css, stack] = await Promise.all([read("../src/sentriface-interface.css"), read("../src/components/ToastStack.jsx")]);
-  assert.match(css, /\.mantine-Modal-overlay \{\s*z-index: calc\(var\(--overlay-z-index, 200\) - 1\) !important;/);
+  assert.match(css, /html\[data-toast-layers="1"\] :is\(\.mantine-Modal-overlay, \.mantine-Drawer-overlay\) \{\s*z-index: calc\(var\(--overlay-z-index, 200\) - 1\) !important;/);
   assert.match(stack, /zIndex=\{TOAST_Z_INDEX\}/);
 });
 
@@ -92,7 +97,7 @@ test("operators drag the toast itself and reset beside the close button", async 
   assert.match(stack, /closest\("button, a, input, textarea, select"\)/);
   assert.match(stack, /if \(state\.narrow && saved\) next\.x = saved\.x;/);
   assert.match(stack, /aria-label="Move messages back to the top right"/);
-  assert.match(stack, /window\.localStorage\.removeItem\(TOAST_POSITION_KEY\)/);
+  assert.match(stack, /saveToastPosition\(null\)/);
   assert.match(stack, /moved: Boolean\(saved\) && !placement\?\.dialog/);
   assert.doesNotMatch(stack, /tabIndex|onKeyDown|role="/);
   assert.match(client, /message: createElement\(ToastContent, null, message\)/);

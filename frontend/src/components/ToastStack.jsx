@@ -3,7 +3,7 @@ import { ActionIcon, Tooltip } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { IconArrowBackUp } from "@tabler/icons-react";
 
-import { EDGE, TOAST_POSITION_KEY, TOAST_Z_INDEX, clamp, placeToastStack, readSavedToastPosition, toastPositionFromRect } from "../utils/toastPlacement.js";
+import { EDGE, TOAST_Z_INDEX, clamp, placeToastStack, readSavedToastPosition, saveToastPosition, toastPositionFromRect } from "../utils/toastPlacement.js";
 
 const DRAG_THRESHOLD = 4;
 const STACK_SELECTOR = ".sentriface-toast-stack[data-position='top-right']";
@@ -14,10 +14,15 @@ function samePlacement(a, b) {
   return Boolean(a) && ["left", "top", "width", "narrow", "dialog"].every((key) => a[key] === b[key]);
 }
 
+// Modals and drawers both count as open dialogs. With exactly one open, toasts
+// sit above its dimmed backdrop (see CSS); with nested layers Mantine's own
+// stacking is kept so an outside click still reaches the top layer.
 function openDialogRects() {
-  return [...document.querySelectorAll(".mantine-Modal-content")]
+  const rects = [...document.querySelectorAll(".mantine-Modal-content, .mantine-Drawer-content")]
     .map((node) => node.getBoundingClientRect())
     .filter((rect) => rect.width > 0 && rect.height > 0);
+  document.documentElement.dataset.toastLayers = String(rects.length);
+  return rects;
 }
 
 function stackHeight() {
@@ -85,7 +90,7 @@ export function ToastStack() {
   }, [measure]);
 
   const reset = useCallback(() => {
-    window.localStorage.removeItem(TOAST_POSITION_KEY);
+    saveToastPosition(null);
     setSaved(null);
   }, []);
 
@@ -118,7 +123,7 @@ export function ToastStack() {
       const next = toastPositionFromRect({ left: state.currentLeft, top: state.currentTop, width: state.width, height: stackHeight() }, viewport);
       if (state.narrow && saved) next.x = saved.x;
       else if (state.narrow) next.x = 1;
-      window.localStorage.setItem(TOAST_POSITION_KEY, JSON.stringify(next));
+      saveToastPosition(next);
       setPlacement((previous) => ({ ...previous, left: state.currentLeft, top: state.currentTop }));
       setSaved(next);
       setDrag(null);

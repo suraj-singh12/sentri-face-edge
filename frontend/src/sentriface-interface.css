@@ -4537,7 +4537,7 @@ button.encounter-list-row:hover { background: var(--mantine-color-default-hover)
 }
 
 /* Toasts sit above a dialog's dimmed backdrop but below the dialog itself. */
-.mantine-Modal-overlay {
+html[data-toast-layers="1"] :is(.mantine-Modal-overlay, .mantine-Drawer-overlay) {
   z-index: calc(var(--overlay-z-index, 200) - 1) !important;
 }
 

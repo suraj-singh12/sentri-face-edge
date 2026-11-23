@@ -10,9 +10,9 @@ export const NARROW_WIDTH = 576;
 
 export const clamp = (value, min, max) => Math.min(Math.max(value, min), Math.max(min, max));
 
-export function readSavedToastPosition(storage = window.localStorage) {
+export function readSavedToastPosition(storage) {
   try {
-    const value = JSON.parse(storage.getItem(TOAST_POSITION_KEY));
+    const value = JSON.parse((storage ?? window.localStorage).getItem(TOAST_POSITION_KEY));
     if (value && Number.isFinite(value.x) && Number.isFinite(value.y)) {
       return { x: clamp(value.x, 0, 1), y: clamp(value.y, 0, 1) };
     }
@@ -27,6 +27,17 @@ function intersects(a, b) {
 }
 
 // Saved positions are shares of the free space, so the stack stays on screen when the window is resized.
+// Blocked browser storage only means the position is not remembered.
+export function saveToastPosition(position, storage) {
+  try {
+    const target = storage ?? window.localStorage;
+    if (position) target.setItem(TOAST_POSITION_KEY, JSON.stringify(position));
+    else target.removeItem(TOAST_POSITION_KEY);
+  } catch {
+    // Keep the in-memory position for this page.
+  }
+}
+
 export function toastPositionFromRect({ left, top, width, height }, viewport) {
   const x = (left - EDGE) / Math.max(1, viewport.width - width - EDGE * 2);
   const y = top + height / 2 < viewport.height / 2 ? top / viewport.height : (top + height) / viewport.height;
