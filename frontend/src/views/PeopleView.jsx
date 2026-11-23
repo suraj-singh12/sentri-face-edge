@@ -732,7 +732,10 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
       >
         <Stack>
           <Text size="sm">
-            This removes the active face record and {pendingPurge?.sighting_count || 0} linked sighting{pendingPurge?.sighting_count === 1 ? "" : "s"} from the live library.
+            This erases the face data used for matching, the face crop and {pendingPurge?.sighting_count || 0} linked sighting{pendingPurge?.sighting_count === 1 ? "" : "s"} from the live library. It can't be restored afterwards.
+          </Text>
+          <Text size="sm" c="dimmed">
+            If this face is part of an Event or its owner was corrected, the Event photo and that history stay, and the history shows “Face removed”.
           </Text>
           <Alert color="yellow" title="A recovery copy will still exist">
             SentriFace creates and verifies a safety backup before erasing the live data. That backup, older managed backups, and any exported backup files may still contain this face. Delete those copies separately if complete erasure is required.

@@ -9,7 +9,7 @@ from typing import Callable
 from sentriface.models import Embedding
 
 
-SCHEMA_VERSION = 34
+SCHEMA_VERSION = 35
 EMBEDDING_RECOGNITION_STATES = frozenset({"GOOD", "POOR_ACCEPTED", "PROOF_ONLY"})
 DELETED_FACE_RETENTION_DAYS = 30
 PERSON_LIFECYCLE_STATUSES = frozenset({"ACTIVE", "ARCHIVED", "DELETED", "MERGED"})

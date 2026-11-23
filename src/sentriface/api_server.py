@@ -2617,6 +2617,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     raise KeyError(f"Unknown deleted face: {embedding_id}")
                 if not lifecycle["deleted_at"]:
                     raise KeyError("Move the face to Deleted Faces before erasing it from the live library")
+                if lifecycle.get("erased_at"):
+                    raise KeyError("This face has already been erased")
                 result = self.server.backed_up_people_deletion(
                     operation_id,
                     "purge-deleted-embedding",
