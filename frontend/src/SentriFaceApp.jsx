@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { ActionIcon, Alert, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Menu, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, UnstyledButton, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
-import { Notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconChevronDown, IconDatabaseExport, IconKey, IconLogout, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
 import { AuthGate } from "./components/AuthGate.jsx";
+import { ToastStack } from "./components/ToastStack.jsx";
 import { ModelGate } from "./components/ModelGate.jsx";
 import { RecoveryGate } from "./components/RecoveryGate.jsx";
 import { VIEWS } from "./constants.js";
@@ -44,7 +44,7 @@ export default function SentriFaceApp() {
         },
       }}
     >
-      <Notifications position="bottom-right" />
+      <ToastStack />
       <AuthGate>{(auth) => (
         <ModelGate user={auth.user} logout={auth.logout}>
           <RecoveryGate user={auth.user} logout={auth.logout}>
