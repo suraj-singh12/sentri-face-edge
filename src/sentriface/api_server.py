@@ -2564,7 +2564,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 result = self.server.backed_up_people_deletion(
                     operation_id,
                     "purge-person",
-                    f"before-person-permanent-delete-{person.name if person else 'deleted'}-{person_id[:8]}",
+                    f"before-person-delete-{person.name if person else 'deleted'}-{person_id[:8]}",
                     lambda: self.server.engine.permanently_delete_person(
                         person_id,
                         operation_id,
@@ -2617,6 +2617,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     raise KeyError(f"Unknown deleted face: {embedding_id}")
                 if not lifecycle["deleted_at"]:
                     raise KeyError("Move the face to Deleted Faces before erasing it from the live library")
+                if lifecycle.get("erased_at"):
+                    raise KeyError("This face has already been erased")
                 result = self.server.backed_up_people_deletion(
                     operation_id,
                     "purge-deleted-embedding",

@@ -49,3 +49,17 @@ test("Events reads use one bounded backend query; corrections are explicit", asy
   assert.match(people, /<Tabs\.Tab value="events">Events<\/Tabs\.Tab>/);
   assert.match(people, /person_status/);
 });
+
+test("People separates Archived from Bin; deleted people restore from Bin without opening", async () => {
+  const view = await read("../src/views/PeopleView.jsx");
+  assert.match(view, /key: "archived", label: "Archived"[^\n]*\n\s*\{ key: "bin", label: "Bin"/);
+  assert.match(view, /archivedPeople\.filter\(\(person\) => !isBinned\(person\)\)/);
+  assert.match(view, /archivedPeople\.filter\(isBinned\)/);
+  assert.match(view, /isBinned\(person\) && personAllows\(person, "RESTORE"\)/);
+  assert.match(view, /onRestore\(restoreTarget\.person_id, \{ openProfile: false \}\)/);
+  assert.doesNotMatch(view, /permanently\?/);
+  assert.doesNotMatch(view, /Delete entire profile/);
+  const controller = await read("../src/hooks/usePeopleController.js");
+  assert.match(controller, /moved to Bin/);
+  assert.doesNotMatch(controller, /The identity is deleted from active use/);
+});

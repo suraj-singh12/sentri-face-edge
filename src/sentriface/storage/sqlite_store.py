@@ -101,6 +101,7 @@ from sentriface.storage.sqlite_constants import (
     EMBEDDING_RECOGNITION_STATES,
     DELETED_FACE_RETENTION_DAYS,
     PERSON_LIFECYCLE_STATUSES,
+    RESTORABLE_PERSON_LIFECYCLE_STATUSES,
     PERSON_IDENTITY_STATUSES,
     PERSON_BIOMETRIC_STATUSES,
     RELATIONSHIP_EVIDENCE_TYPES,
@@ -4891,7 +4892,8 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT e.embedding_id, e.person_id, e.deleted_at, e.purge_after,
+                SELECT e.embedding_id, e.person_id, e.deleted_at, e.purge_after, e.erased_at,
+                       e.source_image, e.crop_path,
                        p.name AS person_name, p.deleted_at AS person_deleted_at
                 FROM embeddings e
                 JOIN persons p ON p.person_id = e.person_id
@@ -5188,8 +5190,9 @@ class SQLiteIdentityStore:
             ).fetchone()
             if row is None:
                 raise KeyError(f"Unknown person: {person_id}")
-            if row["lifecycle_status"] != "ARCHIVED":
-                raise KeyError(f"Only archived people can be restored: {person_id}")
+            previous_status = row["lifecycle_status"]
+            if previous_status not in RESTORABLE_PERSON_LIFECYCLE_STATUSES:
+                raise KeyError(f"Only archived or deleted people can be restored: {person_id}")
             _begin_journal_operation(
                 conn,
                 "identity.restore",
@@ -5197,12 +5200,15 @@ class SQLiteIdentityStore:
                 actor=actor,
                 source=source or "identity-lifecycle",
                 affected_entities=[{"entity_type": "person", "entity_id": person_id}],
-                details={"previous_status": "ARCHIVED"},
+                details={"previous_status": previous_status},
             )
-            cursor = _restore_archived_person_in_transaction(conn, person_id)
+            cursor = _restore_archived_person_in_transaction(
+                conn, person_id, RESTORABLE_PERSON_LIFECYCLE_STATUSES,
+            )
             result = {
                 "person_id": person_id,
                 "restored": True,
+                "previous_lifecycle_status": previous_status,
                 "lifecycle_status": "ACTIVE",
                 "changed": bool(cursor.rowcount),
             }
@@ -6091,7 +6097,7 @@ class SQLiteIdentityStore:
                 FROM embeddings e
                 JOIN persons p ON p.person_id = e.person_id
                 LEFT JOIN recognition_details d ON d.embedding_id = e.embedding_id
-                WHERE e.deleted_at IS NOT NULL
+                WHERE e.deleted_at IS NOT NULL AND e.erased_at IS NULL
                 GROUP BY e.embedding_id
                 ORDER BY e.deleted_at DESC
                 """
@@ -6125,7 +6131,7 @@ class SQLiteIdentityStore:
                 return existing
             row = conn.execute(
                 """
-                SELECT e.embedding_id, e.person_id, e.deleted_at, e.purge_after
+                SELECT e.embedding_id, e.person_id, e.deleted_at, e.purge_after, e.erased_at
                 FROM embeddings e
                 WHERE e.embedding_id = ?
                 """,
@@ -6135,6 +6141,8 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown deleted face: {embedding_id}")
             if row["deleted_at"] is None:
                 raise KeyError("Face is not deleted")
+            if row["erased_at"] is not None:
+                raise KeyError("This face was erased and can't be restored")
             raw_person_id = _raw_embedding_owner_person_id(conn, row)
             effective_person_id = _effective_embedding_owner_person_id(conn, row)
             effective_person = conn.execute(
@@ -6192,7 +6200,7 @@ class SQLiteIdentityStore:
                 return existing
             row = conn.execute(
                 """
-                SELECT person_id, source_image, crop_path, deleted_at, purge_after
+                SELECT embedding_id, person_id, source_image, crop_path, deleted_at, purge_after, erased_at
                 FROM embeddings
                 WHERE embedding_id = ?
                 """,
@@ -6202,6 +6210,8 @@ class SQLiteIdentityStore:
                 raise KeyError(f"Unknown deleted face: {embedding_id}")
             if row["deleted_at"] is None:
                 raise KeyError("Move the face to Deleted Faces before deleting it permanently")
+            if row["erased_at"] is not None:
+                raise KeyError("This face has already been erased")
             if conn.execute("SELECT 1 FROM biometric_enrollment_history WHERE embedding_id=?", (embedding_id,)).fetchone():
                 raise ValueError("Reference history is retained; retire the source instead of purging it")
             _begin_journal_operation(
@@ -6216,13 +6226,13 @@ class SQLiteIdentityStore:
                 "SELECT COUNT(*) FROM recognition_details WHERE embedding_id = ?",
                 (embedding_id,),
             ).fetchone()[0]
-            conn.execute("DELETE FROM recognition_details WHERE embedding_id = ?", (embedding_id,))
-            conn.execute("DELETE FROM embeddings WHERE embedding_id = ?", (embedding_id,))
+            stub_retained = _erase_deleted_face_in_transaction(conn, row, utc_now())
             result = {
                 "embedding_id": embedding_id,
                 "person_id": row["person_id"],
                 "deleted": True,
                 "permanent": True,
+                "stub_retained": stub_retained,
                 "deleted_sightings": detail_count,
                 "source_image": row["source_image"],
                 "crop_path": row["crop_path"],
@@ -6241,6 +6251,7 @@ class SQLiteIdentityStore:
                 SELECT embedding_id
                 FROM embeddings
                 WHERE deleted_at IS NOT NULL
+                  AND erased_at IS NULL
                   AND purge_after IS NOT NULL
                   AND purge_after <= ?
                   AND NOT EXISTS (SELECT 1 FROM biometric_enrollment_history h WHERE h.embedding_id=embeddings.embedding_id)
@@ -6297,6 +6308,7 @@ class SQLiteIdentityStore:
                 FROM embeddings
                 WHERE embedding_id IN ({placeholders})
                   AND deleted_at IS NOT NULL
+                  AND erased_at IS NULL
                   AND purge_after IS NOT NULL
                   AND purge_after <= ?
                   AND NOT EXISTS (SELECT 1 FROM biometric_enrollment_history h WHERE h.embedding_id=embeddings.embedding_id)
@@ -6315,18 +6327,17 @@ class SQLiteIdentityStore:
                     """,
                     eligible_ids,
                 ).fetchone()[0]
-                conn.execute(
-                    f"DELETE FROM recognition_details WHERE embedding_id IN ({eligible_placeholders})",
-                    eligible_ids,
-                )
-                conn.execute(
-                    f"DELETE FROM embeddings WHERE embedding_id IN ({eligible_placeholders})",
-                    eligible_ids,
-                )
+            erased_at = utc_now()
+            stub_ids = [
+                row["embedding_id"]
+                for row in rows
+                if _erase_deleted_face_in_transaction(conn, row, erased_at)
+            ]
             result = {
                 "embedding_ids": eligible_ids,
                 "person_ids": sorted({row["person_id"] for row in rows}),
                 "purged": len(eligible_ids),
+                "stub_embedding_ids": stub_ids,
                 "deleted_sightings": detail_count,
                 "paths": [
                     {
@@ -7113,6 +7124,7 @@ class SQLiteIdentityStore:
             "SELECT source_image AS path FROM biometric_enrollment_history WHERE source_image IS NOT NULL",
             "SELECT crop_path AS path FROM biometric_enrollment_history WHERE crop_path IS NOT NULL",
             "SELECT image_path AS path FROM recognition_details WHERE image_path IS NOT NULL",
+            "SELECT media_path AS path FROM observation_media WHERE media_path IS NOT NULL",
             "SELECT source_image AS path FROM pending_additions WHERE source_image IS NOT NULL",
             "SELECT crop_path AS path FROM pending_additions WHERE crop_path IS NOT NULL",
             "SELECT source_path AS path FROM init_sessions WHERE source_path IS NOT NULL",
@@ -7881,6 +7893,13 @@ def _migrate_33_to_34(conn: sqlite3.Connection) -> None:
             BEGIN SELECT RAISE(ABORT, 'Enrollment history is immutable'); END;
         PRAGMA user_version = 34;
     """)
+
+
+def _migrate_34_to_35(conn: sqlite3.Connection) -> None:
+    """Erased faces become retained stubs so Event and correction history stay valid."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(embeddings)").fetchall()}
+    _execute_migration_script(conn, ("" if "erased_at" in columns else
+        "ALTER TABLE embeddings ADD COLUMN erased_at TEXT;\n") + "PRAGMA user_version = 35;")
     _refresh_source_biometric_status(conn)
     # Physical relocation is not an Encounter change. Translate only still-valid
     # legacy draft fingerprints; genuinely stale preconditions remain stale.
@@ -7892,6 +7911,50 @@ def _migrate_33_to_34(conn: sqlite3.Connection) -> None:
                      (current, oid, previous))
         conn.execute("UPDATE photo_reviews SET expected_encounter_revision=? WHERE target_observation_id=? AND status='IN_PROGRESS' AND expected_encounter_revision=?",
                      (current, oid, previous))
+
+
+def _erase_deleted_face_in_transaction(conn: sqlite3.Connection, row: sqlite3.Row, erased_at: str) -> bool:
+    """Erase one deleted face; return True when a "face removed" stub is kept.
+
+    Event face lists and correction history reference faces with ON DELETE
+    RESTRICT. Such faces keep only their ID and owner; the biometric vector,
+    face crop and legacy sightings are removed. An Event photo stays because
+    the Event still uses it.
+    """
+    embedding_id = row["embedding_id"]
+    conn.execute("DELETE FROM recognition_details WHERE embedding_id = ?", (embedding_id,))
+    referenced = conn.execute(
+        """
+        SELECT 1 FROM observation_face_assignments WHERE embedding_id = ?
+        UNION ALL SELECT 1 FROM identity_corrections WHERE embedding_id = ?
+        LIMIT 1
+        """,
+        (embedding_id, embedding_id),
+    ).fetchone() is not None
+    if not referenced:
+        conn.execute("DELETE FROM embeddings WHERE embedding_id = ?", (embedding_id,))
+        return False
+    source_image = row["source_image"]
+    if source_image and conn.execute(
+        """
+        SELECT 1 FROM observation_media WHERE media_path = ?
+        UNION ALL SELECT 1 FROM photo_reviews WHERE media_path = ?
+        UNION ALL SELECT 1 FROM photo_review_media WHERE media_path = ?
+        LIMIT 1
+        """,
+        (source_image, source_image, source_image),
+    ).fetchone() is None:
+        source_image = None
+    conn.execute(
+        """
+        UPDATE embeddings
+        SET vector = X'', quality_score = 0, crop_path = NULL, source_image = ?,
+            purge_after = NULL, erased_at = ?
+        WHERE embedding_id = ? AND erased_at IS NULL
+        """,
+        (source_image, erased_at, embedding_id),
+    )
+    return True
 
 
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
@@ -7936,6 +7999,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(31, 32, _migrate_31_to_32),
         SchemaMigration(32, 33, _migrate_32_to_33),
         SchemaMigration(33, 34, _migrate_33_to_34),
+        SchemaMigration(34, 35, _migrate_34_to_35),
     )
 
 
@@ -8182,10 +8246,11 @@ def _encounter_review_read(conn: sqlite3.Connection, review_id: str) -> dict:
             "mentioned_person_ids": json.loads(item["mentioned_person_ids"] or "[]"),
             "recognition_detail": json.loads(item["recognition_detail"] or "{}"),
             "quality_status": item["quality_status"],
+            "face_erased": item["face_erased_at"] is not None,
         }
         for item in conn.execute(
             "SELECT f.*, i.group_id, COALESCE(i.source_image, e.source_image) AS source_image, "
-            "i.quality_status "
+            "i.quality_status, e.erased_at AS face_erased_at "
             "FROM photo_review_faces f LEFT JOIN init_faces i "
             "ON f.staged_face_type = 'INIT_FACE' AND i.init_face_id = f.staged_face_id "
             "LEFT JOIN observation_face_assignments a ON a.review_id = f.review_id AND a.face_id = f.face_id "

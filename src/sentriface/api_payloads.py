@@ -171,7 +171,7 @@ def _allowed_person_actions(lifecycle_status: str) -> list[str]:
             "ARCHIVE", "DELETE", "MERGE",
         ],
         "ARCHIVED": ["VIEW_HISTORY", "RESTORE", "DELETE"],
-        "DELETED": ["VIEW_HISTORY"],
+        "DELETED": ["VIEW_HISTORY", "RESTORE"],
         "MERGED": ["VIEW_HISTORY", "OPEN_CANONICAL"],
     }.get(lifecycle_status, [])
 
@@ -203,6 +203,8 @@ def _people_collection_payload(engine: FaceEngine) -> dict[str, Any]:
     historical_summaries = engine.list_persons(archived=True)
     active = [_person_summary(item, engine) for item in active_summaries]
     historical = [_person_summary(item, engine) for item in historical_summaries]
+    archived = [item for item in historical if item.get("lifecycle_status") != "DELETED"]
+    binned = [item for item in historical if item.get("lifecycle_status") == "DELETED"]
     return {
         "contract_version": 1,
         "persons": active,
@@ -210,10 +212,14 @@ def _people_collection_payload(engine: FaceEngine) -> dict[str, Any]:
         "statistics": {
             "active": _people_statistics(active),
             "historical": _people_statistics(historical),
+            "archived": _people_statistics(archived),
+            "bin": _people_statistics(binned),
         },
         "sort_orders": {
             "active": _people_sort_orders(active),
             "historical": _people_sort_orders(historical),
+            "archived": _people_sort_orders(archived),
+            "bin": _people_sort_orders(binned),
         },
     }
 
