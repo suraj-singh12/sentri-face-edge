@@ -243,3 +243,44 @@ def test_sign_in_never_writes_back_a_password_changed_meanwhile(server, monkeypa
     with pytest.raises(auth_module.AuthError):
         server.auth.login("asha", TEMPORARY)
     server.auth.login("asha", CHOSEN)
+
+
+def test_sign_in_racing_an_emergency_reset_does_not_keep_the_old_password(server, monkeypatch):
+    owner(server)
+    real = auth_module.PASSWORD_HASHER
+
+    class ResetDuringVerify:
+        def hash(self, password):
+            return real.hash(password)
+
+        def check_needs_rehash(self, _stored):
+            return False
+
+        def verify(self, stored, password):
+            result = real.verify(stored, password)
+            auth_module.AuthService(server.auth.db_path, server.auth.database_key).emergency_reset_administrator("owner", "custodian chosen password")
+            return result
+
+    monkeypatch.setattr(auth_module, "PASSWORD_HASHER", ResetDuringVerify())
+    _, token = server.auth.login("owner", OWNER_PASSWORD)
+    monkeypatch.setattr(auth_module, "PASSWORD_HASHER", real)
+    assert server.auth.authenticate(token) is None
+    assert server.auth.session_end_reason(token) == "password_reset"
+
+
+def test_check_in_while_the_new_password_is_saved_keeps_the_session(server, monkeypatch):
+    owner(server)
+    server.auth.create_user(server.auth.get_user(server.auth.list_users()[0]["user_id"]), "asha", "Asha", TEMPORARY, ["operator"])
+    user, token = server.auth.login("asha", TEMPORARY)
+    audit = server.auth._audit
+    seen = []
+
+    def commit_then_check_in(connection, *args):
+        audit(connection, *args)
+        connection.commit()
+        seen.append(server.auth.authenticate(token))
+
+    monkeypatch.setattr(server.auth, "_audit", commit_then_check_in)
+    server.auth.set_required_password(user, token, CHOSEN)
+    assert seen and seen[0] is not None
+    assert server.auth.authenticate(token) is not None

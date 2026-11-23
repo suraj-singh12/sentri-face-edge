@@ -119,6 +119,8 @@ class _Session:
     window_seen_at: datetime | None = None
     replaced_windows: list[str] = field(default_factory=list)
     password_stamp: str | None = None
+    # Accepted alongside password_stamp while a password change is being saved.
+    pending_stamp: str | None = None
 
 
 class AuthService:
@@ -199,7 +201,9 @@ class AuthService:
             )
             self._audit(connection, user.user_id, user.user_id, "login", {})
         user = self.get_user(user.user_id)
-        return user, self._issue_session(user.user_id, window_id)
+        # Bind the session to the password just verified: if another process
+        # replaced it meanwhile, the session ends at its first request.
+        return user, self._issue_session(user.user_id, window_id, password_hash)
 
     def authenticate(self, token: str | None, window_id: str | None = None, *, touch: bool = True) -> AuthUser | None:
         if not token:
@@ -230,7 +234,7 @@ class AuthService:
                 self._end_session(digest, "account_removed")
             return None
         user = _user_from_row(row)
-        if session.password_stamp is not None and session.password_stamp != _digest(row["password_hash"]):
+        if session.password_stamp is not None and _digest(row["password_hash"]) not in {session.password_stamp, session.pending_stamp}:
             # Another process (the emergency reset command) replaced the password.
             with self._lock:
                 self._end_session(digest, "password_reset")
@@ -387,19 +391,23 @@ class AuthService:
                 pass
             else:
                 raise AuthError("Choose a password different from the one the administrator set", "password_reused", HTTPStatus.UNPROCESSABLE_ENTITY)
+            new_hash = PASSWORD_HASHER.hash(new_password)
+            keep = _digest(token) if token else None
+            with self._lock:
+                kept = self._sessions.get(keep) if keep else None
+                if kept is not None:
+                    kept.pending_stamp = _digest(new_hash)
             connection.execute(
                 "UPDATE app_users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE user_id = ?",
-                (PASSWORD_HASHER.hash(new_password), _now(), user.user_id),
+                (new_hash, _now(), user.user_id),
             )
             self._audit(connection, user.user_id, user.user_id, "required-password-set", {})
-            stamp = _digest(connection.execute("SELECT password_hash FROM app_users WHERE user_id = ?", (user.user_id,)).fetchone()["password_hash"])
-        keep = _digest(token) if token else None
         with self._lock:
             for digest, session in list(self._sessions.items()):
                 if session.user_id == user.user_id and digest != keep:
                     self._end_session(digest, "password_changed")
                 elif digest == keep:
-                    session.password_stamp = stamp
+                    session.password_stamp, session.pending_stamp = _digest(new_hash), None
         return self.get_user(user.user_id)
 
     def emergency_reset_administrator(self, username: str, new_password: str) -> AuthUser:
@@ -482,13 +490,15 @@ class AuthService:
                 {"version": RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION},
             )
         return acknowledgement
-    def _issue_session(self, user_id: str, window_id: str | None = None) -> str:
+    def _issue_session(self, user_id: str, window_id: str | None = None, password_hash: str | None = None) -> str:
         """Start the only session; one operator uses SentriFace at a time."""
         token, now = secrets.token_urlsafe(32), datetime.now(timezone.utc)
         window_id = _window_id(window_id)
-        with self._connect() as connection:
-            row = connection.execute("SELECT password_hash FROM app_users WHERE user_id = ?", (user_id,)).fetchone()
-        stamp = _digest(row["password_hash"]) if row is not None else None
+        if password_hash is None:
+            with self._connect() as connection:
+                row = connection.execute("SELECT password_hash FROM app_users WHERE user_id = ?", (user_id,)).fetchone()
+            password_hash = row["password_hash"] if row is not None else None
+        stamp = _digest(password_hash) if password_hash is not None else None
         with self._lock:
             for digest, session in list(self._sessions.items()):
                 for ended_window in (session.window_id, *session.replaced_windows):
