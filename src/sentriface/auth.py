@@ -7,7 +7,7 @@ import secrets
 import threading
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from pathlib import Path
@@ -23,6 +23,12 @@ AUTH_COOKIE_NAME = "sentriface_auth"
 SESSION_HOURS = 8
 SESSION_IDLE_MINUTES = 30
 MAX_ENDED_SESSIONS = 2048
+# One operator uses one browser window. Windows check in every
+# WINDOW_HEARTBEAT_SECONDS; an owner unseen for WINDOW_STALE_SECONDS is closed.
+WINDOW_HEARTBEAT_SECONDS = 15
+WINDOW_STALE_SECONDS = 45
+MAX_ENDED_WINDOWS = 256
+WINDOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 SESSION_END_MESSAGES = {
     "account_disabled": "An administrator disabled this account.",
     "access_changed": "An administrator changed this account's access.",
@@ -32,6 +38,7 @@ SESSION_END_MESSAGES = {
     "account_removed": "This account is no longer available.",
     "expired": "Your session expired. Sign in again to continue.",
     "idle_timeout": "You were signed out after a period of inactivity.",
+    "signed_in_elsewhere": "You signed in from another window. Only one window can be used at a time.",
 }
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
@@ -76,6 +83,7 @@ class AuthUser:
     created_at: str
     updated_at: str
     last_login_at: str | None
+    must_change_password: bool = False
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -98,6 +106,7 @@ class AuthUser:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "last_login_at": self.last_login_at,
+            "must_change_password": self.must_change_password,
         }
 
 
@@ -106,6 +115,12 @@ class _Session:
     user_id: str
     expires_at: datetime
     last_seen_at: datetime
+    window_id: str | None = None
+    window_seen_at: datetime | None = None
+    replaced_windows: list[str] = field(default_factory=list)
+    password_stamp: str | None = None
+    # Accepted alongside password_stamp while a password change is being saved.
+    pending_stamp: str | None = None
 
 
 class AuthService:
@@ -115,6 +130,8 @@ class AuthService:
         self._sessions: dict[str, _Session] = {}
         # In-memory only: why a recently ended session token stopped working.
         self._ended_sessions: dict[str, str] = {}
+        # Windows whose session a newer sign-in ended, so they can say why.
+        self._ended_windows: dict[str, str] = {}
         self._lock = threading.RLock()
         self._dummy_hash = PASSWORD_HASHER.hash(secrets.token_urlsafe(32))
 
@@ -122,7 +139,7 @@ class AuthService:
         with self._connect() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM app_users").fetchone()[0]) == 0
 
-    def signup_initial(self, username: str, display_name: str, password: str) -> tuple[AuthUser, str]:
+    def signup_initial(self, username: str, display_name: str, password: str, window_id: str | None = None) -> tuple[AuthUser, str]:
         username, normalized = _validate_username(username)
         display_name = _validate_display_name(display_name, username)
         _validate_password(password, username)
@@ -142,9 +159,9 @@ class AuthService:
             )
             self._audit(connection, user_id, user_id, "initial-signup", {})
         user = self.get_user(user_id)
-        return user, self._issue_session(user_id)
+        return user, self._issue_session(user_id, window_id)
 
-    def login(self, username: str, password: str) -> tuple[AuthUser, str]:
+    def login(self, username: str, password: str, window_id: str | None = None) -> tuple[AuthUser, str]:
         _, normalized = _validate_username(username)
         password = password if isinstance(password, str) and len(password) <= 256 else ""
         with self._connect() as connection:
@@ -175,22 +192,32 @@ class AuthService:
                 raise _invalid_credentials()
             now = _now()
             password_hash = PASSWORD_HASHER.hash(password) if PASSWORD_HASHER.check_needs_rehash(row["password_hash"]) else row["password_hash"]
+            # Rehash only if the password is still the one just verified, so a
+            # password change that commits meanwhile is never overwritten.
             connection.execute(
-                "UPDATE app_users SET password_hash = ?, failed_attempts = 0, locked_until = NULL, last_login_at = ?, updated_at = ? WHERE user_id = ?",
-                (password_hash, now, now, user.user_id),
+                "UPDATE app_users SET password_hash = CASE WHEN password_hash = ? THEN ? ELSE password_hash END, "
+                "failed_attempts = 0, locked_until = NULL, last_login_at = ?, updated_at = ? WHERE user_id = ?",
+                (row["password_hash"], password_hash, now, now, user.user_id),
             )
             self._audit(connection, user.user_id, user.user_id, "login", {})
         user = self.get_user(user.user_id)
-        return user, self._issue_session(user.user_id)
+        # Bind the session to the password just verified: if another process
+        # replaced it meanwhile, the session ends at its first request.
+        return user, self._issue_session(user.user_id, window_id, password_hash)
 
-    def authenticate(self, token: str | None) -> AuthUser | None:
+    def authenticate(self, token: str | None, window_id: str | None = None, *, touch: bool = True) -> AuthUser | None:
         if not token:
             return None
         digest = _digest(token)
         now = datetime.now(timezone.utc)
+        window_id = _window_id(window_id)
         with self._lock:
             session = self._sessions.get(digest)
             if session is None:
+                return None
+            if window_id and window_id in self._ended_windows and session.window_id != window_id:
+                # The browser shares one cookie across windows; a newer sign-in
+                # elsewhere ended this window's session even though the cookie is live.
                 return None
             if session.expires_at <= now:
                 self._end_session(digest, "expired")
@@ -198,25 +225,81 @@ class AuthService:
             if now - session.last_seen_at > timedelta(minutes=SESSION_IDLE_MINUTES):
                 self._end_session(digest, "idle_timeout")
                 return None
-            session.last_seen_at = now
-        try:
-            user = self.get_user(session.user_id)
-        except AuthError:
+            if touch:
+                session.last_seen_at = now
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM app_users WHERE user_id = ?", (session.user_id,)).fetchone()
+        if row is None:
             with self._lock:
                 self._end_session(digest, "account_removed")
             return None
+        if not self._password_matches_session(session, row):
+            # The first read can predate a forced-password save that has since
+            # committed and re-stamped this session; only a fresh mismatch counts.
+            with self._connect() as connection:
+                row = connection.execute("SELECT * FROM app_users WHERE user_id = ?", (session.user_id,)).fetchone()
+            if row is None or not self._password_matches_session(session, row):
+                # Another process (the emergency reset command) replaced the password.
+                with self._lock:
+                    self._end_session(digest, "password_reset" if row is not None else "account_removed")
+                return None
+        user = _user_from_row(row)
         if user.disabled:
             with self._lock:
                 self._end_session(digest, "account_disabled")
             return None
         return user
 
-    def session_end_reason(self, token: str | None) -> str | None:
+    @staticmethod
+    def _password_matches_session(session: _Session, row) -> bool:
+        return session.password_stamp is None or _digest(row["password_hash"]) in {
+            session.password_stamp,
+            session.pending_stamp,
+        }
+
+    def session_end_reason(self, token: str | None, window_id: str | None = None) -> str | None:
         """Return why this token's session ended, if it ended recently."""
-        if not token:
-            return None
+        window_id = _window_id(window_id)
         with self._lock:
+            if window_id and window_id in self._ended_windows:
+                return self._ended_windows[window_id]
+            if not token:
+                return None
             return self._ended_sessions.get(_digest(token))
+
+    def use_window(self, token: str | None, window_id: str | None, *, claim: bool = False) -> str:
+        """Return this window's state: active, in_use, replaced, or none."""
+        window_id = _window_id(window_id)
+        if not token or not window_id:
+            return "none"
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            session = self._sessions.get(_digest(token))
+            if session is None:
+                return "none"
+            owner_closed = (
+                session.window_id is None
+                or session.window_seen_at is None
+                or now - session.window_seen_at > timedelta(seconds=WINDOW_STALE_SECONDS)
+            )
+            if claim or owner_closed or session.window_id == window_id:
+                if session.window_id and session.window_id != window_id:
+                    session.replaced_windows = [*session.replaced_windows[-15:], session.window_id]
+                session.replaced_windows = [item for item in session.replaced_windows if item != window_id]
+                session.window_id = window_id
+                session.window_seen_at = now
+                return "active"
+            return "replaced" if window_id in session.replaced_windows else "in_use"
+
+    def release_window(self, token: str | None, window_id: str | None) -> None:
+        window_id = _window_id(window_id)
+        if not token or not window_id:
+            return
+        with self._lock:
+            session = self._sessions.get(_digest(token))
+            if session is not None and session.window_id == window_id:
+                session.window_id = None
+                session.window_seen_at = None
 
     def logout(self, token: str | None) -> None:
         if token:
@@ -248,8 +331,9 @@ class AuthService:
                 connection.execute(
                     """INSERT INTO app_users(
                         user_id, username, username_norm, display_name, password_hash, roles,
-                        disabled, failed_attempts, locked_until, created_at, updated_at, last_login_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, NULL)""",
+                        disabled, failed_attempts, locked_until, created_at, updated_at, last_login_at,
+                        must_change_password
+                    ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, NULL, 1)""",
                     (user_id, username, normalized, display_name, PASSWORD_HASHER.hash(password), json.dumps(roles), now, now),
                 )
                 self._audit(connection, actor.user_id, user_id, "account-created", {"roles": roles})
@@ -285,7 +369,7 @@ class AuthService:
         _validate_password(password, target.username)
         with self._connect() as connection:
             connection.execute(
-                "UPDATE app_users SET password_hash = ?, failed_attempts = 0, locked_until = NULL, updated_at = ? WHERE user_id = ?",
+                "UPDATE app_users SET password_hash = ?, failed_attempts = 0, locked_until = NULL, must_change_password = 1, updated_at = ? WHERE user_id = ?",
                 (PASSWORD_HASHER.hash(password), _now(), user_id),
             )
             self._audit(connection, actor.user_id, user_id, "password-reset", {})
@@ -300,11 +384,43 @@ class AuthService:
             except (VerifyMismatchError, VerificationError, InvalidHashError) as exc:
                 raise AuthError("Current password is incorrect", "invalid_current_password", HTTPStatus.UNAUTHORIZED) from exc
             connection.execute(
-                "UPDATE app_users SET password_hash = ?, updated_at = ? WHERE user_id = ?",
+                "UPDATE app_users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE user_id = ?",
                 (PASSWORD_HASHER.hash(new_password), _now(), user.user_id),
             )
             self._audit(connection, user.user_id, user.user_id, "password-changed", {})
         self._revoke_user_sessions(user.user_id, "password_changed")
+
+    def set_required_password(self, user: AuthUser, token: str | None, new_password: str) -> AuthUser:
+        """Replace an administrator-set password; the current session continues."""
+        _validate_password(new_password, user.username)
+        with self._connect() as connection:
+            row = connection.execute("SELECT password_hash, must_change_password FROM app_users WHERE user_id = ?", (user.user_id,)).fetchone()
+            if row is None or not row["must_change_password"]:
+                raise AuthError("This account does not need a new password", "password_change_not_required", HTTPStatus.CONFLICT)
+            try:
+                PASSWORD_HASHER.verify(row["password_hash"], new_password)
+            except (VerifyMismatchError, VerificationError, InvalidHashError):
+                pass
+            else:
+                raise AuthError("Choose a password different from the one the administrator set", "password_reused", HTTPStatus.UNPROCESSABLE_ENTITY)
+            new_hash = PASSWORD_HASHER.hash(new_password)
+            keep = _digest(token) if token else None
+            with self._lock:
+                kept = self._sessions.get(keep) if keep else None
+                if kept is not None:
+                    kept.pending_stamp = _digest(new_hash)
+            connection.execute(
+                "UPDATE app_users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE user_id = ?",
+                (new_hash, _now(), user.user_id),
+            )
+            self._audit(connection, user.user_id, user.user_id, "required-password-set", {})
+        with self._lock:
+            for digest, session in list(self._sessions.items()):
+                if session.user_id == user.user_id and digest != keep:
+                    self._end_session(digest, "password_changed")
+                elif digest == keep:
+                    session.password_stamp, session.pending_stamp = _digest(new_hash), None
+        return self.get_user(user.user_id)
 
     def emergency_reset_administrator(self, username: str, new_password: str) -> AuthUser:
         _, normalized = _validate_username(username)
@@ -315,7 +431,7 @@ class AuthService:
                 raise AuthError("That account is not an administrator", "administrator_not_found", HTTPStatus.NOT_FOUND)
             user = _user_from_row(row)
             connection.execute(
-                "UPDATE app_users SET password_hash = ?, disabled = 0, failed_attempts = 0, locked_until = NULL, updated_at = ? WHERE user_id = ?",
+                "UPDATE app_users SET password_hash = ?, disabled = 0, failed_attempts = 0, locked_until = NULL, must_change_password = 0, updated_at = ? WHERE user_id = ?",
                 (PASSWORD_HASHER.hash(new_password), _now(), user.user_id),
             )
             self._audit(connection, None, user.user_id, "os-custodian-password-reset", {})
@@ -386,10 +502,31 @@ class AuthService:
                 {"version": RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION},
             )
         return acknowledgement
-    def _issue_session(self, user_id: str) -> str:
+    def _issue_session(self, user_id: str, window_id: str | None = None, password_hash: str | None = None) -> str:
+        """Start the only session; one operator uses SentriFace at a time."""
         token, now = secrets.token_urlsafe(32), datetime.now(timezone.utc)
+        window_id = _window_id(window_id)
+        if password_hash is None:
+            with self._connect() as connection:
+                row = connection.execute("SELECT password_hash FROM app_users WHERE user_id = ?", (user_id,)).fetchone()
+            password_hash = row["password_hash"] if row is not None else None
+        stamp = _digest(password_hash) if password_hash is not None else None
         with self._lock:
-            self._sessions[_digest(token)] = _Session(user_id, now + timedelta(hours=SESSION_HOURS), now)
+            for digest, session in list(self._sessions.items()):
+                for ended_window in (session.window_id, *session.replaced_windows):
+                    if ended_window and ended_window != window_id:
+                        self._ended_windows.pop(ended_window, None)
+                        self._ended_windows[ended_window] = "signed_in_elsewhere"
+                self._end_session(digest, "signed_in_elsewhere")
+            while len(self._ended_windows) > MAX_ENDED_WINDOWS:
+                self._ended_windows.pop(next(iter(self._ended_windows)))
+            if window_id:
+                self._ended_windows.pop(window_id, None)
+            self._sessions[_digest(token)] = _Session(
+                user_id, now + timedelta(hours=SESSION_HOURS), now,
+                window_id=window_id, window_seen_at=now if window_id else None,
+                password_stamp=stamp,
+            )
         return token
 
     def _revoke_user_sessions(self, user_id: str, reason: str) -> None:
@@ -437,16 +574,24 @@ class AuthService:
             connection.close()
 
 
-def session_ended_payload(service: AuthService, token: str | None) -> dict[str, str] | None:
-    reason = service.session_end_reason(token)
+def session_ended_payload(service: AuthService, token: str | None, window_id: str | None = None) -> dict[str, str] | None:
+    reason = service.session_end_reason(token, window_id)
     if reason is None:
         return None
     return {"reason": reason, "message": SESSION_END_MESSAGES.get(reason, "Your session ended. Sign in again to continue.")}
 
 
-def auth_status_payload(service: AuthService, user: AuthUser | None, token: str | None = None) -> dict[str, Any]:
+def auth_status_payload(
+    service: AuthService,
+    user: AuthUser | None,
+    token: str | None = None,
+    window_id: str | None = None,
+    window: str = "none",
+) -> dict[str, Any]:
     return {
-        "session_ended": None if user is not None else session_ended_payload(service, token),
+        "session_ended": None if user is not None else session_ended_payload(service, token, window_id),
+        "window": window if user is not None else "none",
+        "window_heartbeat_seconds": WINDOW_HEARTBEAT_SECONDS,
         "setup_required": service.setup_required(),
         "authenticated": user is not None,
         "user": user.as_dict() if user else None,
@@ -487,7 +632,15 @@ def _validate_roles(value: list[str]) -> list[str]:
 
 
 def _user_from_row(row) -> AuthUser:
-    return AuthUser(row["user_id"], row["username"], row["display_name"], tuple(_roles(row["roles"])), bool(row["disabled"]), row["created_at"], row["updated_at"], row["last_login_at"])
+    return AuthUser(
+        row["user_id"], row["username"], row["display_name"], tuple(_roles(row["roles"])), bool(row["disabled"]),
+        row["created_at"], row["updated_at"], row["last_login_at"], bool(row["must_change_password"]),
+    )
+
+
+def _window_id(value: str | None) -> str | None:
+    value = str(value or "")
+    return value if WINDOW_ID_PATTERN.fullmatch(value) else None
 
 
 def _roles(value: str) -> list[str]:

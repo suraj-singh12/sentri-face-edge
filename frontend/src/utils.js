@@ -191,3 +191,33 @@ export function backupReminderDue(lastDataChange, backups = []) {
   const latest = Math.max(...usable.map((backup) => Date.parse(backup.created_at || "")).filter((value) => !Number.isNaN(value)), -Infinity);
   return changed > latest;
 }
+
+const BACKUP_REASON_LABELS = [
+  ["before-person-delete-", "Safety copy before deleting a person"],
+  ["before-person-archive-", "Safety copy before archiving a person"],
+  ["before-face-permanent-delete-", "Safety copy before erasing a face"],
+  ["before-face-delete-", "Safety copy before removing a face"],
+  ["before-expired-face-purge-", "Safety copy before 30-day face cleanup"],
+  ["before-restore-", "Safety copy before restoring a backup"],
+  ["before-schema-migration-", "Safety copy before upgrading SentriFace data"],
+  ["automatic-recovery", "First recovery backup"],
+];
+
+export function backupLabel(backup) {
+  const reason = String(backup?.reason || "");
+  if (!reason) return backup?.imported_from_backup_id ? "Imported backup" : "Manual backup";
+  const match = BACKUP_REASON_LABELS.find(([prefix]) => reason.startsWith(prefix));
+  return match ? match[1] : "Backup";
+}
+
+export function formatBackupDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "-");
+  return date.toLocaleString([], {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}

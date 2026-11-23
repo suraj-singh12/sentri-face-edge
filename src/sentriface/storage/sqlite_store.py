@@ -92,7 +92,7 @@ from sentriface.models import (
 )
 from sentriface.media_registry import media_content_identity, require_existing_media
 
-from sentriface.secure_storage import connect_database, ensure_encrypted_database
+from sentriface.secure_storage import INTEGRITY_ERRORS, connect_database, ensure_encrypted_database
 
 # Module-level helpers live in the modules below. They are re-exported here so
 # existing imports keep working; SQLiteIdentityStore resolves them from here.
@@ -565,8 +565,8 @@ class SQLiteIdentityStore:
                     metadata=normalized_metadata,
                     enrollment_status="placeholder",
                 )
-            except sqlite3.IntegrityError as exc:
-                raise _placeholder_name_conflict(exc) from exc
+            except INTEGRITY_ERRORS as exc:
+                raise _placeholder_name_conflict(exc, normalized_name) from exc
             result = {
                 "person_id": person.person_id,
                 "lifecycle_status": "ACTIVE",
@@ -853,8 +853,8 @@ class SQLiteIdentityStore:
                     "UPDATE persons SET name = ? WHERE person_id = ? AND deleted_at IS NULL",
                     (name, person_id),
                 )
-            except sqlite3.IntegrityError as exc:
-                raise _placeholder_name_conflict(exc) from exc
+            except INTEGRITY_ERRORS as exc:
+                raise _placeholder_name_conflict(exc, name) from exc
         if cursor.rowcount == 0:
             raise KeyError(f"Unknown person: {person_id}")
 
@@ -952,8 +952,8 @@ class SQLiteIdentityStore:
                         person_id,
                     ),
                 )
-            except sqlite3.IntegrityError as exc:
-                raise _placeholder_name_conflict(exc) from exc
+            except INTEGRITY_ERRORS as exc:
+                raise _placeholder_name_conflict(exc, name) from exc
             _insert_person_change(conn, change)
             result = {"change_id": change.change_id, "person_id": person_id}
             _record_person_operation(
@@ -1734,7 +1734,7 @@ class SQLiteIdentityStore:
             association = _new_person_association(person_a_id, person_b_id, actor)
             try:
                 _insert_person_association(conn, association)
-            except sqlite3.IntegrityError as exc:
+            except INTEGRITY_ERRORS as exc:
                 if "person_associations" in str(exc):
                     raise KeyError("These people are already associated") from exc
                 raise
@@ -7895,6 +7895,14 @@ def _migrate_33_to_34(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_35_to_36(conn: sqlite3.Connection) -> None:
+    """Accounts whose password an administrator set must choose their own at sign-in."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(app_users)").fetchall()}
+    _execute_migration_script(conn, ("" if not columns or "must_change_password" in columns else
+        "ALTER TABLE app_users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0\n"
+        "    CHECK(must_change_password IN (0,1));\n") + "PRAGMA user_version = 36;")
+
+
 def _migrate_34_to_35(conn: sqlite3.Connection) -> None:
     """Erased faces become retained stubs so Event and correction history stay valid."""
     columns = {row[1] for row in conn.execute("PRAGMA table_info(embeddings)").fetchall()}
@@ -8000,6 +8008,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(32, 33, _migrate_32_to_33),
         SchemaMigration(33, 34, _migrate_33_to_34),
         SchemaMigration(34, 35, _migrate_34_to_35),
+        SchemaMigration(35, 36, _migrate_35_to_36),
     )
 
 

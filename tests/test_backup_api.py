@@ -114,8 +114,30 @@ class PortableBackupApiTest(unittest.TestCase):
                     encrypted,
                     self._passphrase_header("correct horse battery staple"),
                 )
+                self.assertEqual(status, 409)
+                refused = json.loads(response)
+                self.assertEqual(refused["code"], "backup_already_present")
+                self.assertEqual(refused["existing_backup"]["backup_id"], backup_id)
+                self.assertEqual(len(server.backups.list_backups()), 1)
+                status, _, response = self._raw_request(
+                    server,
+                    "POST",
+                    "/api/backups/import?filename=protected.sfbackup.enc&allow_duplicate=1",
+                    encrypted,
+                    self._passphrase_header("correct horse battery staple"),
+                )
                 self.assertEqual(status, 200)
                 imported = json.loads(response)["backup"]
+                self.assertEqual(imported["imported_from_backup_id"], backup_id)
+                self.assertTrue(imported["imported_at"])
+                status, _, response = self._raw_request(
+                    server,
+                    "POST",
+                    "/api/backups/import?filename=protected.sfbackup.enc",
+                    encrypted,
+                    self._passphrase_header("correct horse battery staple"),
+                )
+                self.assertEqual(status, 409)
                 self.assertNotEqual(imported["backup_id"], backup_id)
                 self.assertTrue(imported["verified"])
                 self.assertEqual(list(server.config.backup_dir.glob(".decrypt-*.sfbackup")), [])
