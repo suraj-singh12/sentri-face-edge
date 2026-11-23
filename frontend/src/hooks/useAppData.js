@@ -229,7 +229,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     showToast("Portable backup deleted", "yellow");
   };
 
-  const importBackup = async (file, passphrase = "", { allowDuplicate = false } = {}) => {
+  const importBackup = async (file, passphrase = "", { allowDuplicate = false, approvedRemovals = [] } = {}) => {
     if (!file || backupImporting) return;
     if (!/\.sfbackup\.enc$/i.test(String(file.name || ""))) {
       showToast("Choose a password-encrypted SentriFace .sfbackup.enc file.", "yellow", {
@@ -246,7 +246,10 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     setBackupImporting(true);
     try {
       const query = new URLSearchParams({ filename: file.name });
-      if (allowDuplicate) query.set("allow_duplicate", "1");
+      if (allowDuplicate) {
+        query.set("allow_duplicate", "1");
+        query.set("approved_removals", approvedRemovals.join(","));
+      }
       const payload = await apiUpload(
         `/api/backups/import?${query}`,
         file,
@@ -274,7 +277,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
       );
       setDuplicateImport(null);
     } catch (error) {
-      if (error.code === "backup_already_present" && !allowDuplicate) {
+      if (error.code === "backup_already_present") {
         setDuplicateImport({
           file,
           passphrase,
@@ -402,9 +405,12 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     cancelDuplicateImport: () => setDuplicateImport(null),
     confirmDuplicateImport: () => {
       if (!duplicateImport) return null;
-      const { file, passphrase } = duplicateImport;
+      const { file, passphrase, retentionRemoves } = duplicateImport;
       setDuplicateImport(null);
-      return importBackup(file, passphrase, { allowDuplicate: true });
+      return importBackup(file, passphrase, {
+        allowDuplicate: true,
+        approvedRemovals: retentionRemoves.map((backup) => backup.backup_id),
+      });
     },
     loadPeople,
     loadEvents,

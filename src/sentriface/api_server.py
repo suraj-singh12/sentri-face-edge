@@ -1732,10 +1732,20 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         import_path,
                         maximum_bytes=BACKUP_IMPORT_LIMIT_BYTES,
                     )
+                    import_query = parse_qs(parsed.query)
+                    allow_duplicate = import_query.get("allow_duplicate") == ["1"]
                     record = self.server.backups.import_encrypted_backup(
                         import_path,
                         passphrase,
-                        allow_duplicate=parse_qs(parsed.query).get("allow_duplicate") == ["1"],
+                        allow_duplicate=allow_duplicate,
+                        approved_removals={
+                            backup_id
+                            for value in import_query.get("approved_removals", [])
+                            for backup_id in value.split(",")
+                            if backup_id
+                        }
+                        if allow_duplicate
+                        else None,
                     )
                 finally:
                     import_path.unlink(missing_ok=True)

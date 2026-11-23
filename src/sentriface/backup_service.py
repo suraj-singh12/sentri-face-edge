@@ -355,7 +355,13 @@ class BackupService:
             None,
         )
 
-    def import_backup(self, archive_path: Path, *, allow_duplicate: bool = False) -> BackupRecord:
+    def import_backup(
+        self,
+        archive_path: Path,
+        *,
+        allow_duplicate: bool = False,
+        approved_removals: set[str] | None = None,
+    ) -> BackupRecord:
         """Validate and install a portable archive as a managed backup."""
         with self._create_lock:
             if not archive_path.exists() or not archive_path.is_file():
@@ -388,14 +394,19 @@ class BackupService:
                         raise BackupError("Unsupported portable backup format")
                     source_backup_id = str(metadata.get("backup_id") or "unknown")
                     existing = self.find_same_backup(source_backup_id)
-                    if existing is not None and not allow_duplicate:
-                        raise BackupAlreadyPresent(
-                            existing,
-                            self._retention_candidates(
-                                self.list_backups(), {existing.backup_id}, incoming=1
-                            ),
-                            self.retention_limit,
+                    if existing is not None:
+                        removals = self._retention_candidates(
+                            self.list_backups(), {existing.backup_id}, incoming=1
                         )
+                        # Warn again if retention would now remove a backup the
+                        # operator was not shown when approving the duplicate.
+                        unapproved = approved_removals is not None and not {
+                            record.backup_id for record in removals
+                        } <= set(approved_removals)
+                        if not allow_duplicate or unapproved:
+                            raise BackupAlreadyPresent(
+                                existing, removals, self.retention_limit
+                            )
                     database_entry = f"database/{self.db_path.name}"
                     expected_entries = {"backup.json", database_entry}
                     expected_entries.update(
@@ -495,6 +506,7 @@ class BackupService:
         passphrase: str,
         *,
         allow_duplicate: bool = False,
+        approved_removals: set[str] | None = None,
     ) -> BackupRecord:
         """Authenticate, decrypt, validate, and install an encrypted export."""
         with self._create_lock:
@@ -502,7 +514,11 @@ class BackupService:
             plain = self.backup_dir / f".decrypt-{uuid.uuid4().hex}.sfbackup"
             try:
                 decrypt_file(archive_path, plain, passphrase)
-                return self.import_backup(plain, allow_duplicate=allow_duplicate)
+                return self.import_backup(
+                    plain,
+                    allow_duplicate=allow_duplicate,
+                    approved_removals=approved_removals,
+                )
             except BackupEncryptionError as exc:
                 raise BackupError(str(exc)) from exc
             finally:

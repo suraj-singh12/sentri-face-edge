@@ -188,7 +188,12 @@ class BackupServiceTest(unittest.TestCase):
             self.assertEqual(caught.exception.retention_limit, 3)
             self.assertEqual([item.backup_id for item in service.list_backups()], list(reversed(created)))
 
-            copy = service.import_backup(archive, allow_duplicate=True)
+            with self.assertRaises(BackupAlreadyPresent) as unapproved:
+                service.import_backup(archive, allow_duplicate=True, approved_removals=set())
+            self.assertEqual([item.backup_id for item in unapproved.exception.retention_removes], [created[1]])
+            self.assertEqual(len(service.list_backups()), 3)
+
+            copy = service.import_backup(archive, allow_duplicate=True, approved_removals={created[1]})
             remaining = {item.backup_id for item in service.list_backups()}
             self.assertEqual(remaining, {copy.backup_id, created[0], created[2]})
 
