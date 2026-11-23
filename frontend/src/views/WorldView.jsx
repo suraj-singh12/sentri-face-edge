@@ -26,6 +26,7 @@ import {
 } from "@mantine/core";
 import {
   IconAdjustments,
+  IconArrowLeft,
   IconArrowRight,
   IconBinaryTree,
   IconCalendarStats,
@@ -55,6 +56,7 @@ export function WorldView({
   onApplyScope,
   onCollection,
   onNextPage,
+  onFirstPage,
   onOpenCluster,
   onCloseCluster,
   onRefreshCluster,
@@ -214,7 +216,11 @@ export function WorldView({
       <Box className="world-workarea">
         <Box className="world-exploration">
           {state.loading ? <Box className="world-loading-stripe"><Loader size={16} /><Text size="xs">Replacing scope…</Text></Box> : null}
-          <WorldCollection data={data} collection={state.collection} onInspect={setSelected} onOpenCluster={onOpenCluster} selected={selected} />
+          {page && state.pageNumber > 1 && !page.returned_count ? (
+            <WorldPageEmpty total={page.total_count} collection={state.collection} onFirstPage={onFirstPage} disabled={state.loading} />
+          ) : (
+            <WorldCollection data={data} collection={state.collection} onInspect={setSelected} onOpenCluster={onOpenCluster} selected={selected} />
+          )}
           {page?.has_more ? (
             <Group justify="center" mt="sm">
               <Button
@@ -566,6 +572,19 @@ function InspectorRow({ label, value }) {
 
 function Metric({ value, label }) {
   return <span className="world-metric"><Text component="span" size="xs" fw={800}>{value ?? "—"}</Text><Text component="span" size="9px" c="dimmed">{label}</Text></span>;
+}
+
+const WORLD_PAGE_NOUNS = { PEOPLE: "people", CLUSTERS: "clusters", RELATIONSHIPS: "relationships", PATTERNS: "patterns" };
+
+function WorldPageEmpty({ total, collection, onFirstPage, disabled }) {
+  const noun = WORLD_PAGE_NOUNS[collection] || "results";
+  return (
+    <Stack align="center" gap={6} p="xl" ta="center">
+      <Text size="sm" fw={700}>No more {noun} here</Text>
+      <Text size="xs" c="dimmed">{Number.isFinite(total) ? `All ${total.toLocaleString()} ${noun} are on earlier pages.` : `The ${noun} in this scope are on earlier pages.`}</Text>
+      <Button variant="default" size="xs" leftSection={<IconArrowLeft size={14} />} onClick={onFirstPage} disabled={disabled || !onFirstPage}>Back to first page</Button>
+    </Stack>
+  );
 }
 
 function WorldEmpty({ title, detail }) {

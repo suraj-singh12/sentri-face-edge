@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+
+from sentriface.secure_storage import INTEGRITY_ERRORS
 import uuid
 
 from dataclasses import asdict
@@ -356,7 +358,7 @@ def _restore_archived_person_in_transaction(
             """,
             (utc_now(), person_id, row["lifecycle_status"]),
         )
-    except sqlite3.IntegrityError as exc:
+    except INTEGRITY_ERRORS as exc:
         raise _placeholder_name_conflict(exc) from exc
     if cursor.rowcount != 1:
         raise RuntimeError("Person lifecycle changed concurrently")

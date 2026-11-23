@@ -54,7 +54,7 @@ import {
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
 import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
-import { EmptyCard } from "../components/Shared.jsx";
+import { EmptyCard, PersonName } from "../components/Shared.jsx";
 import { isNewPersonSuggestion, matchDisplay, mediaUrl, plural, qualityColor, recognitionText } from "../utils.js";
 import { browsePeopleCandidates, PROFILE_BROWSE_MODES } from "../utils/profileBrowse.js";
 
@@ -1196,8 +1196,8 @@ function PeoplePicker({ opened, people, allPeople, mode, onMode, loading, query,
                   )}
                   {person.match && <Badge className="queue-person-picker-rank" color={candidateDisplay.color}>#{person.match.rank}</Badge>}
                 </Box>
-                <Group justify="space-between" wrap="nowrap" gap={6}>
-                  <Text fw={800} truncate>{person.name}</Text>
+                <PersonName name={person.name} fw={800} />
+                <Group wrap="wrap" gap={6}>
                   {person.draft_created && <Badge size="xs">Drafted</Badge>}
                   <Badge size="xs" variant="light" color={person.match ? candidateDisplay.color : "gray"}>
                     {mode === "no_face" ? "No face enrolled" : person.match ? candidateDisplay.badge : "No references"}

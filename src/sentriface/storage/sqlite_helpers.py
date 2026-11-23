@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+
+from sentriface.secure_storage import INTEGRITY_ERRORS
 import uuid
 
 from dataclasses import replace
@@ -189,7 +191,7 @@ def _create_placeholder_record(
     ).fetchone()
     if duplicate is not None:
         raise _placeholder_name_conflict(
-            sqlite3.IntegrityError("duplicate placeholder name")
+            sqlite3.IntegrityError("duplicate placeholder name"), name
         )
     placeholder_metadata = dict(metadata or {})
     placeholder_metadata["tags"] = _normalize_tags(
@@ -218,9 +220,9 @@ def _create_placeholder_record(
                 person.notes,
             ),
         )
-    except sqlite3.IntegrityError as exc:
+    except INTEGRITY_ERRORS as exc:
         if "placeholder" in str(exc).lower() or "persons.name" in str(exc).lower():
-            raise _placeholder_name_conflict(exc) from exc
+            raise _placeholder_name_conflict(exc, name) from exc
         raise
     _insert_person_change(
         conn,
@@ -3216,7 +3218,7 @@ def _set_canonical_person_id_in_transaction(
             """,
             (resolved_target, changed_at, changed_at, normalized_person_id),
         )
-    except sqlite3.IntegrityError as exc:
+    except INTEGRITY_ERRORS as exc:
         if "cycle" in str(exc).lower() or "check constraint" in str(exc).lower():
             raise ValueError(
                 "Canonical identity cannot reference itself or create a cycle"
@@ -3708,10 +3710,13 @@ def _mark_person_enrolled(conn: sqlite3.Connection, person_id: str) -> None:
     )
 
 
-def _placeholder_name_conflict(exc: sqlite3.IntegrityError) -> KeyError:
-    return KeyError(
-        "A placeholder with this name already exists. Add a photograph to that profile or choose a different name."
-    )
+class PlaceholderNameConflict(KeyError):
+    reason = "placeholder_name_taken"
+
+
+def _placeholder_name_conflict(exc: BaseException, name: str | None = None) -> KeyError:
+    named = f" “{name.strip()}”" if name and name.strip() else " by this name"
+    return PlaceholderNameConflict(f"Another unknown person is already called{named}. Choose a different name.")
 
 
 def _journal_json_object(value: dict | None, label: str) -> tuple[dict, str]:
@@ -3804,7 +3809,7 @@ def _begin_journal_operation(
                 created_at,
             ),
         )
-    except sqlite3.IntegrityError as exc:
+    except INTEGRITY_ERRORS as exc:
         if conn.execute(
             "SELECT 1 FROM operation_journal WHERE operation_id = ?",
             (normalized_id,),

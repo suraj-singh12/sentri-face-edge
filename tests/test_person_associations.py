@@ -82,7 +82,7 @@ class PersonAssociationTest(unittest.TestCase):
             )
             changes = store.list_person_changes(placeholder.person_id)
             self.assertEqual(changes[0].new_status, "placeholder")
-            with self.assertRaisesRegex(KeyError, "placeholder with this name"):
+            with self.assertRaisesRegex(KeyError, "Another unknown person is already called"):
                 store.create_placeholder_association(
                     source.person_id,
                     "new contact",
