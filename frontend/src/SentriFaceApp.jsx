@@ -408,6 +408,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               canAttach={can("add")}
               canCorrect={can("destroy")}
               onCorrect={actions.correctEncounter}
+              onNoChanges={actions.notifyNoCorrectionChanges}
               onAttach={actions.attachEncounterMedia}
               people={state.people}
               onQuery={guarded(actions.loadEncounters)}

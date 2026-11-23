@@ -188,7 +188,7 @@ class GraphReadContractsTest(unittest.TestCase):
             self.assertEqual([item.person_id for item in archived.nodes], [field.person_id])
             self.assertEqual(archived.nodes[0].state_indicator, "HISTORICAL")
             self.assertEqual([item.person_id for item in tombstoned.nodes], [deleted.person_id])
-            self.assertEqual(tombstoned.nodes[0].allowed_actions, ("VIEW_HISTORY",))
+            self.assertEqual(tombstoned.nodes[0].allowed_actions, ("VIEW_HISTORY", "RESTORE"))
 
     def test_world_contract_has_revision_timestamp_counts_and_ui_ready_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
