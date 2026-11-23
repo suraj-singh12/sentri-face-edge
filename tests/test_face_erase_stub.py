@@ -124,3 +124,25 @@ def test_v34_database_upgrades_to_stub_schema_and_restarts_cleanly(store):
             assert conn.execute('SELECT erased_at FROM embeddings WHERE embedding_id=?', (eid,)).fetchone()[0] is None
     upgraded.delete_embedding(eid, op())
     assert upgraded.permanently_delete_embedding(eid, op())['stub_retained'] is True
+
+
+def test_backup_verified_by_v34_app_still_restores_after_upgrade(store, tmp_path, monkeypatch):
+    import sentriface.integrity as integrity
+    from sentriface.backup_service import BackupService
+    store.create_person('Alice')
+    with store._connect() as conn:
+        conn.execute('ALTER TABLE embeddings DROP COLUMN erased_at')
+        conn.execute('PRAGMA user_version = 34')
+    with monkeypatch.context() as patch:
+        patch.setattr(integrity, 'SCHEMA_VERSION', 34)
+        old = BackupService(store.db_path, tmp_path / 'backups', supported_database_version=34)
+        backup = old.create_backup()
+    assert backup.database_version == 34 and backup.restorable
+    upgraded = BackupService(store.db_path, tmp_path / 'backups', supported_database_version=SCHEMA_VERSION)
+    assert upgraded.verify_backup(backup.backup_id)
+    assert upgraded.restore_backup(backup.backup_id, op())['outcome'] == 'COMMITTED'
+    restored = SQLiteIdentityStore(store.db_path, embedding_dim=2)
+    restored.initialize()
+    with restored._connect() as conn:
+        assert conn.execute('PRAGMA user_version').fetchone()[0] == SCHEMA_VERSION
+    assert len(restored.list_persons()) == 1

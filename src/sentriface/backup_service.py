@@ -1561,7 +1561,19 @@ class BackupService:
             raise BackupError("Portable backup size manifest does not match its files")
 
         actual_integrity = self._integrity_metadata(database_path, actual_database_version)
-        if metadata.get("integrity") != actual_integrity:
+        recorded_integrity = metadata.get("integrity")
+        if (
+            actual_integrity.get("status") == "PENDING_MIGRATION"
+            and isinstance(recorded_integrity, dict)
+            and recorded_integrity.get("schema_version") == actual_database_version
+            and recorded_integrity.get("fingerprint") == _canonical_sha256(
+                {k: v for k, v in recorded_integrity.items() if k != "fingerprint"}
+            )
+        ):
+            # A backup verified by the app version that owned this older
+            # schema keeps its report; restore migrates and re-checks it.
+            actual_integrity = recorded_integrity
+        if recorded_integrity != actual_integrity:
             raise BackupError("Portable backup integrity fingerprint is invalid")
         expected_restorable = complete and bool(actual_integrity["restore_eligible"])
         if bool(metadata.get("restorable")) != expected_restorable:
