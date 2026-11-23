@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 
 import { partitionImageFiles, skippedInputMessage } from "../inputValidation.js";
+import { uploadRelativePath } from "../utils.js";
 
 export function useFileUploads({ apiPost, apiUpload, showToast }) {
   const reportInputRejections = useCallback(async (source, rejectedCount, acceptedCount, reasons) => {
@@ -44,7 +45,7 @@ export function useFileUploads({ apiPost, apiUpload, showToast }) {
     const query = new URLSearchParams({
       upload_id: uploadId,
       filename: file.name,
-      relative_path: file.webkitRelativePath || file.name,
+      relative_path: uploadRelativePath(file),
     });
     try {
       const payload = await apiUpload(
@@ -91,7 +92,7 @@ export function useFileUploads({ apiPost, apiUpload, showToast }) {
         const query = new URLSearchParams({
           upload_id: uploadId,
           filename: file.name,
-          relative_path: file.webkitRelativePath || file.name,
+          relative_path: uploadRelativePath(file),
         });
         try {
           const payload = await apiUpload(
