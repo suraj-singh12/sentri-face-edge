@@ -471,9 +471,17 @@ function SentriFaceShell({ user, logout, changePassword }) {
               <Text span fw={800}>{state.duplicateImport?.existing ? backupLabel(state.duplicateImport.existing) : "one already listed"}</Text>
               {state.duplicateImport?.existing?.created_at ? `, made ${formatBackupDateTime(state.duplicateImport.existing.created_at)}` : ""}.
             </Alert>
-            <Text size="sm">
-              Importing it again adds a second copy. Nothing else changes, and you can delete either copy later.
-            </Text>
+            {state.duplicateImport?.retentionRemoves?.length ? (
+              <Text size="sm">
+                Importing it again adds a second copy. SentriFace keeps up to {state.duplicateImport.retentionLimit} backups, so it also removes{" "}
+                {state.duplicateImport.retentionRemoves.map((backup) => `${backupLabel(backup)}, made ${formatBackupDateTime(backup.created_at)}`).join("; ")}.
+                You can delete either copy later.
+              </Text>
+            ) : (
+              <Text size="sm">
+                Importing it again adds a second copy. Nothing else changes, and you can delete either copy later.
+              </Text>
+            )}
             <Group justify="flex-end">
               <Button variant="default" onClick={actions.cancelDuplicateImport}>Cancel</Button>
               <Button color="orange" onClick={guarded(actions.confirmDuplicateImport)} loading={state.backupImporting}>Import anyway</Button>

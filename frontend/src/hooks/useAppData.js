@@ -275,7 +275,13 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
       setDuplicateImport(null);
     } catch (error) {
       if (error.code === "backup_already_present" && !allowDuplicate) {
-        setDuplicateImport({ file, passphrase, existing: error.payload?.existing_backup || null });
+        setDuplicateImport({
+          file,
+          passphrase,
+          existing: error.payload?.existing_backup || null,
+          retentionRemoves: error.payload?.retention_removes || [],
+          retentionLimit: error.payload?.retention_limit || 0,
+        });
         return;
       }
       showToast(error.message || "Portable backup import failed.", "red", {

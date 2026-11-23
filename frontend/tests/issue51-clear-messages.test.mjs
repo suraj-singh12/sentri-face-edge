@@ -26,6 +26,7 @@ test("duplicate import warns first and only Import anyway allows the second copy
   assert.match(appData, /query\.set\("allow_duplicate", "1"\)/);
   assert.match(app, /This backup is already in the list/);
   assert.match(app, />Import anyway</);
+  assert.match(app, /retentionRemoves\?\.length[\s\S]*SentriFace keeps up to/);
   assert.doesNotMatch(debug, /<Text size="xs" c="dimmed">\{backup\.backup_id\}<\/Text>/);
   assert.match(debug, /Copy reference for support/);
 });

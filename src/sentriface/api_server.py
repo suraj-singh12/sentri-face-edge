@@ -3350,6 +3350,8 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if isinstance(exc, BackupAlreadyPresent):
             payload["code"] = "backup_already_present"
             payload["existing_backup"] = _backup(exc.existing)
+            payload["retention_removes"] = [_backup(record) for record in exc.retention_removes]
+            payload["retention_limit"] = exc.retention_limit
         if isinstance(exc, EngineBusyError):
             payload["code"] = "engine_busy"
         if isinstance(exc, AuthError):

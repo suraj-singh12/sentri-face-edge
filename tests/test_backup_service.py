@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sentriface.backup_service import (
+    BackupAlreadyPresent,
     BackupError,
     BackupService,
     _with_manifest_fingerprint,
@@ -164,6 +165,32 @@ class BackupServiceTest(unittest.TestCase):
             self.assertNotIn(created[0], remaining)
             self.assertNotIn(created[1], remaining)
             self.assertIn(created[-1], remaining)
+
+    def test_duplicate_import_names_retention_removals_and_keeps_the_original(self) -> None:
+        counter = {"value": 0}
+
+        def next_time() -> datetime:
+            counter["value"] += 1
+            return datetime(2026, 7, 15, 22, 0, counter["value"], tzinfo=timezone.utc)
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "sentriface.db"
+            self._seed_database(db_path)
+            service = BackupService(db_path, root / "backups", retention_limit=3, now=next_time)
+            created = [service.create_backup().backup_id for _ in range(3)]
+            archive = service.export_backup(created[0], root / "exports" / "oldest")
+
+            with self.assertRaises(BackupAlreadyPresent) as caught:
+                service.import_backup(archive)
+            self.assertEqual(caught.exception.existing.backup_id, created[0])
+            self.assertEqual([item.backup_id for item in caught.exception.retention_removes], [created[1]])
+            self.assertEqual(caught.exception.retention_limit, 3)
+            self.assertEqual([item.backup_id for item in service.list_backups()], list(reversed(created)))
+
+            copy = service.import_backup(archive, allow_duplicate=True)
+            remaining = {item.backup_id for item in service.list_backups()}
+            self.assertEqual(remaining, {copy.backup_id, created[0], created[2]})
 
     def test_invalid_backup_ids_and_traversal_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
