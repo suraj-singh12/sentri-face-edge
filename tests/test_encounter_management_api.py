@@ -79,7 +79,7 @@ class EncounterManagementApiTest(unittest.TestCase):
                     self.assertNotIn('Unknown person:', json.dumps(history))
                 status, profile = request('GET', f'/api/person?person_id={a.person_id}')
                 self.assertEqual(profile['relationships'][0]['person']['lifecycle_status'], 'DELETED')
-                self.assertEqual(profile['relationships'][0]['person']['allowed_actions'], ['VIEW_HISTORY'])
+                self.assertEqual(profile['relationships'][0]['person']['allowed_actions'], ['VIEW_HISTORY', 'RESTORE'])
                 removed = request('POST', '/api/person-association-remove', 'operator', {'evidence_id': manual['evidence_id'], 'operation_id': str(uuid.uuid4())})
                 self.assertEqual(removed[0], 200, removed)
                 self.assertTrue(any('CO_OBSERVED' in item.evidence_types for item in store.get_person_neighbors(a.person_id)))

@@ -55,6 +55,7 @@ import {
   IconSortDescending,
   IconStar,
   IconRestore,
+  IconFaceIdError,
   IconSwitchHorizontal,
   IconTrash,
   IconShield,
@@ -125,6 +126,8 @@ export function PeopleView({
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState(null);
+  const [restoreBusy, setRestoreBusy] = useState(false);
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
   const [placeholderBusy, setPlaceholderBusy] = useState(false);
   const [placeholderValues, setPlaceholderValues] = useState(() => newPlaceholderValues());
@@ -132,10 +135,12 @@ export function PeopleView({
   useEffect(() => { if (!placeholderOpen) setPlaceholderErrors({}); }, [placeholderOpen]);
   const resultsRef = useRef(null);
   const normalizedQuery = query.trim().toLowerCase();
-  const collectionKey = filter === "archived" ? "historical" : "active";
+  const collectionKey = filter === "archived" || filter === "bin" ? filter : "active";
+  const archivedCollection = useMemo(() => archivedPeople.filter((person) => !isBinned(person)), [archivedPeople]);
+  const binCollection = useMemo(() => archivedPeople.filter(isBinned), [archivedPeople]);
   const collectionStats = peopleReadModel?.statistics?.[collectionKey] || {};
   const visiblePeople = useMemo(() => {
-    const collection = filter === "archived" ? archivedPeople : people;
+    const collection = filter === "archived" ? archivedCollection : filter === "bin" ? binCollection : people;
     const filtered = collection
       .filter((person) => {
         if (filter === "favorites" && !person.favorite) return false;
@@ -159,7 +164,7 @@ export function PeopleView({
       (rank.get(left.person_id) ?? Number.MAX_SAFE_INTEGER)
       - (rank.get(right.person_id) ?? Number.MAX_SAFE_INTEGER)
     ));
-  }, [archivedPeople, collectionKey, filter, normalizedQuery, people, peopleReadModel, sort]);
+  }, [archivedCollection, binCollection, collectionKey, filter, normalizedQuery, people, peopleReadModel, sort]);
   const pageCount = Number(pageSize);
   const totalPages = Math.max(1, Math.ceil(visiblePeople.length / pageCount));
   const safePage = Math.min(page, totalPages);
@@ -230,7 +235,8 @@ export function PeopleView({
           <Grid.Col span={{ base: 12, md: "content" }} className="people-library-sidebar-col">
             <PeopleLibrarySidebar
               people={people}
-              archivedPeople={archivedPeople}
+              archivedCount={archivedCollection.length}
+              binCount={binCollection.length}
               deletedFaces={deletedFaces}
               activeFilter={filter}
               canDestroy={canDestroy}
@@ -243,9 +249,9 @@ export function PeopleView({
               <Group justify="space-between" align="flex-start" gap="md" className="people-library-header">
                 <Box>
                   <Group gap="xs" align="baseline">
-                    <Title order={3} size="h4">{filter === "deleted" ? "Deleted Faces" : "People"}</Title>
+                    <Title order={3} size="h4">{filter === "deleted" ? "Deleted Faces" : filter === "bin" ? "Bin" : "People"}</Title>
                     <Text size="xs" c="dimmed">
-                      ({filter === "deleted" ? deletedFaces.length : filter === "archived" ? archivedPeople.length : people.length})
+                      ({filter === "deleted" ? deletedFaces.length : filter === "archived" ? archivedCollection.length : filter === "bin" ? binCollection.length : people.length})
                     </Text>
                   </Group>
                   <Text size="sm" c="dimmed">
@@ -253,7 +259,9 @@ export function PeopleView({
                       ? "Restore faces or permanently delete them before automatic cleanup"
                       : filter === "archived"
                         ? "Restore archived identities or review their history"
-                        : "Manage and browse all known identities"}
+                        : filter === "bin"
+                          ? "Deleted people keep their history. Restore someone to make them active again."
+                          : "Manage and browse all known identities"}
                   </Text>
                 </Box>
                 {filter === "deleted" ? (
@@ -281,7 +289,7 @@ export function PeopleView({
                       onSort={setSort}
                       onViewMode={setViewMode}
                     />
-                    {canEdit && filter !== "archived" && (
+                    {canEdit && filter !== "archived" && filter !== "bin" && (
                       <Button leftSection={<IconUserPlus size={16} />} onClick={() => {
                         setPlaceholderValues(newPlaceholderValues());
                         setPlaceholderOpen(true);
@@ -303,7 +311,7 @@ export function PeopleView({
                 <>
                   <PeopleStatsStrip
                     statistics={collectionStats}
-                    archived={filter === "archived"}
+                    collection={collectionKey}
                   />
                   <Box ref={resultsRef} className="people-results-scroll">
                     {pagePeople.length ? (
@@ -311,7 +319,6 @@ export function PeopleView({
                         people={pagePeople}
                         groupBy={groupBy}
                         viewMode={viewMode}
-                        archived={filter === "archived"}
                         canDestroy={canDestroy}
                         onOpen={onOpen}
                         onFavorite={toggleFavorite}
@@ -319,9 +326,10 @@ export function PeopleView({
                           setDeleteTarget(person);
                           setDeleteConfirmation("");
                         }}
+                        onRestore={setRestoreTarget}
                       />
                     ) : (
-                      <EmptyCard text="No people match the current search." />
+                      <EmptyCard text={filter === "bin" && !binCollection.length ? "Bin is empty." : "No people match the current search."} />
                     )}
                   </Box>
                   <PeoplePagination
@@ -379,12 +387,12 @@ export function PeopleView({
           setDeleteTarget(null);
           setDeleteConfirmation("");
         }}
-        title="Delete entire profile permanently?"
+        title={`Delete “${deleteTarget?.name || "this person"}”?`}
         centered
       >
         <Stack>
-          <Alert color="red" icon={<IconShield size={18} />} title="This tombstones the identity">
-            {deleteTarget?.name} will leave active use. Historical identity, sightings, relationships, and operation provenance remain represented. A verified safety backup is created first.
+          <Alert color="red" icon={<IconShield size={18} />} title="This person moves to Bin">
+            {DELETE_PERSON_EXPLANATION}
           </Alert>
           <TextInput
             label="Type DELETE to confirm"
@@ -413,13 +421,52 @@ export function PeopleView({
                 }
               }}
             >
-              Delete entire profile
+              Delete Person
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+      <Modal
+        opened={Boolean(restoreTarget)}
+        onClose={() => !restoreBusy && setRestoreTarget(null)}
+        title={`Restore “${restoreTarget?.name || "this person"}”?`}
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            {restoreTarget?.name} will leave Bin and return to the active People library and recognition, with all retained photos, sightings and relationships.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" disabled={restoreBusy} onClick={() => setRestoreTarget(null)}>Cancel</Button>
+            <Button
+              loading={restoreBusy}
+              leftSection={<IconRestore size={16} />}
+              onClick={async () => {
+                if (!restoreTarget || restoreBusy) return;
+                setRestoreBusy(true);
+                try {
+                  await onRestore(restoreTarget.person_id, { openProfile: false });
+                  setRestoreTarget(null);
+                } catch (error) {
+                  console.error(error);
+                } finally {
+                  setRestoreBusy(false);
+                }
+              }}
+            >
+              Restore Person
             </Button>
           </Group>
         </Stack>
       </Modal>
     </Paper>
   );
+}
+
+const DELETE_PERSON_EXPLANATION = "Their photos, sightings, relationships and history are kept, and you can restore them from Bin at any time. They won’t appear in People or recognition while they are in Bin. A safety backup is created first.";
+
+function isBinned(person) {
+  return person?.lifecycle_status === "DELETED";
 }
 
 function PeopleToolbar({ query, filter, groupBy, sort, viewMode, onQuery, onFilter, onGroupBy, onSort, onViewMode }) {
@@ -429,6 +476,7 @@ function PeopleToolbar({ query, filter, groupBy, sort, viewMode, onQuery, onFilt
     withPhotos: "With Photos",
     withoutPhotos: "No Photos",
     archived: "Archived",
+    bin: "Bin",
   }[filter];
   const groupLabel = {
     none: "None",
@@ -513,7 +561,8 @@ function PeopleToolbar({ query, filter, groupBy, sort, viewMode, onQuery, onFilt
 function PeopleLibrarySidebar({
   canDestroy,
   people,
-  archivedPeople,
+  archivedCount,
+  binCount,
   deletedFaces,
   activeFilter,
   onFilter,
@@ -524,8 +573,9 @@ function PeopleLibrarySidebar({
     { key: "favorites", label: "Favorites", icon: IconStar, count: people.filter((person) => person.favorite).length },
     { key: "withPhotos", label: "With Photos", icon: IconPhoto, count: people.filter((person) => Number(person.embedding_count || 0)).length },
     { key: "withoutPhotos", label: "No Photos", icon: IconUser, count: people.filter((person) => !Number(person.embedding_count || 0)).length },
-    { key: "archived", label: "Archived", icon: IconArchive, count: archivedPeople.length },
-    ...(canDestroy ? [{ key: "deleted", label: "Deleted Faces", icon: IconTrash, count: deletedFaces.length }] : []),
+    { key: "archived", label: "Archived", icon: IconArchive, count: archivedCount },
+    { key: "bin", label: "Bin", icon: IconTrash, count: binCount },
+    ...(canDestroy ? [{ key: "deleted", label: "Deleted Faces", icon: IconFaceIdError, count: deletedFaces.length }] : []),
   ];
   return (
     <Stack className="people-library-sidebar">
@@ -715,8 +765,13 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
   );
 }
 
-function PeopleStatsStrip({ statistics, archived }) {
-  const stats = archived ? [
+function PeopleStatsStrip({ statistics, collection }) {
+  const historical = collection === "archived" || collection === "bin";
+  const stats = collection === "bin" ? [
+    { label: "In Bin", value: statistics.people_count || 0, icon: IconTrash, color: "gray" },
+    { label: "Retained Photos", value: Number(statistics.embedding_count || 0).toLocaleString(), icon: IconImageInPicture, color: "violet" },
+    { label: "Deleted Today", value: statistics.archived_today_count || 0, icon: IconRefresh, color: "red" },
+  ] : historical ? [
     { label: "Archived Records", value: statistics.people_count || 0, icon: IconArchive, color: "gray" },
     { label: "Retained Photos", value: Number(statistics.embedding_count || 0).toLocaleString(), icon: IconImageInPicture, color: "violet" },
     { label: "Merged Records", value: statistics.merged_count || 0, icon: IconSwitchHorizontal, color: "blue" },
@@ -730,7 +785,7 @@ function PeopleStatsStrip({ statistics, archived }) {
     { label: "Added Today", value: statistics.added_today_count || 0, icon: IconRefresh, color: "blue" },
   ];
   return (
-    <SimpleGrid cols={{ base: 2, sm: 3, lg: archived ? 4 : 6 }} spacing="sm" className="people-stats-strip">
+    <SimpleGrid cols={{ base: 2, sm: 3, lg: historical ? stats.length : 6 }} spacing="sm" className="people-stats-strip">
       {stats.map((item) => {
         const Icon = item.icon;
         return (
@@ -749,7 +804,7 @@ function PeopleStatsStrip({ statistics, archived }) {
   );
 }
 
-function PeopleResults({ people, groupBy, viewMode, archived, canDestroy, onOpen, onFavorite, onDelete }) {
+function PeopleResults({ people, groupBy, viewMode, canDestroy, onOpen, onFavorite, onDelete, onRestore }) {
   const groups = useMemo(() => groupPeople(people, groupBy), [groupBy, people]);
   const groupSignature = groups.map((group) => group.label).join("\u0000");
   const [closedGroups, setClosedGroups] = useState(new Set());
@@ -768,12 +823,12 @@ function PeopleResults({ people, groupBy, viewMode, archived, canDestroy, onOpen
             key={person.person_id}
             person={person}
             favorite={Boolean(person.favorite)}
-            archived={isHistorical}
             viewMode={viewMode}
             canDestroy={canDestroy}
             onOpen={() => onOpen(person.person_id, { archived: isHistorical })}
             onFavorite={() => onFavorite(person)}
             onDelete={() => onDelete(person)}
+            onRestore={() => onRestore(person)}
           />
         );
       })}
@@ -816,11 +871,12 @@ function PeopleResults({ people, groupBy, viewMode, archived, canDestroy, onOpen
   );
 }
 
-function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, onFavorite, onDelete }) {
+function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite, onDelete, onRestore }) {
   const cardClass = viewMode === "list" ? "people-person-card people-person-card--list" : "people-person-card";
   const lifecycleStatus = requirePersonContract(person).lifecycle_status;
   const historical = lifecycleStatus !== "ACTIVE";
   const canOpen = lifecycleStatus === "ACTIVE" || (lifecycleStatus === "ARCHIVED" && personAllows(person, "VIEW_HISTORY"));
+  const restoreFromBin = isBinned(person) && personAllows(person, "RESTORE");
   const openPerson = () => {
     if (canOpen) onOpen(person.person_id);
   };
@@ -876,9 +932,15 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
           {favorite ? <IconStar size={15} fill="currentColor" /> : <IconStar size={15} />}
         </ActionIcon>
         <Group justify="space-between" wrap="nowrap" className="people-card-actions">
-          <Button fullWidth size="compact-xs" variant="subtle" disabled={!canOpen} onClick={(event) => { event.stopPropagation(); openPerson(); }}>
-            {canOpen ? "Open profile" : lifecycleStatusLabel(lifecycleStatus)}
-          </Button>
+          {restoreFromBin ? (
+            <Button fullWidth size="compact-xs" variant="subtle" leftSection={<IconRestore size={14} />} disabled={!canDestroy} onClick={(event) => { event.stopPropagation(); onRestore(); }}>
+              Restore
+            </Button>
+          ) : (
+            <Button fullWidth size="compact-xs" variant="subtle" disabled={!canOpen} onClick={(event) => { event.stopPropagation(); openPerson(); }}>
+              {canOpen ? "Open profile" : lifecycleStatusLabel(lifecycleStatus)}
+            </Button>
+          )}
           <Menu withinPortal position="bottom-end">
             <Menu.Target>
               <ActionIcon variant="subtle" onClick={(event) => event.stopPropagation()} aria-label="More actions"><IconDots size={16} /></ActionIcon>
@@ -887,10 +949,14 @@ function PersonCard({ person, favorite, archived, viewMode, canDestroy, onOpen, 
               <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => navigator.clipboard?.writeText(person.person_id)}>
                 Copy ID
               </Menu.Item>
-              <Menu.Divider />
-              <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={onDelete}>
-                Delete entire profile
-              </Menu.Item>
+              {personAllows(person, "DELETE") && (
+                <>
+                  <Menu.Divider />
+                  <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={onDelete}>
+                    Delete Person…
+                  </Menu.Item>
+                </>
+              )}
             </Menu.Dropdown>
           </Menu>
         </Group>
@@ -1320,7 +1386,7 @@ function PeopleGalleryView({
                   setProfileDeleteConfirmation("");
                   setManagementDialog("delete-profile");
                 }}>
-                  Delete entire profile
+                  Delete Person…
                 </Menu.Item>
               )}
             </Menu.Dropdown>
@@ -1615,12 +1681,12 @@ function PeopleGalleryView({
       <Modal
         opened={managementDialog === "delete-profile"}
         onClose={() => !actionBusy && setManagementDialog(null)}
-        title="Delete entire profile permanently?"
+        title={`Delete “${payload.person.name}”?`}
         centered
       >
         <Stack>
-          <Alert color="red" icon={<IconShield size={18} />} title="This tombstones the identity">
-            <strong>{payload.person.name}</strong> will leave active use. Historical identity, sightings, relationships, and operation provenance remain represented. A verified safety backup is created first.
+          <Alert color="red" icon={<IconShield size={18} />} title="This person moves to Bin">
+            {DELETE_PERSON_EXPLANATION}
           </Alert>
           <TextInput
             label="Type DELETE to confirm"
@@ -1637,7 +1703,7 @@ function PeopleGalleryView({
               leftSection={<IconTrash size={16} />}
               onClick={() => runManagement(() => onDelete(payload.person.person_id))}
             >
-              Delete entire profile
+              Delete Person
             </Button>
           </Group>
         </Stack>

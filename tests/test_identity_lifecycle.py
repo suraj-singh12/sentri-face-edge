@@ -224,8 +224,20 @@ class IdentityLifecycleTest(unittest.TestCase):
             self.assertEqual(len(store.list_embeddings_for_person(person.person_id, include_archived=True)), 1)
             self.assertEqual(len(store.list_recognition_details_for_person(person.person_id)), 1)
             self.assertEqual(store.get_operation("delete-1")["status"], "COMMITTED")
-            with self.assertRaisesRegex(KeyError, "Only archived"):
-                store.restore_person(person.person_id, "restore-deleted-1")
+            restored = store.restore_person(person.person_id, "restore-deleted-1")
+            self.assertEqual(restored["lifecycle_status"], "ACTIVE")
+            self.assertEqual(restored["previous_lifecycle_status"], "DELETED")
+            active = store.get_person(person.person_id)
+            self.assertIsNotNone(active)
+            self.assertIsNone(active.deleted_at)
+            self.assertEqual(len(store.list_embeddings_for_person(person.person_id)), 1)
+            self.assertEqual(len(store.list_recognition_details_for_person(person.person_id)), 1)
+            journal = store.get_operation("restore-deleted-1")
+            self.assertEqual(journal["status"], "COMMITTED")
+            self.assertEqual(journal["details"]["previous_status"], "DELETED")
+            self.assertEqual(store.restore_person(person.person_id, "restore-deleted-1"), restored)
+            with self.assertRaisesRegex(KeyError, "Only archived or deleted"):
+                store.restore_person(person.person_id, "restore-active-1")
 
     def test_legacy_permanent_delete_entry_point_now_tombstones(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

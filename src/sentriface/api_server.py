@@ -2552,7 +2552,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 result = self.server.backed_up_people_deletion(
                     operation_id,
                     "purge-person",
-                    f"before-person-permanent-delete-{person.name if person else 'deleted'}-{person_id[:8]}",
+                    f"before-person-delete-{person.name if person else 'deleted'}-{person_id[:8]}",
                     lambda: self.server.engine.permanently_delete_person(
                         person_id,
                         operation_id,
