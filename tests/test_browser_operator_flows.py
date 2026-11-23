@@ -109,6 +109,13 @@ def _sign_in(page, username, password):
     page.get_by_role("button", name="Sign in", exact=True).click()
 
 
+def _choose_own_password(page, password=PASSWORD + "-own"):
+    page.get_by_role("heading", name="Choose a new password").wait_for()
+    _field(page, "New password").fill(password)
+    _field(page, "Confirm new password").fill(password)
+    page.get_by_role("button", name="Save and continue", exact=True).click()
+
+
 def _sign_out(page):
     page.get_by_role("button", name=re.compile("account menu", re.I)).click()
     page.get_by_role("menuitem", name="Sign out").click()
@@ -223,20 +230,29 @@ def test_roles_limit_navigation_and_disabled_accounts_cannot_sign_in(app):
     _add_account(admin, "reg-viewer", "Viewer")
     _add_account(admin, "reg-technician", "Technician")
 
+    expect(admin.locator(".mantine-Card-root").filter(has_text="reg-viewer").get_by_text("Must change password")).to_be_visible()
+
+    # One sign-in at a time: each account signs in after the previous one.
     viewer = app.page()
     _sign_in(viewer, "reg-viewer", PASSWORD)
+    _choose_own_password(viewer)
     viewer.get_by_role("tab", name="Check a photo", exact=True).wait_for()
     assert viewer.get_by_role("tab").all_inner_texts() == ["Check a photo", "People", "Events", "World"]
     assert _api(viewer, "/api/backups")["status"] == 403
 
     technician = app.page()
     _sign_in(technician, "reg-technician", PASSWORD)
+    _choose_own_password(technician)
     technician.get_by_role("tab", name="Settings", exact=True).wait_for()
     assert "Review photos" not in technician.get_by_role("tab").all_inner_texts()
     _settings(technician, "Backups & restore")
     expect(technician.get_by_role("button", name=re.compile("^Import")).first).to_be_disabled()
     assert _api(technician, "/api/backups")["status"] == 200
 
+    admin.reload()
+    _sign_in(admin, "smoke-owner", PASSWORD)
+    _settings(admin, "User accounts")
+    expect(admin.locator(".mantine-Card-root").filter(has_text="reg-technician").get_by_text("Must change password")).to_have_count(0)
     admin.locator(".mantine-Card-root").filter(has_text="reg-technician").get_by_role("button", name="Manage").click()
     dialog = admin.get_by_role("dialog", name=re.compile("Manage"))
     dialog.get_by_label("Disable this account").check()
@@ -244,7 +260,7 @@ def test_roles_limit_navigation_and_disabled_accounts_cannot_sign_in(app):
     expect(admin.locator(".mantine-Card-root").filter(has_text="reg-technician").get_by_text("Disabled", exact=True)).to_be_visible()
     assert _api(technician, "/api/persons")["status"] == 401
     signin = app.page()
-    _sign_in(signin, "reg-technician", PASSWORD)
+    _sign_in(signin, "reg-technician", PASSWORD + "-own")
     expect(signin.get_by_text("This account is disabled")).to_be_visible()
 
 
@@ -273,23 +289,33 @@ def test_encounter_correction_persists_history_and_refuses_stale_revision(app):
     _sign_up(page)
     _enroll_from_photo(page, app.tmp, "Corr Alpha", "Original occasion", 21)
 
-    other = app.page()
-    _sign_in(other, "smoke-owner", PASSWORD)
-    _open_event(other, "Original occasion")
-    stale = _correct_occasion(other, "Stale occasion")
-
     _open_event(page, "Original occasion")
-    dialog = _correct_occasion(page, "Corrected occasion")
-    dialog.get_by_role("button", name=re.compile("^Save")).click()
-    dialog.wait_for(state="hidden")
-    expect(page.get_by_text("Corrected occasion").first).to_be_visible()
+    stale = _correct_occasion(page, "Stale occasion")
+    # Only one window can be used, so the competing change is saved directly
+    # through the API while this dialog still holds the older revision.
+    saved = page.evaluate(
+        """async () => {
+            const headers = {"X-SentriFace-Session": document.querySelector('meta[name="sentriface-session-token"]').content};
+            const list = await (await fetch("/api/encounters?search=Original%20occasion", {headers})).json();
+            const id = list.events[0].observation_id;
+            const detail = await (await fetch(`/api/encounter?observation_id=${id}`, {headers})).json();
+            const encounter = detail.encounter || detail;
+            const response = await fetch("/api/encounter-correct", {
+                method: "POST",
+                headers: {...headers, "Content-Type": "application/json"},
+                body: JSON.stringify({observation_id: id, expected_revision: encounter.revision, operation_id: crypto.randomUUID(), event_details: {event_occasion: "Corrected occasion"}}),
+            });
+            return {status: response.status, body: await response.json()};
+        }"""
+    )
+    assert saved["status"] == 200, saved
 
     stale.get_by_role("button", name=re.compile("^Save")).click()
     expect(stale).to_be_visible()
-    other.reload()
-    _tab(other, "Events")
-    expect(other.get_by_text("Corrected occasion").first).to_be_visible()
-    expect(other.get_by_text("Stale occasion")).to_have_count(0)
+    page.reload()
+    _tab(page, "Events")
+    expect(page.get_by_text("Corrected occasion").first).to_be_visible()
+    expect(page.get_by_text("Stale occasion")).to_have_count(0)
 
 
 def _open_profile(page, name):

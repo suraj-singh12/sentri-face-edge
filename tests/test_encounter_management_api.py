@@ -12,6 +12,7 @@ from sentriface.api_server import create_server
 from sentriface.auth import AUTH_COOKIE_NAME
 from sentriface.models import DetectedFace, FaceBox, MatchDecision, PendingAddition, QualityReport, QualityStatus
 from sentriface.integrity import ReadOnlyIntegrityChecker
+from api_auth_helpers import SignInEachTime, clear_required_password
 
 
 class EncounterManagementApiTest(unittest.TestCase):
@@ -19,11 +20,12 @@ class EncounterManagementApiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             server = create_server(port=0, data_dir=Path(temp) / 'data', runtime='dev', debug=False)
             admin, token = server.auth.signup_initial('admin-test', 'Administrator', 'administrator test password')
-            cookies = {'administrator': f'{AUTH_COOKIE_NAME}={token}'}
+            credentials = {'administrator': ('admin-test', 'administrator test password')}
             for role in ('viewer', 'operator', 'custodian', 'technician'):
-                server.auth.create_user(admin, f'{role}-test', role, f'{role} test password secure', [role])
-                _, role_token = server.auth.login(f'{role}-test', f'{role} test password secure')
-                cookies[role] = f'{AUTH_COOKIE_NAME}={role_token}'
+                created = server.auth.create_user(admin, f'{role}-test', role, f'{role} test password secure', [role])
+                clear_required_password(server, created['user_id'])
+                credentials[role] = (f'{role}-test', f'{role} test password secure')
+            cookies = SignInEachTime(server, credentials)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:

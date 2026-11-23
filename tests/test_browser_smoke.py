@@ -309,7 +309,7 @@ def _admin_post(page, path, body):
     )
 
 
-def test_ended_session_explains_why(app):
+def test_new_sign_in_ends_old_window_and_admin_set_password_is_changed_first(app):
     page, errors, _tmp, _server = app
     _sign_up(page)
     created = _admin_post(page, "/api/users", {
@@ -317,7 +317,7 @@ def test_ended_session_explains_why(app):
         "password": "viewer password long enough", "roles": ["viewer"],
     })
     assert created["status"] == 201, created
-    user_id = created["body"]["user"]["user_id"]
+    assert created["body"]["user"]["must_change_password"] is True
 
     viewer_context = page.context.browser.new_context(viewport={"width": 1440, "height": 1000})
     viewer_context.set_default_timeout(15000)
@@ -327,20 +327,45 @@ def test_ended_session_explains_why(app):
         _field(viewer, "Account name").fill("smoke-viewer")
         _field(viewer, "Password").fill("viewer password long enough")
         viewer.get_by_role("button", name="Sign in", exact=True).click()
+        expect(viewer.get_by_role("heading", name="Choose a new password")).to_be_visible()
+        expect(viewer.get_by_text("An administrator set this password. Choose your own before you continue.")).to_be_visible()
+        assert viewer.get_by_role("tab", name="Check a photo", exact=True).count() == 0
+        viewer.get_by_role("button", name="Save and continue", exact=True).click()
+        expect(viewer.get_by_text("New password is required")).to_be_visible()
+        _field(viewer, "New password").fill("viewer chosen password here")
+        _field(viewer, "Confirm new password").fill("viewer chosen password here")
+        viewer.get_by_role("button", name="Save and continue", exact=True).click()
         viewer.get_by_role("tab", name="Check a photo", exact=True).wait_for()
 
-        updated = _admin_post(page, "/api/users/update", {
-            "user_id": user_id, "display_name": "Smoke Viewer", "roles": ["viewer"], "disabled": True,
-        })
-        assert updated["status"] == 200, updated
-
-        viewer.evaluate("window.dispatchEvent(new Event('focus'))")
-        expect(viewer.get_by_text("Your session ended")).to_be_visible()
-        expect(viewer.get_by_text("An administrator disabled this account.")).to_be_visible()
-        expect(viewer.get_by_role("button", name="Sign in", exact=True)).to_be_visible()
-        assert viewer.get_by_text("Connection or operation error").count() == 0
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+        expect(page.get_by_text("Your session ended")).to_be_visible()
+        expect(page.get_by_text("You signed in from another window.", exact=False)).to_be_visible()
+        expect(page.get_by_role("button", name="Sign in", exact=True)).to_be_visible()
+        assert page.get_by_text("Connection or operation error").count() == 0
     finally:
         viewer_context.close()
+    assert not errors
+
+
+def test_second_window_is_blocked_until_use_this_window(app):
+    page, errors, _tmp, _server = app
+    _sign_up(page)
+    second = page.context.new_page()
+    second.goto(page.url)
+    expect(second.get_by_role("heading", name="SentriFace is open in another window")).to_be_visible()
+    assert second.get_by_role("tab", name="Check a photo", exact=True).count() == 0
+    second.get_by_role("button", name="Use this window", exact=True).click()
+    second.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+
+    page.evaluate("window.dispatchEvent(new Event('focus'))")
+    expect(page.get_by_role("heading", name="SentriFace is now being used in another window")).to_be_visible()
+    page.get_by_role("button", name="Use this window", exact=True).click()
+    page.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+
+    # Reloading the active window releases it first, so the reload is not blocked.
+    page.reload()
+    page.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+    second.close()
     assert not errors
 
 

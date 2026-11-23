@@ -120,7 +120,7 @@ def test_v34_database_upgrades_to_stub_schema_and_restarts_cleanly(store):
         upgraded = SQLiteIdentityStore(store.db_path, embedding_dim=2)
         upgraded.initialize()
         with upgraded._connect() as conn:
-            assert conn.execute('PRAGMA user_version').fetchone()[0] == SCHEMA_VERSION == 35
+            assert conn.execute('PRAGMA user_version').fetchone()[0] == SCHEMA_VERSION >= 35
             assert conn.execute('SELECT erased_at FROM embeddings WHERE embedding_id=?', (eid,)).fetchone()[0] is None
     upgraded.delete_embedding(eid, op())
     assert upgraded.permanently_delete_embedding(eid, op())['stub_retained'] is True

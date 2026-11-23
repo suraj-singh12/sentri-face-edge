@@ -10,6 +10,7 @@ from pathlib import Path
 
 from sentriface.api_server import create_server
 from sentriface.auth import AUTH_COOKIE_NAME
+from api_auth_helpers import clear_required_password
 
 
 PASSWORD = "correct horse battery staple"
@@ -80,7 +81,8 @@ class ModelOnboardingApiTest(unittest.TestCase):
                 self.assertEqual(status, 428)
                 self.assertEqual(payload["code"], "models_required")
 
-                server.auth.create_user(administrator, "reader", "Reader", "reader password long enough", ["viewer"])
+                reader = server.auth.create_user(administrator, "reader", "Reader", "reader password long enough", ["viewer"])
+                clear_required_password(server, reader["user_id"])
                 _, reader_token = server.auth.login("reader", "reader password long enough")
                 reader_cookie = f"{AUTH_COOKIE_NAME}={reader_token}"
                 status, payload = self._request(server, "GET", "/api/models/status", cookie=reader_cookie)
@@ -99,6 +101,8 @@ class ModelOnboardingApiTest(unittest.TestCase):
                 self.assertEqual(status, 403)
                 self.assertEqual(payload["code"], "permission_denied")
 
+                _, token = server.auth.login("owner", PASSWORD)
+                cookie = f"{AUTH_COOKIE_NAME}={token}"
                 status, payload = self._request(server, "POST", "/api/auth/logout", {}, cookie=cookie)
                 self.assertEqual(status, 200)
                 self.assertTrue(payload["logged_out"])

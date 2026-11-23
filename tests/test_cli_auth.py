@@ -28,6 +28,8 @@ class CliAuthorizationTest(unittest.TestCase):
             administrator, _ = auth.signup_initial("owner", "Owner", PASSWORD)
             auth.create_user(administrator, "reader", "Reader", "reader password long enough", ["viewer"])
             auth.create_user(administrator, "keeper", "Keeper", "keeper password long enough", ["custodian"])
+            with auth._connect() as connection:
+                connection.execute("UPDATE app_users SET must_change_password = 0")
 
             with patch("sentriface.cli.getpass.getpass", return_value="reader password long enough"):
                 _authorize_cli(auth, "persons", "reader")
@@ -43,6 +45,16 @@ class CliAuthorizationTest(unittest.TestCase):
 
             with patch("sentriface.cli.getpass.getpass", return_value=PASSWORD):
                 _authorize_cli(auth, "init-db", "owner")
+
+    def test_cli_refuses_an_administrator_set_password_until_it_is_changed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            auth = self._service(Path(directory))
+            administrator, _ = auth.signup_initial("owner", "Owner", PASSWORD)
+            auth.create_user(administrator, "keeper", "Keeper", "keeper password long enough", ["custodian"])
+            with patch("sentriface.cli.getpass.getpass", return_value="keeper password long enough"):
+                with self.assertRaises(AuthError) as caught:
+                    _authorize_cli(auth, "persons", "keeper")
+            self.assertEqual(caught.exception.code, "password_change_required")
 
     @staticmethod
     def _service(directory: Path) -> AuthService:
