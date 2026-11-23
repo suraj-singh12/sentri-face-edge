@@ -120,7 +120,7 @@ main                         7e7b4a6  v1.0.0 (2026-08-17). Untouchable without e
 **CI (GitHub Actions) on each PR:**
 - backend tests on Ubuntu, macOS and Windows;
 - frontend tests and build;
-- lint plus a browser smoke test;
+- lint plus browser tests: the smoke test (`tests/test_browser_smoke.py`) and the six operator flow regressions (`tests/test_browser_operator_flows.py`);
 - an unsigned Windows package build;
 - Devin Review (automated code review).
 
