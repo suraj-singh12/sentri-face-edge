@@ -4,6 +4,7 @@ import { notifications } from "@mantine/notifications";
 const DEFAULT_TIMEOUT_MS = 60_000;
 const SESSION_TOKEN = typeof document === "undefined" ? "" : document.querySelector('meta[name="sentriface-session-token"]')?.content || "";
 const GET_REQUESTS_IN_FLIGHT = new Map();
+export const SESSION_ENDED_CODES = ["authentication_required", "setup_required", "page_session_expired"];
 
 function authorizedHeaders(headers = {}) {
   return { ...headers, "X-SentriFace-Session": SESSION_TOKEN };
@@ -33,8 +34,15 @@ export function useApiClient() {
       error.operationResult = payload.operation_result;
       error.integrityReport = payload.integrity_report;
       error.payload = payload;
-      if (["authentication_required", "setup_required"].includes(error.code)) {
-        window.dispatchEvent(new CustomEvent("sentriface-auth-required"));
+      if (error.code === "page_session_expired") {
+        window.dispatchEvent(new CustomEvent("sentriface-reload-required"));
+      } else if (["authentication_required", "setup_required"].includes(error.code)) {
+        window.dispatchEvent(new CustomEvent("sentriface-auth-required", { detail: payload.session_ended || null }));
+      }
+      if (SESSION_ENDED_CODES.includes(error.code)) {
+        // The sign-in or reload screen explains this; a generic error toast would not.
+        error.notified = true;
+        throw error;
       }
       if (error.code === "models_required") {
         window.dispatchEvent(new CustomEvent("sentriface-models-required"));

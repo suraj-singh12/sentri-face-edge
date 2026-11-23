@@ -15,11 +15,14 @@ export function AuthGate({ children }) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [reloadRequired, setReloadRequired] = useState(false);
   const clearError = (field) => setFieldErrors((current) => ({ ...current, [field]: undefined }));
 
   const refresh = useCallback(async () => {
     try {
-      setStatus(await apiGet("/api/auth/status", { silent: true }));
+      const next = await apiGet("/api/auth/status", { silent: true, dedupe: false });
+      // Keep the same object when nothing changed so focus re-checks do not re-render the app.
+      setStatus((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
     } catch (requestError) {
       setError(requestError?.message || "SentriFace authentication is unavailable");
     } finally {
@@ -30,8 +33,19 @@ export function AuthGate({ children }) {
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => {
     const requireLogin = () => refresh();
+    const requireReload = () => setReloadRequired(true);
+    // Re-check access when the operator returns, so an administrator's change shows promptly.
+    const recheck = () => { if (document.visibilityState === "visible") refresh(); };
     window.addEventListener("sentriface-auth-required", requireLogin);
-    return () => window.removeEventListener("sentriface-auth-required", requireLogin);
+    window.addEventListener("sentriface-reload-required", requireReload);
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", recheck);
+    return () => {
+      window.removeEventListener("sentriface-auth-required", requireLogin);
+      window.removeEventListener("sentriface-reload-required", requireReload);
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", recheck);
+    };
   }, [refresh]);
 
   const submit = async (event) => {
@@ -74,6 +88,19 @@ export function AuthGate({ children }) {
     showToast("Password changed. Sign in again.");
   };
 
+  if (reloadRequired) {
+    return (
+      <Center mih="100vh" p="md">
+        <Card withBorder shadow="md" radius="lg" p="xl" w="100%" maw={460}>
+          <Stack>
+            <Title order={2}>SentriFace was restarted</Title>
+            <Text>This window is from before the restart. Reload it to sign in again. Changes that were not saved before the restart are not kept.</Text>
+            <Button onClick={() => window.location.reload()}>Reload</Button>
+          </Stack>
+        </Card>
+      </Center>
+    );
+  }
   if (loading) return <Center mih="100vh"><Stack align="center"><Loader /><Text c="dimmed">Opening the local vault...</Text></Stack></Center>;
   if (!status?.authenticated) {
     const setup = Boolean(status?.setup_required);
@@ -93,6 +120,9 @@ export function AuthGate({ children }) {
                 <Alert color="blue" title="Private by default">
                   Your account and face data stay on this computer. Nothing is sent to an online service.
                 </Alert>
+              ) : null}
+              {!setup && status?.session_ended ? (
+                <Alert color="orange" title="Your session ended" role="alert">{status.session_ended.message}</Alert>
               ) : null}
               {error ? <Alert color="red">{error}</Alert> : null}
               <TextInput label="Account name" description={setup ? "You will use this name to sign in." : undefined} value={username} onChange={(event) => { setUsername(event.currentTarget.value); clearError("username"); }} error={fieldErrors.username} autoComplete="username" required />
