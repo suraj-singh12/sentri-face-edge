@@ -322,7 +322,10 @@ def test_failed_attach_media_keeps_retry_and_cancel_until_cancelled(served_app):
     page.get_by_role("tab", name="Review photos", exact=True).click()
     for attempt in range(2):
         expect(page.get_by_text("Attach Media draft")).to_be_visible()
-        page.get_by_role("button", name="Retry Attach Media").click()
+        with page.expect_response(lambda response: "/api/queue-scan" in response.url) as retry:
+            page.get_by_role("button", name="Retry Attach Media").click()
+        assert retry.value.status >= 400, attempt
+        assert "Reference Only" in retry.value.text(), attempt
         expect(page.get_by_text("This image is Reference Only biometric material").last).to_be_visible()
         expect(page.get_by_role("button", name="Retry Attach Media")).to_be_visible()
         expect(page.get_by_role("button", name="Cancel Attach Media")).to_be_visible()
