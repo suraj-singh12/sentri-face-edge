@@ -40,7 +40,7 @@ def _image(path: Path, seed: int) -> Path:
 
 @pytest.fixture
 def app(served_app):
-    yield served_app[:3]
+    yield served_app
 
 
 @pytest.fixture
@@ -395,7 +395,7 @@ def test_failed_attach_media_keeps_retry_and_cancel_until_cancelled(served_app):
 
 
 def test_nested_folder_upload_suggests_one_encounter_per_subfolder(app):
-    page, errors, tmp = app
+    page, errors, tmp, _server = app
     _sign_up(page)
     for relative, seed in (("Trip/Day1/a.png", 51), ("Trip/Day1/b.png", 52), ("Trip/Day2/c.png", 53)):
         target = tmp / "folder" / relative
