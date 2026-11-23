@@ -59,7 +59,7 @@ class PersonManagementTest(unittest.TestCase):
             )
             self.assertEqual(summary.embedding_count, 0)
             self.assertEqual(engine.index.search(tuple([0.0] * 512), 5), [])
-            with self.assertRaisesRegex(KeyError, "placeholder with this name"):
+            with self.assertRaisesRegex(KeyError, "Another unknown person is already called"):
                 engine.create_placeholder_person(
                     "alex morgan",
                     {},

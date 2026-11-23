@@ -1224,6 +1224,10 @@ function PeopleGalleryView({
     try {
       if (await onSave(editValues)) setEditOpen(false);
     } catch (error) {
+      if (error?.reason === "placeholder_name_taken") {
+        setEditErrors((current) => ({ ...current, name: `${error.message} Nothing was saved.` }));
+        return;
+      }
       console.error(error);
     }
   };

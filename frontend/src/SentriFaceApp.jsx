@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActionIcon, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Menu, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, UnstyledButton, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
+import { ActionIcon, Alert, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Menu, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, UnstyledButton, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconChevronDown, IconDatabaseExport, IconKey, IconLogout, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
@@ -9,7 +9,7 @@ import { RecoveryGate } from "./components/RecoveryGate.jsx";
 import { VIEWS } from "./constants.js";
 import { useSentriFaceController } from "./hooks/useSentriFaceController.js";
 import { useLicenseController } from "./hooks/useLicenseController.js";
-import { backupReminderDue, profileLine, tabLabel } from "./utils.js";
+import { backupLabel, backupReminderDue, formatBackupDateTime, profileLine, tabLabel } from "./utils.js";
 import { DebugView } from "./views/DebugView.jsx";
 import { EventsView } from "./views/EventsView.jsx";
 import { PeopleView } from "./views/PeopleView.jsx";
@@ -377,6 +377,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onApplyScope={guarded(actions.applyWorldScope)}
               onCollection={guarded(actions.selectWorldCollection)}
               onNextPage={guarded(actions.nextWorldPage)}
+              onFirstPage={guarded(actions.firstWorldPage)}
               onOpenCluster={guarded(actions.openWorldCluster)}
               onCloseCluster={actions.closeWorldCluster}
               onRefreshCluster={guarded(actions.refreshWorldCluster)}
@@ -459,6 +460,35 @@ function SentriFaceShell({ user, logout, changePassword }) {
           </Stack>
         </Modal>
         <Modal
+          opened={Boolean(state.duplicateImport)}
+          onClose={actions.cancelDuplicateImport}
+          title="This backup is already in the list"
+          centered
+        >
+          <Stack gap="md">
+            <Alert color="orange" icon={<IconAlertTriangle size={18} />}>
+              The file you chose is the same backup as{" "}
+              <Text span fw={800}>{state.duplicateImport?.existing ? backupLabel(state.duplicateImport.existing) : "one already listed"}</Text>
+              {state.duplicateImport?.existing?.created_at ? `, made ${formatBackupDateTime(state.duplicateImport.existing.created_at)}` : ""}.
+            </Alert>
+            {state.duplicateImport?.retentionRemoves?.length ? (
+              <Text size="sm">
+                Importing it again adds a second copy. SentriFace keeps up to {state.duplicateImport.retentionLimit} backups, so it also removes{" "}
+                {state.duplicateImport.retentionRemoves.map((backup) => `${backupLabel(backup)}, made ${formatBackupDateTime(backup.created_at)}`).join("; ")}.
+                You can delete either copy later.
+              </Text>
+            ) : (
+              <Text size="sm">
+                Importing it again adds a second copy. Nothing else changes, and you can delete either copy later.
+              </Text>
+            )}
+            <Group justify="flex-end">
+              <Button variant="default" onClick={actions.cancelDuplicateImport}>Cancel</Button>
+              <Button color="orange" onClick={guarded(actions.confirmDuplicateImport)} loading={state.backupImporting}>Import anyway</Button>
+            </Group>
+          </Stack>
+        </Modal>
+        <Modal
           opened={Boolean(state.restoreBackupSelection)}
           onClose={actions.cancelRestoreBackup}
           title="Restore portable backup?"
@@ -469,7 +499,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
           <Stack gap="md">
             <Text size="sm">
               This replaces the current identity database with{" "}
-              <Text span fw={800}>{state.restoreBackupSelection?.reason || "the selected backup"}</Text>
+              <Text span fw={800}>{state.restoreBackupSelection ? backupLabel(state.restoreBackupSelection) : "the selected backup"}</Text>
               {" "}and restores its {state.restoreBackupSelection?.file_count || 0} referenced files.
             </Text>
             <Text size="sm" c="dimmed">
