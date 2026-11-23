@@ -128,13 +128,20 @@ export async function droppedImageFiles(dataTransfer) {
   return Array.from(dataTransfer?.files || []);
 }
 
+export function uploadRelativePath(file) {
+  return file.webkitRelativePath || file.droppedRelativePath || file.name;
+}
+
 export function clearFile(ref) {
   if (ref.current) ref.current.value = "";
 }
 
 async function collectEntryFiles(entry, files) {
   if (entry.isFile) {
-    files.push(await entryFile(entry));
+    const file = await entryFile(entry);
+    const relativePath = String(entry.fullPath || "").replace(/^\/+/, "");
+    if (relativePath && !file.webkitRelativePath) Object.defineProperty(file, "droppedRelativePath", { value: relativePath });
+    files.push(file);
     return;
   }
   if (!entry.isDirectory) return;

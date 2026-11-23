@@ -290,8 +290,9 @@ export function QueueView({
   );
 }
 
-function groupingFolder(mediaPath) {
-  const parts = String(mediaPath || "").replaceAll("\\", "/").split("/").filter(Boolean);
+function groupingFolder(item) {
+  if (typeof item?.source_folder === "string") return item.source_folder;
+  const parts = String(item?.media_path || "").replaceAll("\\", "/").split("/").filter(Boolean);
   const batchIndex = parts.lastIndexOf("batches");
   return batchIndex < 0 ? "" : parts.slice(batchIndex + 2, -1).join("/");
 }
@@ -306,9 +307,9 @@ function EncounterGrouping({ media, onConfirm, onExclude }) {
   const faceMediaCount = usable.filter((item) => item.face_count === undefined || item.face_count > 0).length;
   const maxCount = Math.max(1, faceMediaCount);
   const encounterCount = Math.min(count, maxCount);
-  const folders = [...new Set(usable.map((item) => groupingFolder(item.media_path)))];
+  const folders = [...new Set(usable.map((item) => groupingFolder(item)))];
   const canSuggest = folders.length > 1 && !folders.includes("") && folders.every((folder) =>
-    usable.some((item) => groupingFolder(item.media_path) === folder && (item.face_count === undefined || item.face_count > 0)));
+    usable.some((item) => groupingFolder(item) === folder && (item.face_count === undefined || item.face_count > 0)));
   const assigned = usable.map((item, index) => ({
     item,
     number: mode === "one" ? 1 : Math.min(encounterCount, Number(assignment[item.media_id] || (index % encounterCount) + 1)),
@@ -330,7 +331,7 @@ function EncounterGrouping({ media, onConfirm, onExclude }) {
       <Button variant="default" disabled={!canSuggest} title={canSuggest ? "Suggest Encounters from the uploaded folder structure" : "No distinct uploaded subfolders with detected faces are available for this batch"} onClick={() => {
         const folderNumbers = new Map(folders.map((folder, index) => [folder, index + 1]));
         setCount(folders.length);
-        setAssignment(Object.fromEntries(usable.map((item) => [item.media_id, folderNumbers.get(groupingFolder(item.media_path))])));
+        setAssignment(Object.fromEntries(usable.map((item) => [item.media_id, folderNumbers.get(groupingFolder(item))])));
         setMode("multiple");
       }}>Suggest grouping</Button>
     </Group>
