@@ -278,7 +278,10 @@ def test_deleted_people_move_to_bin_and_restore_to_active(app):
     expect(_people_card(page, "Archive Keeper")).to_have_count(0)
     expect(bin_card.get_by_role("button", name="Open profile")).to_have_count(0)
     expect(bin_card.locator(".people-card-star")).to_have_count(0)
-    expect(bin_card.get_by_role("button", name=re.compile("Historical identity Bin Keeper"))).to_be_disabled()
+    expect(bin_card.get_by_role("button", name=re.compile("Bin Keeper"))).to_have_count(0)
+    bin_name = bin_card.get_by_text("Bin Keeper", exact=True)
+    bin_name.focus()
+    expect(bin_name).to_be_focused()
     _shot(page, "bin-02-bin")
 
     bin_card.get_by_role("button", name="Restore", exact=True).click()
