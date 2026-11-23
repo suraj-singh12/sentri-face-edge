@@ -337,16 +337,9 @@ def test_archive_restore_and_delete_keep_history(app):
     assert _person(page, "Life Alpha")["archived"] is False
 
     page.get_by_role("button", name="More", exact=True).click()
-    if not page.get_by_role("menuitem", name="Delete entire profile").count():
-        page.get_by_role("menuitem", name="Archive person").click()
-        page.get_by_role("dialog", name="Archive this person?").get_by_role("button", name=re.compile("^Archive")).click()
-        expect(page.get_by_text(re.compile("Person moved to Archived")).last).to_be_visible()
-        page.get_by_role("dialog", name="Archive this person?").wait_for(state="hidden")
-        page.get_by_role("button", name=re.compile(r"^Archived \d")).click()
-        page.get_by_text("Life Alpha").first.click()
-        page.get_by_role("button", name="More", exact=True).click()
-    page.get_by_role("menuitem", name="Delete entire profile").click()
-    dialog = page.get_by_role("dialog", name="Delete entire profile permanently?")
+    page.get_by_role("menuitem", name=re.compile("^Delete Person")).click()
+    dialog = page.get_by_role("dialog", name=re.compile(r"^Delete .Life Alpha.\?$"))
+    expect(dialog.get_by_text("This person moves to Bin")).to_be_visible()
     confirm = dialog.get_by_role("button", name=re.compile("^Delete"))
     dialog.get_by_label("Type DELETE to confirm").fill("delete")
     expect(confirm).to_be_disabled()
@@ -354,6 +347,8 @@ def test_archive_restore_and_delete_keep_history(app):
     confirm.click()
     dialog.wait_for(state="hidden")
     assert _person(page, "Life Alpha")["deleted"] is True
+    page.get_by_role("button", name=re.compile(r"^Bin \d")).click()
+    expect(page.get_by_text("Life Alpha").first).to_be_visible()
     _tab(page, "Events")
     page.get_by_text("Lifecycle event").first.click()
     expect(page.get_by_text(re.compile(r"Life Alpha.*\(deleted\)")).first).to_be_visible()
