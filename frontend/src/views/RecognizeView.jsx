@@ -38,7 +38,7 @@ import {
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
 import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
-import { GalleryPanel, LoadImagePanel, Surface } from "../components/Shared.jsx";
+import { GalleryPanel, LoadImagePanel, PersonName, Surface } from "../components/Shared.jsx";
 import { isNewPersonSuggestion, matchDisplay, mediaUrl, qualityColor } from "../utils.js";
 import { browsePeopleCandidates, PROFILE_BROWSE_MODES } from "../utils/profileBrowse.js";
 
@@ -614,7 +614,7 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, re
         </Box>
         <Box miw={0} className="recognition-face-identity">
           <Text size="sm" fw={700} className="recognition-face-label">{faceLabel}</Text>
-          <Text fw={800} truncate>{accepted && !resolved ? "Accepted identity loading" : unknown ? "No match found" : best.name}</Text>
+          <PersonName name={accepted && !resolved ? "Accepted identity loading" : unknown ? "No match found" : best.name} fw={800} />
           <Badge size="xs" color={unknown ? "orange" : display.color} variant="light">
             {reviewDecision === "SKIP" ? "Deferred" : reviewDecision === "EXCLUDE" ? "Discarded" : accepted ? "Accepted" : unknown ? "Human review" : manualMatch ? "Selected" : display.badge}
           </Badge>
@@ -686,8 +686,8 @@ function RecognitionPeoplePicker({ opened, people, allPeople, mode, onMode, load
                   )}
                   {person.match && <Badge className="queue-person-picker-rank" color={candidateDisplay.color}>#{person.match.rank}</Badge>}
                 </Box>
-                <Group justify="space-between" wrap="nowrap" gap={6}>
-                  <Text fw={800} truncate>{person.name}</Text>
+                <PersonName name={person.name} fw={800} />
+                <Group wrap="wrap" gap={6}>
                   <Badge size="xs" variant="light" color={person.match ? candidateDisplay.color : "gray"}>
                     {mode === "no_face" ? "No face enrolled" : person.match ? candidateDisplay.badge : "No references"}
                   </Badge>
