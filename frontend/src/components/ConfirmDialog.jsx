@@ -7,7 +7,7 @@ export const CONFIRM_TONE_COLORS = { danger: "red", caution: "orange", safe: "te
 export function ConfirmNote({ tone = "neutral", children }) {
   if (tone === "neutral") {
     return (
-      <Paper bg="var(--mantine-color-gray-0)" p="sm" radius="md" withBorder>
+      <Paper bg="var(--mantine-color-default-hover)" p="sm" radius="md" withBorder>
         <Group gap="xs" wrap="nowrap" align="flex-start">
           <IconInfoCircle size={18} color="var(--mantine-color-gray-6)" style={{ flexShrink: 0 }} aria-hidden="true" />
           <Text size="sm">{children}</Text>
