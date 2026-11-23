@@ -6,6 +6,7 @@ Run with SENTRIFACE_BROWSER_SMOKE=1 (optionally SENTRIFACE_QA_CHROMIUM=<browser 
 """
 from __future__ import annotations
 
+import time
 import os
 import re
 import threading
@@ -38,7 +39,12 @@ def _image(path: Path, seed: int) -> Path:
 
 
 @pytest.fixture
-def app(tmp_path):
+def app(served_app):
+    yield served_app
+
+
+@pytest.fixture
+def served_app(tmp_path):
     from playwright.sync_api import sync_playwright
     from sentriface.api_server import create_server
 
@@ -303,7 +309,7 @@ def _admin_post(page, path, body):
     )
 
 
-def test_ended_session_explains_why(app):
+def test_new_sign_in_ends_old_window_and_admin_set_password_is_changed_first(app):
     page, errors, _tmp, _server = app
     _sign_up(page)
     created = _admin_post(page, "/api/users", {
@@ -311,7 +317,7 @@ def test_ended_session_explains_why(app):
         "password": "viewer password long enough", "roles": ["viewer"],
     })
     assert created["status"] == 201, created
-    user_id = created["body"]["user"]["user_id"]
+    assert created["body"]["user"]["must_change_password"] is True
 
     viewer_context = page.context.browser.new_context(viewport={"width": 1440, "height": 1000})
     viewer_context.set_default_timeout(15000)
@@ -321,18 +327,113 @@ def test_ended_session_explains_why(app):
         _field(viewer, "Account name").fill("smoke-viewer")
         _field(viewer, "Password").fill("viewer password long enough")
         viewer.get_by_role("button", name="Sign in", exact=True).click()
+        expect(viewer.get_by_role("heading", name="Choose a new password")).to_be_visible()
+        expect(viewer.get_by_text("An administrator set this password. Choose your own before you continue.")).to_be_visible()
+        assert viewer.get_by_role("tab", name="Check a photo", exact=True).count() == 0
+        viewer.get_by_role("button", name="Save and continue", exact=True).click()
+        expect(viewer.get_by_text("New password is required")).to_be_visible()
+        _field(viewer, "New password").fill("viewer chosen password here")
+        _field(viewer, "Confirm new password").fill("viewer chosen password here")
+        viewer.get_by_role("button", name="Save and continue", exact=True).click()
         viewer.get_by_role("tab", name="Check a photo", exact=True).wait_for()
 
-        updated = _admin_post(page, "/api/users/update", {
-            "user_id": user_id, "display_name": "Smoke Viewer", "roles": ["viewer"], "disabled": True,
-        })
-        assert updated["status"] == 200, updated
-
-        viewer.evaluate("window.dispatchEvent(new Event('focus'))")
-        expect(viewer.get_by_text("Your session ended")).to_be_visible()
-        expect(viewer.get_by_text("An administrator disabled this account.")).to_be_visible()
-        expect(viewer.get_by_role("button", name="Sign in", exact=True)).to_be_visible()
-        assert viewer.get_by_text("Connection or operation error").count() == 0
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+        expect(page.get_by_text("Your session ended")).to_be_visible()
+        expect(page.get_by_text("You signed in from another window.", exact=False)).to_be_visible()
+        expect(page.get_by_role("button", name="Sign in", exact=True)).to_be_visible()
+        assert page.get_by_text("Connection or operation error").count() == 0
     finally:
         viewer_context.close()
     assert not errors
+
+
+def test_second_window_is_blocked_until_use_this_window(app):
+    page, errors, _tmp, _server = app
+    _sign_up(page)
+    second = page.context.new_page()
+    second.goto(page.url)
+    expect(second.get_by_role("heading", name="SentriFace is open in another window")).to_be_visible()
+    assert second.get_by_role("tab", name="Check a photo", exact=True).count() == 0
+    second.get_by_role("button", name="Use this window", exact=True).click()
+    second.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+
+    page.evaluate("window.dispatchEvent(new Event('focus'))")
+    expect(page.get_by_role("heading", name="SentriFace is now being used in another window")).to_be_visible()
+    page.get_by_role("button", name="Use this window", exact=True).click()
+    page.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+
+    # Reloading the active window releases it first, so the reload is not blocked.
+    page.reload()
+    page.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+    second.close()
+    assert not errors
+
+
+def _reference_only_event(engine, tmp):
+    import shutil
+    import uuid
+
+    person = engine.store.create_person("Attach Owner")
+    observation = engine.store.create_observation("smoke-attach-create", participant_ids=[person.person_id])
+    engine.store._finalize_observation_without_graph_evidence(observation.observation_id, "smoke-attach-finalize")
+    reference = _image(tmp / "reference.png", 41)
+    upload = tmp / "reference-upload.png"
+    shutil.copy(reference, upload)
+    review = engine.prepare_reference_review(reference, person.person_id)
+    engine.confirm_reference(review["review_id"], person.person_id, str(uuid.uuid4()), no_context_acknowledged=True,
+                             recognition_state="GOOD", actor={"username": "smoke-owner"})
+    return upload
+
+
+def test_failed_attach_media_keeps_retry_and_cancel_until_cancelled(served_app):
+    page, errors, tmp, server = served_app
+    _sign_up(page)
+    upload = _reference_only_event(server.engine, tmp)
+    page.reload()
+    page.get_by_role("tab", name="Events", exact=True).click()
+    page.get_by_text("Unnamed Event").first.click()
+    with page.expect_file_chooser() as chooser:
+        page.get_by_role("button", name="Attach Media").click()
+    chooser.value.set_files(str(upload))
+    expect(page.get_by_text("This image is Reference Only biometric material").first).to_be_visible()
+    page.get_by_role("tab", name="Review photos", exact=True).click()
+    for attempt in range(2):
+        expect(page.get_by_text("Attach Media draft")).to_be_visible()
+        with page.expect_response(lambda response: "/api/queue-scan" in response.url) as retry:
+            page.get_by_role("button", name="Retry Attach Media").click()
+        assert retry.value.status >= 400, attempt
+        assert "Reference Only" in retry.value.text(), attempt
+        expect(page.get_by_text("This image is Reference Only biometric material").last).to_be_visible()
+        expect(page.get_by_role("button", name="Retry Attach Media")).to_be_visible()
+        expect(page.get_by_role("button", name="Cancel Attach Media")).to_be_visible()
+        expect(page.get_by_text("No new media to attach")).to_have_count(0)
+        deadline = time.monotonic() + 10
+        while (statuses := [session.status for session in server.engine.store.list_init_sessions()]) != ["processing_failed"]:
+            assert time.monotonic() < deadline, (attempt, statuses)
+            time.sleep(0.1)
+        expect(page.get_by_role("button", name="Retry Attach Media")).to_be_enabled()
+    _shot(page, "53-attach-retry-kept")
+    page.get_by_role("button", name="Cancel Attach Media").click()
+    expect(page.get_by_text("Attach Media draft")).to_have_count(0)
+    assert server.engine.store.list_init_sessions() == []
+    assert errors == []
+
+
+def test_nested_folder_upload_suggests_one_encounter_per_subfolder(app):
+    page, errors, tmp, _server = app
+    _sign_up(page)
+    for relative, seed in (("Trip/Day1/a.png", 51), ("Trip/Day1/b.png", 52), ("Trip/Day2/c.png", 53)):
+        target = tmp / "folder" / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _image(target, seed)
+    page.get_by_role("tab", name="Review photos", exact=True).click()
+    page.locator("input[type=file][webkitdirectory]").set_input_files(str(tmp / "folder" / "Trip"))
+    page.get_by_role("button", name="Confirm Encounter grouping").wait_for()
+    suggest = page.get_by_role("button", name="Suggest grouping")
+    expect(suggest).to_be_enabled()
+    expect(page.get_by_text("Suggestions need distinct uploaded subfolders")).to_have_count(0)
+    suggest.click()
+    expect(page.get_by_text("Encounter 1: 2 photos")).to_be_visible()
+    expect(page.get_by_text("Encounter 2: 1 photo", exact=True)).to_be_visible()
+    _shot(page, "53-nested-suggested")
+    assert errors == []

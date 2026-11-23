@@ -23,6 +23,8 @@ from sentriface.licensing.authority import (
 )
 from sentriface.licensing.fingerprint import MachineFingerprintError, windows_machine_fingerprint
 from sentriface.api_server import _license_exempt_endpoint, _required_capability, create_server
+from api_auth_helpers import clear_required_password
+from sentriface.auth import AUTH_COOKIE_NAME
 
 
 MACHINE = "SFE-MC-ABCDE-FGHIJ-KLMNO-PQRST-UVWX"
@@ -206,7 +208,8 @@ def test_api_requires_admin_refuses_actor_spoof_and_blocks_product_mutation(sign
             assert status == 201
             admin_cookie = headers["set-cookie"].split(";", 1)[0]
             admin = server.auth.authenticate(admin_cookie.split("=", 1)[1])
-            server.auth.create_user(admin, "viewer", "Viewer", "viewer password long enough", ["viewer"])
+            viewer = server.auth.create_user(admin, "viewer", "Viewer", "viewer password long enough", ["viewer"])
+            clear_required_password(server, viewer["user_id"])
             status, _, headers = _request(server, "POST", "/api/auth/login", {
                 "username": "viewer", "password": "viewer password long enough",
             })
@@ -214,6 +217,7 @@ def test_api_requires_admin_refuses_actor_spoof_and_blocks_product_mutation(sign
             viewer_cookie = headers["set-cookie"].split(";", 1)[0]
 
             assert _request(server, "POST", "/api/license/activate", {"token": _token(signing_key)}, cookie=viewer_cookie)[0] == 403
+            admin_cookie = f"{AUTH_COOKIE_NAME}={server.auth.login('owner', 'owner password long enough')[1]}"
             status, payload, _ = _request(
                 server, "POST", "/api/license/activate",
                 {"token": _token(signing_key), "actor": "spoofed"}, cookie=admin_cookie,

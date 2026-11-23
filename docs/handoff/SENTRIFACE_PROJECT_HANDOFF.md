@@ -32,7 +32,7 @@ Most importantly, it is **evidence-based**. The model only *proposes*. Only expl
 | Layer | Technology | Where |
 |---|---|---|
 | Backend | Python 3.12, `ThreadingHTTPServer` on 127.0.0.1:8765, OpenCV, ONNX Runtime (SCRFD/ArcFace-compatible, licensed models supplied by the user, not bundled), Argon2, `cryptography`, `keyring` | `src/sentriface/` |
-| Storage | Encrypted SQLite (SQLCipher), inline versioned migrations, **schema v35** on `v2-hardening-followups` (PR #50 added `embeddings.erased_at`) | `src/sentriface/storage/sqlite_store.py` (+ `sqlite_*.py` helpers) |
+| Storage | Encrypted SQLite (SQLCipher), inline versioned migrations, **schema v36** (v35 `embeddings.erased_at`, v36 `app_users.must_change_password`) | `src/sentriface/storage/sqlite_store.py` (+ `sqlite_*.py` helpers) |
 | Service boundary | `FaceEngine` orchestrates detection, embedding, matching, cleanup, indexes | `src/sentriface/engine.py` |
 | API + authorization | Loopback HTTP API, capability checks on every route | `src/sentriface/api_server.py`, `auth.py` |
 | Frontend | React 19, Mantine 9.3, Vite; controllers in `frontend/src/hooks/`, views in `frontend/src/views/` | `frontend/` → built into `src/sentriface/ui_static/` (generated; never hand-edited) |
@@ -99,8 +99,8 @@ Most importantly, it is **evidence-based**. The model only *proposes*. Only expl
 ```
 main                         7e7b4a6  v1.0.0 (2026-08-17). Untouchable without explicit permission.
  └─ release-v2.0.0-hardening b457f0a  v2.0.0 hardening line (33 commits ahead of main)
-     └─ v2-hardening-followups 62dd74b operator-directed integration branch (41 ahead, 0 behind)
-                                          includes merged PRs #42, #45, #46, #48 and #50
+     └─ v2-hardening-followups 0e87d1d operator-directed integration branch (61 ahead, 0 behind)
+                                          includes merged PRs #42, #45, #46, #48, #50, #55 and #63
 ```
 
 **What `v2-hardening-followups` is:** the operator created it as the integration branch for work coming out of the 2026-11-22 engineering takeover audit. It contains everything on `release-v2.0.0-hardening`, plus merged PRs #38–#41 (below) and #42, #45, #46, #48 and #50 (section 5):

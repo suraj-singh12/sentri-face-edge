@@ -2,7 +2,7 @@
 
 ## Current handoff — Product Studio #6 and #4 design gate (2026-11-04)
 
-**Integrated baseline:** `release-v2.0.0-hardening` at `0c5d451424f56ca236f921c08e3e4d6e09236458` incorporates World #31 / merged PR #32 and accepted source QA Foundation #17, Normal #19, Moderate #20 and Advanced #21. **Explore** is the opening World UI, with **Connections** preserving the original Current view. Backend `view=CURRENT` default is unchanged. Identity/evidence authority remains unchanged; the current schema on `v2-hardening-followups` is v35 (PR #50 added `embeddings.erased_at`).
+**Integrated baseline:** `release-v2.0.0-hardening` at `0c5d451424f56ca236f921c08e3e4d6e09236458` incorporates World #31 / merged PR #32 and accepted source QA Foundation #17, Normal #19, Moderate #20 and Advanced #21. **Explore** is the opening World UI, with **Connections** preserving the original Current view. Backend `view=CURRENT` default is unchanged. Identity/evidence authority remains unchanged; the current schema on `v2-hardening-followups` is v36 (PR #50 added `embeddings.erased_at` in v35; PR #63 added `app_users.must_change_password` in v36).
 
 **Next v2.0.0 requirement:** #6 professional, Apple-HIG-inspired UI refinement and #4 safe Encounter Split/Merge **both ship before** #5 final release acceptance. #9 `main` CI remains explicitly deferred. Read [UI_UX_DESIGN.md](UI_UX_DESIGN.md), the *sole canonical Product Studio charter and UI design register*, after [FEATURES_BY_TAB.md](FEATURES_BY_TAB.md). The approved design direction is not screen approval. Its UX-00…UX-15 register is source-mapped only and must be expanded against the actual application. Prepare editable Figcraft-first designs and red-team/role/state review, obtain explicit operator approval, then code on issue branches. #4 requires separate domain and Figcraft approval.
 
@@ -65,7 +65,7 @@ Batch 3 gates: 577 backend passed, 47 skipped, 115 subtests passed; 112 frontend
 
 ## Historical checkpoints — post-P14 through partial Batch 3.7
 
-The records below preserve earlier source and release milestones. Their schema versions, test counts, working-tree status, artifacts and pending walkthroughs describe those checkpoints, not the current v35/green-CI baseline above. The dated P14 acceptance record owns the older artifact's checksum; it does not identify or accept the latest CI installer.
+The records below preserve earlier source and release milestones. Their schema versions, test counts, working-tree status, artifacts and pending walkthroughs describe those checkpoints, not the current v36/green-CI baseline above. The dated P14 acceptance record owns the older artifact's checksum; it does not identify or accept the latest CI installer.
 
 - Application version: `2.0.0` (`src/sentriface/_version.py`).
 - Database schema at the earlier partial Batch 3.7 checkpoint: v33 (`SQLiteIdentityStore`), extending v32 with targeted scan ownership; v30 is the Batch 2 staging foundation and v28 remains the frozen P11/P14 release baseline.

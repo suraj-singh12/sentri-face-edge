@@ -388,8 +388,9 @@ def test_new_collections_use_existing_view_authorization_and_local_api(tmp_path)
     from sentriface.auth import AUTH_COOKIE_NAME
     server=create_server(port=0,data_dir=tmp_path/'api',runtime='dev',debug=False)
     admin,token=server.auth.signup_initial('world-admin','Administrator','world administrator password')
-    server.auth.create_user(admin,'world-viewer','Viewer','world viewer password secure',['viewer'])
-    _,viewer=server.auth.login('world-viewer','world viewer password secure')
+    from api_auth_helpers import SignInEachTime, clear_required_password
+    clear_required_password(server,server.auth.create_user(admin,'world-viewer','Viewer','world viewer password secure',['viewer'])['user_id'])
+    tokens=SignInEachTime(server,{'viewer':('world-viewer','world viewer password secure'),'admin':('world-admin','world administrator password')},cookie=False)
     thread=threading.Thread(target=server.serve_forever,daemon=True)
     thread.start()
     def get(query,cookie=None,host=None):
@@ -409,11 +410,11 @@ def test_new_collections_use_existing_view_authorization_and_local_api(tmp_path)
         for collection in (C.MOST_FREQUENTLY_SEEN,C.MOST_RECENTLY_SEEN,C.MULTIPLE_LOCATIONS,C.LOCATION_SUGGESTIONS):
             query=f'collection={collection.value}&location_query=Delhi'
             assert get(query)[0]==401
-            assert get(query,viewer)[0]==200
-            assert get(query,token)[0]==200
-            assert get(query,viewer,'untrusted.example')[0] in (400,403)
-        assert get('view=EXPLORE&evidence_type=&collection=CLUSTERS',viewer)[0]==400
-        assert get('view=EXPLORE&evidence_type=CO_OBSERVED&min_relationship_strength=2&include_below_threshold=true',viewer)[0]==200
+            assert get(query,tokens['viewer'])[0]==200
+            assert get(query,tokens['admin'])[0]==200
+            assert get(query,tokens['viewer'],'untrusted.example')[0] in (400,403)
+        assert get('view=EXPLORE&evidence_type=&collection=CLUSTERS',tokens['viewer'])[0]==400
+        assert get('view=EXPLORE&evidence_type=CO_OBSERVED&min_relationship_strength=2&include_below_threshold=true',tokens['viewer'])[0]==200
     finally:
         server.shutdown()
         server.server_close()
