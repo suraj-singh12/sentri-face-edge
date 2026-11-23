@@ -390,6 +390,7 @@ class Sighting:
     raw_participant_person_ids: tuple[str, ...] = ()
     effective_participant_person_ids: tuple[str, ...] = ()
     correction_operation_ids: tuple[str, ...] = ()
+    date_recorded: bool = True
 
 
 @dataclass(frozen=True)
@@ -486,8 +487,8 @@ class GraphReadEdge:
     relationship_strength: int
     evidence_count: int
     evidence_types: tuple[str, ...]
-    first_occurrence_at: str
-    last_occurrence_at: str
+    first_occurrence_at: str | None
+    last_occurrence_at: str | None
     directionality: str
     relationship_types: tuple[str, ...]
     relationship_type_summary: str
@@ -666,6 +667,7 @@ class WorldEvent:
     evidence_summary: dict[str, Any]
     media_summary: dict[str, Any]
     explanation: WorldExplanation
+    event_time: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -683,6 +685,7 @@ class WorldEvidence:
     occurrence_bounds: dict[str, str | None] = field(default_factory=dict)
     explanation: WorldExplanation | None = None
     media_summary: dict[str, Any] = field(default_factory=dict)
+    event_time: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -694,8 +697,8 @@ class WorldRelationship:
     relationship_types: tuple[str, ...]
     evidence_count: int
     evidence_type_counts: dict[str, int]
-    first_occurrence_at: str
-    last_occurrence_at: str
+    first_occurrence_at: str | None
+    last_occurrence_at: str | None
     strength_basis: str
     explanation: WorldExplanation
     evidence_expansion_token: str | None = None
@@ -738,6 +741,7 @@ class WorldMediaReference:
     occurred_at: str
     supporting_event_id: str | None = None
     supporting_evidence_id: str | None = None
+    event_time: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

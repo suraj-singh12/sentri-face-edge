@@ -92,6 +92,8 @@ Associations explains independent evidence and opens Person Graph. Add Associati
 
 **Rename conflicts (#51):** saving an unknown person under a name another unknown person already has shows "Another unknown person is already called “X”. Choose a different name. Nothing was saved." under the Name field. Any other database conflict shows "This change conflicts with existing data. Nothing was saved."; the technical text goes only to the log.
 
+**Event dates and times (#56):** every Event date/time uses one shared format and shows only what was recorded: `2026-11-22 · 10:00–11:00`, `2026-11-22 · About 10:00`, `2026-11-22 · Time unknown`, or `Date unknown` when no date was saved. This applies to Events, People profile Events and Sightings, World Connections/Explore Event rows, Event and Evidence headers, media previews, Review's finalized-Encounter note and Person Graph. Summary dates (Last seen, First/Last occurrence, Latest shared Encounter, Seen N days ago) show the date only, skip Events with no date and show `Date unknown` when none is dated; a record's creation time is never shown as an Event time. Real system times (backups, recovery, World "as of", Finalized, note/manual-link save times, profile history) keep their clock time. Date filters and sort order still place an undated Event by its creation time.
+
 **Names at decision points (#52):** People cards (all collections), the deleted-face list, associations, Check a photo and Review candidate cards keep each name on one line ending in "…" when it does not fit. The full name shows on hover or touch, on keyboard focus of a People card, and in the profile header. Status badges sit on their own line so they are never clipped.
 
 ## Settings (`debug`)

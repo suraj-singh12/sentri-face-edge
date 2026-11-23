@@ -245,7 +245,8 @@ def _world_recurrence_for_pairs(
             SELECT DISTINCT MIN({source}, {target}) AS first_person,
                    MAX({source}, {target}) AS second_person,
                    o.observation_id AS event_id,
-                   COALESCE(o.observed_at, o.created_at) AS occurred_at, o.location
+                   COALESCE(o.observed_at, o.created_at) AS occurred_at, o.location,
+                   o.observed_at AS recorded_at, o.context AS event_context
             FROM relationship_evidence e JOIN effective_observations o ON o.observation_id = e.source_entity_id
             WHERE e.active = 1 AND e.evidence_type = 'CO_OBSERVED'
               AND e.source_entity_type = 'OBSERVATION' AND {scope_sql}
@@ -253,8 +254,8 @@ def _world_recurrence_for_pairs(
         ), numbered AS (
             SELECT *, ROW_NUMBER() OVER (PARTITION BY first_person, second_person ORDER BY world_time(occurred_at) DESC, event_id) AS position,
                    COUNT(*) OVER (PARTITION BY first_person, second_person) AS total,
-                   MIN(world_occurrence(occurred_at) COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS first_at,
-                   MAX(world_occurrence(occurred_at) COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS latest_at
+                   MIN(world_occurrence(recorded_at) COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS first_at,
+                   MAX(world_occurrence(recorded_at) COLLATE world_instant) OVER (PARTITION BY first_person, second_person) AS latest_at
             FROM encounters
         ) SELECT * FROM numbered WHERE position <= ? ORDER BY first_person, second_person, position""",
         [*params, context.limits.events],
@@ -268,6 +269,7 @@ def _world_recurrence_for_pairs(
         })
         item["supporting_encounters"].append({
             "event_id": str(row["event_id"]), "occurred_at": str(row["occurred_at"]), "location": row["location"],
+            "event_time": _world_event_time(row["recorded_at"], row["event_context"]),
         })
     return result
 
@@ -371,6 +373,20 @@ def _world_stored_datetime(value: str) -> datetime | None:
         return _world_datetime(value, "occurrence")
     except ValueError:
         return None
+
+
+def _world_event_time(observed_at: object, context: object) -> dict[str, str | None]:
+    """The recorded Event date and time; never a creation-time fallback."""
+    text = str(observed_at or "").strip()
+    date = text[:10] if text and _world_stored_datetime(text) is not None else None
+    values = context if isinstance(context, dict) else json.loads(str(context or "{}"))
+    clock = text[11:16] if date and len(text) >= 16 and text[10] == "T" else None
+    start = _optional_text(values.get("start_time")) or clock
+    precision = str(values.get("time_precision") or ("exact" if start else "unknown")).lower()
+    if not date or precision not in {"exact", "approximate"} or not start:
+        precision, start = "unknown", None
+    end = _optional_text(values.get("end_time")) if precision == "exact" else None
+    return {"date": date, "time_precision": precision, "start_time": start, "end_time": end}
 
 
 def _normalize_world_filters(value: WorldReadFilter, as_of: datetime) -> WorldReadFilter:
@@ -618,8 +634,8 @@ def _world_relationship_scope(
                e.source_entity_type, e.source_entity_id,
                e.relationship_type, e.directionality, o.location,
                COUNT(*) AS evidence_count,
-               MIN(world_occurrence(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) COLLATE world_instant) AS first_at,
-               MAX(world_occurrence(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN COALESCE(o.observed_at, o.created_at) ELSE e.created_at END) COLLATE world_instant) AS last_at
+               MIN(world_occurrence(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN o.observed_at ELSE e.created_at END) COLLATE world_instant) AS first_at,
+               MAX(world_occurrence(CASE WHEN e.evidence_type = 'CO_OBSERVED' THEN o.observed_at ELSE e.created_at END) COLLATE world_instant) AS last_at
         FROM relationship_evidence e
         LEFT JOIN effective_observations o ON e.evidence_type = 'CO_OBSERVED'
              AND e.source_entity_type = 'OBSERVATION' AND o.observation_id = e.source_entity_id
@@ -1647,7 +1663,7 @@ def _world_event_media_page(
 ) -> tuple[int, tuple[WorldMediaReference, ...]]:
     total = _world_event_media_count(conn, event_id)
     event = conn.execute(
-        "SELECT COALESCE(observed_at, created_at) AS occurred_at FROM effective_observations WHERE observation_id = ? AND status = 'FINALIZED'",
+        "SELECT COALESCE(observed_at, created_at) AS occurred_at, observed_at, context FROM effective_observations WHERE observation_id = ? AND status = 'FINALIZED'",
         (event_id,),
     ).fetchone()
     if event is None:
@@ -1664,6 +1680,7 @@ def _world_event_media_page(
         occurred_at=str(event["occurred_at"]),
         supporting_event_id=event_id,
         supporting_evidence_id=supporting_evidence_id,
+        event_time=_world_event_time(event["observed_at"], event["context"]),
     ) for row in rows)
 
 
@@ -1703,6 +1720,7 @@ def _world_event_from_row(
         occurred_at=occurred_at,
         location=_optional_text(row["location"]),
         context_summary=_world_context_summary(str(row["context"] or "{}")),
+        event_time=_world_event_time(row["observed_at"], row["context"]),
         source=_optional_text(row["source"]),
         participants=participants,
         participant_provenance=page_provenance,
@@ -1815,7 +1833,8 @@ def _world_evidence_page(
     joined = "relationship_evidence e LEFT JOIN effective_observations o ON e.evidence_type = 'CO_OBSERVED' AND o.observation_id = e.source_entity_id"
     total = int(conn.execute(f"SELECT COUNT(*) FROM {joined} WHERE {where}", params).fetchone()[0])
     rows = conn.execute(
-        f"SELECT e.*, o.location AS encounter_location, {occurrence} AS effective_occurred_at FROM {joined} "
+        f"SELECT e.*, o.location AS encounter_location, o.observed_at AS encounter_observed_at, "
+        f"o.context AS encounter_context, {occurrence} AS effective_occurred_at FROM {joined} "
         f"WHERE {where} ORDER BY world_time({occurrence}) DESC, e.evidence_id LIMIT ? OFFSET ?",
         [*params, limit, offset],
     ).fetchall()
@@ -1903,6 +1922,10 @@ def _world_evidence_page(
             directionality=directionality,
             effective_endpoints=effective_endpoints, raw_endpoints=raw_endpoints,
             occurrence_bounds={"first": known_occurrence, "last": known_occurrence},
+            event_time=(
+                _world_event_time(row["encounter_observed_at"], row["encounter_context"])
+                if is_observation else None
+            ),
             explanation=explanation,
             media_summary={
                 "total_count": media_count,

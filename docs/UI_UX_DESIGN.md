@@ -17,6 +17,8 @@ Make SentriFace **calm, professional, attractive, legible, efficient, reachable,
 6. **Make completeness inspectable.** Every entry point, command, nested state and failure mode gets an explicit preserve/refine/move/defer decision and a test or justified gap. No silent disappearance of features, permission-based paths or secondary recovery controls.
 7. **Design first, implement only after approval.** #6 sets common UI language and inventories safe entry points for #4; #4 separately owns Split/Merge domain policy and implementation. Both are mandatory for v2.0.0 before #5.
 
+**Event times are never invented (#56).** Show an Event's date and time only as recorded, through the shared Event time formatter: unknown times read `Time unknown`, approximate times read `About HH:MM`, a missing date reads `Date unknown`, and summary dates show the date only. Never run a date-only value through a clock conversion or substitute a record's creation time. Genuine system timestamps keep their clock time.
+
 **Reference principles:** Apple's [design principles](https://developer.apple.com/design/human-interface-guidelines/design-principles/), [macOS guidance](https://developer.apple.com/design/human-interface-guidelines/designing-for-macos/), [menus](https://developer.apple.com/design/human-interface-guidelines/menus), and [layout](https://developer.apple.com/design/human-interface-guidelines/layout). Adapt familiarity, agency, purpose, simplicity, platform fit, craftsmanship and safe recovery—not visual imitation.
 
 ## Product Studio: roles and accountability

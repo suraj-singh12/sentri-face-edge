@@ -67,9 +67,50 @@ export function tabLabel(view) {
   }[view];
 }
 
+const STORED_DATE = /^(\d{4}-\d{2}-\d{2})(?:$|T(?!.*(?:Z|[+-]\d{2}:?\d{2})$))/;
+
+function recordedDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const stored = STORED_DATE.exec(text);
+  if (stored) return stored[1];
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
+}
+
+// The one formatter for when an Event happened. It shows only what was recorded.
+export function formatEventWhen(time) {
+  const date = recordedDate(time?.date);
+  if (!date) return "Date unknown";
+  const start = time.time_precision === "unknown" ? "" : time.start_time || "";
+  if (!start) return `${date} · Time unknown`;
+  if (time.time_precision === "approximate") return `${date} · About ${start}`;
+  return `${date} · ${start}${time.end_time ? `–${time.end_time}` : ""}`;
+}
+
+export function formatEventDate(value) {
+  return recordedDate(value) || "Date unknown";
+}
+
+export function formatSavedTime(value) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+export function formatOccurrence(item) {
+  return item?.event_time ? formatEventWhen(item.event_time) : formatSavedTime(item?.occurred_at);
+}
+
 export function formatSeenDateTime(detail) {
-  const date = detail.date || "Date unknown";
-  return detail.time ? `${date}, ${detail.time}` : `${date} · Time unknown`;
+  return formatEventWhen({
+    date: detail.date,
+    time_precision: detail.time_precision || (detail.time ? "exact" : "unknown"),
+    start_time: detail.time,
+    end_time: detail.end_time,
+  });
 }
 
 export function plural(count, noun) {

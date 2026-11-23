@@ -55,7 +55,7 @@ import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.j
 import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
 import { EmptyCard, PersonName } from "../components/Shared.jsx";
-import { isNewPersonSuggestion, matchDisplay, mediaUrl, plural, qualityColor, recognitionText } from "../utils.js";
+import { formatEventWhen, isNewPersonSuggestion, matchDisplay, mediaUrl, plural, qualityColor, recognitionText } from "../utils.js";
 import { browsePeopleCandidates, PROFILE_BROWSE_MODES } from "../utils/profileBrowse.js";
 
 export function QueueView({
@@ -344,7 +344,7 @@ function EncounterGrouping({ media, onConfirm, onExclude }) {
         <Group justify="space-between" align="flex-start"><Badge color={item.finalized_encounter ? "red" : item.excluded ? "gray" : "teal"} variant="light">{item.finalized_encounter ? "Already finalized — excluded" : item.excluded ? "Removed" : "Ready"}</Badge>{!item.finalized_encounter && <ActionIcon aria-label={`Leave photo ${index + 1} out of this Encounter`} title="Leave this photo out of the Encounter. The photo file is not deleted." color="red" variant="subtle" disabled={busy || item.excluded} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, true); } finally { setBusy(false); } }}><IconX size={17} /></ActionIcon>}</Group>
         <Image src={mediaUrl(item.media_path)} h={145} fit="contain" alt="Queued media" />
         <Text size="xs" truncate mt="xs">Photo {index + 1}</Text>
-        {item.finalized_encounter && <Text size="xs" c="red" mt="xs">In finalized Encounter {item.finalized_encounter.occasion || item.finalized_encounter.observation_id} {item.finalized_encounter.observed_at ? `· ${item.finalized_encounter.observed_at}` : ""}</Text>}
+        {item.finalized_encounter && <Text size="xs" c="red" mt="xs">In finalized Encounter {item.finalized_encounter.occasion || item.finalized_encounter.observation_id} · {formatEventWhen(item.finalized_encounter.event_time || { date: item.finalized_encounter.observed_at })}</Text>}
         {item.excluded && !item.finalized_encounter && <Button size="compact-xs" variant="subtle" disabled={busy} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, false); } finally { setBusy(false); } }}>Restore photo</Button>}
         {mode === "multiple" && !item.excluded && !item.finalized_encounter && <Select mt="xs" label="Encounter" value={String(Math.min(encounterCount, Number(assignment[item.media_id] || (usable.findIndex((candidate) => candidate.media_id === item.media_id) % encounterCount) + 1)))} onChange={(value) => setAssignment((current) => ({ ...current, [item.media_id]: Number(value) }))} data={buckets.map((_, index) => ({ value: String(index + 1), label: `Encounter ${index + 1}` }))} />}
       </Card>)}

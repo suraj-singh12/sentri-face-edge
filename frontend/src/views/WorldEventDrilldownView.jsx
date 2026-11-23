@@ -32,7 +32,7 @@ import {
 
 import { SafeImage } from "../components/Shared.jsx";
 import { WorldMediaPreview } from "../components/WorldMediaPreview.jsx";
-import { mediaUrl } from "../utils.js";
+import { formatEventDate, formatOccurrence, formatSavedTime, mediaUrl } from "../utils.js";
 
 const EVENT_COLLECTIONS = [
   { label: "Participants", value: "PARTICIPANTS" },
@@ -115,7 +115,7 @@ function EventHeader({ summary, binding, state, page, onBack, onRefresh }) {
           <ThemeIcon size={40} radius="md" variant="light" color="teal"><IconCalendarEvent size={21} /></ThemeIcon>
           <Box miw={0}>
             <Group gap="xs" wrap="wrap"><Title order={2} size="h3">Finalized observation</Title><Badge size="xs" variant="outline" color="gray">{shortId(summary.event_id)}</Badge></Group>
-            <Text size="xs" c="dimmed" lineClamp={1}>{formatDateTime(summary.occurred_at)} · {summary.location || "Location not recorded"} · {effectiveScopeLabel(binding?.filters)}</Text>
+            <Text size="xs" c="dimmed" lineClamp={1}>{formatOccurrence(summary)} · {summary.location || "Location not recorded"} · {effectiveScopeLabel(binding?.filters)}</Text>
             <Text size="10px" c="dimmed" lineClamp={1}>{eventContext(summary.context_summary, summary.source)}</Text>
           </Box>
         </Group>
@@ -126,7 +126,7 @@ function EventHeader({ summary, binding, state, page, onBack, onRefresh }) {
         <HeaderFact label="Raw provenance" value={summary.participant_summary.provenance_total_count} />
         <HeaderFact label="Evidence" value={summary.evidence_summary.total_count} />
         <HeaderFact label="Media" value={summary.media_summary.total_count} />
-        <Paper withBorder radius="sm" px="xs" py={5} className="world-event-header-fact"><Text span size="10px" c="dimmed">Finalized </Text><Text span size="xs" fw={700}>{formatDateTime(summary.finalized_at)}</Text></Paper>
+        <Paper withBorder radius="sm" px="xs" py={5} className="world-event-header-fact"><Text span size="10px" c="dimmed">Finalized </Text><Text span size="xs" fw={700}>{formatSavedTime(summary.finalized_at)}</Text></Paper>
         {page?.truncated ? <Badge size="xs" color="yellow" variant="light">Current collection is bounded</Badge> : null}
       </Group>
     </Stack>
@@ -171,7 +171,7 @@ function Evidence({ items, page, selected, onSelect }) {
   return <ScrollArea.Autosize mah={535}><Stack gap={0}>{items.map((item) => (
     <button key={item.evidence_id} type="button" className="world-row world-event-evidence-row" data-selected={selected?.type === "evidence" && selected.value.evidence_id === item.evidence_id} onClick={() => onSelect({ type: "evidence", value: item })}>
       <ThemeIcon size={34} variant="light" color="blue"><IconFileDescription size={17} /></ThemeIcon>
-      <span className="world-row-main"><Text component="span" size="xs" fw={800}>{humanize(item.evidence_type)} · {humanize(item.directionality)}</Text><Text component="span" size="10px" c="dimmed">{endpointLabel(item.effective_endpoints)} · {formatDateTime(item.occurred_at)}</Text><Text component="span" size="10px">{item.explanation.summary}</Text></span>
+      <span className="world-row-main"><Text component="span" size="xs" fw={800}>{humanize(item.evidence_type)} · {humanize(item.directionality)}</Text><Text component="span" size="10px" c="dimmed">{endpointLabel(item.effective_endpoints)} · {formatOccurrence(item)}</Text><Text component="span" size="10px">{item.explanation.summary}</Text></span>
       <Box ta="right"><Badge size="xs" variant="light" color={item.media_summary.availability === "AVAILABLE" ? "teal" : "gray"}>{item.media_summary.total_count} media</Badge><Text size="10px" c="dimmed">{shortId(item.evidence_id)}</Text></Box>
     </button>
   ))}</Stack></ScrollArea.Autosize>;
@@ -182,7 +182,7 @@ function Media({ items, page, selected, onSelect }) {
   return <ScrollArea.Autosize mah={535}><SimpleGrid cols={{ base: 2, sm: 3, lg: 4 }} spacing="xs" p="xs">{items.map((item) => (
     <button key={item.media_id} type="button" className="world-event-media-card" data-selected={selected?.type === "media" && selected.value.media_id === item.media_id} onClick={() => onSelect({ type: "media", value: item })}>
       <SafeImage src={item.media_reference ? mediaUrl(item.media_reference) : ""} alt="" className="world-event-media-thumb" fallback={<ThemeIcon size={42} variant="light" color="gray"><IconPhoto size={21} /></ThemeIcon>} />
-      <span className="world-row-main"><Text component="span" size="xs" fw={800}>{shortId(item.media_id)}</Text><Text component="span" size="10px" c="dimmed">{formatDateTime(item.occurred_at)}</Text><Text component="span" size="10px">{item.source || "Source not supplied"}</Text></span>
+      <span className="world-row-main"><Text component="span" size="xs" fw={800}>{shortId(item.media_id)}</Text><Text component="span" size="10px" c="dimmed">{formatOccurrence(item)}</Text><Text component="span" size="10px">{item.source || "Source not supplied"}</Text></span>
     </button>
   ))}</SimpleGrid></ScrollArea.Autosize>;
 }
@@ -195,7 +195,7 @@ function EventEmpty({ page, noun }) {
 function EventExplanation({ summary, binding }) {
   const explanation = summary.explanation;
   return (
-    <Stack gap="sm" p="sm"><Box><Text fw={800}>Event fact</Text><Text size="10px" c="dimmed">Finalized observation and backend explanation</Text></Box><Text size="sm">{explanation.summary}</Text><Divider /><InspectorRow label="Event ID" value={summary.event_id} /><InspectorRow label="Observed" value={formatDateTime(summary.occurred_at)} /><InspectorRow label="Location" value={summary.location || "Not recorded"} /><InspectorRow label="Source" value={summary.source || "Not supplied"} /><InspectorRow label="Context" value={eventContext(summary.context_summary)} /><InspectorRow label="Effective scope" value={effectiveScopeLabel(binding?.filters)} /><FactorRows factors={explanation.factual_factors} /><Box className="world-limitations"><Text size="xs" fw={700}>Limitations</Text>{explanation.limitations.map((limitation) => <Text key={limitation} size="xs" c="dimmed">{limitation}</Text>)}</Box></Stack>
+    <Stack gap="sm" p="sm"><Box><Text fw={800}>Event fact</Text><Text size="10px" c="dimmed">Finalized observation and backend explanation</Text></Box><Text size="sm">{explanation.summary}</Text><Divider /><InspectorRow label="Event ID" value={summary.event_id} /><InspectorRow label="Observed" value={formatOccurrence(summary)} /><InspectorRow label="Location" value={summary.location || "Not recorded"} /><InspectorRow label="Source" value={summary.source || "Not supplied"} /><InspectorRow label="Context" value={eventContext(summary.context_summary)} /><InspectorRow label="Effective scope" value={effectiveScopeLabel(binding?.filters)} /><FactorRows factors={explanation.factual_factors} /><Box className="world-limitations"><Text size="xs" fw={700}>Limitations</Text>{explanation.limitations.map((limitation) => <Text key={limitation} size="xs" c="dimmed">{limitation}</Text>)}</Box></Stack>
   );
 }
 
@@ -208,10 +208,10 @@ function EventSelectionInspector({ item, eventId, binding, onOpenEvidence, onPre
   }
   if (item.type === "media") {
     const value = item.value;
-    return <Stack gap="sm" p="sm"><Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Event media</Text><Text fw={800}>{shortId(value.media_id)}</Text></Box><InspectorRow label="Event" value={value.supporting_event_id} /><InspectorRow label="Supporting evidence" value={value.supporting_evidence_id || "None supplied"} /><InspectorRow label="Occurred" value={formatDateTime(value.occurred_at)} /><InspectorRow label="Revision binding" value={shortId(binding?.revision)} /><Button size="xs" variant="light" leftSection={<IconPhoto size={14} />} onClick={() => onPreviewMedia(value)}>Inspect event media</Button></Stack>;
+    return <Stack gap="sm" p="sm"><Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Event media</Text><Text fw={800}>{shortId(value.media_id)}</Text></Box><InspectorRow label="Event" value={value.supporting_event_id} /><InspectorRow label="Supporting evidence" value={value.supporting_evidence_id || "None supplied"} /><InspectorRow label="Occurred" value={formatOccurrence(value)} /><InspectorRow label="Revision binding" value={shortId(binding?.revision)} /><Button size="xs" variant="light" leftSection={<IconPhoto size={14} />} onClick={() => onPreviewMedia(value)}>Inspect event media</Button></Stack>;
   }
   const value = item.value;
-  return <Stack gap="sm" p="sm"><Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Evidence detail</Text><Text fw={800}>{shortId(value.evidence_id)}</Text></Box><InspectorRow label="Event" value={eventId} /><InspectorRow label="Type" value={humanize(value.evidence_type)} /><InspectorRow label="Directionality" value={humanize(value.directionality)} /><InspectorRow label="Effective endpoints" value={endpointLabel(value.effective_endpoints)} /><InspectorRow label="Raw endpoints" value={endpointLabel(value.raw_endpoints)} /><InspectorRow label="Occurrence" value={formatDateTime(value.occurred_at)} /><InspectorRow label="Media availability" value={`${humanize(value.media_summary.availability)} · ${value.media_summary.total_count}`} /><InspectorRow label="Revision binding" value={shortId(binding?.revision)} /><Text size="sm">{value.explanation.summary}</Text><Button size="xs" variant="light" leftSection={<IconFileDescription size={14} />} onClick={() => onOpenEvidence(value)}>Open authoritative evidence</Button></Stack>;
+  return <Stack gap="sm" p="sm"><Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Evidence detail</Text><Text fw={800}>{shortId(value.evidence_id)}</Text></Box><InspectorRow label="Event" value={eventId} /><InspectorRow label="Type" value={humanize(value.evidence_type)} /><InspectorRow label="Directionality" value={humanize(value.directionality)} /><InspectorRow label="Effective endpoints" value={endpointLabel(value.effective_endpoints)} /><InspectorRow label="Raw endpoints" value={endpointLabel(value.raw_endpoints)} /><InspectorRow label="Occurrence" value={formatOccurrence(value)} /><InspectorRow label="Media availability" value={`${humanize(value.media_summary.availability)} · ${value.media_summary.total_count}`} /><InspectorRow label="Revision binding" value={shortId(binding?.revision)} /><Text size="sm">{value.explanation.summary}</Text><Button size="xs" variant="light" leftSection={<IconFileDescription size={14} />} onClick={() => onOpenEvidence(value)}>Open authoritative evidence</Button></Stack>;
 }
 
 function FactorRows({ factors }) {
@@ -230,7 +230,7 @@ function endpointLabel(values) {
 function effectiveScopeLabel(filters = {}) {
   const parts = [];
   if (filters.recent_activity) parts.push(humanize(filters.recent_activity));
-  else if (filters.date_from || filters.date_to) parts.push(`${formatDate(filters.date_from) || "Start"} to ${formatDate(filters.date_to) || "Now"}`);
+  else if (filters.date_from || filters.date_to) parts.push(`${(filters.date_from ? formatEventDate(filters.date_from) : "Start")} to ${(filters.date_to ? formatEventDate(filters.date_to) : "Now")}`);
   else parts.push("All recorded time");
   if (filters.locations?.length) parts.push(filters.locations.join(", "));
   parts.push(`${humanize(filters.missing_location || "INCLUDE")} missing locations`);
@@ -259,14 +259,4 @@ function shortId(value) {
   return text.length > 18 ? `${text.slice(0, 9)}…${text.slice(-6)}` : text;
 }
 
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
 
-function formatDateTime(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
