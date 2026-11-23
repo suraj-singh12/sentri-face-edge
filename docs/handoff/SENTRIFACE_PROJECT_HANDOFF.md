@@ -210,7 +210,7 @@ Each item needs its own self-explanatory issue and branch before work starts. Au
 |---|---|---|
 | 1 | **No invented times** [F01] | Events show "Time unknown", but World → supporting proof and the Person Graph show the same Event as "12:00 AM", sometimes on the wrong day. Rule: show the time if it's known, otherwise say "Time unknown". Applies to all views. |
 | 2 | **Long Person Notes wrap** [F05] | Use the existing styling; full text readable without edit rights. |
-| 3 | **One operator, one window** | Not enforced today; only a data-folder lock exists. Approved: a new sign-in ends any other session, and a second tab shows "SentriFace is open in another window". Lowers the priority of stale-data findings F08/F15. |
+| 3 | **One operator, one window** | **Done: issue [#54](https://github.com/suraj-singh12/sentri-face-edge/issues/54), merged in [PR #63](https://github.com/suraj-singh12/sentri-face-edge/pull/63).** A new sign-in, for any account, ends every other session, and a second window shows "SentriFace is open in another window" with **Use this window**; a window silent for 45 seconds counts as closed. Lowers the priority of stale-data findings F08/F15. |
 | 4 | **Role limits explained** [F06, F33] | Disabled controls say why, e.g. "Requires Custodian or Administrator". Viewer Favorite consistency. |
 | 5 | **Human-readable backups and duplicate import** [F11, F37] | Show origin (Manual / Imported / Safety copy), date and counts, never raw IDs. Re-importing the same backup **warns but is allowed**. |
 | 6 | **Rename error** [F22] | Unique names for unknown placeholders are intended. Replace "UNIQUE constraint failed" with "Another unknown person is already called X. Choose a different name." |
@@ -222,7 +222,7 @@ Each item needs its own self-explanatory issue and branch before work starts. Au
 | 12 | **Movable toasts** | Top-right stack that moves out of the way of open dialogs, can be dragged, remembers its position and can be reset. Must never cover decision buttons [F04]. |
 | 13 | **Apple-style glossary** | **Event** everywhere on screen (Encounter internal only); **Skip for now** replaces Skip/Defer; **Restore** for people; **Restore from Backup…** for backups. Record it in `docs/UI_UX_DESIGN.md`. |
 | 14 | **No-photo sighting becomes a real Event** [F35] | "Add without photo" requires date, place and occasion, but today they are stored as hidden profile data and never shown. Save them as a real Event with one participant, no photo and no relationships. **Also convert the existing hidden sightings** (needs a migration). Photo and no-photo people are otherwise identical; the only difference is biometric enrollment. |
-| 15 | **Forced password change** [F39] | Required at first sign-in after an Administrator creates an account **or resets a password**. |
+| 15 | **Forced password change** [F39] | **Done: issue [#54](https://github.com/suraj-singh12/sentri-face-edge/issues/54), merged in [PR #63](https://github.com/suraj-singh12/sentri-face-edge/pull/63).** Required at first sign-in after an Administrator creates an account **or resets a password** (schema v36 `app_users.must_change_password`); the owner's sign-up and the command-line emergency reset are not flagged. |
 
 **Audit findings not yet decided or scheduled** (see `findings.md` in PR #34):
 - F02: keyboard access to graph edge evidence.
@@ -282,7 +282,7 @@ Each item needs its own self-explanatory issue and branch before work starts. Au
   - Do these first, because the other UI fixes reuse them.
 - **C. Clarity fixes:** rename error (6), backup labels and duplicate warning (5), notes wrap (2), names not cut off (10), Connections page 2 (9).
 - **D. Workflow dead ends:** failed Attach (7), nested folders (8). Done in PR #55.
-- **E. Session and security:** one window (3), forced password change (15). Builds on PR #45.
+- **E. Session and security:** one window (3), forced password change (15). Builds on PR #45. Done in PR #63.
 - **F. Then:** #4 Split/Merge (design first), and accessibility (F02, screen readers).
 - **G. Finally:** #5 release acceptance on real Windows and macOS hosts with real models.
 
