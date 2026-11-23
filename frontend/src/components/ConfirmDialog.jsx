@@ -65,7 +65,7 @@ export function ConfirmDialog({
 
   const locked = busy || running;
   const matched = !typed || typedValue === typed;
-  const canConfirm = matched && !confirmDisabled && !locked;
+  const canConfirm = matched && !confirmDisabled && !locked && !error?.unknownOutcome;
   const close = () => { if (!locked) onClose?.(); };
   const cancel = () => { if (!locked) (onCancel || onClose)?.(); };
 
@@ -134,7 +134,7 @@ export function ConfirmDialog({
               <Button type="button" variant="default" disabled={locked} onClick={cancel} data-autofocus={typed ? undefined : true}>
                 {cancelLabel}
               </Button>
-              <Button type="submit" color={CONFIRM_TONE_COLORS[tone] || "red"} loading={locked} disabled={!matched || confirmDisabled}>
+              <Button type="submit" color={CONFIRM_TONE_COLORS[tone] || "red"} loading={locked} disabled={!matched || confirmDisabled || Boolean(error?.unknownOutcome)}>
                 {error ? "Try again" : actionLabel}
               </Button>
             </Group>
