@@ -8,7 +8,7 @@ For the latest implementation and QA qualification state, start with the [docume
 
 Ordinary photographs belong in Encounters: their date/place, participants, relationships and recurrence form historical authority. A known Person lacking reliable occurrence context can instead receive a cropped, single-face **Reference Only** image after explicit acknowledgment. NO_FACE Add Face is the prominent bootstrap entry; once enrolled, the same capability moves into secondary Recognition References management. This avoids turning generic Add Face into a contextless photo library. Four active sources allow limited biometric diversity; replace weaker material by retiring then adding. Retired history is preserved. PROOF_ONLY counts toward the cap but remains excluded from ordinary recognition.
 
-Reference identity/lifecycle are independent of Encounter assignments and Person lifecycle. Reference changes produce no Events, evidence, graph edges or World activity. Existing targeted Attach Retry/Cancel and compact backup-button fixes are preserved. Current representation is schema v34; older schema-v32 qualification sections below are historical checkpoints. No Batch 4.
+Reference identity/lifecycle are independent of Encounter assignments and Person lifecycle. Reference changes produce no Events, evidence, graph edges or World activity. Existing targeted Attach Retry/Cancel and compact backup-button fixes are preserved. Current representation is schema v36 (v35 `embeddings.erased_at`, v36 `app_users.must_change_password`); older schema-v32 qualification sections below are historical checkpoints. No Batch 4.
 
 ## Batch 3.6 current qualification
 
@@ -368,8 +368,11 @@ security boundary.
 
 The first local account is an administrator. Passwords use Argon2id. Sessions
 are local, time-bounded, idle-bounded, revocable, and carried by an HttpOnly
-SameSite cookie. Repeated failed logins trigger persistent lockout, and account
-activity is audited.
+SameSite cookie. Only one session and one browser window are active at a time:
+a new sign-in, for any account, ends every other session. Accounts that an
+Administrator created or whose password an Administrator reset must choose a
+new password at first sign-in. Repeated failed logins trigger persistent
+lockout, and account activity is audited.
 
 ---
 
@@ -549,7 +552,7 @@ because durable SQL behavior stays behind one storage boundary.
 `SQLiteIdentityStore` owns schema creation, the contiguous migration chain,
 SQL reads, transactional writes, canonical resolution, journal coupling,
 projection queries, integrity fingerprints, and storage-level validation. The
-current schema version is 32.
+current schema version is 36.
 
 Module-level helpers are split by area into `sqlite_constants.py`,
 `sqlite_helpers.py`, `sqlite_migrations.py`, `sqlite_world.py` and
