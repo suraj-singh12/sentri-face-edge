@@ -665,7 +665,7 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
       <ConfirmDialog
         opened={Boolean(pendingPurge)}
         title="Erase this face?"
-        message="The face is erased for good, and Events show “Face removed”. No undo."
+        message="The face is erased for good, and Events show “Face removed”. No undo. Its sightings are removed too. A safety backup is made first."
         note={{ tone: "caution", text: "Older backups may still contain this face." }}
         typed="ERASE"
         actionLabel="Erase face"
