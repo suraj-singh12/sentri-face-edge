@@ -523,7 +523,7 @@ function retentionWarning(duplicate) {
 
 function backupDeleteNote(backups = [], target) {
   if (!target) return null;
-  const usable = (backup) => backup.verified && backup.complete;
+  const usable = (backup) => backup.verified && backup.complete && backup.portable && backup.restorable;
   if (backups.some((backup) => backup.backup_id !== target.backup_id && usable(backup))) {
     return { tone: "safe", text: "You still have another verified backup." };
   }
