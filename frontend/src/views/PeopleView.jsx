@@ -64,7 +64,7 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 
-import { EmptyCard, ImageFrame, SafeImage } from "../components/Shared.jsx";
+import { EmptyCard, ImageFrame, NAME_TOOLTIP_PROPS, PersonName, SafeImage } from "../components/Shared.jsx";
 import { CountrySelect } from "../components/CountrySelect.jsx";
 import { SavedLocationInput } from "../components/SavedLocationInput.jsx";
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
@@ -663,8 +663,8 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
                     />
                     <Box miw={0} style={{ flex: 1 }}>
                       <Group justify="space-between" gap="xs" wrap="nowrap">
-                        <Text fw={900} truncate>{face.person_name}</Text>
-                        <Badge color={face.days_remaining <= 3 ? "red" : "yellow"} variant="light">
+                        <PersonName name={face.person_name} fw={900} />
+                        <Badge color={face.days_remaining <= 3 ? "red" : "yellow"} variant="light" style={{ flexShrink: 0 }}>
                           {face.days_remaining} day{face.days_remaining === 1 ? "" : "s"} left
                         </Badge>
                       </Group>
@@ -894,7 +894,8 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
   return (
     <Card withBorder radius="md" p="xs" className={cardClass}>
       <Stack gap="xs" align="stretch" className="people-person-card-inner">
-        <Box component="button" type="button" className="people-card-main" onClick={openPerson} disabled={!canOpen} aria-label={`${historical ? "Historical identity" : "Open"} ${person.name}`}>
+        <Tooltip label={person.name} {...NAME_TOOLTIP_PROPS} events={{ hover: false, focus: canOpen, touch: false }}>
+        <Box component={canOpen ? "button" : "div"} type={canOpen ? "button" : undefined} className="people-card-main" onClick={canOpen ? openPerson : undefined} aria-label={canOpen ? `${historical ? "Historical identity" : "Open"} ${person.name}` : undefined}>
           <Box className="people-card-image-wrap">
             <ImageFrame variant="peopleCard">
               <SafeImage
@@ -907,11 +908,9 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
             </ImageFrame>
           </Box>
           <Box miw={0} className="people-card-copy">
-            <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
-              <Text fw={800} lineClamp={1}>{person.name}</Text>
-              {historical && <Badge color="gray" variant="light">{lifecycleStatusLabel(lifecycleStatus)}</Badge>}
-            </Group>
-            <Group gap="xs" mt={4} wrap="nowrap">
+            <PersonName name={person.name} fw={800} focusable={!canOpen} />
+            {historical && <Badge color="gray" variant="light" mt={4} style={{ flexShrink: 0 }}>{lifecycleStatusLabel(lifecycleStatus)}</Badge>}
+            <Group gap="xs" mt={4} wrap="wrap">
               <Text size="xs" c="dimmed" fw={700}>{rank}</Text>
               <Badge color={priority.color} variant="light" size="xs">{priority.label}</Badge>
             </Group>
@@ -921,6 +920,7 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
             <Text size="xs" c={person.last_seen_at ? "teal.4" : "dimmed"} mt={3}>{lastSeenLabelForCard(person.last_seen_at)}</Text>
           </Box>
         </Box>
+        </Tooltip>
         {isBinned(person) ? null : <ActionIcon
           size="sm"
           radius="xl"
@@ -1404,7 +1404,7 @@ function PeopleGalleryView({
         <ProfilePhoto path={selectedRecord?.thumbPath || payload.person.representative_image || selectedPath} name={payload.person.name} />
         <Box miw={0} className="people-profile-heading">
           <Group gap="xs" align="center">
-            <Title order={2} size="h3">{payload.person.name}</Title>
+            <Title order={2} size="h3" style={{ overflowWrap: "anywhere" }}>{payload.person.name}</Title>
             <ActionIcon
               variant="subtle"
               color={favorite ? "yellow" : "gray"}
@@ -2065,8 +2065,8 @@ function AssociationIdentity({ person }) {
         <ThemeIcon size={42} radius="xl" variant="light" color="gray"><IconUser size={22} /></ThemeIcon>
       )}
       <Box miw={0}>
-        <Group gap="xs" wrap="nowrap">
-          <Text fw={800} truncate>{person.name}</Text>
+        <PersonName name={person.name} fw={800} />
+        <Group gap="xs" wrap="wrap">
           {person.is_placeholder && <Badge size="xs" color="gray" variant="light">No photo</Badge>}
           {requirePersonContract(person).lifecycle_status !== "ACTIVE" && (
             <Badge size="xs" color="gray">{lifecycleStatusLabel(person.lifecycle_status)}</Badge>

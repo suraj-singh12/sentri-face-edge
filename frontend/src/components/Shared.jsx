@@ -231,7 +231,7 @@ export function GalleryPanel({ payload, selectedImage, onImage, onBack }) {
       <Group gap="sm" wrap="nowrap" className="gallery-person-row">
         {selectedRecord?.thumbPath && <Image src={mediaUrl(selectedRecord.thumbPath)} alt={payload.person.name} fit="cover" h={68} w={68} radius="sm" />}
         <Box miw={0}>
-          <Text fw={800} size="lg" truncate>{payload.person.name}</Text>
+          <PersonName name={payload.person.name} fw={800} size="lg" />
           <Text size="sm" c="dimmed">{images.length} reference photos</Text>
         </Box>
       </Group>
@@ -450,5 +450,22 @@ function MatchIdentityPlaceholder() {
         </Box>
       </Group>
     </Paper>
+  );
+}
+
+export const NAME_TOOLTIP_PROPS = {
+  multiline: true,
+  maw: "min(320px, calc(100vw - 32px))",
+  styles: { tooltip: { overflowWrap: "anywhere" } },
+};
+
+// Names stay on one line and end in "…" when they don't fit; the full name
+// shows on hover. Cards add a focus tooltip on their own button for keyboards;
+// `focusable` makes the name itself the focus target where no button exists.
+export function PersonName({ name, focusable = false, ...textProps }) {
+  return (
+    <Tooltip label={name} {...NAME_TOOLTIP_PROPS} openDelay={250} events={{ hover: true, focus: focusable, touch: true }}>
+      <Text truncate="end" miw={0} tabIndex={focusable ? 0 : undefined} {...textProps}>{name}</Text>
+    </Tooltip>
   );
 }
