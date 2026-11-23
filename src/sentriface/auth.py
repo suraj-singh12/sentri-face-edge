@@ -118,6 +118,7 @@ class _Session:
     window_id: str | None = None
     window_seen_at: datetime | None = None
     replaced_windows: list[str] = field(default_factory=list)
+    password_stamp: str | None = None
 
 
 class AuthService:
@@ -189,9 +190,12 @@ class AuthService:
                 raise _invalid_credentials()
             now = _now()
             password_hash = PASSWORD_HASHER.hash(password) if PASSWORD_HASHER.check_needs_rehash(row["password_hash"]) else row["password_hash"]
+            # Rehash only if the password is still the one just verified, so a
+            # password change that commits meanwhile is never overwritten.
             connection.execute(
-                "UPDATE app_users SET password_hash = ?, failed_attempts = 0, locked_until = NULL, last_login_at = ?, updated_at = ? WHERE user_id = ?",
-                (password_hash, now, now, user.user_id),
+                "UPDATE app_users SET password_hash = CASE WHEN password_hash = ? THEN ? ELSE password_hash END, "
+                "failed_attempts = 0, locked_until = NULL, last_login_at = ?, updated_at = ? WHERE user_id = ?",
+                (row["password_hash"], password_hash, now, now, user.user_id),
             )
             self._audit(connection, user.user_id, user.user_id, "login", {})
         user = self.get_user(user.user_id)
@@ -219,11 +223,17 @@ class AuthService:
                 return None
             if touch:
                 session.last_seen_at = now
-        try:
-            user = self.get_user(session.user_id)
-        except AuthError:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM app_users WHERE user_id = ?", (session.user_id,)).fetchone()
+        if row is None:
             with self._lock:
                 self._end_session(digest, "account_removed")
+            return None
+        user = _user_from_row(row)
+        if session.password_stamp is not None and session.password_stamp != _digest(row["password_hash"]):
+            # Another process (the emergency reset command) replaced the password.
+            with self._lock:
+                self._end_session(digest, "password_reset")
             return None
         if user.disabled:
             with self._lock:
@@ -382,11 +392,14 @@ class AuthService:
                 (PASSWORD_HASHER.hash(new_password), _now(), user.user_id),
             )
             self._audit(connection, user.user_id, user.user_id, "required-password-set", {})
+            stamp = _digest(connection.execute("SELECT password_hash FROM app_users WHERE user_id = ?", (user.user_id,)).fetchone()["password_hash"])
         keep = _digest(token) if token else None
         with self._lock:
             for digest, session in list(self._sessions.items()):
                 if session.user_id == user.user_id and digest != keep:
                     self._end_session(digest, "password_changed")
+                elif digest == keep:
+                    session.password_stamp = stamp
         return self.get_user(user.user_id)
 
     def emergency_reset_administrator(self, username: str, new_password: str) -> AuthUser:
@@ -473,6 +486,9 @@ class AuthService:
         """Start the only session; one operator uses SentriFace at a time."""
         token, now = secrets.token_urlsafe(32), datetime.now(timezone.utc)
         window_id = _window_id(window_id)
+        with self._connect() as connection:
+            row = connection.execute("SELECT password_hash FROM app_users WHERE user_id = ?", (user_id,)).fetchone()
+        stamp = _digest(row["password_hash"]) if row is not None else None
         with self._lock:
             for digest, session in list(self._sessions.items()):
                 for ended_window in (session.window_id, *session.replaced_windows):
@@ -487,6 +503,7 @@ class AuthService:
             self._sessions[_digest(token)] = _Session(
                 user_id, now + timedelta(hours=SESSION_HOURS), now,
                 window_id=window_id, window_seen_at=now if window_id else None,
+                password_stamp=stamp,
             )
         return token
 

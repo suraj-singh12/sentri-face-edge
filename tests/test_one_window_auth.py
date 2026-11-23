@@ -194,3 +194,52 @@ def test_signup_and_login_cookie_name_is_unchanged(server):
     owner(server)
     cookie, _ = login(server, "owner", OWNER_PASSWORD)
     assert cookie.startswith(f"{AUTH_COOKIE_NAME}=")
+
+
+def test_emergency_reset_in_another_process_ends_the_running_servers_session(server):
+    owner(server)
+    created = server.auth.create_user(server.auth.get_user(server.auth.list_users()[0]["user_id"]), "asha", "Asha", TEMPORARY, ["administrator"])
+    cookie, payload = login(server, "asha", TEMPORARY, window="window-one-1234")
+    assert payload["user"]["must_change_password"] is True
+    # The recovery command runs as a separate process with its own AuthService.
+    auth_module.AuthService(server.auth.db_path, server.auth.database_key).emergency_reset_administrator("asha", "custodian chosen password")
+    status, refused, _ = request(server, "GET", "/api/profile", cookie=cookie, window="window-one-1234")
+    assert status == 401 and refused["session_ended"]["reason"] == "password_reset"
+    assert server.auth.get_user(created["user_id"]).must_change_password is False
+
+
+def test_forced_password_change_keeps_its_own_session_bound_to_the_new_password(server):
+    owner(server)
+    server.auth.create_user(server.auth.get_user(server.auth.list_users()[0]["user_id"]), "asha", "Asha", TEMPORARY, ["operator"])
+    cookie, _ = login(server, "asha", TEMPORARY, window="window-one-1234")
+    assert request(server, "POST", "/api/auth/set-password", {"new_password": CHOSEN}, cookie=cookie, window="window-one-1234")[0] == 200
+    assert request(server, "GET", "/api/profile", cookie=cookie, window="window-one-1234")[0] == 200
+
+
+def test_sign_in_never_writes_back_a_password_changed_meanwhile(server, monkeypatch):
+    admin = owner(server)
+    created = server.auth.create_user(admin, "asha", "Asha", TEMPORARY, ["operator"])
+    real = auth_module.PASSWORD_HASHER
+
+    class ChangesPasswordDuringVerify:
+        def hash(self, password):
+            return real.hash(password)
+
+        def check_needs_rehash(self, _stored):
+            return True
+
+        def verify(self, stored, password):
+            result = real.verify(stored, password)
+            with server.auth._connect() as connection:
+                connection.execute(
+                    "UPDATE app_users SET password_hash = ?, must_change_password = 0 WHERE user_id = ?",
+                    (real.hash(CHOSEN), created["user_id"]),
+                )
+            return result
+
+    monkeypatch.setattr(auth_module, "PASSWORD_HASHER", ChangesPasswordDuringVerify())
+    server.auth.login("asha", TEMPORARY)
+    monkeypatch.setattr(auth_module, "PASSWORD_HASHER", real)
+    with pytest.raises(auth_module.AuthError):
+        server.auth.login("asha", TEMPORARY)
+    server.auth.login("asha", CHOSEN)
