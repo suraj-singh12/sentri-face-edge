@@ -262,6 +262,7 @@ def test_deleted_people_move_to_bin_and_restore_to_active(app):
     assert store.get_person(binned.person_id) is None
 
     page.get_by_role("button", name=re.compile(r"^Archived")).click()
+    expect(page.get_by_role("heading", name="Archived", exact=True)).to_be_visible()
     expect(_people_card(page, "Archive Keeper")).to_be_visible()
     expect(_people_card(page, "Bin Keeper")).to_have_count(0)
 
@@ -270,6 +271,7 @@ def test_deleted_people_move_to_bin_and_restore_to_active(app):
     expect(bin_card).to_be_visible()
     expect(_people_card(page, "Archive Keeper")).to_have_count(0)
     expect(bin_card.get_by_role("button", name="Open profile")).to_have_count(0)
+    expect(bin_card.locator(".people-card-star")).to_have_count(0)
     expect(bin_card.get_by_role("button", name=re.compile("Historical identity Bin Keeper"))).to_be_disabled()
     _shot(page, "bin-02-bin")
 

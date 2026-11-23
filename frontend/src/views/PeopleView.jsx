@@ -249,7 +249,7 @@ export function PeopleView({
               <Group justify="space-between" align="flex-start" gap="md" className="people-library-header">
                 <Box>
                   <Group gap="xs" align="baseline">
-                    <Title order={3} size="h4">{filter === "deleted" ? "Deleted Faces" : filter === "bin" ? "Bin" : "People"}</Title>
+                    <Title order={3} size="h4">{filter === "deleted" ? "Deleted Faces" : filter === "bin" ? "Bin" : filter === "archived" ? "Archived" : "People"}</Title>
                     <Text size="xs" c="dimmed">
                       ({filter === "deleted" ? deletedFaces.length : filter === "archived" ? archivedCollection.length : filter === "bin" ? binCollection.length : people.length})
                     </Text>
@@ -918,7 +918,7 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
             <Text size="xs" c={person.last_seen_at ? "teal.4" : "dimmed"} mt={3}>{lastSeenLabelForCard(person.last_seen_at)}</Text>
           </Box>
         </Box>
-        <ActionIcon
+        {isBinned(person) ? null : <ActionIcon
           size="sm"
           radius="xl"
           color={favorite ? "yellow" : "teal"}
@@ -929,7 +929,7 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
           aria-label={historical ? "Historical identity" : favorite ? "Remove favorite" : "Add favorite"}
         >
           {favorite ? <IconStar size={15} fill="currentColor" /> : <IconStar size={15} />}
-        </ActionIcon>
+        </ActionIcon>}
         <Group justify="space-between" wrap="nowrap" className="people-card-actions">
           {restoreFromBin ? (
             <Button fullWidth size="compact-xs" variant="subtle" leftSection={<IconRestore size={14} />} disabled={!canDestroy} onClick={(event) => { event.stopPropagation(); onRestore(); }}>
