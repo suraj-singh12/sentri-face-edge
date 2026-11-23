@@ -201,6 +201,12 @@ def _authorize_cli(auth: AuthService, command: str, username: str | None) -> Non
     password = getpass.getpass("SentriFace password: ")
     user, token = auth.login(username, password)
     try:
+        if user.must_change_password:
+            raise AuthError(
+                "An administrator set this password. Sign in to the SentriFace window and choose your own first",
+                "password_change_required",
+                403,
+            )
         capability = "technical" if command == "init-db" else _CLI_CAPABILITIES[command]
         if not user.has(capability):
             raise AuthError(
