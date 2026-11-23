@@ -1,6 +1,7 @@
 """#54: one sign-in, one browser window, and first-sign-in password changes."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import http.client
 import json
 import tempfile
@@ -284,3 +285,34 @@ def test_check_in_while_the_new_password_is_saved_keeps_the_session(server, monk
     server.auth.set_required_password(user, token, CHOSEN)
     assert seen and seen[0] is not None
     assert server.auth.authenticate(token) is not None
+
+
+def test_stale_check_in_read_after_the_new_password_is_saved_keeps_the_session(server, monkeypatch):
+    owner(server)
+    server.auth.create_user(server.auth.get_user(server.auth.list_users()[0]["user_id"]), "asha", "Asha", TEMPORARY, ["operator"])
+    user, token = server.auth.login("asha", TEMPORARY)
+    with server.auth._connect() as connection:
+        stale = connection.execute("SELECT * FROM app_users WHERE user_id = ?", (user.user_id,)).fetchone()
+    server.auth.set_required_password(user, token, CHOSEN)
+    real_connect = server.auth._connect
+    reads = []
+
+    class StaleRead:
+        def execute(self, *args):
+            return self
+
+        def fetchone(self):
+            return stale
+
+    @contextmanager
+    def stale_first_read():
+        if not reads:
+            reads.append(True)
+            yield StaleRead()
+            return
+        with real_connect() as connection:
+            yield connection
+
+    monkeypatch.setattr(server.auth, "_connect", stale_first_read)
+    assert server.auth.authenticate(token) is not None
+    assert reads

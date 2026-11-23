@@ -233,17 +233,29 @@ class AuthService:
             with self._lock:
                 self._end_session(digest, "account_removed")
             return None
+        if not self._password_matches_session(session, row):
+            # The first read can predate a forced-password save that has since
+            # committed and re-stamped this session; only a fresh mismatch counts.
+            with self._connect() as connection:
+                row = connection.execute("SELECT * FROM app_users WHERE user_id = ?", (session.user_id,)).fetchone()
+            if row is None or not self._password_matches_session(session, row):
+                # Another process (the emergency reset command) replaced the password.
+                with self._lock:
+                    self._end_session(digest, "password_reset" if row is not None else "account_removed")
+                return None
         user = _user_from_row(row)
-        if session.password_stamp is not None and _digest(row["password_hash"]) not in {session.password_stamp, session.pending_stamp}:
-            # Another process (the emergency reset command) replaced the password.
-            with self._lock:
-                self._end_session(digest, "password_reset")
-            return None
         if user.disabled:
             with self._lock:
                 self._end_session(digest, "account_disabled")
             return None
         return user
+
+    @staticmethod
+    def _password_matches_session(session: _Session, row) -> bool:
+        return session.password_stamp is None or _digest(row["password_hash"]) in {
+            session.password_stamp,
+            session.pending_stamp,
+        }
 
     def session_end_reason(self, token: str | None, window_id: str | None = None) -> str | None:
         """Return why this token's session ended, if it ended recently."""
