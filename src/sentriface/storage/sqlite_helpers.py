@@ -1728,7 +1728,7 @@ def _graph_allowed_actions(lifecycle_status: str) -> tuple[str, ...]:
             "ARCHIVE", "DELETE", "MERGE",
         ),
         "ARCHIVED": ("VIEW_HISTORY", "RESTORE", "DELETE"),
-        "DELETED": ("VIEW_HISTORY",),
+        "DELETED": ("VIEW_HISTORY", "RESTORE"),
         "MERGED": ("VIEW_HISTORY", "OPEN_CANONICAL"),
     }.get(lifecycle_status, ("VIEW_HISTORY",))
 

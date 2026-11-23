@@ -294,15 +294,20 @@ export function usePeopleController({
     showToast("Person moved to Archived. A database backup was created first.");
   };
 
-  const restorePerson = async (personId) => {
+  const restorePerson = async (personId, { openProfile = true } = {}) => {
     const result = await apiPost("/api/person-restore", {
       person_id: personId,
       operation_id: operationId(),
     });
     await invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
-    setPeopleGallery(await loadPerson(result.person_id || personId));
-    showToast("Person restored");
+    if (openProfile) setPeopleGallery(await loadPerson(result.person_id || personId));
+    showToast(
+      result.previous_lifecycle_status === "DELETED" ? "Restored from Bin. This person is active again." : "Person restored",
+      "teal",
+      { title: "Person restored" },
+    );
+    return result;
   };
 
   const permanentlyDeletePerson = async (personId) => {
@@ -316,9 +321,9 @@ export function usePeopleController({
     await loadPeople({ dedupe: false });
     await loadDeletedFaces({ dedupe: false });
     showToast(
-      `The identity is deleted from active use. Historical identity and provenance remain represented. Safety backup ${result.backup?.backup_id || "created"} retains a recovery copy.`,
-      "red",
-      { title: "Profile deleted", autoClose: 9000 },
+      `${result.person_name || "This person"} moved to Bin. Their history is kept, and you can restore them from Bin. A safety backup was created first.`,
+      "teal",
+      { title: "Person deleted", autoClose: 9000 },
     );
     return result;
   };
