@@ -6,6 +6,7 @@ Run with SENTRIFACE_BROWSER_SMOKE=1 (optionally SENTRIFACE_QA_CHROMIUM=<browser 
 """
 from __future__ import annotations
 
+import time
 import os
 import re
 import threading
@@ -209,12 +210,34 @@ def _saved_location_suggestions(page):
     _shot(page, "06-location-suggestions")
 
 
+def _correction_feedback(page):
+    page.get_by_role("tab", name="Events", exact=True).click()
+    page.locator(".encounter-list-row").first.click()
+    correct = page.get_by_role("button", name="Correct Encounter", exact=True)
+    correct.click()
+    dialog = page.get_by_role("dialog").filter(has=page.get_by_label("Event / occasion"))
+    dialog.get_by_role("button", name="Save correction").click()
+    dialog.wait_for(state="hidden")
+    expect(page.get_by_text("No changes to save")).to_be_visible()
+
+    correct.click()
+    _field(dialog, "Event / occasion").fill("Corrected smoke occasion")
+    dialog.get_by_role("button", name="Save correction").click()
+    dialog.wait_for(state="hidden")
+    expect(page.get_by_text("Encounter details corrected")).to_be_visible()
+    expect(page.get_by_role("heading", name="Corrected smoke occasion")).to_be_visible()
+    page.get_by_text("Correction and provenance history").click()
+    assert page.get_by_text("Encounter interpretation reviewed").count() == 0
+    _shot(page, "05b-correction-feedback")
+
+
 def test_operator_workflows_smoke(app):
     page, errors, tmp = app
     _sign_up(page)
     _shot(page, "01-signed-in")
     _check_photo(page, tmp)
     _review_photos(page, tmp)
+    _correction_feedback(page)
     _saved_location_suggestions(page)
     assert not errors, errors
 
@@ -304,8 +327,11 @@ def test_failed_attach_media_keeps_retry_and_cancel_until_cancelled(served_app):
         expect(page.get_by_role("button", name="Retry Attach Media")).to_be_visible()
         expect(page.get_by_role("button", name="Cancel Attach Media")).to_be_visible()
         expect(page.get_by_text("No new media to attach")).to_have_count(0)
-        sessions = server.engine.store.list_init_sessions()
-        assert [session.status for session in sessions] == ["processing_failed"], attempt
+        deadline = time.monotonic() + 10
+        while (statuses := [session.status for session in server.engine.store.list_init_sessions()]) != ["processing_failed"]:
+            assert time.monotonic() < deadline, (attempt, statuses)
+            time.sleep(0.1)
+        expect(page.get_by_role("button", name="Retry Attach Media")).to_be_enabled()
     _shot(page, "53-attach-retry-kept")
     page.get_by_role("button", name="Cancel Attach Media").click()
     expect(page.get_by_text("Attach Media draft")).to_have_count(0)

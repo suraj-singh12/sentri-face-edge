@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button, Group, Modal, Select, Stack, Text } from "@mantine/core";
 
-export function EncounterManagementModal({ detail, people, mode, onClose, onSave }) {
+export function EncounterManagementModal({ detail, people, mode, onClose, onSave, onNoChanges }) {
   const [action, setAction] = useState("REASSIGN");
   const [personId, setPersonId] = useState(null);
   const [targetId, setTargetId] = useState(null);
@@ -24,6 +24,11 @@ export function EncounterManagementModal({ detail, people, mode, onClose, onSave
   const pairs = proposed.flatMap((a, index) => proposed.slice(index + 1).map((b) => ({ a, b, key: pairKey(a, b) })));
   const valueFor = (pair) => decisions[pair.key] || existing[pair.key] || ((detail.relations || []).length === 0 && current.includes(pair.a) && current.includes(pair.b) ? "INCLUDE" : null);
   const save = async () => {
+    if (mode === "relations" && pairs.every((pair) => existing[pair.key] === valueFor(pair))) {
+      onNoChanges?.();
+      onClose();
+      return;
+    }
     setBusy(true); setError("");
     try {
       await onSave({
