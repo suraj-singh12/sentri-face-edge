@@ -64,7 +64,7 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 
-import { EmptyCard, ImageFrame, PersonName, SafeImage } from "../components/Shared.jsx";
+import { EmptyCard, ImageFrame, NAME_TOOLTIP_PROPS, PersonName, SafeImage } from "../components/Shared.jsx";
 import { CountrySelect } from "../components/CountrySelect.jsx";
 import { SavedLocationInput } from "../components/SavedLocationInput.jsx";
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
@@ -894,8 +894,8 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
   return (
     <Card withBorder radius="md" p="xs" className={cardClass}>
       <Stack gap="xs" align="stretch" className="people-person-card-inner">
-        <Tooltip label={person.name} multiline maw={320} events={{ hover: false, focus: true, touch: false }}>
-        <Box component="button" type="button" className="people-card-main" onClick={openPerson} disabled={!canOpen} aria-label={`${historical ? "Historical identity" : "Open"} ${person.name}`}>
+        <Tooltip label={person.name} {...NAME_TOOLTIP_PROPS} events={{ hover: false, focus: true, touch: false }}>
+        <Box component={canOpen ? "button" : "div"} type={canOpen ? "button" : undefined} className="people-card-main" onClick={canOpen ? openPerson : undefined} aria-label={canOpen ? `${historical ? "Historical identity" : "Open"} ${person.name}` : undefined}>
           <Box className="people-card-image-wrap">
             <ImageFrame variant="peopleCard">
               <SafeImage
@@ -908,7 +908,7 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
             </ImageFrame>
           </Box>
           <Box miw={0} className="people-card-copy">
-            <PersonName name={person.name} fw={800} />
+            <PersonName name={person.name} fw={800} focusable={!canOpen} />
             {historical && <Badge color="gray" variant="light" mt={4} style={{ flexShrink: 0 }}>{lifecycleStatusLabel(lifecycleStatus)}</Badge>}
             <Group gap="xs" mt={4} wrap="wrap">
               <Text size="xs" c="dimmed" fw={700}>{rank}</Text>

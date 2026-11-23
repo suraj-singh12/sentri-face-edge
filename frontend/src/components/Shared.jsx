@@ -453,12 +453,19 @@ function MatchIdentityPlaceholder() {
   );
 }
 
+export const NAME_TOOLTIP_PROPS = {
+  multiline: true,
+  maw: "min(320px, calc(100vw - 32px))",
+  styles: { tooltip: { overflowWrap: "anywhere" } },
+};
+
 // Names stay on one line and end in "…" when they don't fit; the full name
-// shows on hover. Cards add a focus tooltip on their own button for keyboards.
-export function PersonName({ name, ...textProps }) {
+// shows on hover. Cards add a focus tooltip on their own button for keyboards;
+// `focusable` makes the name itself the focus target where no button exists.
+export function PersonName({ name, focusable = false, ...textProps }) {
   return (
-    <Tooltip label={name} multiline maw={320} openDelay={250} events={{ hover: true, focus: false, touch: true }}>
-      <Text truncate="end" miw={0} {...textProps}>{name}</Text>
+    <Tooltip label={name} {...NAME_TOOLTIP_PROPS} openDelay={250} events={{ hover: true, focus: focusable, touch: true }}>
+      <Text truncate="end" miw={0} tabIndex={focusable ? 0 : undefined} {...textProps}>{name}</Text>
     </Tooltip>
   );
 }

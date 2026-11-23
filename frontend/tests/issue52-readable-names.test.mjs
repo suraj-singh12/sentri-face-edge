@@ -21,6 +21,12 @@ test("decision-point names stay on one line with the full name on hover", async 
 
 test("People cards show the full name on keyboard focus and keep badges off the name line", async () => {
   const people = await read("../src/views/PeopleView.jsx");
-  assert.match(people, /<Tooltip label=\{person\.name\}[^>]*events=\{\{ hover: false, focus: true, touch: false \}\}>\s*<Box component="button" type="button" className="people-card-main"/);
-  assert.match(people, /<PersonName name=\{person\.name\} fw=\{800\} \/>\s*\{historical && <Badge[^>]*flexShrink: 0/);
+  assert.match(people, /<Tooltip label=\{person\.name\} \{\.\.\.NAME_TOOLTIP_PROPS\} events=\{\{ hover: false, focus: true, touch: false \}\}>\s*<Box component=\{canOpen \? "button" : "div"\}/);
+  assert.match(people, /<PersonName name=\{person\.name\} fw=\{800\} focusable=\{!canOpen\} \/>\s*\{historical && <Badge[^>]*flexShrink: 0/);
+});
+
+test("full-name tooltips wrap unbroken names inside the viewport", async () => {
+  const shared = await read("../src/components/Shared.jsx");
+  assert.match(shared, /maw: "min\(320px, calc\(100vw - 32px\)\)"/);
+  assert.match(shared, /overflowWrap: "anywhere"/);
 });
