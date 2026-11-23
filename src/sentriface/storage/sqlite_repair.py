@@ -338,27 +338,28 @@ def _r01_existing_result(
 
 def _restore_archived_person_in_transaction(
     conn: sqlite3.Connection, person_id: str,
+    allowed_statuses: tuple[str, ...] = ("ARCHIVED",),
 ) -> sqlite3.Cursor:
     row = conn.execute(
         "SELECT lifecycle_status FROM persons WHERE person_id = ?", (person_id,),
     ).fetchone()
     if row is None:
         raise KeyError(f"Unknown person: {person_id}")
-    if row["lifecycle_status"] != "ARCHIVED":
-        raise KeyError(f"Only archived people can be restored: {person_id}")
+    if row["lifecycle_status"] not in allowed_statuses:
+        raise KeyError(f"Only archived or deleted people can be restored: {person_id}")
     try:
         cursor = conn.execute(
             """
             UPDATE persons
             SET lifecycle_status = 'ACTIVE', deleted_at = NULL, lifecycle_changed_at = ?
-            WHERE person_id = ? AND lifecycle_status = 'ARCHIVED'
+            WHERE person_id = ? AND lifecycle_status = ?
             """,
-            (utc_now(), person_id),
+            (utc_now(), person_id, row["lifecycle_status"]),
         )
     except sqlite3.IntegrityError as exc:
         raise _placeholder_name_conflict(exc) from exc
     if cursor.rowcount != 1:
-        raise RuntimeError("Archived person lifecycle changed concurrently")
+        raise RuntimeError("Person lifecycle changed concurrently")
     return cursor
 
 

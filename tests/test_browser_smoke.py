@@ -56,7 +56,7 @@ def app(tmp_path):
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{server.server_port}/")
             try:
-                yield page, errors, tmp_path
+                yield page, errors, tmp_path, server
             finally:
                 if SHOTS:
                     _shot(page, "zz-last")
@@ -204,11 +204,135 @@ def _saved_location_suggestions(page):
     _shot(page, "06-location-suggestions")
 
 
+def _correction_feedback(page):
+    page.get_by_role("tab", name="Events", exact=True).click()
+    page.locator(".encounter-list-row").first.click()
+    correct = page.get_by_role("button", name="Correct Encounter", exact=True)
+    correct.click()
+    dialog = page.get_by_role("dialog").filter(has=page.get_by_label("Event / occasion"))
+    dialog.get_by_role("button", name="Save correction").click()
+    dialog.wait_for(state="hidden")
+    expect(page.get_by_text("No changes to save")).to_be_visible()
+
+    correct.click()
+    _field(dialog, "Event / occasion").fill("Corrected smoke occasion")
+    dialog.get_by_role("button", name="Save correction").click()
+    dialog.wait_for(state="hidden")
+    expect(page.get_by_text("Encounter details corrected")).to_be_visible()
+    expect(page.get_by_role("heading", name="Corrected smoke occasion")).to_be_visible()
+    page.get_by_text("Correction and provenance history").click()
+    assert page.get_by_text("Encounter interpretation reviewed").count() == 0
+    _shot(page, "05b-correction-feedback")
+
+
 def test_operator_workflows_smoke(app):
-    page, errors, tmp = app
+    page, errors, tmp, _server = app
     _sign_up(page)
     _shot(page, "01-signed-in")
     _check_photo(page, tmp)
     _review_photos(page, tmp)
+    _correction_feedback(page)
     _saved_location_suggestions(page)
     assert not errors, errors
+
+
+def _people_card(page, name):
+    return page.locator(".people-person-card-inner").filter(has_text=name)
+
+
+def test_deleted_people_move_to_bin_and_restore_to_active(app):
+    page, errors, _tmp, server = app
+    _sign_up(page)
+    store = server.engine.store
+    binned = store.create_person("Bin Keeper")
+    archived = store.create_person("Archive Keeper")
+    store.archive_person(archived.person_id, "smoke-archive")
+    page.reload()
+    page.get_by_role("tab", name="People", exact=True).click()
+
+    _people_card(page, "Bin Keeper").get_by_role("button", name="More actions").click()
+    page.get_by_role("menuitem", name="Delete Person…").click()
+    dialog = page.get_by_role("dialog", name="Delete “Bin Keeper”?")
+    expect(dialog.get_by_text("This person moves to Bin")).to_be_visible()
+    expect(dialog).not_to_contain_text("permanently")
+    _field(dialog, "Type DELETE to confirm").fill("DELETE")
+    dialog.get_by_role("button", name="Delete Person", exact=True).click()
+    expect(page.get_by_text("Bin Keeper moved to Bin.", exact=False)).to_be_visible()
+    _shot(page, "bin-01-deleted")
+    assert store.get_person(binned.person_id) is None
+
+    page.get_by_role("button", name=re.compile(r"^Archived")).click()
+    expect(page.get_by_role("heading", name="Archived", exact=True)).to_be_visible()
+    expect(_people_card(page, "Archive Keeper")).to_be_visible()
+    expect(_people_card(page, "Bin Keeper")).to_have_count(0)
+
+    page.get_by_role("button", name=re.compile(r"^Bin")).click()
+    bin_card = _people_card(page, "Bin Keeper")
+    expect(bin_card).to_be_visible()
+    expect(_people_card(page, "Archive Keeper")).to_have_count(0)
+    expect(bin_card.get_by_role("button", name="Open profile")).to_have_count(0)
+    expect(bin_card.locator(".people-card-star")).to_have_count(0)
+    expect(bin_card.get_by_role("button", name=re.compile("Historical identity Bin Keeper"))).to_be_disabled()
+    _shot(page, "bin-02-bin")
+
+    bin_card.get_by_role("button", name="Restore", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Restore “Bin Keeper”?")
+    dialog.get_by_role("button", name="Restore Person", exact=True).click()
+    expect(page.get_by_text("Restored from Bin. This person is active again.")).to_be_visible()
+    expect(page.get_by_text("Bin is empty.")).to_be_visible()
+    restored = store.get_person(binned.person_id)
+    assert restored is not None and restored.deleted_at is None
+    page.get_by_role("button", name=re.compile(r"^All People")).click()
+    expect(_people_card(page, "Bin Keeper")).to_be_visible()
+    _shot(page, "bin-03-restored")
+    assert not errors, errors
+
+
+def _admin_post(page, path, body):
+    return page.evaluate(
+        """async ([path, body]) => {
+            const token = document.querySelector('meta[name="sentriface-session-token"]').content;
+            const response = await fetch(path, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-SentriFace-Session": token },
+                body: JSON.stringify(body),
+            });
+            return { status: response.status, body: await response.json() };
+        }""",
+        [path, body],
+    )
+
+
+def test_ended_session_explains_why(app):
+    page, errors, _tmp, _server = app
+    _sign_up(page)
+    created = _admin_post(page, "/api/users", {
+        "username": "smoke-viewer", "display_name": "Smoke Viewer",
+        "password": "viewer password long enough", "roles": ["viewer"],
+    })
+    assert created["status"] == 201, created
+    user_id = created["body"]["user"]["user_id"]
+
+    viewer_context = page.context.browser.new_context(viewport={"width": 1440, "height": 1000})
+    viewer_context.set_default_timeout(15000)
+    viewer = viewer_context.new_page()
+    try:
+        viewer.goto(page.url)
+        _field(viewer, "Account name").fill("smoke-viewer")
+        _field(viewer, "Password").fill("viewer password long enough")
+        viewer.get_by_role("button", name="Sign in", exact=True).click()
+        viewer.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+
+        updated = _admin_post(page, "/api/users/update", {
+            "user_id": user_id, "display_name": "Smoke Viewer", "roles": ["viewer"], "disabled": True,
+        })
+        assert updated["status"] == 200, updated
+
+        viewer.evaluate("window.dispatchEvent(new Event('focus'))")
+        expect(viewer.get_by_text("Your session ended")).to_be_visible()
+        expect(viewer.get_by_text("An administrator disabled this account.")).to_be_visible()
+        expect(viewer.get_by_role("button", name="Sign in", exact=True)).to_be_visible()
+        assert viewer.get_by_text("Connection or operation error").count() == 0
+    finally:
+        viewer_context.close()
+    assert not errors

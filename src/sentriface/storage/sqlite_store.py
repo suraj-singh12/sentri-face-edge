@@ -101,6 +101,7 @@ from sentriface.storage.sqlite_constants import (
     EMBEDDING_RECOGNITION_STATES,
     DELETED_FACE_RETENTION_DAYS,
     PERSON_LIFECYCLE_STATUSES,
+    RESTORABLE_PERSON_LIFECYCLE_STATUSES,
     PERSON_IDENTITY_STATUSES,
     PERSON_BIOMETRIC_STATUSES,
     RELATIONSHIP_EVIDENCE_TYPES,
@@ -5189,8 +5190,9 @@ class SQLiteIdentityStore:
             ).fetchone()
             if row is None:
                 raise KeyError(f"Unknown person: {person_id}")
-            if row["lifecycle_status"] != "ARCHIVED":
-                raise KeyError(f"Only archived people can be restored: {person_id}")
+            previous_status = row["lifecycle_status"]
+            if previous_status not in RESTORABLE_PERSON_LIFECYCLE_STATUSES:
+                raise KeyError(f"Only archived or deleted people can be restored: {person_id}")
             _begin_journal_operation(
                 conn,
                 "identity.restore",
@@ -5198,12 +5200,15 @@ class SQLiteIdentityStore:
                 actor=actor,
                 source=source or "identity-lifecycle",
                 affected_entities=[{"entity_type": "person", "entity_id": person_id}],
-                details={"previous_status": "ARCHIVED"},
+                details={"previous_status": previous_status},
             )
-            cursor = _restore_archived_person_in_transaction(conn, person_id)
+            cursor = _restore_archived_person_in_transaction(
+                conn, person_id, RESTORABLE_PERSON_LIFECYCLE_STATUSES,
+            )
             result = {
                 "person_id": person_id,
                 "restored": True,
+                "previous_lifecycle_status": previous_status,
                 "lifecycle_status": "ACTIVE",
                 "changed": bool(cursor.rowcount),
             }
