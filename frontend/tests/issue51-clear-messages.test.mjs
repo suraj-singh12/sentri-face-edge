@@ -26,9 +26,11 @@ test("duplicate import warns first and only Import anyway allows the second copy
   assert.match(appData, /query\.set\("allow_duplicate", "1"\)/);
   assert.match(appData, /query\.set\("approved_removals", approvedRemovals\.join\(","\)\)/);
   assert.match(appData, /approvedRemovals: retentionRemoves\.map\(\(backup\) => backup\.backup_id\)/);
-  assert.match(app, /This backup is already in the list/);
-  assert.match(app, />Import anyway</);
-  assert.match(app, /retentionRemoves\?\.length[\s\S]*SentriFace keeps up to/);
+  assert.match(app, /This backup is already in your list\. You can delete either copy later\./);
+  assert.match(app, /actionLabel="Import anyway"/);
+  assert.match(app, /retentionRemoves\?\.length[\s\S]*retentionWarning/);
+  assert.match(app, /The list is full/);
+  assert.match(appData, /const \{ file, passphrase, retentionRemoves \} = duplicateImport;\s*return importBackup\(/);
   assert.doesNotMatch(debug, /<Text size="xs" c="dimmed">\{backup\.backup_id\}<\/Text>/);
   assert.match(debug, /Copy reference for support/);
 });

@@ -18,7 +18,8 @@ test("signed-in model onboarding browses local files and automates verification"
   assert.match(gate, /\/api\/models\/activation\/prepare/);
   assert.match(gate, /candidate_bundles/);
   assert.match(gate, /token: preparation\.token/);
-  assert.match(gate, /Activate verified bundle/);
+  assert.match(gate, /actionLabel="Activate model"/);
+  assert.match(gate, /preparation\?\.expires_at \? `All checks passed · Plan expires/);
   assert.doesNotMatch(gate, /actor:/);
   assert.doesNotMatch(gate, /setInterval|setTimeout/);
   assert.match(gate, /You do not need to type a path or create a checksum/);

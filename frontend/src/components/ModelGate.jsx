@@ -9,6 +9,7 @@ import {
 } from "@tabler/icons-react";
 
 import { useApiClient } from "../hooks/useApiClient.js";
+import { ConfirmDialog } from "./ConfirmDialog.jsx";
 
 const EMPTY_FORM = {
   detectorUploadId: "",
@@ -190,19 +191,20 @@ export function ModelGate({ user, logout, children }) {
 
   return (
     <Box mih="100vh" bg="var(--mantine-color-body)" p={{ base: "md", md: "xl" }}>
-      <Modal opened={Boolean(preparation)} onClose={() => !installing && setPreparation(null)} title="Confirm model activation" centered closeOnClickOutside={!installing} closeOnEscape={!installing}>
-        <Stack>
-          <Alert color="blue" icon={<IconShieldCheck size={18} />} title="Compatibility checks passed">
-            SentriFace verified the detector, recognizer, calibration, file hashes, and 512-dimensional recognition contract. Activation changes only the recognition runtime.
-          </Alert>
-          <Text size="sm">Bundle <strong>{preparation?.bundle?.bundle_id}</strong></Text>
-          <Text size="sm" c="dimmed">This exact server-prepared plan expires at {preparation?.expires_at ? new Date(preparation.expires_at).toLocaleString() : "the stated time"}.</Text>
-          <Group justify="flex-end">
-            <Button variant="default" disabled={installing} onClick={() => setPreparation(null)}>Cancel</Button>
-            <Button loading={installing} onClick={activate}>Activate verified bundle</Button>
-          </Group>
-        </Stack>
-      </Modal>
+      <ConfirmDialog
+        opened={Boolean(preparation)}
+        tone="safe"
+        title="Activate this model?"
+        message="This model will be used for all recognition from now on."
+        item={{
+          name: preparation?.bundle?.bundle_id || "Prepared model",
+          detail: preparation?.expires_at ? `All checks passed · Plan expires ${new Date(preparation.expires_at).toLocaleString()}` : "All checks passed",
+        }}
+        actionLabel="Activate model"
+        busy={installing}
+        onClose={() => setPreparation(null)}
+        onConfirm={activate}
+      />
       <Stack maw={920} mx="auto" gap="lg">
         <Group justify="space-between" align="flex-start">
           <Group gap="sm" wrap="nowrap" align="flex-start">
