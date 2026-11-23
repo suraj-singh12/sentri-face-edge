@@ -274,6 +274,15 @@ PUBLIC_AUTH_ENDPOINTS = {
     ("POST", "/api/auth/login"),
 }
 
+# Window check-ins and status checks are not operator activity for the idle timeout.
+PASSIVE_AUTH_ENDPOINTS = {"/api/auth/status", "/api/auth/window"}
+# What an account with an administrator-set password may still do.
+PASSWORD_CHANGE_ENDPOINTS = {"/api/auth/logout", "/api/auth/set-password", "/api/auth/window"}
+WINDOW_BLOCKED_MESSAGES = {
+    "in_use": "SentriFace is open in another window.",
+    "replaced": "SentriFace is now being used in another window.",
+}
+
 LICENSE_ENDPOINTS = {
     "/api/license/status",
     "/api/license/activate",
@@ -302,7 +311,7 @@ def _license_exempt_endpoint(method: str, path: str) -> bool:
 def _required_capability(method: str, path: str) -> str | None:
     if (method, path) in PUBLIC_AUTH_ENDPOINTS:
         return None
-    if path in {"/api/auth/logout", "/api/auth/change-password"}:
+    if path in {"/api/auth/logout", "/api/auth/change-password", "/api/auth/window", "/api/auth/set-password"}:
         return "view"
     if path == "/api/license/status":
         return "view"
@@ -985,6 +994,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
     sys_version = ""
     server: SentriFaceApiServer
     auth_user: AuthUser | None = None
+    window_state: str = "none"
     pending_auth_cookie: str | None = None
 
     def log_message(self, format: str, *args: object) -> None:
@@ -1078,6 +1088,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         morsel = cookies.get(AUTH_COOKIE_NAME)
         return morsel.value if morsel else ""
 
+    def _window_id(self) -> str:
+        return self.headers.get("X-SentriFace-Window", "")
+
     def _operation_actor(self) -> dict | None:
         if self.auth_user is None:
             return None
@@ -1090,8 +1103,11 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
 
     def _reject_user_authorization(self, method: str, path: str) -> bool:
         required = _required_capability(method, path)
-        user = self.server.auth.authenticate(self._auth_token())
+        token, window_id = self._auth_token(), self._window_id()
+        user = self.server.auth.authenticate(token, window_id, touch=path not in PASSIVE_AUTH_ENDPOINTS)
         self.auth_user = user
+        # Requests without a window ID (images, scripts) are not tied to a window.
+        self.window_state = self.server.auth.use_window(token, window_id) if user is not None else "none"
         if required is None:
             return False
         if self.server.auth.setup_required():
@@ -1101,7 +1117,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             )
             return True
         if user is None:
-            ended = session_ended_payload(self.server.auth, self._auth_token())
+            ended = session_ended_payload(self.server.auth, token, window_id)
             self._json(
                 {
                     "error": ended["message"] if ended else "Sign in to continue",
@@ -1109,6 +1125,18 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     "session_ended": ended,
                 },
                 status=HTTPStatus.UNAUTHORIZED,
+            )
+            return True
+        if self.window_state in WINDOW_BLOCKED_MESSAGES and path != "/api/auth/window":
+            self._json(
+                {"error": WINDOW_BLOCKED_MESSAGES[self.window_state], "code": f"window_{self.window_state}"},
+                status=HTTPStatus.CONFLICT,
+            )
+            return True
+        if user.must_change_password and path not in PASSWORD_CHANGE_ENDPOINTS:
+            self._json(
+                {"error": "Choose a new password before you continue", "code": "password_change_required"},
+                status=HTTPStatus.FORBIDDEN,
             )
             return True
         if not user.has(required):
@@ -1267,7 +1295,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"status": "ok", "runtime": self.server.runtime})
                 return
             if parsed.path == "/api/auth/status":
-                self._json(auth_status_payload(self.server.auth, self.auth_user, self._auth_token()))
+                self._json(auth_status_payload(self.server.auth, self.auth_user, self._auth_token(), self._window_id(), self.window_state))
                 return
             if parsed.path == "/api/license/status":
                 self._json(self.server.license.status().as_dict(enforced=self.server.license.enforced))
@@ -2109,16 +2137,16 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/person-association-placeholder":
                 raise DomainWorkflowUnavailableError("Create a Person first, then add a Manual Association")
             if parsed.path == "/api/auth/signup":
-                user, token = self.server.auth.signup_initial(_required(payload, "username"), str(payload.get("display_name") or ""), _required(payload, "password"))
+                user, token = self.server.auth.signup_initial(_required(payload, "username"), str(payload.get("display_name") or ""), _required(payload, "password"), self._window_id())
                 self._set_auth_cookie(token)
                 self.server.log_event("initial-admin-created", username=user.username)
-                self._json(auth_status_payload(self.server.auth, user), status=HTTPStatus.CREATED)
+                self._json(auth_status_payload(self.server.auth, user, token, self._window_id(), self.server.auth.use_window(token, self._window_id())), status=HTTPStatus.CREATED)
                 return
             if parsed.path == "/api/auth/login":
-                user, token = self.server.auth.login(_required(payload, "username"), _required(payload, "password"))
+                user, token = self.server.auth.login(_required(payload, "username"), _required(payload, "password"), self._window_id())
                 self._set_auth_cookie(token)
                 self.server.log_event("login", username=user.username)
-                self._json(auth_status_payload(self.server.auth, user))
+                self._json(auth_status_payload(self.server.auth, user, token, self._window_id(), self.server.auth.use_window(token, self._window_id())))
                 return
             if parsed.path == "/api/auth/logout":
                 username = self.auth_user.username if self.auth_user else "unknown"
@@ -2126,6 +2154,24 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._clear_auth_cookie()
                 self.server.log_event("logout", username=username)
                 self._json({"logged_out": True})
+                return
+            if parsed.path == "/api/auth/window":
+                action = str(payload.get("action") or "heartbeat")
+                if action not in {"heartbeat", "claim", "release"}:
+                    raise ValueError("Unknown window action")
+                if action == "release":
+                    self.server.auth.release_window(self._auth_token(), self._window_id())
+                    self._json({"window": "none"})
+                    return
+                if action == "claim":
+                    self.window_state = self.server.auth.use_window(self._auth_token(), self._window_id(), claim=True)
+                    self.server.log_event("window-claimed", username=self.auth_user.username)
+                self._json({"window": self.window_state})
+                return
+            if parsed.path == "/api/auth/set-password":
+                user = self.server.auth.set_required_password(self.auth_user, self._auth_token(), _required(payload, "new_password"))
+                self.server.log_event("required-password-set", username=user.username)
+                self._json(auth_status_payload(self.server.auth, user, self._auth_token(), self._window_id(), self.window_state))
                 return
             if parsed.path == "/api/auth/change-password":
                 self.server.auth.change_password(self.auth_user, _required(payload, "current_password"), _required(payload, "new_password"))
