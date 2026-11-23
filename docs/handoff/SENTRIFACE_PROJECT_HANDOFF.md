@@ -32,7 +32,7 @@ Most importantly, it is **evidence-based**. The model only *proposes*. Only expl
 | Layer | Technology | Where |
 |---|---|---|
 | Backend | Python 3.12, `ThreadingHTTPServer` on 127.0.0.1:8765, OpenCV, ONNX Runtime (SCRFD/ArcFace-compatible, licensed models supplied by the user, not bundled), Argon2, `cryptography`, `keyring` | `src/sentriface/` |
-| Storage | Encrypted SQLite (SQLCipher), inline versioned migrations, **schema v34** on the current base (v35 in PR #50) | `src/sentriface/storage/sqlite_store.py` (+ `sqlite_*.py` helpers) |
+| Storage | Encrypted SQLite (SQLCipher), inline versioned migrations, **schema v35** on `v2-hardening-followups` (PR #50 added `embeddings.erased_at`) | `src/sentriface/storage/sqlite_store.py` (+ `sqlite_*.py` helpers) |
 | Service boundary | `FaceEngine` orchestrates detection, embedding, matching, cleanup, indexes | `src/sentriface/engine.py` |
 | API + authorization | Loopback HTTP API, capability checks on every route | `src/sentriface/api_server.py`, `auth.py` |
 | Frontend | React 19, Mantine 9.3, Vite; controllers in `frontend/src/hooks/`, views in `frontend/src/views/` | `frontend/` → built into `src/sentriface/ui_static/` (generated; never hand-edited) |
@@ -99,15 +99,11 @@ Most importantly, it is **evidence-based**. The model only *proposes*. Only expl
 ```
 main                         7e7b4a6  v1.0.0 (2026-08-17). Untouchable without explicit permission.
  └─ release-v2.0.0-hardening b457f0a  v2.0.0 hardening line (33 commits ahead of main)
-     └─ v2-hardening-followups 677bb61 operator-directed integration branch (25 ahead, 0 behind)
-         ├─ PR #42 test/issue-6-browser-regressions
-         ├─ PR #45 fix/issue-43-session-ended-reason
-         ├─ PR #46 fix/issue-44-correction-toasts
-         ├─ PR #48 fix/issue-47-person-bin
-         └─ PR #50 fix/issue-49-face-erase-stub
+     └─ v2-hardening-followups 62dd74b operator-directed integration branch (41 ahead, 0 behind)
+                                          includes merged PRs #42, #45, #46, #48 and #50
 ```
 
-**What `v2-hardening-followups` is:** the operator created it as the integration branch for work coming out of the 2026-11-22 engineering takeover audit. It contains everything on `release-v2.0.0-hardening`, plus merged PRs #38–#41:
+**What `v2-hardening-followups` is:** the operator created it as the integration branch for work coming out of the 2026-11-22 engineering takeover audit. It contains everything on `release-v2.0.0-hardening`, plus merged PRs #38–#41 (below) and #42, #45, #46, #48 and #50 (section 5):
 - **[#38](https://github.com/suraj-singh12/sentri-face-edge/pull/38):** documentation and Linux development setup brought in line with the code (issue #35).
 - **[#39](https://github.com/suraj-singh12/sentri-face-edge/pull/39) and [#40](https://github.com/suraj-singh12/sentri-face-edge/pull/40):** workflow dead-ends, provenance, backup-drive safety, plain language, and no raw IDs in the UI (issue #36).
 - **[#41](https://github.com/suraj-singh12/sentri-face-edge/pull/41):** contract tests and a browser smoke test in CI, lock-pinned installs, report-only ruff/eslint, and move-only splits of storage, API and bundle (issue #37).
@@ -139,7 +135,7 @@ main                         7e7b4a6  v1.0.0 (2026-08-17). Untouchable without e
 - QA campaigns [#16–#21](https://github.com/suraj-singh12/sentri-face-edge/issues/16), accepted by the operator.
 - The Product Studio UI charter, `docs/UI_UX_DESIGN.md` ([PR #33](https://github.com/suraj-singh12/sentri-face-edge/pull/33)).
 
-**Merged into `v2-hardening-followups`:** PRs #38, #39, #40 and #41 (see section 3).
+**Merged into `v2-hardening-followups`:** PRs #38, #39, #40 and #41 (see section 3), and #42, #45, #46, #48 and #50 (see section 5).
 
 **Audit (#6, Pass 3):** a full hands-on audit of all six operator flow families on `677bb61`:
 - 52 journeys, findings F01–F40, more than 100 screenshots;
@@ -151,20 +147,17 @@ It lives in **draft [PR #34](https://github.com/suraj-singh12/sentri-face-edge/p
 
 ---
 
-## 5. Open PRs: done and waiting for operator review and merge approval
+## 5. Follow-up PRs merged into `v2-hardening-followups` (2026-11-23)
 
 | PR | Issue | What it delivers | Status |
 |---|---|---|---|
-| [#42](https://github.com/suraj-singh12/sentri-face-edge/pull/42) | [#6](https://github.com/suraj-singh12/sentri-face-edge/issues/6) | Browser regression tests for the six operator flow families (tests only) | Open; CI was green when last checked |
-| [#45](https://github.com/suraj-singh12/sentri-face-edge/pull/45) | [#43](https://github.com/suraj-singh12/sentri-face-edge/issues/43) | "Your session ended" with the specific reason (account disabled, access changed, password reset, timeout, restart with a Reload button) instead of "Connection or operation error". Reasons are kept in memory only; no schema change. | Open |
-| [#46](https://github.com/suraj-singh12/sentri-face-edge/pull/46) | [#44](https://github.com/suraj-singh12/sentri-face-edge/issues/44) | Success and failure toasts after Event corrections. "No changes to save" sends nothing and adds no history entry. | Open |
-| [#48](https://github.com/suraj-singh12/sentri-face-edge/pull/48) | [#47](https://github.com/suraj-singh12/sentri-face-edge/issues/47) | A new **Bin** collection below Archived. Deleted people appear only in Bin, can't be opened, and **Restore** returns them to Active. Wording changed to "Delete Person…" / "Delete "Name"?", with no "permanently". The raw backup ID is removed from the toast. **Delete behavior is unchanged:** it is still a soft delete with a safety backup and a journal entry, and an active person can still be deleted directly. The invalid "Deleted Today" count was removed. | Open; 965 backend and 158 frontend tests pass, plus a browser test |
-| [#50](https://github.com/suraj-singh12/sentri-face-edge/pull/50) | [#49](https://github.com/suraj-singh12/sentri-face-edge/issues/49) | **Face erase stub, plus a fix for the 30-day cleanup.** See section 6. | Open; **all CI green**; Devin Review finding fixed |
+| [#42](https://github.com/suraj-singh12/sentri-face-edge/pull/42) | [#6](https://github.com/suraj-singh12/sentri-face-edge/issues/6) | Browser regression tests for the six operator flow families (tests only) | Merged |
+| [#45](https://github.com/suraj-singh12/sentri-face-edge/pull/45) | [#43](https://github.com/suraj-singh12/sentri-face-edge/issues/43) | "Your session ended" with the specific reason (account disabled, access changed, password reset, timeout, restart with a Reload button) instead of "Connection or operation error". Reasons are kept in memory only; no schema change. | Merged |
+| [#46](https://github.com/suraj-singh12/sentri-face-edge/pull/46) | [#44](https://github.com/suraj-singh12/sentri-face-edge/issues/44) | Success and failure toasts after Event corrections. "No changes to save" sends nothing and adds no history entry. | Merged |
+| [#48](https://github.com/suraj-singh12/sentri-face-edge/pull/48) | [#47](https://github.com/suraj-singh12/sentri-face-edge/issues/47) | A new **Bin** collection below Archived. Deleted people appear only in Bin, can't be opened, and **Restore** returns them to Active. Wording changed to "Delete Person…" / "Delete "Name"?", with no "permanently". The raw backup ID is removed from the toast. **Delete behavior is unchanged:** it is still a soft delete with a safety backup and a journal entry, and an active person can still be deleted directly. The invalid "Deleted Today" count was removed. | Merged |
+| [#50](https://github.com/suraj-singh12/sentri-face-edge/pull/50) | [#49](https://github.com/suraj-singh12/sentri-face-edge/issues/49) | **Face erase stub, plus a fix for the 30-day cleanup.** See section 6. | Merged |
 
-**Merge notes:**
-- The PRs overlap mainly in generated `src/sentriface/ui_static/` assets, and #48 and #50 both touch `PeopleView.jsx`. After each merge, rebase the next PR and **rebuild `ui_static`** rather than hand-merging it.
-- PR #42's browser tests may need small updates after #48 changes the delete wording and adds Bin.
-- **Suggested merge order:** #42 → #45 → #46 → #48 → #50.
+**Merge notes:** all five merged on 2026-11-23, in the order #45 → #46 → #48 → #50 → #42. Issues #43, #44, #47 and #49 stay open until the operator closes them.
 
 ---
 
@@ -243,7 +236,7 @@ Each item needs its own self-explanatory issue and branch before work starts. Au
 | [#5](https://github.com/suraj-singh12/sentri-face-edge/issues/5) | Release acceptance: signed Windows installer lifecycle, macOS/Windows qualification, real ONNX models | Blocked until #6 and #4 are done |
 | [#9](https://github.com/suraj-singh12/sentri-face-edge/issues/9) | Adopt the CI workflow on `main` | Deferred until explicitly authorized |
 | [#35](https://github.com/suraj-singh12/sentri-face-edge/issues/35), [#36](https://github.com/suraj-singh12/sentri-face-edge/issues/36), [#37](https://github.com/suraj-singh12/sentri-face-edge/issues/37) | Takeover phases 1–3 | PRs merged; issues still open and can be closed when the operator wants |
-| [#43](https://github.com/suraj-singh12/sentri-face-edge/issues/43), [#44](https://github.com/suraj-singh12/sentri-face-edge/issues/44), [#47](https://github.com/suraj-singh12/sentri-face-edge/issues/47), [#49](https://github.com/suraj-singh12/sentri-face-edge/issues/49) | Session-ended reasons, correction toasts, Bin, face erase stub | Each has an open PR (section 5) |
+| [#43](https://github.com/suraj-singh12/sentri-face-edge/issues/43), [#44](https://github.com/suraj-singh12/sentri-face-edge/issues/44), [#47](https://github.com/suraj-singh12/sentri-face-edge/issues/47), [#49](https://github.com/suraj-singh12/sentri-face-edge/issues/49) | Session-ended reasons, correction toasts, Bin, face erase stub | PRs merged (section 5); issues still open until the operator closes them |
 
 **Release gaps that have not been verified at all:**
 - Windows or macOS at the current code;

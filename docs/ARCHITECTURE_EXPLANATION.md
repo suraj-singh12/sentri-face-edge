@@ -209,7 +209,7 @@ All later architectural work depended on changing the schema of databases that m
 
 ### Design decision
 
-The schema uses a contiguous, explicit migration registry through current schema version 32 (the frozen P11 release checkpoint was v28). Each supported version advances one version at a time, old databases receive a verified pre-migration backup, and the migration chain runs inside an immediate SQLite transaction. A database newer than the application is rejected rather than guessed at.
+The schema uses a contiguous, explicit migration registry through current schema version 35 (the frozen P11 release checkpoint was v28). Each supported version advances one version at a time, old databases receive a verified pre-migration backup, and the migration chain runs inside an immediate SQLite transaction. A database newer than the application is rejected rather than guessed at.
 
 This was chosen instead of broad schema replacement or best-effort migration. Additive versioned migrations preserve compatibility records and make every supported upgrade path testable. A destructive “recreate current tables and copy what fits” approach was rejected because it could lose legacy history precisely when new authority rules are being introduced.
 
