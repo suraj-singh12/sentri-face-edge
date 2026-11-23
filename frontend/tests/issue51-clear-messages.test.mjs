@@ -22,7 +22,7 @@ test("duplicate import warns first and only Import anyway allows the second copy
     read("../src/SentriFaceApp.jsx"),
     read("../src/views/DebugView.jsx"),
   ]);
-  assert.match(appData, /if (error.code === "backup_already_present") {\s*setDuplicateImport/);
+  assert.match(appData, /if \(error\.code === "backup_already_present"\) \{\s*setDuplicateImport/);
   assert.match(appData, /query\.set\("allow_duplicate", "1"\)/);
   assert.match(appData, /query\.set\("approved_removals", approvedRemovals\.join\(","\)\)/);
   assert.match(appData, /approvedRemovals: retentionRemoves\.map\(\(backup\) => backup\.backup_id\)/);
