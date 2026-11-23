@@ -2304,7 +2304,7 @@ def _presence_analytics(sightings: list[Sighting]) -> PresenceAnalytics:
         active_days = max(1.0, (last - first).total_seconds() / 86_400 + 1)
     except (AttributeError, TypeError, ValueError):
         active_days = 30.0
-    frequency = round(len(ordered) / max(1.0, active_days / 30.0), 3)
+    frequency = round(len(dated or ordered) / max(1.0, active_days / 30.0), 3)
     if frequency >= 8:
         frequency_label = "Very Frequent"
     elif frequency >= 3:

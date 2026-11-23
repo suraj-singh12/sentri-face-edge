@@ -65,6 +65,16 @@ class EventTimeTest(unittest.TestCase):
         edge = self.store.get_person_graph_read(self.alpha).edges[0]
         self.assertEqual((edge.first_occurrence_at, edge.last_occurrence_at), ("2026-11-22", "2026-11-22"))
 
+    def test_undated_sightings_do_not_inflate_frequency(self) -> None:
+        self._observe("early", "2026-01-01")
+        self._observe("late", "2026-12-31")
+        for index in range(20):
+            self._observe(f"undated-{index}", None)
+        summary = next(item for item in self.store.list_persons() if item.person.person_id == self.alpha)
+        self.assertEqual(summary.sighting_count, 22)
+        self.assertLess(summary.frequency_per_30_days, 0.2)
+        self.assertEqual(summary.frequency_label, "Rare")
+
 
 if __name__ == "__main__":
     unittest.main()
