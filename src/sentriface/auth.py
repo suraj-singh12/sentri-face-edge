@@ -22,6 +22,17 @@ from sentriface.secure_storage import connect_database
 AUTH_COOKIE_NAME = "sentriface_auth"
 SESSION_HOURS = 8
 SESSION_IDLE_MINUTES = 30
+MAX_ENDED_SESSIONS = 2048
+SESSION_END_MESSAGES = {
+    "account_disabled": "An administrator disabled this account.",
+    "access_changed": "An administrator changed this account's access.",
+    "account_updated": "An administrator updated this account. Sign in again to continue.",
+    "password_reset": "This account's password was reset. Sign in with the new password.",
+    "password_changed": "This account's password was changed. Sign in with the new password.",
+    "account_removed": "This account is no longer available.",
+    "expired": "Your session expired. Sign in again to continue.",
+    "idle_timeout": "You were signed out after a period of inactivity.",
+}
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
@@ -102,6 +113,8 @@ class AuthService:
         self.db_path = db_path
         self.database_key = database_key
         self._sessions: dict[str, _Session] = {}
+        # In-memory only: why a recently ended session token stopped working.
+        self._ended_sessions: dict[str, str] = {}
         self._lock = threading.RLock()
         self._dummy_hash = PASSWORD_HASHER.hash(secrets.token_urlsafe(32))
 
@@ -179,24 +192,38 @@ class AuthService:
             session = self._sessions.get(digest)
             if session is None:
                 return None
-            if session.expires_at <= now or now - session.last_seen_at > timedelta(minutes=SESSION_IDLE_MINUTES):
-                self._sessions.pop(digest, None)
+            if session.expires_at <= now:
+                self._end_session(digest, "expired")
+                return None
+            if now - session.last_seen_at > timedelta(minutes=SESSION_IDLE_MINUTES):
+                self._end_session(digest, "idle_timeout")
                 return None
             session.last_seen_at = now
         try:
             user = self.get_user(session.user_id)
         except AuthError:
-            self.logout(token)
+            with self._lock:
+                self._end_session(digest, "account_removed")
             return None
         if user.disabled:
-            self.logout(token)
+            with self._lock:
+                self._end_session(digest, "account_disabled")
             return None
         return user
+
+    def session_end_reason(self, token: str | None) -> str | None:
+        """Return why this token's session ended, if it ended recently."""
+        if not token:
+            return None
+        with self._lock:
+            return self._ended_sessions.get(_digest(token))
 
     def logout(self, token: str | None) -> None:
         if token:
             with self._lock:
-                self._sessions.pop(_digest(token), None)
+                digest = _digest(token)
+                self._sessions.pop(digest, None)
+                self._ended_sessions.pop(digest, None)
 
     def get_user(self, user_id: str) -> AuthUser:
         with self._connect() as connection:
@@ -244,7 +271,13 @@ class AuthService:
                 (display_name, json.dumps(roles), int(disabled), _now(), user_id),
             )
             self._audit(connection, actor.user_id, user_id, "account-updated", {"roles": roles, "disabled": disabled})
-        self._revoke_user_sessions(user_id)
+        if disabled and not target.disabled:
+            reason = "account_disabled"
+        elif sorted(roles) != sorted(target.roles):
+            reason = "access_changed"
+        else:
+            reason = "account_updated"
+        self._revoke_user_sessions(user_id, reason)
         return self.get_user(user_id).as_dict()
 
     def reset_password(self, actor: AuthUser, user_id: str, password: str) -> None:
@@ -256,7 +289,7 @@ class AuthService:
                 (PASSWORD_HASHER.hash(password), _now(), user_id),
             )
             self._audit(connection, actor.user_id, user_id, "password-reset", {})
-        self._revoke_user_sessions(user_id)
+        self._revoke_user_sessions(user_id, "password_reset")
 
     def change_password(self, user: AuthUser, current_password: str, new_password: str) -> None:
         _validate_password(new_password, user.username)
@@ -271,7 +304,7 @@ class AuthService:
                 (PASSWORD_HASHER.hash(new_password), _now(), user.user_id),
             )
             self._audit(connection, user.user_id, user.user_id, "password-changed", {})
-        self._revoke_user_sessions(user.user_id)
+        self._revoke_user_sessions(user.user_id, "password_changed")
 
     def emergency_reset_administrator(self, username: str, new_password: str) -> AuthUser:
         _, normalized = _validate_username(username)
@@ -286,7 +319,7 @@ class AuthService:
                 (PASSWORD_HASHER.hash(new_password), _now(), user.user_id),
             )
             self._audit(connection, None, user.user_id, "os-custodian-password-reset", {})
-        self._revoke_user_sessions(user.user_id)
+        self._revoke_user_sessions(user.user_id, "password_reset")
         return self.get_user(user.user_id)
 
     def role_catalog(self) -> list[dict[str, Any]]:
@@ -359,11 +392,19 @@ class AuthService:
             self._sessions[_digest(token)] = _Session(user_id, now + timedelta(hours=SESSION_HOURS), now)
         return token
 
-    def _revoke_user_sessions(self, user_id: str) -> None:
+    def _revoke_user_sessions(self, user_id: str, reason: str) -> None:
         with self._lock:
             for digest, session in list(self._sessions.items()):
                 if session.user_id == user_id:
-                    self._sessions.pop(digest, None)
+                    self._end_session(digest, reason)
+
+    def _end_session(self, digest: str, reason: str) -> None:
+        # Callers hold self._lock.
+        self._sessions.pop(digest, None)
+        self._ended_sessions.pop(digest, None)
+        self._ended_sessions[digest] = reason
+        while len(self._ended_sessions) > MAX_ENDED_SESSIONS:
+            self._ended_sessions.pop(next(iter(self._ended_sessions)))
 
     @staticmethod
     def _enabled_admin_count(connection) -> int:
@@ -396,8 +437,16 @@ class AuthService:
             connection.close()
 
 
-def auth_status_payload(service: AuthService, user: AuthUser | None) -> dict[str, Any]:
+def session_ended_payload(service: AuthService, token: str | None) -> dict[str, str] | None:
+    reason = service.session_end_reason(token)
+    if reason is None:
+        return None
+    return {"reason": reason, "message": SESSION_END_MESSAGES.get(reason, "Your session ended. Sign in again to continue.")}
+
+
+def auth_status_payload(service: AuthService, user: AuthUser | None, token: str | None = None) -> dict[str, Any]:
     return {
+        "session_ended": None if user is not None else session_ended_payload(service, token),
         "setup_required": service.setup_required(),
         "authenticated": user is not None,
         "user": user.as_dict() if user else None,

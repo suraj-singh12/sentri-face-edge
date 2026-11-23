@@ -234,3 +234,53 @@ def test_operator_workflows_smoke(app):
     _correction_feedback(page)
     _saved_location_suggestions(page)
     assert not errors, errors
+
+
+def _admin_post(page, path, body):
+    return page.evaluate(
+        """async ([path, body]) => {
+            const token = document.querySelector('meta[name="sentriface-session-token"]').content;
+            const response = await fetch(path, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-SentriFace-Session": token },
+                body: JSON.stringify(body),
+            });
+            return { status: response.status, body: await response.json() };
+        }""",
+        [path, body],
+    )
+
+
+def test_ended_session_explains_why(app):
+    page, errors, _ = app
+    _sign_up(page)
+    created = _admin_post(page, "/api/users", {
+        "username": "smoke-viewer", "display_name": "Smoke Viewer",
+        "password": "viewer password long enough", "roles": ["viewer"],
+    })
+    assert created["status"] == 201, created
+    user_id = created["body"]["user"]["user_id"]
+
+    viewer_context = page.context.browser.new_context(viewport={"width": 1440, "height": 1000})
+    viewer_context.set_default_timeout(15000)
+    viewer = viewer_context.new_page()
+    try:
+        viewer.goto(page.url)
+        _field(viewer, "Account name").fill("smoke-viewer")
+        _field(viewer, "Password").fill("viewer password long enough")
+        viewer.get_by_role("button", name="Sign in", exact=True).click()
+        viewer.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+
+        updated = _admin_post(page, "/api/users/update", {
+            "user_id": user_id, "display_name": "Smoke Viewer", "roles": ["viewer"], "disabled": True,
+        })
+        assert updated["status"] == 200, updated
+
+        viewer.evaluate("window.dispatchEvent(new Event('focus'))")
+        expect(viewer.get_by_text("Your session ended")).to_be_visible()
+        expect(viewer.get_by_text("An administrator disabled this account.")).to_be_visible()
+        expect(viewer.get_by_role("button", name="Sign in", exact=True)).to_be_visible()
+        assert viewer.get_by_text("Connection or operation error").count() == 0
+    finally:
+        viewer_context.close()
+    assert not errors
