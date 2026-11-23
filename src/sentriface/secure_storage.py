@@ -380,6 +380,20 @@ def _verify_encrypted_database(path: Path, key: bytes) -> None:
         raise StorageSecurityError("Encrypted database could not be opened with this machine's key") from exc
 
 
+def _driver_errors(name: str) -> tuple[type[BaseException], ...]:
+    try:
+        from sqlcipher3 import dbapi2
+    except ImportError:
+        return (getattr(sqlite3, name),)
+    return (getattr(sqlite3, name), getattr(dbapi2, name))
+
+
+# The encrypted database raises SQLCipher's own exception classes, which are
+# not subclasses of the sqlite3 ones; catch both.
+INTEGRITY_ERRORS = _driver_errors("IntegrityError")
+DATABASE_ERRORS = _driver_errors("DatabaseError")
+
+
 def _sqlcipher_driver() -> Any:
     try:
         from sqlcipher3 import dbapi2

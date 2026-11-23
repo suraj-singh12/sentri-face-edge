@@ -92,6 +92,23 @@ class BackupRecord:
     reference_count: int = 0
     restorable: bool = False
     integrity_status: str = "UNKNOWN"
+    imported_from_backup_id: str | None = None
+    imported_at: str | None = None
+
+
+class BackupAlreadyPresent(BackupError):
+    """The archive is a copy of a backup that is already in the list."""
+
+    def __init__(
+        self,
+        existing: BackupRecord,
+        retention_removes: list[BackupRecord] | None = None,
+        retention_limit: int = 0,
+    ) -> None:
+        super().__init__("This backup is already in the list")
+        self.existing = existing
+        self.retention_removes = list(retention_removes or [])
+        self.retention_limit = retention_limit
 
 
 class BackupService:
@@ -246,10 +263,23 @@ class BackupService:
         self._log("backup-deleted", backup_id=backup_id)
 
     def enforce_retention(self, protected_ids: set[str] | None = None) -> list[str]:
+        removed = []
+        for record in self._retention_candidates(self.list_backups(), protected_ids):
+            self.delete_backup(record.backup_id)
+            removed.append(record.backup_id)
+            self._log("backup-retention-cleanup", backup_id=record.backup_id)
+        return removed
+
+    def _retention_candidates(
+        self,
+        backups: list[BackupRecord],
+        protected_ids: set[str] | None = None,
+        incoming: int = 0,
+    ) -> list[BackupRecord]:
+        """Backups retention would remove once `incoming` protected backups are added."""
         if self.retention_limit <= 0:
             return []
         protected_ids = set(protected_ids or set())
-        backups = self.list_backups()
         last_verified = next(
             (record for record in backups if record.verified and record.complete),
             None,
@@ -262,18 +292,16 @@ class BackupService:
             if record.reason
             and (record.reason.startswith("before-") or "safety" in record.reason)
         )
-        removed = []
-        remaining = len(backups)
+        candidates = []
+        remaining = len(backups) + incoming
         for record in reversed(backups):
             if remaining <= self.retention_limit:
                 break
             if record.backup_id in protected_ids:
                 continue
-            self.delete_backup(record.backup_id)
-            removed.append(record.backup_id)
+            candidates.append(record)
             remaining -= 1
-            self._log("backup-retention-cleanup", backup_id=record.backup_id)
-        return removed
+        return candidates
 
     def export_backup(self, backup_id: str, destination: Path) -> Path:
         """Create one verified, portable archive without loading it into memory."""
@@ -315,7 +343,25 @@ class BackupService:
             )
             return destination
 
-    def import_backup(self, archive_path: Path) -> BackupRecord:
+    def find_same_backup(self, source_backup_id: str) -> BackupRecord | None:
+        """Return a listed backup made from, or imported from, the same source backup."""
+        if not source_backup_id or source_backup_id == "unknown":
+            return None
+        return next(
+            (
+                record for record in self.list_backups()
+                if source_backup_id in {record.backup_id, record.imported_from_backup_id}
+            ),
+            None,
+        )
+
+    def import_backup(
+        self,
+        archive_path: Path,
+        *,
+        allow_duplicate: bool = False,
+        approved_removals: set[str] | None = None,
+    ) -> BackupRecord:
         """Validate and install a portable archive as a managed backup."""
         with self._create_lock:
             if not archive_path.exists() or not archive_path.is_file():
@@ -347,6 +393,20 @@ class BackupService:
                     }:
                         raise BackupError("Unsupported portable backup format")
                     source_backup_id = str(metadata.get("backup_id") or "unknown")
+                    existing = self.find_same_backup(source_backup_id)
+                    if existing is not None:
+                        removals = self._retention_candidates(
+                            self.list_backups(), {existing.backup_id}, incoming=1
+                        )
+                        # Warn again if retention would now remove a backup the
+                        # operator was not shown when approving the duplicate.
+                        unapproved = approved_removals is not None and not {
+                            record.backup_id for record in removals
+                        } <= set(approved_removals)
+                        if not allow_duplicate or unapproved:
+                            raise BackupAlreadyPresent(
+                                existing, removals, self.retention_limit
+                            )
                     database_entry = f"database/{self.db_path.name}"
                     expected_entries = {"backup.json", database_entry}
                     expected_entries.update(
@@ -388,7 +448,10 @@ class BackupService:
                 os.replace(imported_root, target)
                 record = self._record_from_metadata(metadata)
                 try:
-                    self.enforce_retention(protected_ids={backup_id})
+                    # A duplicate import must not push out the backup it copies.
+                    self.enforce_retention(
+                        protected_ids={backup_id} | ({existing.backup_id} if existing else set())
+                    )
                 except Exception as retention_exc:  # noqa: BLE001
                     self._log("backup-retention-failed", error=str(retention_exc))
                 self._log(
@@ -441,6 +504,9 @@ class BackupService:
         self,
         archive_path: Path,
         passphrase: str,
+        *,
+        allow_duplicate: bool = False,
+        approved_removals: set[str] | None = None,
     ) -> BackupRecord:
         """Authenticate, decrypt, validate, and install an encrypted export."""
         with self._create_lock:
@@ -448,7 +514,11 @@ class BackupService:
             plain = self.backup_dir / f".decrypt-{uuid.uuid4().hex}.sfbackup"
             try:
                 decrypt_file(archive_path, plain, passphrase)
-                return self.import_backup(plain)
+                return self.import_backup(
+                    plain,
+                    allow_duplicate=allow_duplicate,
+                    approved_removals=approved_removals,
+                )
             except BackupEncryptionError as exc:
                 raise BackupError(str(exc)) from exc
             finally:
@@ -1294,6 +1364,8 @@ class BackupService:
                 if isinstance(metadata.get("integrity"), dict)
                 else "LEGACY"
             ),
+            imported_from_backup_id=str(metadata["imported_from_backup_id"]) if metadata.get("imported_from_backup_id") else None,
+            imported_at=str(metadata["imported_at"]) if metadata.get("imported_at") else None,
         )
 
     def _read_metadata(self, backup_path: Path) -> dict[str, object]:

@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from sentriface.models import utc_now
 from sentriface.media_registry import observation_media_provenance_issues
-from sentriface.secure_storage import connect_database
+from sentriface.secure_storage import DATABASE_ERRORS, connect_database
 from sentriface.storage.sqlite_store import SCHEMA_VERSION, _attachment_ownership_errors, _reference_integrity_errors, _expected_graph_connections
 
 
@@ -209,7 +209,7 @@ class ReadOnlyIntegrityChecker:
                 checks_run.append(invariant_id)
                 try:
                     check(conn)
-                except (sqlite3.DatabaseError, ValueError, TypeError, KeyError, AssertionError) as exc:
+                except (*DATABASE_ERRORS, ValueError, TypeError, KeyError, AssertionError) as exc:
                     self._add(
                         invariant_id,
                         "Check could not complete because required state was unreadable or malformed",
@@ -254,7 +254,7 @@ class ReadOnlyIntegrityChecker:
     def _safe_one(conn: sqlite3.Connection, sql: str):
         try:
             return conn.execute(sql).fetchone()
-        except sqlite3.DatabaseError:
+        except DATABASE_ERRORS:
             return None
 
     def _add(

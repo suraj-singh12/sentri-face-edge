@@ -221,15 +221,23 @@ export function usePeopleController({
   };
 
   const savePeopleProfile = async (values) => {
-    const result = await apiPost("/api/person-update", {
-      person_id: values.personId,
-      name: values.name,
-      rank: values.rank,
-      country: values.country,
-      importance: values.importance,
-      tags: values.tags || [],
-      operation_id: operationId(),
-    });
+    let result;
+    try {
+      result = await apiPost("/api/person-update", {
+        person_id: values.personId,
+        name: values.name,
+        rank: values.rank,
+        country: values.country,
+        importance: values.importance,
+        tags: values.tags || [],
+        operation_id: operationId(),
+      }, { silent: true });
+    } catch (error) {
+      if (error.reason !== "placeholder_name_taken") {
+        showToast(error.message || "Person details could not be saved.", "red", { title: "Nothing was saved" });
+      }
+      throw error;
+    }
     await invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     await refreshPeopleProfile(values.personId);
@@ -400,7 +408,7 @@ export function usePeopleController({
     await loadPeople({ dedupe: false });
     await loadDeletedFaces({ dedupe: false });
     showToast(
-      `${result.deleted_sightings || 0} linked sighting${result.deleted_sightings === 1 ? "" : "s"} removed from the live library. Safety backup ${result.backup?.backup_id || "created"} retains a recovery copy.`,
+      `${result.deleted_sightings || 0} linked sighting${result.deleted_sightings === 1 ? "" : "s"} removed from the live library. A safety backup was created first and keeps a recovery copy.`,
       "red",
       { title: "Live-library erasure complete", autoClose: 8000 },
     );

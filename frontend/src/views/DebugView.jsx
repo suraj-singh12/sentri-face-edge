@@ -26,6 +26,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconCircleCheck,
+  IconCopy,
   IconCpu,
   IconDatabase,
   IconDatabaseExport,
@@ -42,6 +43,7 @@ import {
   IconUpload,
   IconUsers,
 } from "@tabler/icons-react";
+import { backupLabel } from "../utils.js";
 import { AccountsPanel } from "./AccountsPanel.jsx";
 import { AboutSupportPanel } from "./AboutSupportPanel.jsx";
 import { MachineProfilePanel } from "./MachineProfilePanel.jsx";
@@ -473,7 +475,7 @@ function DatabaseBackupsPanel({
             {latest ? (
               <>
                 <Text fw={900} size="lg">{formatDateTime(latest.created_at)}</Text>
-                <Text size="sm">{latest.reason || "Manual backup"}</Text>
+                <Text size="sm">{backupLabel(latest)}</Text>
                 <Text size="sm" c="dimmed">
                   {formatBytes(latest.size_bytes)} · {latest.people_count.toLocaleString()} people · {latest.embedding_count.toLocaleString()} face records · {latest.file_count || 0} files
                 </Text>
@@ -513,8 +515,16 @@ function DatabaseBackupsPanel({
               {backups.length ? backups.map((backup) => (
                 <tr key={backup.backup_id}>
                   <td>
-                    <Text size="sm" fw={700}>{backup.reason || "Manual backup"}</Text>
-                    <Text size="xs" c="dimmed">{backup.backup_id}</Text>
+                    <Group gap={6} wrap="nowrap">
+                      <Text size="sm" fw={700}>{backupLabel(backup)}</Text>
+                      {backup.imported_from_backup_id ? <Badge color="gray" variant="light" size="sm">Imported</Badge> : null}
+                      <BackupReferenceCopy backupId={backup.backup_id} />
+                    </Group>
+                    {backup.imported_from_backup_id ? (
+                      <Text size="xs" c="dimmed">
+                        Originally made {formatDateTime(backup.created_at)}{backup.imported_at ? ` · imported ${formatDateTime(backup.imported_at)}` : ""}
+                      </Text>
+                    ) : null}
                   </td>
                   <td>{formatDateTime(backup.created_at)}</td>
                   <td>{formatBytes(backup.size_bytes)}</td>
@@ -757,6 +767,26 @@ function formatBytes(value) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function BackupReferenceCopy({ backupId }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(backupId);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <Tooltip label={copied ? "Copied" : "Copy reference for support"}>
+      <ActionIcon size="sm" variant="subtle" color={copied ? "teal" : "gray"} onClick={copy} aria-label="Copy reference for support">
+        <IconCopy size={14} />
+      </ActionIcon>
+    </Tooltip>
+  );
 }
 
 function formatDateTime(value) {

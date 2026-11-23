@@ -364,6 +364,11 @@ export function useWorldController({ activeView, apiGet, initialFilters = EMPTY_
     });
   }, [loadWorld]);
 
+  const firstWorldPage = useCallback(() => {
+    if (worldRef.current.pageNumber <= 1) return null;
+    return loadWorld({ pageNumber: 1, preserve: false });
+  }, [loadWorld]);
+
   const recoverStaleCluster = useCallback(async (message = "The selected cluster is no longer valid in the current World snapshot.") => {
     for (const request of Object.values(clusterRequestsRef.current)) request.abort?.abort();
     clusterRequestsRef.current = {
@@ -909,6 +914,7 @@ export function useWorldController({ activeView, apiGet, initialFilters = EMPTY_
       applyWorldScope,
       selectWorldCollection,
       nextWorldPage,
+      firstWorldPage,
       openWorldCluster,
       closeWorldCluster,
       selectWorldClusterCollection,
