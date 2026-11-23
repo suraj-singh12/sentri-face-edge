@@ -214,8 +214,8 @@ Each item needs its own self-explanatory issue and branch before work starts. Au
 | 4 | **Role limits explained** [F06, F33] | Disabled controls say why, e.g. "Requires Custodian or Administrator". Viewer Favorite consistency. |
 | 5 | **Human-readable backups and duplicate import** [F11, F37] | Show origin (Manual / Imported / Safety copy), date and counts, never raw IDs. Re-importing the same backup **warns but is allowed**. |
 | 6 | **Rename error** [F22] | Unique names for unknown placeholders are intended. Replace "UNIQUE constraint failed" with "Another unknown person is already called X. Choose a different name." |
-| 7 | **Failed Attach recovery** [F25] | After a failed Retry, the Retry and Cancel buttons disappear and the draft is stuck. Keep the targeted Retry and Cancel (Attach ownership rules in AGENTS.md). |
-| 8 | **Nested-folder grouping** [F24] | Uploading `Trip/Day1` and `Trip/Day2` should offer "Suggest grouping"; today it stays disabled. Trace the cause. |
+| 7 | **Failed Attach recovery** [F25] | **Done: issue [#53](https://github.com/suraj-singh12/sentri-face-edge/issues/53), merged in [PR #55](https://github.com/suraj-singh12/sentri-face-edge/pull/55).** A failed Attach Media draft keeps Retry and Cancel after every failed Retry and shows the real reason; only targeted Retry or Cancel continues it (Attach ownership rules in AGENTS.md). |
+| 8 | **Nested-folder grouping** [F24] | **Done: issue [#53](https://github.com/suraj-singh12/sentri-face-edge/issues/53), merged in [PR #55](https://github.com/suraj-singh12/sentri-face-edge/pull/55).** Uploading `Trip/Day1` and `Trip/Day2` now offers "Suggest grouping": the server reports each photo's uploaded subfolder, because identical uploads are stored once by content. |
 | 9 | **Connections page 2** [F28] | Page 2 wrongly says "No qualifying … clusters exist in this scope"; state the page scope correctly and allow going back. |
 | 10 | **Names never cut off** [F03, F07] | In Review and People decision rows: wrap the text, or show a tooltip, following the design language. |
 | 11 | **One confirmation dialog, three strengths** | Light (Cancel / OK), Medium (shows what changes), Strong (type a word); one shared look. |
@@ -281,7 +281,7 @@ Each item needs its own self-explanatory issue and branch before work starts. Au
 - **B. Shared UI building blocks:** confirmation dialog (11), movable toasts (12), disabled-with-reason (4), glossary (13).
   - Do these first, because the other UI fixes reuse them.
 - **C. Clarity fixes:** rename error (6), backup labels and duplicate warning (5), notes wrap (2), names not cut off (10), Connections page 2 (9).
-- **D. Workflow dead ends:** failed Attach (7), nested folders (8).
+- **D. Workflow dead ends:** failed Attach (7), nested folders (8). Done in PR #55.
 - **E. Session and security:** one window (3), forced password change (15). Builds on PR #45.
 - **F. Then:** #4 Split/Merge (design first), and accessibility (F02, screen readers).
 - **G. Finally:** #5 release acceptance on real Windows and macOS hosts with real models.
