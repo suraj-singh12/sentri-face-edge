@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { requirePersonContract } from "../utils.js";
+import { SESSION_ENDED_CODES } from "./useApiClient.js";
 
 export function useAppData({ activeView, capabilities = [], apiGet, apiPost, apiUpload, apiDownload, apiDelete, showToast }) {
   const canTechnical = capabilities.includes("technical");
@@ -112,7 +113,9 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
         loadedViews.current.add("debug");
       }
     } catch (error) {
-      setConnectionError(error?.message || "SentriFace server is unavailable");
+      if (!SESSION_ENDED_CODES.includes(error?.code)) {
+        setConnectionError(error?.message || "SentriFace server is unavailable");
+      }
       throw error;
     }
   }, [activeView, loadProfile, loadPeople, loadDeletedFaces, loadEvents, loadBackups, loadEncounters]);
