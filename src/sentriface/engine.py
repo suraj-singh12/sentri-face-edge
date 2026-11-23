@@ -798,7 +798,10 @@ class FaceEngine:
         return self.graph.create_photo_review(review_id, media_id, faces, **values)
 
     def list_init_session_media(self, session_id: str) -> list[dict]:
-        return self.store.list_init_session_media(session_id)
+        media = self.store.list_init_session_media(session_id)
+        session = self.store.get_init_session(session_id)
+        folders = _uploaded_media_folders(Path(session.source_path), self.config.data_dir) if session and session.source_path else {}
+        return [{**item, "source_folder": folders.get(item["media_path"], "")} for item in media]
 
     def set_init_media_excluded(self, session_id: str, media_id: str, excluded: bool) -> None:
         self.store.set_init_media_excluded(session_id, media_id, excluded)
@@ -1386,6 +1389,13 @@ class FaceEngine:
                         raise ValueError("A scan retry must retain its target Encounter")
                     quality_only = previous.quality_only
                     retry_media = [Path(item["media_path"]) for item in self.store.list_init_session_media(session_id)]
+                    if not retry_media:
+                        # Admission can fail before any media is retained (for example Reference
+                        # Only material); revalidate the draft's own staged upload instead.
+                        retained_source = Path(previous.source_path or "")
+                        if not previous.source_path or not retained_source.exists():
+                            raise ValueError("The photos for this Attach Media draft are no longer available. Cancel it and attach the photos again.")
+                        retry_media = _iter_images(retained_source)
                     session = self.store.retry_targeted_scan(session_id)
                 else:
                     session = self.store.create_init_session(str(source_path), quality_only=quality_only,
@@ -1546,6 +1556,8 @@ class FaceEngine:
                     groups=group_count,
                 )
                 cancellation_checkpoint("before_save")
+                if session.target_observation_id and not scanned_media_paths:
+                    raise ValueError("None of the selected photos could be read. Cancel this Attach Media draft or retry it.")
                 with self.metrics.timer("db_save_init_faces_ms"):
                     self.store.save_init_session_media(session.session_id, scanned_media_paths)
                     self.store.save_init_faces(grouped)
@@ -2280,6 +2292,25 @@ def _iter_images(
                 )
     images.sort()
     return images
+
+
+def _uploaded_media_folders(source_root: Path, data_dir: Path) -> dict[str, str]:
+    """Relative folder of each scanned image inside its session source.
+
+    Uploaded images are stored once by content, so the canonical media path no
+    longer carries the operator's folder structure; the staged hard links do.
+    """
+    if not source_root.is_dir():
+        return {}
+    folders: dict[str, str] = {}
+    try:
+        images = _iter_images(source_root)
+    except (KeyError, OSError):
+        return {}
+    for image_path in images:
+        folder = image_path.parent.relative_to(source_root).as_posix()
+        folders.setdefault(_canonical_source_path(image_path, data_dir), "" if folder == "." else folder)
+    return folders
 
 
 def _canonical_source_path(image_path: Path, data_dir: Path) -> str:
