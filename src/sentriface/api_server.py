@@ -38,6 +38,7 @@ from sentriface.auth import (
     AuthService,
     AuthUser,
     auth_status_payload,
+    session_ended_payload,
 )
 from sentriface.backup_service import (
     BackupError,
@@ -1056,7 +1057,10 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         if self._valid_session():
             return False
         self._json(
-            {"error": "SentriFace session authorization is required"},
+            {
+                "error": "SentriFace was restarted. Reload this window to continue.",
+                "code": "page_session_expired",
+            },
             status=HTTPStatus.UNAUTHORIZED,
         )
         return True
@@ -1096,7 +1100,15 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             )
             return True
         if user is None:
-            self._json({"error": "Sign in to continue", "code": "authentication_required"}, status=HTTPStatus.UNAUTHORIZED)
+            ended = session_ended_payload(self.server.auth, self._auth_token())
+            self._json(
+                {
+                    "error": ended["message"] if ended else "Sign in to continue",
+                    "code": "authentication_required",
+                    "session_ended": ended,
+                },
+                status=HTTPStatus.UNAUTHORIZED,
+            )
             return True
         if not user.has(required):
             self.server.log_event("authorization-denied", username=user.username, capability=required, endpoint=path)
@@ -1254,7 +1266,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 self._json({"status": "ok", "runtime": self.server.runtime})
                 return
             if parsed.path == "/api/auth/status":
-                self._json(auth_status_payload(self.server.auth, self.auth_user))
+                self._json(auth_status_payload(self.server.auth, self.auth_user, self._auth_token()))
                 return
             if parsed.path == "/api/license/status":
                 self._json(self.server.license.status().as_dict(enforced=self.server.license.enforced))

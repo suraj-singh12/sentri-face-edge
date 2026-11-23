@@ -135,6 +135,63 @@ class AuthenticationApiTest(unittest.TestCase):
             self.assertEqual(self._request(server, "DELETE", f"/api/backups/{backup_id}?confirm={backup_id}", cookie=technician_cookie)[0], 403)
             self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": backup_id}, cookie=technician_cookie)[0], 403)
 
+    def test_ended_sessions_report_why_they_ended(self) -> None:
+        with self._running_server() as server:
+            admin, _ = server.auth.signup_initial("owner", "Owner", PASSWORD)
+            user = server.auth.create_user(admin, "asha", "Asha", "asha password long enough", ["operator"])
+            uid = user["user_id"]
+
+            def assert_ended(cookie, reason, text):
+                status, payload, _ = self._request(server, "GET", "/api/profile", cookie=cookie)
+                self.assertEqual(status, 401)
+                self.assertEqual(payload["code"], "authentication_required")
+                self.assertEqual(payload["session_ended"]["reason"], reason)
+                self.assertIn(text, payload["error"])
+                status, auth_status, _ = self._request(server, "GET", "/api/auth/status", cookie=cookie)
+                self.assertEqual(status, 200)
+                self.assertFalse(auth_status["authenticated"])
+                self.assertEqual(auth_status["session_ended"]["reason"], reason)
+
+            cookie = self._login_cookie(server, "asha", "asha password long enough")
+            server.auth.update_user(admin, uid, "Asha", ["viewer"], False)
+            assert_ended(cookie, "access_changed", "changed this account's access")
+
+            cookie = self._login_cookie(server, "asha", "asha password long enough")
+            server.auth.update_user(admin, uid, "Asha K", ["viewer"], False)
+            assert_ended(cookie, "account_updated", "updated this account")
+
+            cookie = self._login_cookie(server, "asha", "asha password long enough")
+            server.auth.reset_password(admin, uid, "asha new password long enough")
+            assert_ended(cookie, "password_reset", "password was reset")
+
+            cookie = self._login_cookie(server, "asha", "asha new password long enough")
+            server.auth.update_user(admin, uid, "Asha K", ["viewer"], True)
+            assert_ended(cookie, "account_disabled", "disabled this account")
+
+            server.auth.update_user(admin, uid, "Asha K", ["viewer"], False)
+            cookie = self._login_cookie(server, "asha", "asha new password long enough")
+            self.assertEqual(self._request(server, "POST", "/api/auth/logout", {}, cookie=cookie)[0], 200)
+            status, payload, _ = self._request(server, "GET", "/api/profile", cookie=cookie)
+            self.assertEqual(status, 401)
+            self.assertIsNone(payload["session_ended"])
+            self.assertEqual(payload["error"], "Sign in to continue")
+
+            status, payload, _ = self._request(server, "GET", "/api/auth/status")
+            self.assertIsNone(payload["session_ended"])
+
+    def test_stale_page_session_after_restart_has_a_reload_code(self) -> None:
+        with self._running_server() as server:
+            connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=20)
+            try:
+                connection.request("GET", "/api/auth/status", headers={"X-SentriFace-Session": "from-a-previous-run"})
+                response = connection.getresponse()
+                payload = json.loads(response.read().decode("utf-8"))
+            finally:
+                connection.close()
+            self.assertEqual(response.status, 401)
+            self.assertEqual(payload["code"], "page_session_expired")
+            self.assertIn("Reload", payload["error"])
+
     def test_disaster_recovery_requires_explicit_administrator_acknowledgement(self) -> None:
         with self._running_server() as server:
             admin, _ = server.auth.signup_initial("owner", "Machine Owner", PASSWORD)
