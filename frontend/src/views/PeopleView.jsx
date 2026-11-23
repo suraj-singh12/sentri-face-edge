@@ -770,7 +770,6 @@ function PeopleStatsStrip({ statistics, collection }) {
   const stats = collection === "bin" ? [
     { label: "In Bin", value: statistics.people_count || 0, icon: IconTrash, color: "gray" },
     { label: "Retained Photos", value: Number(statistics.embedding_count || 0).toLocaleString(), icon: IconImageInPicture, color: "violet" },
-    { label: "Deleted Today", value: statistics.archived_today_count || 0, icon: IconRefresh, color: "red" },
   ] : historical ? [
     { label: "Archived Records", value: statistics.people_count || 0, icon: IconArchive, color: "gray" },
     { label: "Retained Photos", value: Number(statistics.embedding_count || 0).toLocaleString(), icon: IconImageInPicture, color: "violet" },
