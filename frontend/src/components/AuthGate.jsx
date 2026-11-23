@@ -134,6 +134,10 @@ export function AuthGate({ children }) {
 
   const logout = async () => {
     try { await apiPost("/api/auth/logout", {}, { silent: true }); } catch (_) { /* Clear the local view regardless. */ }
+    setPassword("");
+    setNewPassword("");
+    setNewPasswordConfirmation("");
+    setFieldErrors({});
     setStatus((current) => ({ ...current, authenticated: false, user: null, setup_required: false }));
     showToast("Signed out", "gray");
   };
