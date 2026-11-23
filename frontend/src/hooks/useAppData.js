@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { requirePersonContract } from "../utils.js";
+import { formatBackupDateTime, requirePersonContract } from "../utils.js";
 import { SESSION_ENDED_CODES } from "./useApiClient.js";
 
 export function useAppData({ activeView, capabilities = [], apiGet, apiPost, apiUpload, apiDownload, apiDelete, showToast }) {
@@ -27,6 +27,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const [backupImporting, setBackupImporting] = useState(false);
   const [backupRestoring, setBackupRestoring] = useState(false);
   const [restoreBackupSelection, setRestoreBackupSelection] = useState(null);
+  const [duplicateImport, setDuplicateImport] = useState(null);
   const backupInFlight = useRef(false);
   const restoreInFlight = useRef(false);
   const profileLoaded = useRef(false);
@@ -228,7 +229,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     showToast("Portable backup deleted", "yellow");
   };
 
-  const importBackup = async (file, passphrase = "") => {
+  const importBackup = async (file, passphrase = "", { allowDuplicate = false } = {}) => {
     if (!file || backupImporting) return;
     if (!/\.sfbackup\.enc$/i.test(String(file.name || ""))) {
       showToast("Choose a password-encrypted SentriFace .sfbackup.enc file.", "yellow", {
@@ -245,6 +246,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     setBackupImporting(true);
     try {
       const query = new URLSearchParams({ filename: file.name });
+      if (allowDuplicate) query.set("allow_duplicate", "1");
       const payload = await apiUpload(
         `/api/backups/import?${query}`,
         file,
@@ -270,7 +272,12 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
           autoClose: 8000,
         },
       );
+      setDuplicateImport(null);
     } catch (error) {
+      if (error.code === "backup_already_present" && !allowDuplicate) {
+        setDuplicateImport({ file, passphrase, existing: error.payload?.existing_backup || null });
+        return;
+      }
       showToast(error.message || "Portable backup import failed.", "red", {
         title: "Backup was not imported",
         autoClose: 8000,
@@ -385,6 +392,14 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     backupImporting,
     backupRestoring,
     restoreBackupSelection,
+    duplicateImport,
+    cancelDuplicateImport: () => setDuplicateImport(null),
+    confirmDuplicateImport: () => {
+      if (!duplicateImport) return null;
+      const { file, passphrase } = duplicateImport;
+      setDuplicateImport(null);
+      return importBackup(file, passphrase, { allowDuplicate: true });
+    },
     loadPeople,
     loadEvents,
     queryEncounters,
@@ -424,18 +439,6 @@ function formatBytes(value) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatBackupDateTime(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value || "-");
-  return date.toLocaleString([], {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function encodePassphrase(value) {

@@ -92,6 +92,16 @@ class BackupRecord:
     reference_count: int = 0
     restorable: bool = False
     integrity_status: str = "UNKNOWN"
+    imported_from_backup_id: str | None = None
+    imported_at: str | None = None
+
+
+class BackupAlreadyPresent(BackupError):
+    """The archive is a copy of a backup that is already in the list."""
+
+    def __init__(self, existing: BackupRecord) -> None:
+        super().__init__("This backup is already in the list")
+        self.existing = existing
 
 
 class BackupService:
@@ -315,7 +325,19 @@ class BackupService:
             )
             return destination
 
-    def import_backup(self, archive_path: Path) -> BackupRecord:
+    def find_same_backup(self, source_backup_id: str) -> BackupRecord | None:
+        """Return a listed backup made from, or imported from, the same source backup."""
+        if not source_backup_id or source_backup_id == "unknown":
+            return None
+        return next(
+            (
+                record for record in self.list_backups()
+                if source_backup_id in {record.backup_id, record.imported_from_backup_id}
+            ),
+            None,
+        )
+
+    def import_backup(self, archive_path: Path, *, allow_duplicate: bool = False) -> BackupRecord:
         """Validate and install a portable archive as a managed backup."""
         with self._create_lock:
             if not archive_path.exists() or not archive_path.is_file():
@@ -347,6 +369,10 @@ class BackupService:
                     }:
                         raise BackupError("Unsupported portable backup format")
                     source_backup_id = str(metadata.get("backup_id") or "unknown")
+                    if not allow_duplicate:
+                        existing = self.find_same_backup(source_backup_id)
+                        if existing is not None:
+                            raise BackupAlreadyPresent(existing)
                     database_entry = f"database/{self.db_path.name}"
                     expected_entries = {"backup.json", database_entry}
                     expected_entries.update(
@@ -441,6 +467,8 @@ class BackupService:
         self,
         archive_path: Path,
         passphrase: str,
+        *,
+        allow_duplicate: bool = False,
     ) -> BackupRecord:
         """Authenticate, decrypt, validate, and install an encrypted export."""
         with self._create_lock:
@@ -448,7 +476,7 @@ class BackupService:
             plain = self.backup_dir / f".decrypt-{uuid.uuid4().hex}.sfbackup"
             try:
                 decrypt_file(archive_path, plain, passphrase)
-                return self.import_backup(plain)
+                return self.import_backup(plain, allow_duplicate=allow_duplicate)
             except BackupEncryptionError as exc:
                 raise BackupError(str(exc)) from exc
             finally:
@@ -1294,6 +1322,8 @@ class BackupService:
                 if isinstance(metadata.get("integrity"), dict)
                 else "LEGACY"
             ),
+            imported_from_backup_id=str(metadata["imported_from_backup_id"]) if metadata.get("imported_from_backup_id") else None,
+            imported_at=str(metadata["imported_at"]) if metadata.get("imported_at") else None,
         )
 
     def _read_metadata(self, backup_path: Path) -> dict[str, object]:

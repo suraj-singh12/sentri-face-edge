@@ -41,6 +41,7 @@ from sentriface.auth import (
     session_ended_payload,
 )
 from sentriface.backup_service import (
+    BackupAlreadyPresent,
     BackupError,
     BackupRecord,
     BackupRestoreError,
@@ -78,7 +79,7 @@ from sentriface.licensing import LicenseAuthority
 from sentriface.licensing.authority import packaged_windows_license_enforced
 from sentriface.paths import default_data_dir, default_log_dir
 from sentriface.recovery import RecoveryError, RecoveryService, available_recovery_destinations, recover_master_key
-from sentriface.secure_storage import StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key, validate_recovered_master_key
+from sentriface.secure_storage import INTEGRITY_ERRORS, StorageSecurityError, database_is_encrypted, load_or_create_master_key, protect_existing_managed_data, store_master_key, validate_recovered_master_key
 from sentriface.secure_storage import load_linux_source_master_key
 from sentriface.secure_files import read_protected_bytes, write_protected_bytes
 from sentriface.offline_guard import install_offline_guard, offline_guard_installed, require_local_path
@@ -1732,7 +1733,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         maximum_bytes=BACKUP_IMPORT_LIMIT_BYTES,
                     )
                     record = self.server.backups.import_encrypted_backup(
-                        import_path, passphrase
+                        import_path,
+                        passphrase,
+                        allow_duplicate=parse_qs(parsed.query).get("allow_duplicate") == ["1"],
                     )
                 finally:
                     import_path.unlink(missing_ok=True)
@@ -3335,7 +3338,18 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             status = exc.status
         if recovery_refusal:
             status = HTTPStatus.CONFLICT
+        if isinstance(exc, INTEGRITY_ERRORS):
+            # The technical text was logged above; it means nothing to an operator.
+            message = "This change conflicts with existing data. Nothing was saved."
+            status = HTTPStatus.CONFLICT
+        if isinstance(exc, BackupAlreadyPresent):
+            status = HTTPStatus.CONFLICT
         payload = {"error": message}
+        if isinstance(exc, INTEGRITY_ERRORS):
+            payload["code"] = "data_conflict"
+        if isinstance(exc, BackupAlreadyPresent):
+            payload["code"] = "backup_already_present"
+            payload["existing_backup"] = _backup(exc.existing)
         if isinstance(exc, EngineBusyError):
             payload["code"] = "engine_busy"
         if isinstance(exc, AuthError):

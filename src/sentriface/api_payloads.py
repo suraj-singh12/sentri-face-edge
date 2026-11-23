@@ -1067,4 +1067,6 @@ def _backup(record: BackupRecord) -> dict[str, Any]:
         "reference_count": record.reference_count,
         "restorable": record.restorable,
         "integrity_status": record.integrity_status,
+        "imported_from_backup_id": record.imported_from_backup_id,
+        "imported_at": record.imported_at,
     }

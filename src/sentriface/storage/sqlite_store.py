@@ -92,7 +92,7 @@ from sentriface.models import (
 )
 from sentriface.media_registry import media_content_identity, require_existing_media
 
-from sentriface.secure_storage import connect_database, ensure_encrypted_database
+from sentriface.secure_storage import INTEGRITY_ERRORS, connect_database, ensure_encrypted_database
 
 # Module-level helpers live in the modules below. They are re-exported here so
 # existing imports keep working; SQLiteIdentityStore resolves them from here.
@@ -565,8 +565,8 @@ class SQLiteIdentityStore:
                     metadata=normalized_metadata,
                     enrollment_status="placeholder",
                 )
-            except sqlite3.IntegrityError as exc:
-                raise _placeholder_name_conflict(exc) from exc
+            except INTEGRITY_ERRORS as exc:
+                raise _placeholder_name_conflict(exc, normalized_name) from exc
             result = {
                 "person_id": person.person_id,
                 "lifecycle_status": "ACTIVE",
@@ -853,8 +853,8 @@ class SQLiteIdentityStore:
                     "UPDATE persons SET name = ? WHERE person_id = ? AND deleted_at IS NULL",
                     (name, person_id),
                 )
-            except sqlite3.IntegrityError as exc:
-                raise _placeholder_name_conflict(exc) from exc
+            except INTEGRITY_ERRORS as exc:
+                raise _placeholder_name_conflict(exc, name) from exc
         if cursor.rowcount == 0:
             raise KeyError(f"Unknown person: {person_id}")
 
@@ -952,8 +952,8 @@ class SQLiteIdentityStore:
                         person_id,
                     ),
                 )
-            except sqlite3.IntegrityError as exc:
-                raise _placeholder_name_conflict(exc) from exc
+            except INTEGRITY_ERRORS as exc:
+                raise _placeholder_name_conflict(exc, name) from exc
             _insert_person_change(conn, change)
             result = {"change_id": change.change_id, "person_id": person_id}
             _record_person_operation(
@@ -1734,7 +1734,7 @@ class SQLiteIdentityStore:
             association = _new_person_association(person_a_id, person_b_id, actor)
             try:
                 _insert_person_association(conn, association)
-            except sqlite3.IntegrityError as exc:
+            except INTEGRITY_ERRORS as exc:
                 if "person_associations" in str(exc):
                     raise KeyError("These people are already associated") from exc
                 raise
