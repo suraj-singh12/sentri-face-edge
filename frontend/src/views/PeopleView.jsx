@@ -894,7 +894,7 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
   return (
     <Card withBorder radius="md" p="xs" className={cardClass}>
       <Stack gap="xs" align="stretch" className="people-person-card-inner">
-        <Tooltip label={person.name} {...NAME_TOOLTIP_PROPS} events={{ hover: false, focus: true, touch: false }}>
+        <Tooltip label={person.name} {...NAME_TOOLTIP_PROPS} events={{ hover: false, focus: canOpen, touch: false }}>
         <Box component={canOpen ? "button" : "div"} type={canOpen ? "button" : undefined} className="people-card-main" onClick={canOpen ? openPerson : undefined} aria-label={canOpen ? `${historical ? "Historical identity" : "Open"} ${person.name}` : undefined}>
           <Box className="people-card-image-wrap">
             <ImageFrame variant="peopleCard">

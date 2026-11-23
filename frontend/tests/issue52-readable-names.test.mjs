@@ -21,7 +21,7 @@ test("decision-point names stay on one line with the full name on hover", async 
 
 test("People cards show the full name on keyboard focus and keep badges off the name line", async () => {
   const people = await read("../src/views/PeopleView.jsx");
-  assert.match(people, /<Tooltip label=\{person\.name\} \{\.\.\.NAME_TOOLTIP_PROPS\} events=\{\{ hover: false, focus: true, touch: false \}\}>\s*<Box component=\{canOpen \? "button" : "div"\}/);
+  assert.match(people, /<Tooltip label=\{person\.name\} \{\.\.\.NAME_TOOLTIP_PROPS\} events=\{\{ hover: false, focus: canOpen, touch: false \}\}>\s*<Box component=\{canOpen \? "button" : "div"\}/);
   assert.match(people, /<PersonName name=\{person\.name\} fw=\{800\} focusable=\{!canOpen\} \/>\s*\{historical && <Badge[^>]*flexShrink: 0/);
 });
 
