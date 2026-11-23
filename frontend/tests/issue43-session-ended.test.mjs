@@ -6,7 +6,7 @@ const source = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url)
 
 test('session-ended responses explain themselves instead of showing a generic error', () => {
   const client = source('hooks/useApiClient.js');
-  assert.match(client, /SESSION_ENDED_CODES = \["authentication_required", "setup_required", "page_session_expired"\]/);
+  assert.match(client, /SESSION_ENDED_CODES = \["authentication_required", "setup_required", "page_session_expired", "password_change_required", \.\.\.WINDOW_CODES\]/);
   assert.match(client, /new CustomEvent\("sentriface-reload-required"\)/);
   assert.match(client, /new CustomEvent\("sentriface-auth-required", \{ detail: payload\.session_ended \|\| null \}\)/);
   assert.match(client, /if \(SESSION_ENDED_CODES\.includes\(error\.code\)\) \{[\s\S]*?error\.notified = true;[\s\S]*?throw error;/);

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Card, Center, Group, Loader, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
 
-import { useApiClient } from "../hooks/useApiClient.js";
+import { releaseWindow, useApiClient } from "../hooks/useApiClient.js";
 import { requiredFieldErrors } from "../utils.js";
 
 export function AuthGate({ children }) {
@@ -16,6 +16,9 @@ export function AuthGate({ children }) {
   const [confirmation, setConfirmation] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [reloadRequired, setReloadRequired] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("");
+  const windowActive = useRef(false);
   const clearError = (field) => setFieldErrors((current) => ({ ...current, [field]: undefined }));
 
   const refresh = useCallback(async () => {
@@ -47,6 +50,59 @@ export function AuthGate({ children }) {
       document.removeEventListener("visibilitychange", recheck);
     };
   }, [refresh]);
+
+  const authenticated = Boolean(status?.authenticated);
+  const windowState = status?.window;
+  windowActive.current = authenticated && windowState === "active";
+  useEffect(() => {
+    if (!authenticated) return undefined;
+    // Check in so the server knows this window is still open, and notice another window taking over.
+    const heartbeat = window.setInterval(async () => {
+      try {
+        const next = await apiPost("/api/auth/window", { action: "heartbeat" }, { silent: true });
+        if (next?.window !== windowState) refresh();
+      } catch (_) { /* Session and window errors refresh the gate through events. */ }
+    }, (status?.window_heartbeat_seconds || 15) * 1000);
+    return () => window.clearInterval(heartbeat);
+  }, [apiPost, authenticated, refresh, status?.window_heartbeat_seconds, windowState]);
+  useEffect(() => {
+    const release = () => { if (windowActive.current) releaseWindow(); };
+    window.addEventListener("pagehide", release);
+    return () => window.removeEventListener("pagehide", release);
+  }, []);
+
+  const useThisWindow = async () => {
+    setSubmitting(true);
+    try {
+      await apiPost("/api/auth/window", { action: "claim" }, { silent: true });
+    } catch (_) { /* refresh shows the current state */ }
+    await refresh();
+    setSubmitting(false);
+  };
+
+  const saveRequiredPassword = async (event) => {
+    event.preventDefault();
+    setError("");
+    const errors = requiredFieldErrors({ newPassword, newPasswordConfirmation }, [
+      ["newPassword", "New password"], ["newPasswordConfirmation", "Password confirmation"],
+    ]);
+    if (!errors.newPassword && newPassword.length < 12) errors.newPassword = "Use at least 12 characters";
+    if (!errors.newPasswordConfirmation && newPassword !== newPasswordConfirmation) errors.newPasswordConfirmation = "Passwords do not match";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
+    setSubmitting(true);
+    try {
+      const next = await apiPost("/api/auth/set-password", { new_password: newPassword }, { silent: true });
+      setNewPassword("");
+      setNewPasswordConfirmation("");
+      setStatus(next);
+      showToast("Password saved");
+    } catch (requestError) {
+      setError(requestError?.message || "The password could not be saved");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const submit = async (event) => {
     event.preventDefault();
@@ -130,6 +186,56 @@ export function AuthGate({ children }) {
               <PasswordInput label="Password" description={setup ? "Use at least 12 characters." : undefined} value={password} onChange={(event) => { setPassword(event.currentTarget.value); clearError("password"); }} error={fieldErrors.password} autoComplete={setup ? "new-password" : "current-password"} required />
               {setup ? <PasswordInput label="Confirm password" value={confirmation} onChange={(event) => { setConfirmation(event.currentTarget.value); clearError("confirmation"); }} error={fieldErrors.confirmation} autoComplete="new-password" required /> : null}
               <Button type="submit" loading={submitting}>{setup ? "Create account" : "Sign in"}</Button>
+            </Stack>
+          </form>
+        </Card>
+      </Center>
+    );
+  }
+  if (windowState === "in_use" || windowState === "replaced") {
+    const replaced = windowState === "replaced";
+    return (
+      <Center mih="100vh" p="md">
+        <Card withBorder shadow="md" radius="lg" p="xl" w="100%" maw={460}>
+          <Stack>
+            <Title order={2}>{replaced ? "SentriFace is now being used in another window" : "SentriFace is open in another window"}</Title>
+            {replaced ? (
+              <Text>This window has stopped so that only one window makes changes. Close it, or use it here instead.</Text>
+            ) : (
+              <>
+                <Text>Only one window can be used at a time. Use this one instead, and the other window will stop.</Text>
+                <Text size="sm" c="dimmed">Changes that were not saved in the other window are not kept.</Text>
+              </>
+            )}
+            <Button loading={submitting} onClick={useThisWindow}>Use this window</Button>
+          </Stack>
+        </Card>
+      </Center>
+    );
+  }
+  if (status.user?.must_change_password) {
+    const who = status.user.display_name && status.user.display_name !== status.user.username
+      ? `${status.user.display_name} (${status.user.username})`
+      : status.user.username;
+    return (
+      <Center mih="100vh" p="md">
+        <Card withBorder shadow="md" radius="lg" p="xl" w="100%" maw={460}>
+          <form onSubmit={saveRequiredPassword} noValidate>
+            <Stack>
+              <Group gap="sm" wrap="nowrap">
+                <img src="/sentriface-icon-64.png" alt="" className="auth-brand-icon" aria-hidden="true" />
+                <Box>
+                  <Title order={2}>SentriFace Edge</Title>
+                  <Text c="dimmed">Signed in as {who}</Text>
+                </Box>
+              </Group>
+              <Title order={3} size="h4">Choose a new password</Title>
+              <Alert color="blue">An administrator set this password. Choose your own before you continue.</Alert>
+              {error ? <Alert color="red" role="alert">{error}</Alert> : null}
+              <PasswordInput label="New password" description="Use at least 12 characters." value={newPassword} onChange={(event) => { setNewPassword(event.currentTarget.value); clearError("newPassword"); }} error={fieldErrors.newPassword} autoComplete="new-password" required data-autofocus />
+              <PasswordInput label="Confirm new password" value={newPasswordConfirmation} onChange={(event) => { setNewPasswordConfirmation(event.currentTarget.value); clearError("newPasswordConfirmation"); }} error={fieldErrors.newPasswordConfirmation} autoComplete="new-password" required />
+              <Button type="submit" loading={submitting}>Save and continue</Button>
+              <Button variant="subtle" color="gray" onClick={logout} disabled={submitting}>Sign out</Button>
             </Stack>
           </form>
         </Card>

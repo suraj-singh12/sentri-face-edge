@@ -4,10 +4,25 @@ import { notifications } from "@mantine/notifications";
 const DEFAULT_TIMEOUT_MS = 60_000;
 const SESSION_TOKEN = typeof document === "undefined" ? "" : document.querySelector('meta[name="sentriface-session-token"]')?.content || "";
 const GET_REQUESTS_IN_FLIGHT = new Map();
-export const SESSION_ENDED_CODES = ["authentication_required", "setup_required", "page_session_expired"];
+// One operator uses one window; the server accepts changes only from the active window.
+export const WINDOW_ID = typeof crypto !== "undefined" && crypto.randomUUID
+  ? crypto.randomUUID()
+  : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+export const WINDOW_CODES = ["window_in_use", "window_replaced"];
+export const SESSION_ENDED_CODES = ["authentication_required", "setup_required", "page_session_expired", "password_change_required", ...WINDOW_CODES];
 
 function authorizedHeaders(headers = {}) {
-  return { ...headers, "X-SentriFace-Session": SESSION_TOKEN };
+  return { ...headers, "X-SentriFace-Session": SESSION_TOKEN, "X-SentriFace-Window": WINDOW_ID };
+}
+
+export function releaseWindow() {
+  // keepalive lets the request finish while the page unloads, so a reload is not blocked.
+  fetch("/api/auth/window", {
+    method: "POST",
+    keepalive: true,
+    headers: authorizedHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ action: "release" }),
+  }).catch(() => {});
 }
 
 export function useApiClient() {
@@ -36,7 +51,7 @@ export function useApiClient() {
       error.payload = payload;
       if (error.code === "page_session_expired") {
         window.dispatchEvent(new CustomEvent("sentriface-reload-required"));
-      } else if (["authentication_required", "setup_required"].includes(error.code)) {
+      } else if (["authentication_required", "setup_required", "password_change_required", ...WINDOW_CODES].includes(error.code)) {
         window.dispatchEvent(new CustomEvent("sentriface-auth-required", { detail: payload.session_ended || null }));
       }
       if (SESSION_ENDED_CODES.includes(error.code)) {

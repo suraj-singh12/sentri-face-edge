@@ -7895,6 +7895,14 @@ def _migrate_33_to_34(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_35_to_36(conn: sqlite3.Connection) -> None:
+    """Accounts whose password an administrator set must choose their own at sign-in."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(app_users)").fetchall()}
+    _execute_migration_script(conn, ("" if not columns or "must_change_password" in columns else
+        "ALTER TABLE app_users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0\n"
+        "    CHECK(must_change_password IN (0,1));\n") + "PRAGMA user_version = 36;")
+
+
 def _migrate_34_to_35(conn: sqlite3.Connection) -> None:
     """Erased faces become retained stubs so Event and correction history stay valid."""
     columns = {row[1] for row in conn.execute("PRAGMA table_info(embeddings)").fetchall()}
@@ -8000,6 +8008,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(32, 33, _migrate_32_to_33),
         SchemaMigration(33, 34, _migrate_33_to_34),
         SchemaMigration(34, 35, _migrate_34_to_35),
+        SchemaMigration(35, 36, _migrate_35_to_36),
     )
 
 
