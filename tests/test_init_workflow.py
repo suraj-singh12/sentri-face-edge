@@ -603,6 +603,83 @@ class InitWorkflowTest(unittest.TestCase):
             self.assertTrue(source.exists())
             self.assertTrue(crop.exists())
 
+    def _reference_only_attachment(self, root, engine):
+        person = engine.store.create_person('Reference owner')
+        observation = engine.store.create_observation('attach-ref-create', participant_ids=[person.person_id])
+        engine.store._finalize_observation_without_graph_evidence(observation.observation_id, 'attach-ref-finalize')
+        reference = Path(root).parent / 'reference.png'
+        self._write_image(reference, 140)
+        upload = root / 'uploads' / 'batches' / 'attach' / 'reference.png'
+        upload.parent.mkdir(parents=True)
+        upload.write_bytes(reference.read_bytes())
+        review = engine.prepare_reference_review(reference, person.person_id)
+        engine.confirm_reference(review['review_id'], person.person_id, 'attach-ref-confirm',
+            no_context_acknowledged=True, recognition_state='GOOD', actor={'username': 'tester'})
+        revision = engine.store.get_encounter_read(observation.observation_id)['revision']
+        return observation, upload, revision
+
+    def test_rejected_attachment_retry_keeps_targeted_draft_and_reason(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / 'data'
+            engine = build_dev_engine(root)
+            engine.initialize()
+            observation, upload, revision = self._reference_only_attachment(root, engine)
+            with self.assertRaisesRegex(ValueError, 'Reference Only'):
+                engine.create_queue_session(upload.parent, allow_bad_quality=True,
+                    target_observation_id=observation.observation_id, expected_revision=revision)
+            session = engine.store.list_init_sessions()[0]
+            self.assertEqual(session.status, 'processing_failed')
+            self.assertEqual(engine.store.list_init_session_media(session.session_id), [])
+            for _ in range(2):
+                with self.assertRaisesRegex(ValueError, 'Reference Only'):
+                    engine.create_queue_session(upload.parent, allow_bad_quality=True,
+                        target_observation_id=observation.observation_id, expected_revision=revision,
+                        session_id=session.session_id)
+                retained = engine.store.get_init_session(session.session_id)
+                self.assertEqual(retained.status, 'processing_failed')
+                self.assertEqual(retained.target_observation_id, observation.observation_id)
+            self.assertTrue(upload.exists())
+            engine.discard_init_session(session.session_id)
+            self.assertEqual(engine.store.list_init_sessions(), [])
+            self.assertEqual(engine.store.get_encounter_read(observation.observation_id)['revision'], revision)
+
+    def test_attachment_retry_without_retained_source_explains_cancel(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / 'data'
+            engine = build_dev_engine(root)
+            engine.initialize()
+            observation, upload, revision = self._reference_only_attachment(root, engine)
+            with self.assertRaisesRegex(ValueError, 'Reference Only'):
+                engine.create_queue_session(upload.parent, allow_bad_quality=True,
+                    target_observation_id=observation.observation_id, expected_revision=revision)
+            session = engine.store.list_init_sessions()[0]
+            upload.unlink()
+            upload.parent.rmdir()
+            with self.assertRaisesRegex(ValueError, 'no longer available. Cancel it'):
+                engine.create_queue_session(upload.parent, allow_bad_quality=True,
+                    target_observation_id=observation.observation_id, expected_revision=revision,
+                    session_id=session.session_id)
+            self.assertEqual(engine.store.get_init_session(session.session_id).status, 'processing_failed')
+
+    def test_session_media_reports_uploaded_subfolder_for_content_stored_uploads(self):
+        from sentriface.api_server import _save_upload_chunk
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / 'data'
+            engine = build_dev_engine(root)
+            engine.initialize()
+            upload_id = '6f1c2b52-0d7e-4c55-9d43-1f1d1a0b7a10'
+            sources = {}
+            for relative, shade in (('Trip/Day1/a.png', 120), ('Trip/Day2/b.png', 180), ('Trip/Day2/nested/c.png', 90)):
+                image = Path(temp) / f'{shade}.png'
+                self._write_image(image, shade)
+                batch, stored = _save_upload_chunk(root, upload_id, image.name, relative, image.read_bytes())
+                sources[relative] = stored
+            result = engine.create_queue_session(batch, allow_bad_quality=True)
+            media = engine.list_init_session_media(result.session.session_id)
+            self.assertTrue(all('/uploads/objects/' in item['media_path'].replace('\\', '/') for item in media))
+            self.assertEqual(sorted(item['source_folder'] for item in media),
+                             ['Trip/Day1', 'Trip/Day2', 'Trip/Day2/nested'])
+
     def _write_image(self, image: Path, shade: int) -> None:
         canvas = np.full((160, 160, 3), shade, dtype=np.uint8)
         cv2.rectangle(canvas, (35, 35), (125, 125), (220, 220, 220), -1)

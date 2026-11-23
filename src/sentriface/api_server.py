@@ -2759,7 +2759,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                             client_side=False,
                         )
                     session_id = queue_result.session.session_id
-                    if not queue_result.media_paths:
+                    if not queue_result.media_paths and not queue_result.session.target_observation_id:
                         self.server.engine.discard_init_session(session_id)
                         session_id = ""
                     self.server.finish_queue_job(
@@ -2776,7 +2776,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                                 _init_group(self.server.engine, group, queue_result.matches_by_face_id)
                                 for group in queue_result.groups
                             ],
-                            "media": self.server.engine.store.list_init_session_media(session_id) if session_id else [],
+                            "media": self.server.engine.list_init_session_media(session_id) if session_id else [],
                             "metrics": self.server.engine.metrics_snapshot(),
                         }
                     )

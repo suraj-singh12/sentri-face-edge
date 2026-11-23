@@ -243,7 +243,7 @@ export function useQueueController({
     } catch (error) {
       if (options.signal?.aborted || canceledQueueJobs.current.has(jobId)) return;
       if (options.targetObservationId) {
-        try { await loadQueueSessions(""); }
+        try { await loadQueueSessions(options.sessionId || ""); }
         catch { /* Durable ownership will reconcile when the server is reachable. */ }
       }
       setQueueProgress((current) => normalizeQueueProgress({
