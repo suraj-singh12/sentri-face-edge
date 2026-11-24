@@ -65,6 +65,7 @@ import {
 } from "@tabler/icons-react";
 
 import { EmptyCard, ImageFrame, NAME_TOOLTIP_PROPS, PersonName, SafeImage } from "../components/Shared.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { CountrySelect } from "../components/CountrySelect.jsx";
 import { SavedLocationInput } from "../components/SavedLocationInput.jsx";
 import { NEW_PERSON_IMPORTANCE_OPTIONS } from "../constants.js";
@@ -124,10 +125,7 @@ export function PeopleView({
   const [pageSize, setPageSize] = useState("12");
   const [page, setPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [deleteBusy, setDeleteBusy] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState(null);
-  const [restoreBusy, setRestoreBusy] = useState(false);
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
   const [placeholderBusy, setPlaceholderBusy] = useState(false);
   const [placeholderValues, setPlaceholderValues] = useState(() => newPlaceholderValues());
@@ -322,10 +320,7 @@ export function PeopleView({
                         canDestroy={canDestroy}
                         onOpen={onOpen}
                         onFavorite={toggleFavorite}
-                        onDelete={(person) => {
-                          setDeleteTarget(person);
-                          setDeleteConfirmation("");
-                        }}
+                        onDelete={setDeleteTarget}
                         onRestore={setRestoreTarget}
                       />
                     ) : (
@@ -380,90 +375,36 @@ export function PeopleView({
           </Stack>
         </form>
       </Modal>
-      <Modal
+      <ConfirmDialog
         opened={Boolean(deleteTarget)}
-        onClose={() => {
-          if (deleteBusy) return;
+        title={`Delete ${deleteTarget?.name || "this person"}?`}
+        message={`${deleteTarget?.name || "This person"} ${DELETE_PERSON_MESSAGE}`}
+        typed="DELETE"
+        actionLabel="Delete person"
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          await onDelete(deleteTarget.person_id);
           setDeleteTarget(null);
-          setDeleteConfirmation("");
         }}
-        title={`Delete “${deleteTarget?.name || "this person"}”?`}
-        centered
-      >
-        <Stack>
-          <Alert color="red" icon={<IconShield size={18} />} title="This person moves to Bin">
-            {DELETE_PERSON_EXPLANATION}
-          </Alert>
-          <TextInput
-            label="Type DELETE to confirm"
-            value={deleteConfirmation}
-            onChange={(event) => setDeleteConfirmation(event.currentTarget.value)}
-            autoComplete="off"
-          />
-          <Group justify="flex-end">
-            <Button variant="default" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button
-              color="red"
-              loading={deleteBusy}
-              disabled={deleteConfirmation !== "DELETE"}
-              leftSection={<IconTrash size={16} />}
-              onClick={async () => {
-                if (!deleteTarget || deleteBusy) return;
-                setDeleteBusy(true);
-                try {
-                  await onDelete(deleteTarget.person_id);
-                  setDeleteTarget(null);
-                  setDeleteConfirmation("");
-                } catch (error) {
-                  console.error(error);
-                } finally {
-                  setDeleteBusy(false);
-                }
-              }}
-            >
-              Delete Person
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-      <Modal
+      />
+      <ConfirmDialog
         opened={Boolean(restoreTarget)}
-        onClose={() => !restoreBusy && setRestoreTarget(null)}
-        title={`Restore “${restoreTarget?.name || "this person"}”?`}
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            {restoreTarget?.name} will leave Bin and return to the active People library and recognition, with all retained photos, sightings and relationships.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" disabled={restoreBusy} onClick={() => setRestoreTarget(null)}>Cancel</Button>
-            <Button
-              loading={restoreBusy}
-              leftSection={<IconRestore size={16} />}
-              onClick={async () => {
-                if (!restoreTarget || restoreBusy) return;
-                setRestoreBusy(true);
-                try {
-                  await onRestore(restoreTarget.person_id, { openProfile: false });
-                  setRestoreTarget(null);
-                } catch (error) {
-                  console.error(error);
-                } finally {
-                  setRestoreBusy(false);
-                }
-              }}
-            >
-              Restore Person
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        tone="safe"
+        title={`Restore ${restoreTarget?.name || "this person"}?`}
+        message={`${restoreTarget?.name || "This person"} ${RESTORE_PERSON_MESSAGE}`}
+        actionLabel="Restore person"
+        onClose={() => setRestoreTarget(null)}
+        onConfirm={async () => {
+          await onRestore(restoreTarget.person_id, { openProfile: false });
+          setRestoreTarget(null);
+        }}
+      />
     </Paper>
   );
 }
 
-const DELETE_PERSON_EXPLANATION = "Their photos, sightings, relationships and history are kept, and you can restore them from Bin at any time. They won’t appear in People or recognition while they are in Bin. A safety backup is created first.";
+const DELETE_PERSON_MESSAGE = "moves to Bin. Photos and history are kept; restore anytime.";
+const RESTORE_PERSON_MESSAGE = "returns to People and recognition, with all photos and history.";
 
 function isBinned(person) {
   return person?.lifecycle_status === "DELETED";
@@ -618,15 +559,14 @@ function PeopleLibrarySidebar({
 function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
   const [pendingPurge, setPendingPurge] = useState(null);
   const [busyId, setBusyId] = useState("");
-  const [purgeConfirmation, setPurgeConfirmation] = useState("");
-  const run = async (face, action) => {
+  const run = async (face, action, rethrow = false) => {
     setBusyId(face.embedding_id);
     try {
       await action();
       setPendingPurge(null);
-      setPurgeConfirmation("");
     } catch (error) {
       console.error(error);
+      if (rethrow) throw error;
     } finally {
       setBusyId("");
     }
@@ -710,7 +650,7 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
                     size="xs"
                     leftSection={<IconTrash size={15} />}
                     disabled={Boolean(busyId)}
-                    onClick={() => { setPendingPurge(face); setPurgeConfirmation(""); }}
+                    onClick={() => setPendingPurge(face)}
                   >
                     Erase from live library
                   </Button>
@@ -722,48 +662,16 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
           <EmptyCard text="No deleted faces. Removed faces will remain recoverable here for 30 days." />
         )}
       </Box>
-      <Modal
+      <ConfirmDialog
         opened={Boolean(pendingPurge)}
-        onClose={() => { if (!busyId) { setPendingPurge(null); setPurgeConfirmation(""); } }}
-        title="Erase this face from the live library?"
-        centered
-        closeOnClickOutside={!busyId}
-        closeOnEscape={!busyId}
-      >
-        <Stack>
-          <Text size="sm">
-            This erases the face data used for matching, the face crop and {pendingPurge?.sighting_count || 0} linked sighting{pendingPurge?.sighting_count === 1 ? "" : "s"} from the live library. It can't be restored afterwards.
-          </Text>
-          <Text size="sm" c="dimmed">
-            If this face is part of an Event or its owner was corrected, the Event photo and that history stay, and the history shows “Face removed”.
-          </Text>
-          <Alert color="yellow" title="A recovery copy will still exist">
-            SentriFace creates and verifies a safety backup before erasing the live data. That backup, older managed backups, and any exported backup files may still contain this face. Delete those copies separately if complete erasure is required.
-          </Alert>
-          <TextInput
-            label='Type ERASE to confirm'
-            value={purgeConfirmation}
-            onChange={(event) => setPurgeConfirmation(event.currentTarget.value)}
-            disabled={Boolean(busyId)}
-            autoComplete="off"
-          />
-          <Group justify="flex-end">
-            <Button variant="default" disabled={Boolean(busyId)} onClick={() => { setPendingPurge(null); setPurgeConfirmation(""); }}>Cancel</Button>
-            <Button
-              color="red"
-              loading={Boolean(busyId)}
-              disabled={purgeConfirmation !== "ERASE"}
-              leftSection={<IconTrash size={16} />}
-              onClick={() => pendingPurge && run(
-                pendingPurge,
-                () => onPurge(pendingPurge.embedding_id),
-              )}
-            >
-              Erase from live library
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        title="Erase this face?"
+        message="The face is erased for good, and Events show “Face removed”. No undo. Its sightings are removed too. A safety backup is made first."
+        note={{ tone: "caution", text: "Older backups may still contain this face." }}
+        typed="ERASE"
+        actionLabel="Erase face"
+        onClose={() => setPendingPurge(null)}
+        onConfirm={() => run(pendingPurge, () => onPurge(pendingPurge.embedding_id), true)}
+      />
     </>
   );
 }
@@ -1105,7 +1013,6 @@ function PeopleGalleryView({
   const [managementConflict, setManagementConflict] = useState(null);
   const [targetPersonId, setTargetPersonId] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
-  const [profileDeleteConfirmation, setProfileDeleteConfirmation] = useState("");
   const normalizedPerson = requirePersonContract(payload.person);
   const profileNote = payload.profile_note || { content: "", mentioned_person_ids: [], mentions: [] };
   const [notesDraft, setNotesDraft] = useState(profileNote.content);
@@ -1165,7 +1072,6 @@ function PeopleGalleryView({
     setManagementDialog(null);
     setManagementConflict(null);
     setTargetPersonId("");
-    setProfileDeleteConfirmation("");
     setSelectedNoteMentionIds(profileNote.mentioned_person_ids || []);
   }, [payload.person.person_id]);
 
@@ -1281,7 +1187,7 @@ function PeopleGalleryView({
       value: person.person_id,
       label: `${person.name} · ${person.embedding_count || 0} photos`,
     }));
-  const runManagement = async (action) => {
+  const runManagement = async (action, rethrow = false) => {
     if (actionBusy) return;
     setManagementConflict(null);
     setActionBusy(true);
@@ -1294,6 +1200,7 @@ function PeopleGalleryView({
         setManagementConflict(error.payload.observation_id);
       }
       console.error(error);
+      if (rethrow) throw error;
     } finally {
       setActionBusy(false);
     }
@@ -1390,7 +1297,6 @@ function PeopleGalleryView({
               {archived && <Menu.Divider />}
               {personAllows(payload.person, "DELETE") && (
                 <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={() => {
-                  setProfileDeleteConfirmation("");
                   setManagementDialog("delete-profile");
                 }}>
                   Delete Person…
@@ -1646,75 +1552,35 @@ function PeopleGalleryView({
         </form>
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         opened={managementDialog === "archive"}
-        onClose={() => !actionBusy && setManagementDialog(null)}
-        title="Archive this person?"
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            {payload.person.name} will stop appearing in recognition results. Their {imageRecords.length} photos, {latestSightings.length} sightings, and {relationships.length} relationships will be retained and can be restored later.
-          </Text>
-          <Text size="xs" c="dimmed">A named database backup is created and verified before archiving.</Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
-            <Button color="red" loading={actionBusy} leftSection={<IconArchive size={16} />} onClick={() => runManagement(() => onArchive(payload.person.person_id))}>
-              Archive person
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        tone="caution"
+        title={`Archive ${payload.person.name}?`}
+        message={`${payload.person.name} is hidden from recognition. Everything is kept; restore anytime.`}
+        actionLabel="Archive person"
+        onClose={() => setManagementDialog(null)}
+        onConfirm={() => runManagement(() => onArchive(payload.person.person_id), true)}
+      />
 
-      <Modal
+      <ConfirmDialog
         opened={managementDialog === "restore"}
-        onClose={() => !actionBusy && setManagementDialog(null)}
-        title="Restore this person?"
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            {payload.person.name} and all retained photos will return to recognition and the active People library.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
-            <Button loading={actionBusy} leftSection={<IconRestore size={16} />} onClick={() => runManagement(() => onRestore(payload.person.person_id))}>
-              Restore person
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        tone="safe"
+        title={`Restore ${payload.person.name}?`}
+        message={`${payload.person.name} ${RESTORE_PERSON_MESSAGE}`}
+        actionLabel="Restore person"
+        onClose={() => setManagementDialog(null)}
+        onConfirm={() => runManagement(() => onRestore(payload.person.person_id), true)}
+      />
 
-      <Modal
+      <ConfirmDialog
         opened={managementDialog === "delete-profile"}
-        onClose={() => !actionBusy && setManagementDialog(null)}
-        title={`Delete “${payload.person.name}”?`}
-        centered
-      >
-        <Stack>
-          <Alert color="red" icon={<IconShield size={18} />} title="This person moves to Bin">
-            {DELETE_PERSON_EXPLANATION}
-          </Alert>
-          <TextInput
-            label="Type DELETE to confirm"
-            value={profileDeleteConfirmation}
-            onChange={(event) => setProfileDeleteConfirmation(event.currentTarget.value)}
-            autoComplete="off"
-          />
-          <Group justify="flex-end">
-            <Button variant="default" disabled={actionBusy} onClick={() => setManagementDialog(null)}>Cancel</Button>
-            <Button
-              color="red"
-              loading={actionBusy}
-              disabled={profileDeleteConfirmation !== "DELETE"}
-              leftSection={<IconTrash size={16} />}
-              onClick={() => runManagement(() => onDelete(payload.person.person_id))}
-            >
-              Delete Person
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        title={`Delete ${payload.person.name}?`}
+        message={`${payload.person.name} ${DELETE_PERSON_MESSAGE}`}
+        typed="DELETE"
+        actionLabel="Delete person"
+        onClose={() => setManagementDialog(null)}
+        onConfirm={() => runManagement(() => onDelete(payload.person.person_id), true)}
+      />
 
       <Modal
         opened={managementDialog === "merge"}
@@ -1785,33 +1651,15 @@ function PeopleGalleryView({
         </Stack>
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         opened={managementDialog === "delete-photo"}
-        onClose={() => !actionBusy && setManagementDialog(null)}
-        title="Move this face to Deleted Faces?"
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            The face stops participating in recognition immediately. It and its {selectedDetails.length} linked sighting{selectedDetails.length === 1 ? "" : "s"} remain recoverable in Deleted Faces for 30 days.
-          </Text>
-          <Text size="xs" c="dimmed">
-            A named database backup is created and verified first. The person remains in People.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setManagementDialog(null)} disabled={actionBusy}>Cancel</Button>
-            <Button
-              color="red"
-              loading={actionBusy}
-              disabled={!selectedRecord}
-              leftSection={<IconTrash size={16} />}
-              onClick={() => runManagement(() => onDeletePhoto(payload.person.person_id, selectedRecord.embeddingId))}
-            >
-              Move to Deleted Faces
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        title="Remove this face?"
+        message="This face stops being used for recognition. Restore it within 30 days."
+        actionLabel="Remove face"
+        confirmDisabled={!selectedRecord}
+        onClose={() => setManagementDialog(null)}
+        onConfirm={() => runManagement(() => onDeletePhoto(payload.person.person_id, selectedRecord.embeddingId), true)}
+      />
     </Stack>
   );
 }
