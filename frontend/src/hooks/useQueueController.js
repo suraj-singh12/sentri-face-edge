@@ -220,8 +220,8 @@ export function useQueueController({
         const usable = (payload.media || []).filter((item) => !item.finalized_encounter && !item.excluded);
         const conflicts = (payload.media || []).filter((item) => item.finalized_encounter);
         if (conflicts.length) showToast(conflicts.every((item) => item.finalized_encounter.observation_id === options.targetObservationId)
-          ? "Selected exact media is already attached to this Encounter." : "Some exact media already belongs to another finalized Encounter; it was excluded.", "yellow");
-        if (!usable.length) throw new Error("No new media to attach. Exact media already belongs to a finalized Encounter.");
+          ? "Selected exact media is already attached to this Event." : "Some exact media already belongs to another finalized Event; it was excluded.", "yellow");
+        if (!usable.length) throw new Error("No new media to attach. Exact media already belongs to a finalized Event.");
         const planned = await apiPost("/api/encounter-attach-media", {
           observation_id: options.targetObservationId, expected_revision: options.expectedRevision,
           session_id: payload.session_id, media_ids: usable.map((item) => item.media_id),
@@ -542,7 +542,7 @@ export function useQueueController({
       await loadQueueGroups(queueSelectedGroup.session_id);
       setQueueSelectedGroup(null);
       resetQueueDecision();
-      showToast("Faces excluded from Encounter draft", "yellow");
+      showToast("Faces excluded from Event draft", "yellow");
       return;
     }
     const payload = await apiPost("/api/queue-discard", {
@@ -703,7 +703,7 @@ export function useQueueController({
       setProofOnlyDuplicateCandidates([]);
       setQueueSelectedFaces([]);
       setQueueAccepted(false);
-      showToast("Identity decision saved to Encounter draft");
+      showToast("Identity decision saved to Event draft");
       setQueueSelectedGroup(null);
       selectedGroupIdRef.current = "";
       setQueueSelectedGroupId("");
@@ -830,7 +830,7 @@ export function useQueueController({
       await loadQueueGroups(queueSelectedGroup.session_id);
       setQueueSelectedGroup(null);
       resetQueueDecision();
-      showToast(payload.resumed ? "Deferred groups returned for review" : "Group deferred until other pending groups are decided", "yellow");
+      showToast(payload.resumed ? "Skipped groups are back for review" : "Group skipped for now. It comes back after the other groups.", "yellow");
       return;
     }
     const payload = await apiPost("/api/queue-skip", {
@@ -867,7 +867,7 @@ export function useQueueController({
       ? queueSessionSummary(session.session_id, payload.groups, session.source_path, session.created_at)
       : session));
     setQueueReviewStats((current) => ({ ...current, skippedGroups: 0 }));
-    showToast(`Restored ${payload.resumed} deferred group${payload.resumed === 1 ? "" : "s"}`);
+    showToast(`${payload.resumed} skipped group${payload.resumed === 1 ? " is" : "s are"} back for review`);
   };
 
   const queueRejectSuggestedMatch = async () => {
@@ -1064,7 +1064,7 @@ export function useQueueController({
         selectedGroupIdRef.current = "";
         setQueueSelectedGroupId("");
         setQueueEvent(null);
-        showToast(activeEncounter.target_observation_id ? "Media attached to the existing Encounter" : "Encounter finalized");
+        showToast(activeEncounter.target_observation_id ? "Media attached to the existing Event" : "Event finalized");
       },
       discardQueueEncounter: async () => {
         await apiPost("/api/queue-encounter-discard", { review_id: activeEncounter.review_id });

@@ -173,7 +173,7 @@ export function QueueView({
           {attachment && encounterReviews.length === 0 && !["running", "cancelling"].includes(queueProgress?.status) ? (
             <Paper withBorder p="md" radius="md">
               <Title order={2} size="h3">Attach Media draft</Title>
-              <Text size="sm" mt="xs">These photos remain reserved for the selected Encounter. Retry revalidates its current state; Cancel abandons this attachment without creating Review Photos work.</Text>
+              <Text size="sm" mt="xs">These photos remain reserved for the selected Event. Retry revalidates its current state; Cancel abandons this attachment without creating Review Photos work.</Text>
               <Group mt="md"><Button onClick={onRetryAttachment}>Retry Attach Media</Button><Button variant="default" onClick={() => setCancelAttachmentOpen(true)}>Cancel Attach Media</Button></Group>
             </Paper>
           ) : encounterMedia.length > 0 && encounterReviews.length === 0 && !["running", "cancelling"].includes(queueProgress?.status) ? (
@@ -216,11 +216,11 @@ export function QueueView({
             {activeEncounter && <Card withBorder radius="md" p="md">
               <Group justify="space-between">
                 <Box>
-                  <Text fw={700}>Encounter {Number(activeEncounter.sequence_number || 0) + 1} of {encounterReviews.length}</Text>
-                  <Text size="sm" c="dimmed">{activeEncounter.identity_resolved} of {activeEncounter.identity_total} faces resolved. Event details are saved once for this Encounter.</Text>
+                  <Text fw={700}>Event {Number(activeEncounter.sequence_number || 0) + 1} of {encounterReviews.length}</Text>
+                  <Text size="sm" c="dimmed">{activeEncounter.identity_resolved} of {activeEncounter.identity_total} faces resolved. Event details are saved once for this Event.</Text>
                 </Box>
                 <Group>
-                  <Button variant="light" color="red" onClick={onDiscardEncounter}>Discard Encounter</Button>
+                  <Button variant="light" color="red" onClick={onDiscardEncounter}>Discard Event</Button>
                   <Button disabled={!activeEncounter.event_details_complete || activeEncounter.identity_resolved !== activeEncounter.identity_total} onClick={onCompleteIdentities}>Continue to Relations</Button>
                 </Group>
               </Group>
@@ -317,12 +317,12 @@ function EncounterGrouping({ media, onConfirm, onExclude }) {
     finally { setBusy(false); }
   };
   return <Stack gap="md">
-    <Box><Title order={2} size="h3">Group photos by Encounter</Title><Text size="sm" c="dimmed">Confirm which photos belong to each real-world occurrence before reviewing people.</Text></Box>
+    <Box><Title order={2} size="h3">Group photos by Event</Title><Text size="sm" c="dimmed">Confirm which photos belong to each real-world occurrence before reviewing people.</Text></Box>
     <Group align="flex-end">
-      <Button variant={mode === "one" ? "filled" : "light"} onClick={() => setMode("one")}>One Encounter</Button>
-      <Group gap="xs" align="flex-end"><Button variant={mode === "multiple" ? "filled" : "light"} disabled={maxCount < 2} title={maxCount < 2 ? "At least two photos with detected faces are needed" : undefined} onClick={() => setMode("multiple")}>Multiple Encounters</Button>
-        {mode === "multiple" && <NumberInput label="How many?" aria-label="Number of Encounters" min={2} max={maxCount} clampBehavior="strict" allowDecimal={false} allowNegative={false} w={95} value={encounterCount} onChange={(value) => setCount(Number(value) || 2)} />}</Group>
-      <Button variant="default" disabled={!canSuggest} title={canSuggest ? "Suggest Encounters from the uploaded folder structure" : "No distinct uploaded subfolders with detected faces are available for this batch"} onClick={() => {
+      <Button variant={mode === "one" ? "filled" : "light"} onClick={() => setMode("one")}>One Event</Button>
+      <Group gap="xs" align="flex-end"><Button variant={mode === "multiple" ? "filled" : "light"} disabled={maxCount < 2} title={maxCount < 2 ? "At least two photos with detected faces are needed" : undefined} onClick={() => setMode("multiple")}>Multiple Events</Button>
+        {mode === "multiple" && <NumberInput label="How many?" aria-label="Number of Events" min={2} max={maxCount} clampBehavior="strict" allowDecimal={false} allowNegative={false} w={95} value={encounterCount} onChange={(value) => setCount(Number(value) || 2)} />}</Group>
+      <Button variant="default" disabled={!canSuggest} title={canSuggest ? "Suggest Events from the uploaded folder structure" : "No distinct uploaded subfolders with detected faces are available for this batch"} onClick={() => {
         const folderNumbers = new Map(folders.map((folder, index) => [folder, index + 1]));
         setCount(folders.length);
         setAssignment(Object.fromEntries(usable.map((item) => [item.media_id, folderNumbers.get(groupingFolder(item))])));
@@ -330,21 +330,21 @@ function EncounterGrouping({ media, onConfirm, onExclude }) {
       }}>Suggest grouping</Button>
     </Group>
     {!canSuggest && <Text size="xs" c="dimmed">Suggestions need distinct uploaded subfolders. You can group these photos manually.</Text>}
-    {ordered.some((item) => item.finalized_encounter) && <Text size="sm" c="red">Photos already in a finalized Encounter are automatically excluded. The other photos can continue.</Text>}
-    {usable.length === 0 && <Text size="sm" c="orange">No usable photos remain for a new Encounter.</Text>}
-    {mode === "multiple" && usable.length > 0 && <Group gap="xs">{buckets.map((bucket, index) => <Badge key={index} color={bucket.some((item) => item.face_count === undefined || item.face_count > 0) ? "teal" : "red"} variant="light">Encounter {index + 1}: {bucket.length} photo{bucket.length === 1 ? "" : "s"}</Badge>)}</Group>}
+    {ordered.some((item) => item.finalized_encounter) && <Text size="sm" c="red">Photos already in a finalized Event are automatically excluded. The other photos can continue.</Text>}
+    {usable.length === 0 && <Text size="sm" c="orange">No usable photos remain for a new Event.</Text>}
+    {mode === "multiple" && usable.length > 0 && <Group gap="xs">{buckets.map((bucket, index) => <Badge key={index} color={bucket.some((item) => item.face_count === undefined || item.face_count > 0) ? "teal" : "red"} variant="light">Event {index + 1}: {bucket.length} photo{bucket.length === 1 ? "" : "s"}</Badge>)}</Group>}
     <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
       {ordered.map((item, index) => <Card withBorder key={item.media_id} className="queue-encounter-media-card" data-conflict={Boolean(item.finalized_encounter) || undefined} data-removed={Boolean(item.excluded || item.finalized_encounter) || undefined}>
-        <Group justify="space-between" align="flex-start"><Badge color={item.finalized_encounter ? "red" : item.excluded ? "gray" : "teal"} variant="light">{item.finalized_encounter ? "Already finalized — excluded" : item.excluded ? "Removed" : "Ready"}</Badge>{!item.finalized_encounter && <ActionIcon aria-label={`Leave photo ${index + 1} out of this Encounter`} title="Leave this photo out of the Encounter. The photo file is not deleted." color="red" variant="subtle" disabled={busy || item.excluded} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, true); } finally { setBusy(false); } }}><IconX size={17} /></ActionIcon>}</Group>
+        <Group justify="space-between" align="flex-start"><Badge color={item.finalized_encounter ? "red" : item.excluded ? "gray" : "teal"} variant="light">{item.finalized_encounter ? "Already finalized — excluded" : item.excluded ? "Removed" : "Ready"}</Badge>{!item.finalized_encounter && <ActionIcon aria-label={`Leave photo ${index + 1} out of this Event`} title="Leave this photo out of the Event. The photo file is not deleted." color="red" variant="subtle" disabled={busy || item.excluded} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, true); } finally { setBusy(false); } }}><IconX size={17} /></ActionIcon>}</Group>
         <Image src={mediaUrl(item.media_path)} h={145} fit="contain" alt="Queued media" />
         <Text size="xs" truncate mt="xs">Photo {index + 1}</Text>
-        {item.finalized_encounter && <Text size="xs" c="red" mt="xs">In finalized Encounter {item.finalized_encounter.occasion || item.finalized_encounter.observation_id} · {formatEventWhen(item.finalized_encounter.event_time || { date: item.finalized_encounter.observed_at })}</Text>}
+        {item.finalized_encounter && <Text size="xs" c="red" mt="xs">In finalized Event {item.finalized_encounter.occasion || item.finalized_encounter.observation_id} · {formatEventWhen(item.finalized_encounter.event_time || { date: item.finalized_encounter.observed_at })}</Text>}
         {item.excluded && !item.finalized_encounter && <Button size="compact-xs" variant="subtle" disabled={busy} onClick={async () => { setBusy(true); try { await onExclude(item.media_id, false); } finally { setBusy(false); } }}>Restore photo</Button>}
-        {mode === "multiple" && !item.excluded && !item.finalized_encounter && <Select mt="xs" label="Encounter" value={String(Math.min(encounterCount, Number(assignment[item.media_id] || (usable.findIndex((candidate) => candidate.media_id === item.media_id) % encounterCount) + 1)))} onChange={(value) => setAssignment((current) => ({ ...current, [item.media_id]: Number(value) }))} data={buckets.map((_, index) => ({ value: String(index + 1), label: `Encounter ${index + 1}` }))} />}
+        {mode === "multiple" && !item.excluded && !item.finalized_encounter && <Select mt="xs" label="Event" value={String(Math.min(encounterCount, Number(assignment[item.media_id] || (usable.findIndex((candidate) => candidate.media_id === item.media_id) % encounterCount) + 1)))} onChange={(value) => setAssignment((current) => ({ ...current, [item.media_id]: Number(value) }))} data={buckets.map((_, index) => ({ value: String(index + 1), label: `Event ${index + 1}` }))} />}
       </Card>)}
     </SimpleGrid>
-    {!validBuckets && usable.length > 0 && <Text size="sm" c="red">Each Encounter needs a photo with a detected face. Adjust the allocations or Encounter count.</Text>}
-    <Group justify="flex-end"><Button onClick={confirm} loading={busy} disabled={!usable.length || !validBuckets || (mode === "multiple" && encounterCount < 2)}>Confirm Encounter grouping</Button></Group>
+    {!validBuckets && usable.length > 0 && <Text size="sm" c="red">Each Event needs a photo with a detected face. Adjust the allocations or Event count.</Text>}
+    <Group justify="flex-end"><Button onClick={confirm} loading={busy} disabled={!usable.length || !validBuckets || (mode === "multiple" && encounterCount < 2)}>Confirm Event grouping</Button></Group>
   </Stack>;
 }
 
@@ -353,18 +353,18 @@ function EncounterRelations({ review, onDecide, onComplete, onDiscard }) {
   const candidates = review.relation_candidates || [];
   const complete = candidates.every((item) => decisions.has(`${item.first_ref}|${item.second_ref}`));
   return <Stack gap="md">
-    <Box><Title order={2} size="h3">Review Relations</Title><Text size="sm" c="dimmed">{decisions.size} of {candidates.length} pairs decided. Choose which confirmed participant pairs this Encounter supports.</Text></Box>
-    {candidates.length === 0 && <Card withBorder>{review.target_observation_id ? "No new participant pairs need a decision. Existing Encounter Relations are retained." : "Only one effective participant. There are no pairs to decide."}</Card>}
+    <Box><Title order={2} size="h3">Review Relations</Title><Text size="sm" c="dimmed">{decisions.size} of {candidates.length} pairs decided. Choose which confirmed participant pairs this Event supports.</Text></Box>
+    {candidates.length === 0 && <Card withBorder>{review.target_observation_id ? "No new participant pairs need a decision. Existing Event Relations are retained." : "Only one effective participant. There are no pairs to decide."}</Card>}
     {candidates.map((candidate) => {
       const key = `${candidate.first_ref}|${candidate.second_ref}`;
       return <Card withBorder key={key}>
         <Group justify="space-between" align="center">
-          <Box><Text fw={700}>{candidate.first_name} ↔ {candidate.second_name}</Text><Text size="xs" c="dimmed">{candidate.support === "SHARED_FRAME" ? "Shared frame" : "Same Encounter only"}</Text></Box>
+          <Box><Text fw={700}>{candidate.first_name} ↔ {candidate.second_name}</Text><Text size="xs" c="dimmed">{candidate.support === "SHARED_FRAME" ? "Shared frame" : "Same Event only"}</Text></Box>
           <Group><Button aria-pressed={decisions.get(key) === "INCLUDE"} leftSection={decisions.get(key) === "INCLUDE" ? <IconCheck size={16} /> : null} variant={decisions.get(key) === "INCLUDE" ? "filled" : "outline"} onClick={() => onDecide(candidate.first_ref, candidate.second_ref, "INCLUDE")}>Include</Button><Button aria-pressed={decisions.get(key) === "EXCLUDE"} leftSection={decisions.get(key) === "EXCLUDE" ? <IconCheck size={16} /> : null} color="red" variant={decisions.get(key) === "EXCLUDE" ? "filled" : "outline"} onClick={() => onDecide(candidate.first_ref, candidate.second_ref, "EXCLUDE")}>Exclude</Button></Group>
         </Group>
       </Card>;
     })}
-    <Group justify="flex-end"><Button variant="light" color="red" onClick={onDiscard}>Discard Encounter</Button><Button disabled={!complete} onClick={onComplete}>Complete Review</Button></Group>
+    <Group justify="flex-end"><Button variant="light" color="red" onClick={onDiscard}>Discard Event</Button><Button disabled={!complete} onClick={onComplete}>Complete Review</Button></Group>
   </Stack>;
 }
 
@@ -585,12 +585,12 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
                     </Group>
                   </Card>
                 );
-              }) : <EmptyCard text={skippedGroups.length ? "Deferred groups return automatically once the other groups are decided, or review them now." : "No groups match this filter."} />}
+              }) : <EmptyCard text={skippedGroups.length ? "Skipped groups come back after the other groups are decided, or review them now." : "No groups match this filter."} />}
             </Stack>
           </Box>
           <Group justify="space-between" gap="sm">
-            <Text size="sm" c="dimmed">Showing {visibleGroups.length} of {pendingGroups.length} pending groups{skippedGroups.length ? ` · ${skippedGroups.length} deferred` : ""}</Text>
-            {encounterReview && skippedGroups.length > 0 && <Button size="xs" variant="default" leftSection={<IconRefresh size={15} />} onClick={onResumeSkipped}>Review deferred now ({skippedGroups.length})</Button>}
+            <Text size="sm" c="dimmed">Showing {visibleGroups.length} of {pendingGroups.length} pending groups{skippedGroups.length ? ` · ${skippedGroups.length} skipped` : ""}</Text>
+            {encounterReview && skippedGroups.length > 0 && <Button size="xs" variant="default" leftSection={<IconRefresh size={15} />} onClick={onResumeSkipped}>Review skipped now ({skippedGroups.length})</Button>}
           </Group>
         </>
       )}
@@ -1133,7 +1133,7 @@ function QueueSuggestedMatch({ best, weakMatch, manual, onBrowse, onCompare }) {
               </Group>
             </Group>
             <Text size="xs" c="dimmed" mt={4}>
-              {best ? (best.draft ? "Pending Person in this Encounter" : "Existing person in People") : weakMatch ? "The closest result did not meet the matching threshold." : "No candidate was found in People."}
+              {best ? (best.draft ? "Pending Person in this Event" : "Existing person in People") : weakMatch ? "The closest result did not meet the matching threshold." : "No candidate was found in People."}
             </Text>
           </Box>
           {best && !best.draft && <Button variant="default" fullWidth leftSection={<IconArrowsHorizontal size={17} />} onClick={onCompare}>View reference photos</Button>}

@@ -146,10 +146,10 @@ def _review_photos(page, tmp):
     page.get_by_role("tab", name="Review photos", exact=True).click()
     inputs = page.locator("input[type=file][multiple]:not([webkitdirectory])")
     inputs.first.set_input_files([str(_image(tmp / f"queue-{seed}.png", seed)) for seed in (11, 12, 13)])
-    page.get_by_role("button", name="Confirm Encounter grouping").wait_for()
-    page.get_by_role("button", name="One Encounter").click()
-    page.get_by_role("button", name="Confirm Encounter grouping").click()
-    expect(page.get_by_text("Encounter 1 of 1")).to_be_visible()
+    page.get_by_role("button", name="Confirm Event grouping").wait_for()
+    page.get_by_role("button", name="One Event").click()
+    page.get_by_role("button", name="Confirm Event grouping").click()
+    expect(page.get_by_text("Event 1 of 1")).to_be_visible()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(4000)
     page.get_by_role("button", name="Review", exact=True).first.click()
@@ -177,7 +177,7 @@ def _review_photos(page, tmp):
 
     page.get_by_role("button", name="Review", exact=True).first.click()
     page.get_by_role("button", name="Skip for now").click()
-    resume = page.get_by_role("button", name="Review deferred now (1)")
+    resume = page.get_by_role("button", name="Review skipped now (1)")
     expect(resume).to_be_visible()
     expect(page.get_by_role("button", name="Continue to Relations")).to_be_disabled()
     _shot(page, "04-queue-deferred")
@@ -192,7 +192,7 @@ def _review_photos(page, tmp):
         expect(page.get_by_text(f"{resolved} of 3 faces resolved")).to_be_visible()
     page.get_by_role("button", name="Continue to Relations").click()
     page.get_by_role("button", name="Complete Review").click()
-    expect(page.get_by_text("Encounter finalized")).to_be_visible()
+    expect(page.get_by_text("Event finalized")).to_be_visible()
     _shot(page, "05-queue-completed")
 
 
@@ -213,7 +213,7 @@ def _saved_location_suggestions(page):
 def _correction_feedback(page):
     page.get_by_role("tab", name="Events", exact=True).click()
     page.locator(".encounter-list-row").first.click()
-    correct = page.get_by_role("button", name="Correct Encounter", exact=True)
+    correct = page.get_by_role("button", name="Correct Event", exact=True)
     correct.click()
     dialog = page.get_by_role("dialog").filter(has=page.get_by_label("Event / occasion"))
     dialog.get_by_role("button", name="Save correction").click()
@@ -224,10 +224,10 @@ def _correction_feedback(page):
     _field(dialog, "Event / occasion").fill("Corrected smoke occasion")
     dialog.get_by_role("button", name="Save correction").click()
     dialog.wait_for(state="hidden")
-    expect(page.get_by_text("Encounter details corrected")).to_be_visible()
+    expect(page.get_by_text("Event details corrected")).to_be_visible()
     expect(page.get_by_role("heading", name="Corrected smoke occasion")).to_be_visible()
     page.get_by_text("Correction and provenance history").click()
-    assert page.get_by_text("Encounter interpretation reviewed").count() == 0
+    assert page.get_by_text("Event interpretation reviewed").count() == 0
     _shot(page, "05b-correction-feedback")
 
 
@@ -273,7 +273,7 @@ def test_discard_session_asks_first_and_stays_until_confirmed(app):
     page.get_by_role("tab", name="Review photos", exact=True).click()
     inputs = page.locator("input[type=file][multiple]:not([webkitdirectory])")
     inputs.first.set_input_files([str(_image(tmp / f"discard-{seed}.png", seed)) for seed in (61, 62)])
-    page.get_by_role("button", name="Confirm Encounter grouping").wait_for()
+    page.get_by_role("button", name="Confirm Event grouping").wait_for()
     discard = page.get_by_role("button", name="Discard session", exact=True)
     discard.click()
     dialog = page.get_by_role("dialog", name="Discard this session?")
@@ -533,13 +533,13 @@ def test_nested_folder_upload_suggests_one_encounter_per_subfolder(app):
         _image(target, seed)
     page.get_by_role("tab", name="Review photos", exact=True).click()
     page.locator("input[type=file][webkitdirectory]").set_input_files(str(tmp / "folder" / "Trip"))
-    page.get_by_role("button", name="Confirm Encounter grouping").wait_for()
+    page.get_by_role("button", name="Confirm Event grouping").wait_for()
     suggest = page.get_by_role("button", name="Suggest grouping")
     expect(suggest).to_be_enabled()
     expect(page.get_by_text("Suggestions need distinct uploaded subfolders")).to_have_count(0)
     suggest.click()
-    expect(page.get_by_text("Encounter 1: 2 photos")).to_be_visible()
-    expect(page.get_by_text("Encounter 2: 1 photo", exact=True)).to_be_visible()
+    expect(page.get_by_text("Event 1: 2 photos")).to_be_visible()
+    expect(page.get_by_text("Event 2: 1 photo", exact=True)).to_be_visible()
     _shot(page, "53-nested-suggested")
     assert errors == []
 

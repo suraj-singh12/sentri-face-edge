@@ -91,7 +91,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
       loadEncounterDetail: appData.loadEncounterDetail,
       closeEncounterDetail: appData.closeEncounterDetail,
       correctEncounter: async (detail, changes) => {
-        const subject = changes.event_details ? "Encounter details" : changes.participant_correction ? "Participants" : "Relations";
+        const subject = changes.event_details ? "Event details" : changes.participant_correction ? "Participants" : "Relations";
         let result;
         try {
           result = await api.apiPost("/api/encounter-correct", { observation_id: detail.observation_id, expected_revision: detail.revision, ...changes }, { silent: true });
@@ -101,7 +101,7 @@ export function useSentriFaceController({ capabilities = [] } = {}) {
           }
           throw error;
         }
-        api.showToast("The correction was saved and added to the Encounter history.", "teal", { title: `${subject} corrected` });
+        api.showToast("The correction was saved and added to the Event history.", "teal", { title: `${subject} corrected` });
         await people.actions.invalidatePersonGraph(result);
         return result;
       },

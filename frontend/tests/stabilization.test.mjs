@@ -73,7 +73,7 @@ test("Event popup confirms before person resolution and keeps person fields", ()
     assert.ok(personForm.includes(field), field);
   }
   assert.doesNotMatch(personForm, /label="Added by"/);
-  assert.match(personForm, /Inherited Encounter/);
+  assert.match(personForm, /Inherited Event/);
   assert.doesNotMatch(personForm, /<TextInput[^>]*label="Date"/);
   assert.doesNotMatch(personForm, /<Textarea label="Event notes"/);
 });
@@ -124,7 +124,7 @@ test("Encounter grouping precedes identity cards and permits valid photos beside
   assert.match(queue, /encounterMedia\.length > 0 && encounterReviews\.length === 0 && !\["running", "cancelling"\]/);
   assert.match(queue, /NumberInput label="How many\?"/);
   assert.match(queue, /const canSuggest = folders\.length > 1/);
-  assert.match(queue, /title=\{canSuggest \? "Suggest Encounters from the uploaded folder structure"/);
+  assert.match(queue, /title=\{canSuggest \? "Suggest Events from the uploaded folder structure"/);
   assert.match(queue, /data-conflict=\{Boolean\(item\.finalized_encounter\)/);
   assert.match(queue, /aria-label=\{`Leave photo/);
   assert.match(queue, /const usable = ordered\.filter\(\(item\) => !item\.excluded && !item\.finalized_encounter\)/);

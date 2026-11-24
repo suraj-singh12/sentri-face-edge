@@ -15,10 +15,10 @@ function render(props={}) {
 }
 test('shared reference bootstrap requires cropped-image instruction and explicit context declaration',()=>{
  const html=render({startAdding:true});
- assert.match(html,/No reliable Encounter context is available/);
+ assert.match(html,/No reliable Event context is available/);
  assert.match(html,/cropped image containing only this person/);
  assert.match(html,/Do not upload group or scene photographs/);
- assert.match(html,/no Encounter, sighting, recurrence, relationship or Event history/);
+ assert.match(html,/no Event, sighting, recurrence or relationship history/);
  assert.match(html,/Select cropped Reference image/);
  assert.match(html,/disabled=""/);
 });

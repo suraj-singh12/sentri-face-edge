@@ -6,7 +6,7 @@ const source = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url)
 
 test('encounter corrections report success and failure with toasts', () => {
   const controller = source('hooks/useSentriFaceController.js');
-  assert.match(controller, /const subject = changes\.event_details \? "Encounter details" : changes\.participant_correction \? "Participants" : "Relations";/);
+  assert.match(controller, /const subject = changes\.event_details \? "Event details" : changes\.participant_correction \? "Participants" : "Relations";/);
   assert.match(controller, /apiPost\("\/api\/encounter-correct", [^\n]*\{ silent: true \}\)/);
   assert.match(controller, /showToast\(error\?\.message \|\| "The correction was not saved\.", "red", \{ title: `\$\{subject\} not corrected` \}\)/);
   assert.match(controller, /showToast\("The correction was saved[^"]*", "teal", \{ title: `\$\{subject\} corrected` \}\)/);

@@ -23,8 +23,8 @@ Associations shows one active standing Manual Association after aliases merge. R
 
 ## Batch 3.5 behavior clarifications
 
-- **Check a photo:** Skip displays Deferred and stays unresolved across refresh/restart; Discard is final negative; accepted-existing/new are final positive. Only final decisions permit completion, with at least one accepted participant. Add Face uses the explicitly chosen existing Person and the standalone enrollment command, preserves quality/origin, and creates no Encounter.
-- **Review photos:** “remaining” is actionable pending groups, excluding removed or already-finalized media. Background restoration/group refresh cannot replace newer selection/Event editing. A deferred group remains distinct from accepted/discarded work.
+- **Check a photo:** Skip for now displays Skipped and stays unresolved across refresh/restart; Discard is final negative; accepted-existing/new are final positive. Only final decisions permit completion, with at least one accepted participant. Add Face uses the explicitly chosen existing Person and the standalone enrollment command, preserves quality/origin, and creates no Encounter.
+- **Review photos:** “remaining” is actionable pending groups, excluding removed or already-finalized media. Background restoration/group refresh cannot replace newer selection/Event editing. A skipped group (“Skip for now”) remains distinct from accepted/discarded work.
 - **People:** Archived cards open their historical profile when `VIEW_HISTORY` permits it. **Delete Person** (available directly on active people, typed `DELETE`, safety backup first) is a soft delete: the person moves to **Bin**, listed below Archived, with photos, sightings, relationships and history retained. Archived shows only ARCHIVED people; Bin shows only DELETED people. Bin cards never open a profile but offer **Restore**, which returns the person to Active like restoring from Archived (`identity.restore` journals the previous status). Restore remains restricted by existing backend capability. Merged cards and historical graph nodes remain distinct. Deleted Faces is the separate face-level 30-day retention collection. Associated people counts unique effective counterparts, not evidence/direction groups.
 - **Events / People / Graph / World:** successful domain mutations reconcile retained current read models from the backend; raw correction and alias history remains provenance. Shared frame support comes from effective Encounter media, not row order.
 - **Settings:** admitted source ONNX running status and packaged OS-boundary verification are separate facts. Explicit eligible Linux source development can configure normal encrypted recovery without an OS keyring; production and macOS/Windows custody are unchanged.
@@ -105,7 +105,7 @@ Associations explains independent evidence and opens Person Graph. Add Associati
 | Term | Meaning and boundary |
 | --- | --- |
 | Attach Media | Review additional photographs as evidence of the existing Encounter. Requires `add`; finalization preserves the occurrence ID and does not increment recurrence. |
-| Correct Encounter | Revise occurrence metadata and selected Event Note IDs; requires `destroy`. Original values remain history. |
+| Correct Event | Revise occurrence metadata and selected Event Note IDs; requires `destroy`. Original values remain history. |
 | Participant Correction | Reassign, remove or add effective attendance under `destroy`. Original assignments remain; newly affected pairs require explicit Relations. |
 | Relation Correction | Deliberately revise INCLUDE/EXCLUDE under `destroy`; evidence and graph update atomically without changing attendance. |
 | Manual Association | Standing independent Person↔Person assertion; create/retire requires `add`, not merely view access. It is neither attendance nor a note reference. |
