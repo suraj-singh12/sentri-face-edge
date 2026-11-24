@@ -27,7 +27,7 @@ import {
 } from "@tabler/icons-react";
 
 import { SafeImage } from "../components/Shared.jsx";
-import { mediaUrl } from "../utils.js";
+import { formatEventDate, mediaUrl } from "../utils.js";
 
 const CLUSTER_COLLECTIONS = [
   { label: "Members", value: "MEMBERS" },
@@ -232,7 +232,7 @@ function ClusterRelationships({ relationships, page, selected, onSelect }) {
               <Text component="span" size="10px">{Object.entries(relationship.evidence_type_counts).map(([type, count]) => `${humanize(type)} ${count}`).join(" · ")}</Text>
             </span>
             <Metric value={relationship.evidence_count} label="evidence" />
-            <Box ta="right" className="world-cluster-occurrence"><Text size="10px" c="dimmed">Last {formatDate(relationship.last_occurrence_at)}</Text><Text size="10px" c="dimmed">{humanize(relationship.strength_basis)}</Text></Box>
+            <Box ta="right" className="world-cluster-occurrence"><Text size="10px" c="dimmed">Last {formatEventDate(relationship.last_occurrence_at)}</Text><Text size="10px" c="dimmed">{humanize(relationship.strength_basis)}</Text></Box>
           </button>
         ))}
       </Stack>
@@ -254,7 +254,7 @@ function ClusterExplanation({ summary, effectiveFilters }) {
       <Divider />
       <InspectorRow label="Ranking context" value={summary.ranking.reason} />
       <InspectorRow label="Grouping method" value={humanize(summary.grouping_algorithm)} />
-      <InspectorRow label="Occurrence" value={`${formatDate(explanation.first_occurrence_at)} – ${formatDate(explanation.last_occurrence_at)}`} />
+      <InspectorRow label="Occurrence" value={`${formatEventDate(explanation.first_occurrence_at)} – ${formatEventDate(explanation.last_occurrence_at)}`} />
       <InspectorRow label="Effective scope" value={effectiveScopeLabel(effectiveFilters)} />
       <FactorRows title="Factual factors" factors={explanation.factual_factors} />
       <FactorRows title="Strongest qualifying factors" factors={explanation.strongest_factors} />
@@ -299,8 +299,8 @@ function ClusterSelectionInspector({ item, onOpenPerson }) {
       <InspectorRow label="Evidence count" value={relationship.evidence_count} />
       <InspectorRow label="Evidence types" value={Object.entries(relationship.evidence_type_counts).map(([type, count]) => `${humanize(type)} ${count}`).join(", ")} />
       <InspectorRow label="Strength basis" value={humanize(relationship.strength_basis)} />
-      <InspectorRow label="First occurrence" value={formatDate(relationship.first_occurrence_at)} />
-      <InspectorRow label="Last occurrence" value={formatDate(relationship.last_occurrence_at)} />
+      <InspectorRow label="First occurrence" value={formatEventDate(relationship.first_occurrence_at)} />
+      <InspectorRow label="Last occurrence" value={formatEventDate(relationship.last_occurrence_at)} />
       <FactorRows title="Factual factors" factors={explanation.factual_factors} />
       <Box className="world-limitations"><Text size="xs" fw={700}>Limitations</Text>{explanation.limitations.map((limitation) => <Text key={limitation} size="xs" c="dimmed">{limitation}</Text>)}</Box>
       <Text size="10px" c="dimmed">Evidence navigation remains reserved for a later P10-F phase.</Text>
@@ -324,7 +324,7 @@ function Metric({ value, label }) {
 function effectiveScopeLabel(filters = {}) {
   const parts = [];
   if (filters.recent_activity) parts.push(humanize(filters.recent_activity));
-  else if (filters.date_from || filters.date_to) parts.push(`${formatDate(filters.date_from) || "Start"} to ${formatDate(filters.date_to) || "Now"}`);
+  else if (filters.date_from || filters.date_to) parts.push(`${(filters.date_from ? formatEventDate(filters.date_from) : "Start")} to ${(filters.date_to ? formatEventDate(filters.date_to) : "Now")}`);
   else parts.push("All recorded time");
   if (filters.locations?.length) parts.push(filters.locations.join(", "));
   parts.push(`${humanize(filters.missing_location || "INCLUDE")} missing locations`);
@@ -352,8 +352,3 @@ function shortId(value) {
   return text.length > 18 ? `${text.slice(0, 9)}…${text.slice(-6)}` : text;
 }
 
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}

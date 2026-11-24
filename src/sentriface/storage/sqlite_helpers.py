@@ -1541,6 +1541,10 @@ def _graph_read_components(
         )
         if not _graph_time_matches(occurrence_at, start, end):
             continue
+        dated_at = (
+            _optional_text(observation["observed_at"]) if observation is not None
+            else str(row["created_at"])
+        )
         if filters.location:
             if observation is None:
                 continue
@@ -1554,7 +1558,7 @@ def _graph_read_components(
         aggregate = aggregates.setdefault(pair, {
             "items": [], "types": {}, "relationships": {}, "sources": set(),
             "directions": {}, "note_directions": {}, "encounters": set(),
-            "latest_encounter": None, "first": occurrence_at, "last": occurrence_at,
+            "latest_encounter": None, "first": None, "last": None,
         })
         aggregate["items"].append(row)
         evidence_type = str(row["evidence_type"])
@@ -1574,12 +1578,14 @@ def _graph_read_components(
         if evidence_type == "CO_OBSERVED" and observation is not None:
             aggregate["encounters"].add(str(row["source_entity_id"]))
             latest = aggregate["latest_encounter"]
-            if latest is None or _graph_occurrence_datetime(occurrence_at) > _graph_occurrence_datetime(latest):
-                aggregate["latest_encounter"] = occurrence_at
-        if _graph_occurrence_datetime(occurrence_at) < _graph_occurrence_datetime(str(aggregate["first"])):
-            aggregate["first"] = occurrence_at
-        if _graph_occurrence_datetime(occurrence_at) > _graph_occurrence_datetime(str(aggregate["last"])):
-            aggregate["last"] = occurrence_at
+            if dated_at and (latest is None or _graph_occurrence_datetime(dated_at) > _graph_occurrence_datetime(latest)):
+                aggregate["latest_encounter"] = dated_at
+        if dated_at:
+            first, last = aggregate["first"], aggregate["last"]
+            if first is None or _graph_occurrence_datetime(dated_at) < _graph_occurrence_datetime(str(first)):
+                aggregate["first"] = dated_at
+            if last is None or _graph_occurrence_datetime(dated_at) > _graph_occurrence_datetime(str(last)):
+                aggregate["last"] = dated_at
         scoped_people.update((source_id, target_id))
 
     if start or end or filters.location:
@@ -1619,8 +1625,8 @@ def _graph_read_components(
             relationship_strength=evidence_count,
             evidence_count=evidence_count,
             evidence_types=evidence_types,
-            first_occurrence_at=str(aggregate["first"]),
-            last_occurrence_at=str(aggregate["last"]),
+            first_occurrence_at=aggregate["first"],
+            last_occurrence_at=aggregate["last"],
             directionality=directionality,
             relationship_types=relationship_types,
             relationship_type_summary=(
@@ -2270,6 +2276,7 @@ def _list_person_sightings(
             raw_participant_person_ids=raw_ids,
             effective_participant_person_ids=effective_ids,
             correction_operation_ids=correction_ids,
+            date_recorded=bool(_optional_text(row["observed_at"])),
         ))
     return sightings
 
@@ -2288,15 +2295,16 @@ def _presence_analytics(sightings: list[Sighting]) -> PresenceAnalytics:
             ),
         )
     ordered = sorted(sightings, key=lambda item: (item.observed_at, item.observation_id))
-    first_seen_at = ordered[0].observed_at
-    last_seen_at = ordered[-1].observed_at
+    dated = [item for item in ordered if item.date_recorded]
+    first_seen_at = dated[0].observed_at if dated else None
+    last_seen_at = dated[-1].observed_at if dated else None
     try:
         first = datetime.fromisoformat(first_seen_at.replace("Z", "+00:00"))
         last = datetime.fromisoformat(last_seen_at.replace("Z", "+00:00"))
         active_days = max(1.0, (last - first).total_seconds() / 86_400 + 1)
-    except (TypeError, ValueError):
+    except (AttributeError, TypeError, ValueError):
         active_days = 30.0
-    frequency = round(len(ordered) / max(1.0, active_days / 30.0), 3)
+    frequency = round(len(dated or ordered) / max(1.0, active_days / 30.0), 3)
     if frequency >= 8:
         frequency_label = "Very Frequent"
     elif frequency >= 3:

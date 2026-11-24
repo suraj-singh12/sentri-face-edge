@@ -37,6 +37,7 @@ import {
   IconWorld,
 } from "@tabler/icons-react";
 
+import { formatEventDate } from "../utils.js";
 import { EMPTY_WORLD_FILTERS, worldPageFor, worldRetainedHierarchyIsCurrent } from "../utils/world.js";
 import { ClusterDrilldownView } from "./ClusterDrilldownView.jsx";
 import { WorldPersonDrilldownView } from "./WorldPersonDrilldownView.jsx";
@@ -497,7 +498,7 @@ function RelationshipList({ relationships, onInspect, selected }) {
         <Text component="span" size="10px" c="dimmed">{relationship.relationship_types.map(humanize).join(", ") || "Typed relationship"} · {humanize(relationship.directionality)}</Text>
       </span>
       <Metric value={relationship.evidence_count} label="evidence" />
-      <Text size="10px" c="dimmed">{formatDate(relationship.last_occurrence_at)}</Text>
+      <Text size="10px" c="dimmed">{formatEventDate(relationship.last_occurrence_at)}</Text>
     </button>
   ))}</Stack>;
 }
@@ -543,8 +544,8 @@ function WorldInspector({ item, onOpenPerson }) {
       {item.type === "pattern" ? <InspectorRow label="Measurements" value={formatFactorValue(value.metrics)} /> : null}
       {value.ranking?.rank_position ? <InspectorRow label="Rank" value={value.ranking.rank_position} /> : null}
       {explanation.evidence_count !== null && explanation.evidence_count !== undefined ? <InspectorRow label="Evidence items" value={explanation.evidence_count} /> : null}
-      {explanation.first_occurrence_at ? <InspectorRow label="First occurrence" value={formatDate(explanation.first_occurrence_at)} /> : null}
-      {explanation.last_occurrence_at ? <InspectorRow label="Last occurrence" value={formatDate(explanation.last_occurrence_at)} /> : null}
+      {explanation.first_occurrence_at ? <InspectorRow label="First occurrence" value={formatEventDate(explanation.first_occurrence_at)} /> : null}
+      {explanation.last_occurrence_at ? <InspectorRow label="Last occurrence" value={formatEventDate(explanation.last_occurrence_at)} /> : null}
       <ExplanationFactors title="Factual factors" factors={explanation.factual_factors} />
       <ExplanationFactors title="Derived calculation" factors={explanation.derived_factors} />
       {explanation.method ? <InspectorRow label="Method" value={humanize(explanation.method)} /> : null}
@@ -603,7 +604,7 @@ function advancedFilterCount(filters) {
 function effectiveScopeLabel(filters = {}) {
   const parts = [];
   if (filters.recent_activity) parts.push(humanize(filters.recent_activity));
-  else if (filters.date_from || filters.date_to) parts.push(`${formatDate(filters.date_from) || "Start"} to ${formatDate(filters.date_to) || "Now"}`);
+  else if (filters.date_from || filters.date_to) parts.push(`${(filters.date_from ? formatEventDate(filters.date_from) : "Start")} to ${(filters.date_to ? formatEventDate(filters.date_to) : "Now")}`);
   else parts.push("All recorded time");
   if (filters.locations?.length) parts.push(filters.locations.join(", "));
   parts.push(`${humanize(filters.missing_location || "INCLUDE")} missing locations`);
@@ -640,11 +641,6 @@ function shortId(value) {
   return text.length > 16 ? `${text.slice(0, 8)}…${text.slice(-5)}` : text;
 }
 
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
 
 function formatDateTime(value) {
   if (!value) return "Snapshot time unavailable";

@@ -542,3 +542,119 @@ def test_nested_folder_upload_suggests_one_encounter_per_subfolder(app):
     expect(page.get_by_text("Encounter 2: 1 photo", exact=True)).to_be_visible()
     _shot(page, "53-nested-suggested")
     assert errors == []
+
+
+TOAST = ".sentriface-toast-stack[data-position='top-right'] .mantine-Notification-root"
+TOAST_KEY = "sentriface.toastPosition.v1"
+
+
+def _clear_toasts(page):
+    page.evaluate("() => document.querySelectorAll('.sentriface-toast-stack .mantine-Notification-closeButton').forEach(b => b.click())")
+    expect(page.locator(TOAST)).to_have_count(0)
+
+
+def _refresh_toast(page):
+    page.get_by_role("button", name="Refresh", exact=True).click()
+    toast = page.locator(TOAST).filter(has_text="App data refreshed")
+    expect(toast).to_have_count(1)
+    page.wait_for_timeout(400)
+    return toast.bounding_box()
+
+
+def _overlaps(a, b):
+    return a["x"] < b["x"] + b["width"] and a["x"] + a["width"] > b["x"] and a["y"] < b["y"] + b["height"] and a["y"] + a["height"] > b["y"]
+
+
+def _assert_dialog_buttons_uncovered(page, dialog, room=True):
+    """With room the stack moves clear of the dialog; without room the dialog is drawn above it."""
+    expect(dialog).to_be_visible()
+    page.wait_for_timeout(400)
+    buttons = dialog.get_by_role("button")
+    toasts = page.locator(TOAST)
+    assert toasts.count() >= 1
+    for index in range(buttons.count()):
+        button = buttons.nth(index)
+        box = button.bounding_box()
+        if not box:
+            continue
+        name = button.get_attribute("aria-label") or button.inner_text()
+        if room:
+            for toast_index in range(toasts.count()):
+                assert not _overlaps(box, toasts.nth(toast_index).bounding_box()), name
+        assert button.evaluate("""b => {
+            const r = b.getBoundingClientRect();
+            const points = [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]];
+            return points.every(([x, y]) => b.contains(document.elementFromPoint(r.x + r.width * x, r.y + r.height * y)));
+        }"""), name
+
+
+def _fail_password_change(page, times):
+    page.get_by_role("button", name="Open account menu").click()
+    page.get_by_role("menuitem", name="Change password").click()
+    dialog = page.get_by_role("dialog", name="Change password")
+    _field(dialog, "Current password").fill("wrong-password-1")
+    _field(dialog, "New password").fill("Another-password-123")
+    _field(dialog, "Confirm new password").fill("Another-password-123")
+    for _ in range(times):
+        dialog.get_by_role("button", name="Change password").click()
+        page.wait_for_timeout(500)
+    return dialog
+
+
+def test_toasts_move_are_remembered_reset_and_never_cover_dialog_buttons(app):
+    page, errors, _tmp, _server = app
+    _sign_up(page)
+    _clear_toasts(page)
+    width = page.viewport_size["width"]
+    reset = page.get_by_role("button", name="Move messages back to the top right")
+
+    home = _refresh_toast(page)
+    assert abs(home["x"] + home["width"] - (width - 16)) <= 2 and home["y"] < 140, home
+    expect(reset).to_have_count(0)
+
+    page.mouse.move(home["x"] + 60, home["y"] + home["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(width / 2, 430, steps=12)
+    page.mouse.up()
+    moved = page.locator(TOAST).first.bounding_box()
+    assert abs(moved["x"] - (width / 2 - 60)) <= 4 and abs(moved["y"] - (430 - moved["height"] / 2)) <= 4, moved
+    assert page.evaluate(f"() => localStorage.getItem('{TOAST_KEY}')")
+    expect(reset).to_have_count(1)
+    _clear_toasts(page)
+
+    page.reload()
+    page.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+    _clear_toasts(page)
+    again = _refresh_toast(page)
+    assert abs(again["x"] - moved["x"]) <= 4 and abs(again["y"] - moved["y"]) <= 60, (again, moved)
+    expect(reset).to_have_count(1)
+    _clear_toasts(page)
+
+    # The saved spot is where the dialog opens; the stack must make way for its buttons.
+    dialog = _fail_password_change(page, 3)
+    _assert_dialog_buttons_uncovered(page, dialog)
+    expect(reset).to_have_count(0)
+    _shot(page, "58-dialog-moved-stack")
+    page.keyboard.press("Escape")
+    expect(dialog).to_have_count(0)
+    _clear_toasts(page)
+
+    _refresh_toast(page)
+    reset.first.click()
+    expect(reset).to_have_count(0)
+    assert page.evaluate(f"() => localStorage.getItem('{TOAST_KEY}')") is None
+    page.wait_for_timeout(400)
+    back = page.locator(TOAST).first.bounding_box()
+    assert abs(back["x"] + back["width"] - (width - 16)) <= 2 and back["y"] < 140, back
+    _clear_toasts(page)
+
+    dialog = _fail_password_change(page, 5)
+    _assert_dialog_buttons_uncovered(page, dialog)
+    page.keyboard.press("Escape")
+
+    page.set_viewport_size({"width": 390, "height": 844})
+    _clear_toasts(page)
+    dialog = _fail_password_change(page, 3)
+    _assert_dialog_buttons_uncovered(page, dialog, room=False)
+    _shot(page, "58-dialog-narrow")
+    assert errors == []

@@ -4535,3 +4535,42 @@ button.encounter-list-row:hover { background: var(--mantine-color-default-hover)
     flex-shrink: 0;
   }
 }
+
+/* Toasts sit above a dialog's dimmed backdrop but below the dialog itself. */
+html[data-toast-layers="1"] :is(.mantine-Modal-overlay, .mantine-Drawer-overlay) {
+  z-index: calc(var(--overlay-z-index, 200) - 1) !important;
+}
+
+.sentriface-toast-stack {
+  pointer-events: none;
+}
+
+.sentriface-toast-stack:not([data-position="top-right"]) {
+  display: none;
+}
+
+.sentriface-toast-stack > * {
+  pointer-events: auto;
+}
+
+.sentriface-toast-stack .mantine-Notification-root {
+  cursor: grab;
+  touch-action: none;
+}
+
+.sentriface-toast-stack[data-dragging] .mantine-Notification-root {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.sentriface-toast-stack .mantine-Notification-body:has(.sentriface-toast-reset) {
+  position: relative;
+  padding-right: 32px;
+}
+
+.sentriface-toast-reset {
+  position: absolute;
+  top: calc(50% - 14px);
+  right: 0;
+  cursor: pointer;
+}

@@ -18,6 +18,7 @@ from urllib.parse import parse_qs
 from sentriface.api_serializers import embedding_record_payload
 from sentriface.backup_service import BackupRecord
 from sentriface.engine import FaceEngine
+from sentriface.storage.sqlite_world import _world_event_time
 from sentriface.logging_config import sanitize_log_details
 from sentriface.models import (
     EmbeddingRecord,
@@ -764,7 +765,7 @@ def _observation_record(observation: Observation) -> dict[str, Any]:
 
 def _sighting_record(sighting: Sighting) -> dict[str, Any]:
     observed_at = sighting.observed_at
-    date, separator, time = observed_at.partition("T")
+    event_time = _world_event_time(observed_at if sighting.date_recorded else None, sighting.context)
     media = [
         {
             "media_id": item.media_id,
@@ -779,8 +780,10 @@ def _sighting_record(sighting: Sighting) -> dict[str, Any]:
         "observation_id": sighting.observation_id,
         "canonical_person_id": sighting.canonical_person_id,
         "observed_at": observed_at,
-        "date": date,
-        "time": time if separator else "",
+        "date": event_time["date"] or "",
+        "time": event_time["start_time"] or "",
+        "end_time": event_time["end_time"] or "",
+        "time_precision": event_time["time_precision"],
         "location": sighting.location,
         "place_seen": sighting.location or "",
         "context": sighting.context,

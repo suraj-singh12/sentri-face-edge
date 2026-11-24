@@ -29,7 +29,7 @@ import {
 } from "@tabler/icons-react";
 
 import { SafeImage } from "../components/Shared.jsx";
-import { mediaUrl } from "../utils.js";
+import { formatEventDate, formatOccurrence, mediaUrl } from "../utils.js";
 
 const PERSON_COLLECTIONS = [
   { label: "Relationships", value: "RELATIONSHIPS" },
@@ -194,7 +194,7 @@ function PersonRelationships({ root, people, relationships, page, selected, onSe
             <Text component="span" size="10px">{Object.entries(relationship.evidence_type_counts).map(([type, count]) => `${humanize(type)} ${count}`).join(" · ")}</Text>
           </span>
           <Metric value={relationship.evidence_count} label="evidence" />
-          <Box ta="right" className="world-person-neighbor-state"><Text size="10px" c="dimmed">Last {formatDate(relationship.last_occurrence_at)}</Text><Text size="10px" c="dimmed">{humanize(relationship.strength_basis)}</Text><Text size="10px" c="dimmed">Neighbor analytics {humanize(neighbor.analytics_state)}</Text></Box>
+          <Box ta="right" className="world-person-neighbor-state"><Text size="10px" c="dimmed">Last {formatEventDate(relationship.last_occurrence_at)}</Text><Text size="10px" c="dimmed">{humanize(relationship.strength_basis)}</Text><Text size="10px" c="dimmed">Neighbor analytics {humanize(neighbor.analytics_state)}</Text></Box>
         </button>
       );
     })}</Stack></ScrollArea.Autosize>
@@ -208,7 +208,7 @@ function PersonEvents({ events, page, selected, onSelect }) {
       <button key={event.event_id} type="button" className="world-row world-person-event-row" data-selected={selected?.type === "event" && selected.value.event_id === event.event_id} onClick={() => onSelect(event)}>
         <ThemeIcon size={32} variant="light" color="teal"><IconCalendarEvent size={16} /></ThemeIcon>
         <span className="world-row-main">
-          <Text component="span" size="xs" fw={800}>{formatDateTime(event.occurred_at)}</Text>
+          <Text component="span" size="xs" fw={800}>{formatOccurrence(event)}</Text>
           <Text component="span" size="10px" c={event.location ? "dimmed" : "yellow.7"}><IconMapPin size={11} /> {event.location || "Location not recorded"}</Text>
           <Text component="span" size="10px">{eventContext(event.context_summary, event.source)}</Text>
         </span>
@@ -230,7 +230,7 @@ function PersonSelectionInspector({ item, binding, onOpenEvent }) {
     const event = item.value;
     return (
       <Stack gap="sm" p="sm">
-        <Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Event navigation intent</Text><Text fw={800}>{formatDateTime(event.occurred_at)}</Text></Box>
+        <Box><Text size="xs" c="dimmed" tt="uppercase" fw={700}>Event navigation intent</Text><Text fw={800}>{formatOccurrence(event)}</Text></Box>
         <InspectorRow label="Event ID" value={event.event_id} />
         <InspectorRow label="Location" value={event.location || "Not recorded"} />
         <InspectorRow label="Source" value={event.source || "Not supplied"} />
@@ -256,8 +256,8 @@ function PersonSelectionInspector({ item, binding, onOpenEvent }) {
       <InspectorRow label="Evidence count" value={relationship.evidence_count} />
       <InspectorRow label="Evidence types" value={Object.entries(relationship.evidence_type_counts).map(([type, count]) => `${humanize(type)} ${count}`).join(", ")} />
       <InspectorRow label="Strength basis" value={humanize(relationship.strength_basis)} />
-      <InspectorRow label="First occurrence" value={formatDate(relationship.first_occurrence_at)} />
-      <InspectorRow label="Last occurrence" value={formatDate(relationship.last_occurrence_at)} />
+      <InspectorRow label="First occurrence" value={formatEventDate(relationship.first_occurrence_at)} />
+      <InspectorRow label="Last occurrence" value={formatEventDate(relationship.last_occurrence_at)} />
       <FactorRows factors={explanation.factual_factors} />
       <Box className="world-limitations"><Text size="xs" fw={700}>Limitations</Text>{explanation.limitations.map((limitation) => <Text key={limitation} size="xs" c="dimmed">{limitation}</Text>)}</Box>
       <Text size="10px" c="dimmed">Evidence navigation remains reserved for P10-F5.</Text>
@@ -285,7 +285,7 @@ function backLabel(origin) {
 function effectiveScopeLabel(filters = {}) {
   const parts = [];
   if (filters.recent_activity) parts.push(humanize(filters.recent_activity));
-  else if (filters.date_from || filters.date_to) parts.push(`${formatDate(filters.date_from) || "Start"} to ${formatDate(filters.date_to) || "Now"}`);
+  else if (filters.date_from || filters.date_to) parts.push(`${(filters.date_from ? formatEventDate(filters.date_from) : "Start")} to ${(filters.date_to ? formatEventDate(filters.date_to) : "Now")}`);
   else parts.push("All recorded time");
   if (filters.locations?.length) parts.push(filters.locations.join(", "));
   parts.push(`${humanize(filters.missing_location || "INCLUDE")} missing locations`);
@@ -318,14 +318,4 @@ function shortId(value) {
   return text.length > 18 ? `${text.slice(0, 9)}…${text.slice(-6)}` : text;
 }
 
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
 
-function formatDateTime(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
