@@ -1,6 +1,9 @@
-import { useCallback } from "react";
+import { createElement, useCallback } from "react";
 import { notifications } from "@mantine/notifications";
+import { ToastContent } from "../components/ToastStack.jsx";
 
+// Semantic toast colors: red failed, orange caution, teal done, gray neutral.
+const TOAST_COLORS = { red: "red", orange: "orange", yellow: "orange", teal: "teal", gray: "gray" };
 const DEFAULT_TIMEOUT_MS = 60_000;
 const SESSION_TOKEN = typeof document === "undefined" ? "" : document.querySelector('meta[name="sentriface-session-token"]')?.content || "";
 const GET_REQUESTS_IN_FLIGHT = new Map();
@@ -28,8 +31,8 @@ export function releaseWindow() {
 export function useApiClient() {
   const showToast = useCallback((message, color = "teal", options = {}) => {
     notifications.show({
-      message,
-      color,
+      message: createElement(ToastContent, null, message),
+      color: TOAST_COLORS[color] || "gray",
       title: options.title,
       autoClose: options.autoClose ?? 4500,
     });
