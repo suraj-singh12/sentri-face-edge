@@ -134,6 +134,13 @@ Every destructive or important confirmation uses `frontend/src/components/Confir
 - **While running:** the dialog stays open, the action shows a spinner, and Cancel, Escape, × and the typed field are disabled. Success closes it and keeps the existing toast. Failure keeps it open with the reason and **Try again**; "Nothing changed" is said only where the server guarantees it, and a timed-out request says the result is unknown.
 - **Converted:** Delete person (list and profile), Restore from Bin, Archive, Restore, Remove face, Erase face, Discard session, Discard group, Cancel Attach Media (new confirmation with the current photo count), Create backup, Restore backup, Import anyway, Delete backup (replaces the browser prompt and the raw backup ID with the readable name, whether another verified backup remains, and typed `DELETE`), the prepared recovery action, Activate model, Use face despite a quality warning, and Add to a person the face resembles less. Server requests, operation IDs, revalidation, approved retention removals, plan tokens and stale-plan refusal are unchanged. Model activation still closes on refusal, because a refused plan cannot be retried.
 
+## Screen wording (#59)
+
+- **Event** is the only on-screen name for a finalized occurrence and its draft (Discard Event, Correct Event, Group photos by Event, Event 1 of 2, Open Event). `Encounter` remains the internal, API and storage name. Some server error messages shown in the app still say "Encounter" and are not reworded yet.
+- **Skip for now** postpones a face or group, and the item then shows as **Skipped** ("3 skipped", **Review skipped now (3)**). "Defer" is not used on screen. Recovery's "Skip the safety copy" means not making a backup, so it keeps its wording.
+- **Restore** is for people. A backup row restores with the restore icon, whose tooltip is **Restore from Backup…** and whose accessible name adds the backup's date. Unavailable backups keep the tooltip that explains why.
+- `frontend/tests/issue59-wording.test.mjs` fails if frontend source outside comments says "Encounter" or "Defer".
+
 ## Initial multidisciplinary review and next proposal
 
 - **Interaction:** Start with a feature-and-role inventory, top frequent tasks and information hierarchy; prevent an overdecorated redesign. Candidate: fewer competing primary actions per step. Must show how every existing action remains discoverable.

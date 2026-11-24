@@ -1437,7 +1437,7 @@ test("Explore v2 renders compact criteria and authoritative type-specific Inspec
   await t.test("Unloaded Person activity stays unavailable while genuine zero stays zero", () => {
     const unavailable = render(WorldExploreInspector, { selected: { type: "person", value: person() } });
     assert.match(unavailable, /explore-inspector-number[^>]*>—</);
-    assert.match(unavailable, /Encounter activity is not loaded/);
+    assert.match(unavailable, /Event activity is not loaded/);
     const zero = render(WorldExploreInspector, { selected: { type: "person", value: person({ analytics_state: "LOADED", activity_summary: { finalized_event_count: 0 } }) } });
     assert.match(zero, /explore-inspector-number[^>]*>0</);
   });
@@ -1459,7 +1459,7 @@ test("Explore v2 renders compact criteria and authoritative type-specific Inspec
     assert.match(markup, /does not contribute to cluster membership/);
     assert.match(markup, /Co-observed/);
     assert.match(markup, /Note references/);
-    assert.match(markup, /Supporting Encounters/);
+    assert.match(markup, /Supporting Events/);
     assert.doesNotMatch(markup, />99</);
     assert.match(markup, /2026-08-05/);
   });

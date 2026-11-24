@@ -34,10 +34,10 @@ export function EncounterDetailsModal({ opened, values, people = [], onChange: c
       .filter(Boolean).some((item) => String(item).toLocaleLowerCase().includes(query.toLocaleLowerCase()))
   )).slice(0, 6);
   return (
-    <Modal opened={opened} onClose={() => !busy && onClose?.()} withCloseButton={Boolean(onClose)} closeOnEscape={Boolean(onClose) && !busy} closeOnClickOutside={false} title={correction ? "Correct Encounter" : "Event details"} centered size="lg">
+    <Modal opened={opened} onClose={() => !busy && onClose?.()} withCloseButton={Boolean(onClose)} closeOnEscape={Boolean(onClose) && !busy} closeOnClickOutside={false} title={correction ? "Correct Event" : "Event details"} centered size="lg">
       <form onSubmit={submit} noValidate>
         <Stack gap="sm">
-          <Text size="sm" c="dimmed">{correction ? "Correct the current Event details. Historical values and selected mentions remain in correction history." : "Confirm these details once for this Encounter. Person decisions follow on the page."}</Text>
+          <Text size="sm" c="dimmed">{correction ? "Correct the current Event details. Historical values and selected mentions remain in correction history." : "Confirm these details once for this Event. Person decisions follow on the page."}</Text>
           <TextInput required={!correction} label="Event / occasion" error={errors.eventOccasion} value={values.eventOccasion || ""} onChange={(event) => onChange("eventOccasion", event.currentTarget.value)} />
           <TextInput required={!correction} type="date" label="Date" error={errors.date} value={values.date || ""} onChange={(event) => onChange("date", event.currentTarget.value)} />
           <Select label="Time" data={[{ value: "exact", label: "Start and end" }, { value: "approximate", label: "Approximate" }, { value: "unknown", label: "Unknown" }]} value={values.timePrecision || "unknown"} onChange={(value) => onChange("timePrecision", value)} />

@@ -554,14 +554,14 @@ function DatabaseBackupsPanel({
                         </ActionIcon>
                       </span>
                     </Tooltip>
-                    <Tooltip label={backup.restorable ? "Restore this verified backup" : "This backup did not pass the server restore-eligibility checks"}>
+                    <Tooltip label={backup.restorable ? "Restore from Backup…" : "This backup did not pass the server restore-eligibility checks"}>
                       <span>
                         <ActionIcon
                           variant="subtle"
                           color="teal"
                           disabled={!canRestore || !backup.restorable || !backup.portable || !backup.verified}
                           onClick={() => onRestore(backup)}
-                          aria-label={`Restore backup ${formatDateTime(backup.created_at)}`}
+                          aria-label={`Restore from Backup… ${formatDateTime(backup.created_at)}`}
                         >
                           <IconRestore size={16} />
                         </ActionIcon>

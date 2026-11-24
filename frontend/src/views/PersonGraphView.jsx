@@ -359,8 +359,8 @@ function GraphInspector({ item, rootPersonId, nodes = [] }) {
       <InspectorRow label="Last occurrence" value={formatEventDate(edge.last_occurrence)} />
       <Divider />
       <Text size="xs" fw={700}>Provenance summary</Text>
-      <InspectorRow label="Shared Encounters" value={provenance.distinct_encounter_count ?? "—"} />
-      <InspectorRow label="Latest shared Encounter" value={provenance.latest_shared_encounter_at ? formatEventDate(provenance.latest_shared_encounter_at) : provenance.distinct_encounter_count ? "Date unknown" : "—"} />
+      <InspectorRow label="Shared Events" value={provenance.distinct_encounter_count ?? "—"} />
+      <InspectorRow label="Latest shared Event" value={provenance.latest_shared_encounter_at ? formatEventDate(provenance.latest_shared_encounter_at) : provenance.distinct_encounter_count ? "Date unknown" : "—"} />
       {Object.entries(provenance.evidence_type_counts || {}).map(([type, count]) => (
         <InspectorRow key={type} label={humanizeToken(type)} value={count} />
       ))}

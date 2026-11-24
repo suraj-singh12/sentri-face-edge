@@ -30,7 +30,7 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
     if (Object.keys(missing).length) { event.preventDefault(); return; }
     return onSubmit(event, ...rest);
   };
-  if (addFaceOnly) return <Card withBorder radius="md" mt="md" p="sm"><form onSubmit={onSubmit}><Stack gap="sm"><Text fw={800}>Add Face to {values.name}</Text><Text size="sm" c="dimmed">This adds a reference face to the existing Person. It creates no Encounter or sighting.</Text><Button type="submit" disabled={confirmed}>Confirm Add Face</Button></Stack></form></Card>;
+  if (addFaceOnly) return <Card withBorder radius="md" mt="md" p="sm"><form onSubmit={onSubmit}><Stack gap="sm"><Text fw={800}>Add Face to {values.name}</Text><Text size="sm" c="dimmed">This adds a reference face to the existing Person. It creates no Event or sighting.</Text><Button type="submit" disabled={confirmed}>Confirm Add Face</Button></Stack></form></Card>;
   const isNew = values.action === "new";
   const mentionQuery = activeMentionQuery(values.notes);
   const mentionSuggestions = mentionQuery.length < 3 ? [] : people.filter((person) => (
@@ -51,12 +51,12 @@ export function RecognitionFollowupForm({ values, people = [], confirmed, onChan
           {isNew && <Select required label="Tag" error={errors.importance} data={NEW_PERSON_IMPORTANCE_OPTIONS} value={values.importance} onChange={(value) => onChange("importance", value)} />}
           <NumberInput required min={0} step={1} label="With how many individuals" error={errors.individualCount} leftSection={<IconUsers size={18} />} placeholder="Select count" value={values.individualCount} onChange={(value) => onChange("individualCount", value)} />
         </SimpleGrid>
-        <Paper withBorder p="xs"><Text size="sm" fw={700}>Inherited Encounter</Text><Text size="sm">{values.eventOccasion || "Occasion unknown"} · {values.date || "Date unknown"} · {values.timePrecision === "unknown" ? "Time unknown" : `${values.time || ""}${values.endTime ? `–${values.endTime}` : ""}${values.timePrecision === "approximate" ? " (approximate)" : ""}`} · {values.placeSeen || "Location unknown"} · {eventContextLabel(values.eventContext)} context</Text></Paper>
+        <Paper withBorder p="xs"><Text size="sm" fw={700}>Inherited Event</Text><Text size="sm">{values.eventOccasion || "Occasion unknown"} · {values.date || "Date unknown"} · {values.timePrecision === "unknown" ? "Time unknown" : `${values.time || ""}${values.endTime ? `–${values.endTime}` : ""}${values.timePrecision === "approximate" ? " (approximate)" : ""}`} · {values.placeSeen || "Location unknown"} · {eventContextLabel(values.eventContext)} context</Text></Paper>
         <Textarea
           autosize
           minRows={2}
           label="Sighting Notes"
-          description="Saved with this person in this Encounter"
+          description="Saved with this person in this Event"
           value={values.notes || ""}
           onChange={(event) => onChange("notes", event.currentTarget.value)}
         />

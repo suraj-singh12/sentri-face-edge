@@ -35,7 +35,7 @@ export function EventsView({ page, detail, people = [], onQuery, onOpen, onClose
   if (detail) return <EncounterDetail key={detail.observation_id} detail={detail} people={people} onClose={onClose} canAttach={canAttach} canCorrect={canCorrect} onCorrect={onCorrect} onNoChanges={onNoChanges} onAttach={onAttach} />;
   return (
     <Stack gap="md">
-      <Box><Title order={2}>Events</Title><Text size="sm" c="dimmed">Finalized Encounters, newest first. Mentions are shown separately from attendance.</Text></Box>
+      <Box><Title order={2}>Events</Title><Text size="sm" c="dimmed">Newest first. Mentions are shown separately from attendance.</Text></Box>
       <Box>
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
           <TextInput label="Event or location" value={filters.search} onChange={(event) => update("search", event.currentTarget.value)} />
@@ -119,19 +119,19 @@ function EncounterDetail({ detail, people, onClose, canAttach, canCorrect, onCor
     finally { setBusy(false); }
   };
   return <Stack gap="md" className="encounter-detail">
-    <Group justify="space-between"><Title order={2}>{detail.occasion || "Unnamed Encounter"}</Title><Button variant="default" onClick={onClose}>Back to Events</Button></Group>
+    <Group justify="space-between"><Title order={2}>{detail.occasion || "Unnamed Event"}</Title><Button variant="default" onClick={onClose}>Back to Events</Button></Group>
     <Group gap="sm"><Text>{eventDateTime(detail)} · {detail.location || "Location unknown"}</Text><Badge variant="light" tt="none">{contextLabel(detail.context)}</Badge></Group>
     <Group gap="xs">
       {canAttach && <FileButton multiple accept="image/*" onChange={async (files) => { if (!files?.length) return; setBusy(true); setError(""); try { await onAttach(detail, files); } catch (failure) { setError(failure.message); } finally { setBusy(false); } }}>{(props) => <Button {...props} disabled={busy}>Attach Media</Button>}</FileButton>}
-      {canCorrect && <><Button variant="default" onClick={() => open("metadata")}>Correct Encounter</Button><Button variant="default" onClick={() => open("participants")}>Correct Participants</Button><Button variant="default" onClick={() => open("relations")}>Correct Relations</Button></>}
+      {canCorrect && <><Button variant="default" onClick={() => open("metadata")}>Correct Event</Button><Button variant="default" onClick={() => open("participants")}>Correct Participants</Button><Button variant="default" onClick={() => open("relations")}>Correct Relations</Button></>}
     </Group>
     {error && !mode && <Text c="red" role="alert">{error}</Text>}
     <Box><Text fw={700}>Participants ({detail.participants?.length || 0})</Text><Group gap="xs">{(detail.participants || []).map((p) => <Text key={p.person_id} size="sm">{p.name}{p.lifecycle_status && p.lifecycle_status !== "ACTIVE" ? ` (${p.lifecycle_status.toLowerCase()})` : ""}</Text>)}</Group></Box>
     <Box><Text fw={700}>Event Note</Text><Text style={{ whiteSpace: "pre-wrap" }}>{detail.event_notes || "No Event Note"}</Text><Text size="sm" c="dimmed">Selected mentions: {detail.mentioned_people?.map((p) => p.name).join(", ") || "None"}</Text></Box>
     <Box><Text fw={700}>Sighting Notes</Text>{detail.sighting_notes?.length ? detail.sighting_notes.map((note, index) => <Text key={index} size="sm">{names[note.person_id] || "Historical Person"}: {note.content}</Text>) : <Text size="sm" c="dimmed">None recorded</Text>}</Box>
-    <Box><Text fw={700}>Relations</Text>{(detail.relations || []).map((r) => <Group key={`${r.first_person_id}:${r.second_person_id}`} justify="space-between" className="encounter-list-row"><Text size="sm">{names[r.first_person_id]} · {names[r.second_person_id]}</Text><Group gap="xs"><Badge color={r.disposition === "INCLUDE" ? "teal" : "gray"}>{r.disposition === "INCLUDE" ? "Included" : "Excluded"}</Badge><Text size="xs" c="dimmed">{r.support === "SHARED_FRAME" ? "Shared frame" : "Same Encounter only"}</Text></Group></Group>)}{!detail.relations?.length && <Text size="sm" c="dimmed">No explicit pair decisions recorded.</Text>}</Box>
-    <Text fw={700}>All Encounter media ({detail.media?.length || 0})</Text>
-    <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>{(detail.media || []).map((item) => <Box key={item.media_id}>{item.media_path ? <Image src={mediaUrl(item.media_path)} alt="Encounter media" fit="contain" mah={300} /> : <Text>Media unavailable</Text>}</Box>)}</SimpleGrid>
+    <Box><Text fw={700}>Relations</Text>{(detail.relations || []).map((r) => <Group key={`${r.first_person_id}:${r.second_person_id}`} justify="space-between" className="encounter-list-row"><Text size="sm">{names[r.first_person_id]} · {names[r.second_person_id]}</Text><Group gap="xs"><Badge color={r.disposition === "INCLUDE" ? "teal" : "gray"}>{r.disposition === "INCLUDE" ? "Included" : "Excluded"}</Badge><Text size="xs" c="dimmed">{r.support === "SHARED_FRAME" ? "Shared frame" : "Same Event only"}</Text></Group></Group>)}{!detail.relations?.length && <Text size="sm" c="dimmed">No explicit pair decisions recorded.</Text>}</Box>
+    <Text fw={700}>All Event media ({detail.media?.length || 0})</Text>
+    <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>{(detail.media || []).map((item) => <Box key={item.media_id}>{item.media_path ? <Image src={mediaUrl(item.media_path)} alt="Event media" fit="contain" mah={300} /> : <Text>Media unavailable</Text>}</Box>)}</SimpleGrid>
     <details><summary>Correction and provenance history</summary><Stack gap="xs" mt="sm">{(detail.history || []).map((entry) => <Box key={entry.operation_id} className="encounter-list-row"><Text size="xs" c="dimmed">{entry.created_at?.slice(0, 10)} · {entry.actor?.display_name || entry.actor?.username || "Operator"}</Text><Text size="sm">{historyDescription(entry, names)}</Text></Box>)}{detail.history_has_more && <Text size="xs">Showing the latest 100 operations.</Text>}</Stack></details>
     {mode === "metadata" && <EncounterDetailsModal opened correction values={values} people={[...people, ...(detail.mentioned_people || []).filter((p) => !people.some((candidate) => candidate.person_id === p.person_id))]} busy={busy} error={error} onChange={(field, value) => setValues((old) => ({ ...old, [field]: value }))} onClose={() => setMode(null)} onConfirm={saveMetadata} />}
     {(mode === "participants" || mode === "relations") && <EncounterManagementModal key={mode} detail={detail} people={people} mode={mode} onClose={() => setMode(null)} onSave={save} onNoChanges={onNoChanges} />}
@@ -140,7 +140,7 @@ function EncounterDetail({ detail, people, onClose, canAttach, canCorrect, onCor
 
 function historyDescription(entry, names) {
   const result = entry.result || {};
-  if (entry.operation_type === "review.complete") return "Encounter review completed; media and identity decisions accepted.";
+  if (entry.operation_type === "review.complete") return "Event review completed; media and identity decisions accepted.";
   if (entry.operation_type === "identity.observation.correct") return `Participant corrected: ${names[result.from_person_id] || "Historical Person"} → ${names[result.to_person_id] || "Historical Person"}`;
   if (entry.operation_type !== "encounter.correct") return entry.operation_type.replaceAll(".", " ");
   const before = result.historical_value || {};
@@ -155,5 +155,5 @@ function historyDescription(entry, names) {
     const previous = (result.historical_relations || []).find((r) => r.first_person_id === relation.first_person_id && r.second_person_id === relation.second_person_id);
     if (!previous || previous.disposition !== relation.disposition) changes.push(`${names[relation.first_person_id] || "Person"} · ${names[relation.second_person_id] || "Person"}: ${previous?.disposition || "Undecided"} → ${relation.disposition}`);
   }
-  return changes.join("; ") || "Encounter interpretation reviewed";
+  return changes.join("; ") || "Event interpretation reviewed";
 }
