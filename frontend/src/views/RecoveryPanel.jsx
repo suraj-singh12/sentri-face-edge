@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import {
   Alert,
   Badge,
@@ -199,23 +200,28 @@ export function IntegrityFindingDetail({ finding, preparing, onPrepare }) {
 
 export function RecoveryActionPlanModal({ plan, executing, onClose, onExecute }) {
   const [reason, setReason] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  useEffect(() => { setReason(""); setConfirmation(""); }, [plan?.token]);
+  useEffect(() => { setReason(""); }, [plan?.token]);
   if (!plan) return null;
-  const confirmed = confirmation === plan.confirmation_phrase && reason.trim().length > 0;
   return (
-    <Modal opened onClose={onClose} title={plan.title} centered size="lg" closeOnClickOutside={!executing} closeOnEscape={!executing}>
-      <Stack gap="md">
-        <Text size="sm">{plan.summary}</Text>
-        <PlanList title="Expected changes" values={plan.expected_changes} />
-        <PlanList title="History preserved" values={plan.preserved_history} />
-        {plan.affected_entities?.length ? <PlanList title="Affected entities" values={plan.affected_entities.map((item) => `${humanize(item.type)}: ${item.id}`)} monospace /> : null}
-        <Textarea label="Reason" description="Stored as bounded operation context." value={reason} maxLength={500} minRows={2} onChange={(event) => setReason(event.currentTarget.value)} disabled={executing} required />
-        <TextInput label={`Type ${plan.confirmation_phrase} to continue`} value={confirmation} onChange={(event) => setConfirmation(event.currentTarget.value)} disabled={executing} autoComplete="off" />
-        <Alert color="orange" icon={<IconAlertTriangle size={18} />}>Execution revalidates the exact prepared token. A changed or ambiguous state will be refused without applying this plan.</Alert>
-        <Group justify="flex-end"><Button variant="default" onClick={onClose} disabled={executing}>Cancel</Button><Button color="orange" loading={executing} disabled={!confirmed} onClick={() => onExecute(reason.trim())}>Execute prepared action</Button></Group>
-      </Stack>
-    </Modal>
+    <ConfirmDialog
+      opened
+      tone="caution"
+      size="lg"
+      title={plan.title}
+      message={plan.summary}
+      note={{ tone: "neutral", text: "The plan is checked again first. If anything changed, nothing is applied." }}
+      typed={plan.confirmation_phrase}
+      actionLabel="Apply"
+      confirmDisabled={!reason.trim()}
+      busy={executing}
+      onClose={onClose}
+      onConfirm={() => onExecute(reason.trim())}
+    >
+      <PlanList title="Expected changes" values={plan.expected_changes} />
+      <PlanList title="History preserved" values={plan.preserved_history} />
+      {plan.affected_entities?.length ? <PlanList title="Affected entities" values={plan.affected_entities.map((item) => `${humanize(item.type)}: ${item.id}`)} monospace /> : null}
+      <Textarea label="Reason" description="Stored as bounded operation context." value={reason} maxLength={500} minRows={2} onChange={(event) => setReason(event.currentTarget.value)} disabled={executing} required />
+    </ConfirmDialog>
   );
 }
 

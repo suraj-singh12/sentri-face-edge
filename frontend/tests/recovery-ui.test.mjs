@@ -21,7 +21,9 @@ test("P11-E prepares server actions before execution and sends no client-built r
   assert.doesNotMatch(controller, /survivor_person_id|referenced_person_id|note_id|canonical_person_id/);
   assert.match(panel, /\{plan\.summary\}/);
   assert.match(panel, /values=\{plan\.expected_changes\}/);
-  assert.match(panel, /Execute prepared action/);
+  assert.match(panel, /typed=\{plan\.confirmation_phrase\}/);
+  assert.match(panel, /confirmDisabled=\{!reason\.trim\(\)\}/);
+  assert.match(panel, /onConfirm=\{\(\) => onExecute\(reason\.trim\(\)\)\}/);
 });
 
 test("stale state clears the plan and committed postcheck failure remains factual", () => {

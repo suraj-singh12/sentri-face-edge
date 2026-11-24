@@ -86,8 +86,9 @@ test("quality search policy and poor-face decisions are independent", () => {
   for (const controller of [recognize, queue]) assert.match(controller, /quality_only:/);
   assert.match(recognize, /embedding_state:/);
   assert.match(queue, /quality_choices:/);
-  assert.match(recognizeView, /No, keep as proof only/);
-  assert.match(recognizeView, /Yes, accept low-quality face/);
+  assert.match(recognizeView, /cancelLabel="Keep as proof only"/);
+  assert.match(recognizeView, /onCancel=\{\(\) => confirmQualityOverride\(false\)\}/);
+  assert.match(recognizeView, /onConfirm=\{\(\) => confirmQualityOverride\(true\)\}/);
   assert.match(personForm, /POOR_ACCEPTED/);
   assert.match(personForm, /PROOF_ONLY/);
 });

@@ -35,6 +35,7 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
 import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
@@ -391,33 +392,21 @@ export function RecognizeView({
           ) : null}
         </Stack>
       </Paper>
-      <Modal
+      <ConfirmDialog
         opened={Boolean(qualityOverride)}
+        tone="caution"
+        title="Use this low-quality face?"
+        message={`Face ${faceNumber(qualityOverride?.face?.index)} ${qualityOverride?.face?.quality?.reasons?.length
+          ? `is ${qualityOverride.face.quality.reasons.map((reason) => qualityReasonLabel(reason).toLowerCase()).join(", ")}`
+          : "is low quality"}. Recognition may be less accurate.`}
+        cancelLabel="Keep as proof only"
+        actionLabel="Use face"
         onClose={() => setQualityOverride(null)}
-        title={`Use Face ${faceNumber(qualityOverride?.face?.index)} despite quality warning?`}
-        centered
+        onCancel={() => confirmQualityOverride(false)}
+        onConfirm={() => confirmQualityOverride(true)}
       >
-        <Stack gap="md">
-          <Text size="sm">
-            This face was marked poor quality{qualityOverride?.face?.quality?.reasons?.length
-              ? ` (${qualityOverride.face.quality.reasons.map(qualityReasonLabel).join(", ")})`
-              : ""}. You can continue, but future recognition may be less reliable.
-          </Text>
-          <Paper withBorder p="sm" className="quality-override-summary">
-            <Group gap="sm" wrap="nowrap">
-              <FaceCrop src={imageSrc} face={qualityOverride?.face} imageSize={imageSize} className="quality-override-thumb" />
-              <Box>
-                <Text fw={700}>Face {faceNumber(qualityOverride?.face?.index)}</Text>
-                <Text size="xs" c="dimmed">Quality score {Math.round((qualityOverride?.face?.quality?.score || 0) * 100)}%</Text>
-              </Box>
-            </Group>
-          </Paper>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => confirmQualityOverride(false)}>No, keep as proof only</Button>
-            <Button color="orange" onClick={() => confirmQualityOverride(true)}>Yes, accept low-quality face</Button>
-          </Group>
-        </Stack>
-      </Modal>
+        <FaceCrop src={imageSrc} face={qualityOverride?.face} imageSize={imageSize} className="quality-override-thumb" />
+      </ConfirmDialog>
       <RecognitionPeoplePicker
         opened={Boolean(peoplePickerFace)}
         people={peopleCandidates[peoplePickerFace] || []}
@@ -440,30 +429,22 @@ export function RecognizeView({
           <Button variant="default" onClick={onCreateAfterProofOnlyCheck}>Create new Person anyway</Button>
         </Stack>
       </Modal>
-      <Modal
+      <ConfirmDialog
         opened={Boolean(targetConflict)}
+        tone="caution"
+        title={`Add to ${targetPerson?.name || "this person"}?`}
+        message={`This face looks more like ${targetConflict?.conflict?.name || "another person"}. Add only if you're sure.`}
+        actionLabel={`Add to ${targetPerson?.name || "this person"}`}
         onClose={() => setTargetConflict(null)}
-        title="This face resembles another person"
-        centered
-      >
-        <Stack gap="md">
-          <Alert color="orange" title="Review before adding">
-            Recognition suggests {targetConflict?.conflict?.name || "another existing person"}, but you selected {targetPerson?.name}. SentriFace will not merge either profile.
-          </Alert>
-          <Text size="sm">Continue only if you are certain this photograph belongs to {targetPerson?.name}.</Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setTargetConflict(null)}>Cancel</Button>
-            <Button color="orange" onClick={() => {
-              const pending = targetConflict;
-              setTargetConflict(null);
-              if (pending?.face) {
-                scrollToFollowup();
-                onEnrollTarget(pending.face.index, pending.forceBadQuality, true);
-              }
-            }}>Add to {targetPerson?.name}</Button>
-          </Group>
-        </Stack>
-      </Modal>
+        onConfirm={() => {
+          const pending = targetConflict;
+          setTargetConflict(null);
+          if (pending?.face) {
+            scrollToFollowup();
+            onEnrollTarget(pending.face.index, pending.forceBadQuality, true);
+          }
+        }}
+      />
       {recognitionFollowup && <Box ref={followupRef} className="followup-scroll-target recognize-followup-anchor">
         <RecognitionFollowupForm
           people={people}

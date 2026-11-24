@@ -53,6 +53,7 @@ import {
 
 import { RecognitionFollowupForm } from "../components/RecognitionFollowupForm.jsx";
 import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { useIntentionalFormScroll } from "../hooks/useIntentionalFormScroll.js";
 import { EmptyCard, PersonName } from "../components/Shared.jsx";
 import { isNewPersonSuggestion, matchDisplay, mediaUrl, plural, qualityColor, recognitionText } from "../utils.js";
@@ -125,6 +126,8 @@ export function QueueView({
 }) {
   const [discardSessionOpen, setDiscardSessionOpen] = useState(false);
   const [groupPendingDiscard, setGroupPendingDiscard] = useState(null);
+  const [cancelAttachmentOpen, setCancelAttachmentOpen] = useState(false);
+  const attachmentPhotoCount = encounterMedia.filter((item) => !item.finalized_encounter && !item.excluded).length;
   return (
     <>
       <EncounterDetailsModal opened={Boolean(queueSelectedGroup && activeEncounter?.phase === "EVENT" && eventDetails?.reviewId !== activeEncounter.review_id)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} onClose={onBack} />
@@ -171,7 +174,7 @@ export function QueueView({
             <Paper withBorder p="md" radius="md">
               <Title order={2} size="h3">Attach Media draft</Title>
               <Text size="sm" mt="xs">These photos remain reserved for the selected Encounter. Retry revalidates its current state; Cancel abandons this attachment without creating Review Photos work.</Text>
-              <Group mt="md"><Button onClick={onRetryAttachment}>Retry Attach Media</Button><Button variant="default" onClick={onCancelAttachment}>Cancel Attach Media</Button></Group>
+              <Group mt="md"><Button onClick={onRetryAttachment}>Retry Attach Media</Button><Button variant="default" onClick={() => setCancelAttachmentOpen(true)}>Cancel Attach Media</Button></Group>
             </Paper>
           ) : encounterMedia.length > 0 && encounterReviews.length === 0 && !["running", "cancelling"].includes(queueProgress?.status) ? (
             <EncounterGrouping key={queueSessionId} media={encounterMedia} onConfirm={onPlanEncounters} onExclude={onMediaExcluded} />
@@ -239,53 +242,44 @@ export function QueueView({
         </Grid.Col>
         </Grid>
       </Paper>
-      <Modal
+      <ConfirmDialog
         opened={discardSessionOpen}
+        title="Discard this session?"
+        message="All pending photos in this session are removed. Saved people stay."
+        actionLabel="Discard session"
         onClose={() => setDiscardSessionOpen(false)}
-        title="Discard this queue session?"
-        centered
-      >
-        <Text size="sm" c="dimmed">
-          All pending faces and temporary photos in this session will be removed. People already confirmed are kept.
-        </Text>
-        <Group justify="flex-end" mt="lg">
-          <Button variant="default" onClick={() => setDiscardSessionOpen(false)}>Cancel</Button>
-          <Button
-            color="red"
-            leftSection={<IconTrash size={16} />}
-            onClick={async () => {
-              setDiscardSessionOpen(false);
-              await onDiscardSession();
-            }}
-          >
-            Discard session
-          </Button>
-        </Group>
-      </Modal>
-      <Modal
+        onConfirm={async () => {
+          await onDiscardSession();
+          setDiscardSessionOpen(false);
+        }}
+      />
+      <ConfirmDialog
         opened={Boolean(groupPendingDiscard)}
+        title="Discard this group?"
+        message={(groupPendingDiscard?.faces?.length || 0) === 1
+          ? "The 1 pending face in this group is removed. Saved people stay."
+          : `The ${groupPendingDiscard?.faces?.length || 0} pending faces in this group are removed. Saved people stay.`}
+        actionLabel="Discard group"
         onClose={() => setGroupPendingDiscard(null)}
-        title="Discard this entire group?"
-        centered
-      >
-        <Text size="sm" c="dimmed">
-          {(groupPendingDiscard?.faces?.length || 0) === 1 ? "This removes the 1 pending face in this group." : `This removes all ${groupPendingDiscard?.faces?.length || 0} pending faces in this group.`} Confirmed people are not affected.
-        </Text>
-        <Group justify="flex-end" mt="lg">
-          <Button variant="default" onClick={() => setGroupPendingDiscard(null)}>Cancel</Button>
-          <Button
-            color="red"
-            leftSection={<IconTrash size={16} />}
-            onClick={async () => {
-              const group = groupPendingDiscard;
-              setGroupPendingDiscard(null);
-              await onDiscardGroup(group);
-            }}
-          >
-            Discard group
-          </Button>
-        </Group>
-      </Modal>
+        onConfirm={async () => {
+          await onDiscardGroup(groupPendingDiscard);
+          setGroupPendingDiscard(null);
+        }}
+      />
+      <ConfirmDialog
+        opened={cancelAttachmentOpen}
+        title={attachmentPhotoCount ? `Cancel attaching ${photoCountLabel(attachmentPhotoCount)}?` : "Cancel attaching these photos?"}
+        message={attachmentPhotoCount
+          ? `${attachmentPhotoCount === 1 ? "This photo won't" : `These ${attachmentPhotoCount} photos won't`} be added. The Event stays as it is.`
+          : "These photos won't be added. The Event stays as it is."}
+        cancelLabel="Keep draft"
+        actionLabel="Cancel attachment"
+        onClose={() => setCancelAttachmentOpen(false)}
+        onConfirm={async () => {
+          await onCancelAttachment();
+          setCancelAttachmentOpen(false);
+        }}
+      />
     </>
   );
 }
@@ -1313,4 +1307,8 @@ function FocusedImage({ title, src, zoom }) {
       {src ? <Box className="queue-focused-image"><Image src={mediaUrl(src)} alt={title} fit="contain" style={{ transform: `scale(${zoom})` }} /></Box> : <EmptyCard text="No reference image." />}
     </Card>
   );
+}
+
+function photoCountLabel(count) {
+  return count === 1 ? "1 photo" : `${count} photos`;
 }
