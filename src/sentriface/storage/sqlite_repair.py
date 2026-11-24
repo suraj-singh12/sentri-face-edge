@@ -1389,7 +1389,7 @@ def _p11d_precondition_from_report(
     if statuses != ("STARTED", "COMMITTED"):
         raise OperationRevertRefused("Operation journal history is incomplete or ambiguous")
     if conn.execute("SELECT 1 FROM relationship_evidence WHERE source_entity_type = 'OBSERVATION' AND (created_operation_id = ? OR deactivated_operation_id = ?) LIMIT 1", (operation_id, operation_id)).fetchone():
-        raise OperationRevertRefused("Merge changed Event Relations and is outside the safe revert subset")
+        raise OperationRevertRefused("Merge revised Event Relations and is outside the safe revert subset")
     if conn.execute("SELECT 1 FROM relationship_evidence WHERE source_entity_type = 'MANUAL_ASSERTION' AND deactivated_operation_id = ? LIMIT 1", (operation_id,)).fetchone():
         raise OperationRevertRefused("Merge retired standing Manual Associations and is outside the safe revert subset")
     manifest = _get_merge_operation(conn, operation_id)
