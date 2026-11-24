@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Card, Center, Group, Loader, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
 
-import { releaseWindow, useApiClient } from "../hooks/useApiClient.js";
+import { RELOADED_FROM_WINDOW_ID, rememberWindowForReload, releaseWindow, useApiClient } from "../hooks/useApiClient.js";
 import { requiredFieldErrors } from "../utils.js";
 
 export function AuthGate({ children }) {
@@ -21,19 +21,39 @@ export function AuthGate({ children }) {
   const windowActive = useRef(false);
   const clearError = (field) => setFieldErrors((current) => ({ ...current, [field]: undefined }));
 
-  const refresh = useCallback(async () => {
+  const checkStatus = useCallback(async (headers) => {
     try {
-      const next = await apiGet("/api/auth/status", { silent: true, dedupe: false });
+      const next = await apiGet("/api/auth/status", { silent: true, dedupe: false, headers });
       // Keep the same object when nothing changed so focus re-checks do not re-render the app.
       setStatus((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
+      return next;
     } catch (requestError) {
       setError(requestError?.message || "SentriFace authentication is unavailable");
-    } finally {
-      setLoading(false);
+      return null;
     }
   }, [apiGet]);
+  const refresh = useCallback(async () => {
+    await checkStatus();
+    setLoading(false);
+  }, [checkStatus]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      // A reloaded tab names the window it replaces. Its old page's release can still
+      // arrive late, so re-check at about 1 s and 3 s before saying another window is open.
+      const headers = RELOADED_FROM_WINDOW_ID ? { "X-SentriFace-Reloaded-From": RELOADED_FROM_WINDOW_ID } : undefined;
+      for (const delay of [0, 1000, 2000]) {
+        if (delay) await new Promise((resolve) => { window.setTimeout(resolve, delay); });
+        if (cancelled) return;
+        const next = await checkStatus(headers);
+        if (!(next?.authenticated && next.window === "in_use")) break;
+      }
+      if (!cancelled) setLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [checkStatus]);
   useEffect(() => {
     const requireLogin = () => refresh();
     const requireReload = () => setReloadRequired(true);
@@ -66,7 +86,11 @@ export function AuthGate({ children }) {
     return () => window.clearInterval(heartbeat);
   }, [apiPost, authenticated, refresh, status?.window_heartbeat_seconds, windowState]);
   useEffect(() => {
-    const release = () => { if (windowActive.current) releaseWindow(); };
+    const release = () => {
+      if (!windowActive.current) return;
+      rememberWindowForReload();
+      releaseWindow();
+    };
     window.addEventListener("pagehide", release);
     return () => window.removeEventListener("pagehide", release);
   }, []);

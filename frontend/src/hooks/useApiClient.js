@@ -8,11 +8,28 @@ const GET_REQUESTS_IN_FLIGHT = new Map();
 export const WINDOW_ID = typeof crypto !== "undefined" && crypto.randomUUID
   ? crypto.randomUUID()
   : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+const RELOADED_FROM_KEY = "sentriface.window.reloadedFrom";
+// Written only while this page unloads, so a duplicated tab never inherits it.
+export const RELOADED_FROM_WINDOW_ID = readReloadedFrom();
 export const WINDOW_CODES = ["window_in_use", "window_replaced"];
 export const SESSION_ENDED_CODES = ["authentication_required", "setup_required", "page_session_expired", "password_change_required", ...WINDOW_CODES];
 
 function authorizedHeaders(headers = {}) {
   return { ...headers, "X-SentriFace-Session": SESSION_TOKEN, "X-SentriFace-Window": WINDOW_ID };
+}
+
+function readReloadedFrom() {
+  try {
+    const value = window.sessionStorage.getItem(RELOADED_FROM_KEY);
+    window.sessionStorage.removeItem(RELOADED_FROM_KEY);
+    return value || "";
+  } catch (_) {
+    return "";
+  }
+}
+
+export function rememberWindowForReload() {
+  try { window.sessionStorage.setItem(RELOADED_FROM_KEY, WINDOW_ID); } catch (_) { /* Reload then waits for the release. */ }
 }
 
 export function releaseWindow() {
@@ -102,7 +119,7 @@ export function useApiClient() {
   }, [readResponse]);
 
   const apiGet = useCallback((path, options = {}) => {
-    if (options.signal || options.dedupe === false) return request(path, {}, options);
+    if (options.signal || options.dedupe === false) return request(path, { headers: options.headers }, options);
     const existing = GET_REQUESTS_IN_FLIGHT.get(path);
     if (existing) return existing;
     const pending = request(path, {}, options).finally(() => {

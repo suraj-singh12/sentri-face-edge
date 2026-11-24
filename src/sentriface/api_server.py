@@ -1107,7 +1107,9 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
         user = self.server.auth.authenticate(token, window_id, touch=path not in PASSIVE_AUTH_ENDPOINTS)
         self.auth_user = user
         # Requests without a window ID (images, scripts) are not tied to a window.
-        self.window_state = self.server.auth.use_window(token, window_id) if user is not None else "none"
+        # A reloaded tab names the window it replaces, so it is not blocked by its own unload.
+        reloaded_from = self.headers.get("X-SentriFace-Reloaded-From") if path == "/api/auth/status" else None
+        self.window_state = self.server.auth.use_window(token, window_id, reloaded_from=reloaded_from) if user is not None else "none"
         if required is None:
             return False
         if self.server.auth.setup_required():
