@@ -29,7 +29,7 @@ import {
 
 import { SafeImage } from "../components/Shared.jsx";
 import { WorldMediaPreview } from "../components/WorldMediaPreview.jsx";
-import { mediaUrl } from "../utils.js";
+import { formatEventDate, formatOccurrence, mediaUrl } from "../utils.js";
 import { worldEvidenceMediaRequestState } from "../utils/world.js";
 
 const EVIDENCE_COLLECTIONS = [
@@ -82,7 +82,7 @@ function EvidenceHeader({ evidence, binding, state, page, onBack, onRefresh }) {
           <ThemeIcon size={40} radius="md" variant="light" color="blue"><IconFileDescription size={21} /></ThemeIcon>
           <Box miw={0}>
             <Group gap="xs" wrap="wrap"><Title order={2} size="h3">Evidence</Title><Badge size="xs" color="blue" variant="light">{evidence.evidence_type}</Badge><Badge size="xs" color={evidence.active ? "teal" : "gray"} variant="outline">{evidence.active ? "ACTIVE" : "INACTIVE"}</Badge></Group>
-            <Text size="xs" c="dimmed">{formatDateTime(evidence.occurred_at)} · {humanize(evidence.directionality)} · {effectiveScopeLabel(binding?.filters)}</Text>
+            <Text size="xs" c="dimmed">{formatOccurrence(evidence)} · {humanize(evidence.directionality)} · {effectiveScopeLabel(binding?.filters)}</Text>
             <Text size="10px" c="dimmed" lineClamp={1}>{sourceLabel(evidence.supporting_references)}</Text>
           </Box>
         </Group>
@@ -128,7 +128,7 @@ function EndpointPanel({ label, endpoints, directionality, color }) {
 
 function EvidenceExplanation({ evidence, binding }) {
   const explanation = evidence.explanation;
-  return <Stack gap="sm"><Box><Text fw={800}>What this evidence supports</Text><Text size="10px" c="dimmed">Backend factual explanation</Text></Box><Text size="sm">{explanation.summary}</Text><FactRow label="Basis" value={humanize(explanation.basis_type)} /><FactRow label="Method" value={humanize(explanation.method)} /><FactRow label="Occurrence" value={`${formatDateTime(evidence.occurrence_bounds.first)} — ${formatDateTime(evidence.occurrence_bounds.last)}`} /><FactRow label="Effective scope" value={effectiveScopeLabel(binding?.filters)} /><Divider />{explanation.factual_factors.length ? <Box><Text size="xs" fw={700} mb={3}>Factual factors</Text>{explanation.factual_factors.map((factor, index) => <FactRow key={`${factor.factor}-${index}`} label={humanize(factor.factor)} value={formatFactorValue(factor.value)} />)}</Box> : null}<Box className="world-limitations"><Text size="xs" fw={700}>Limitations</Text>{explanation.limitations.map((limitation) => <Text key={limitation} size="xs" c="dimmed">{limitation}</Text>)}</Box></Stack>;
+  return <Stack gap="sm"><Box><Text fw={800}>What this evidence supports</Text><Text size="10px" c="dimmed">Backend factual explanation</Text></Box><Text size="sm">{explanation.summary}</Text><FactRow label="Basis" value={humanize(explanation.basis_type)} /><FactRow label="Method" value={humanize(explanation.method)} /><FactRow label="Occurrence" value={`${formatOccurrence({ ...evidence, occurred_at: evidence.occurrence_bounds.first })} — ${formatOccurrence({ ...evidence, occurred_at: evidence.occurrence_bounds.last })}`} /><FactRow label="Effective scope" value={effectiveScopeLabel(binding?.filters)} /><Divider />{explanation.factual_factors.length ? <Box><Text size="xs" fw={700} mb={3}>Factual factors</Text>{explanation.factual_factors.map((factor, index) => <FactRow key={`${factor.factor}-${index}`} label={humanize(factor.factor)} value={formatFactorValue(factor.value)} />)}</Box> : null}<Box className="world-limitations"><Text size="xs" fw={700}>Limitations</Text>{explanation.limitations.map((limitation) => <Text key={limitation} size="xs" c="dimmed">{limitation}</Text>)}</Box></Stack>;
 }
 
 function MediaStatus({ summary, onMedia }) {
@@ -149,7 +149,7 @@ function SupportingMedia({ evidence, state, data, page, onPreview, onRetry }) {
   if (requestState === "EVIDENCE_MEDIA_UNAVAILABLE") return <Paper withBorder radius="md" p="sm"><Stack gap="xs"><Text fw={800}>No supporting media for this evidence type</Text><Text size="xs" c="dimmed">The backend explicitly marks media unavailable: {humanize(evidence.media_summary.reason)}.</Text><Badge size="xs" variant="outline" color="gray" w="fit-content">REQUESTED · UNAVAILABLE</Badge></Stack></Paper>;
   if (requestState === "EVIDENCE_MEDIA_EMPTY") return <Paper withBorder radius="md" p="sm"><Stack gap={2} align="center" ta="center"><Text size="sm" fw={700}>No supporting media returned</Text><Text size="xs" c="dimmed">The media collection was requested and is empty: {page.returned_count} of {page.total_count}.</Text></Stack></Paper>;
   const media = data.media;
-  return <Paper withBorder radius="md" className="world-evidence-media-collection">{state?.loading ? <Box className="world-loading-stripe"><Loader size={16} /><Text size="xs">Replacing media page…</Text></Box> : null}<ScrollArea.Autosize mah={570}><SimpleGrid cols={{ base: 2, sm: 3, lg: 4 }} spacing="xs" p="xs">{media.map((item) => <button key={item.media_id} type="button" className="world-evidence-media-card" onClick={() => onPreview(item)}><SafeImage src={item.media_reference ? mediaUrl(item.media_reference) : ""} alt="" className="world-evidence-media-thumb" fallback={<Stack align="center" gap={2}><ThemeIcon size={42} variant="light" color="gray"><IconPhoto size={21} /></ThemeIcon><Text size="10px" c="dimmed">Preview unavailable</Text></Stack>} /><span className="world-row-main"><Text component="span" size="xs" fw={800}>{shortId(item.media_id)}</Text><Text component="span" size="10px" c="dimmed">{formatDateTime(item.occurred_at)}</Text><Text component="span" size="10px">{item.source || "Source not supplied"}</Text><Text component="span" size="10px" c="dimmed">Event {shortId(item.supporting_event_id)}</Text></span></button>)}</SimpleGrid></ScrollArea.Autosize></Paper>;
+  return <Paper withBorder radius="md" className="world-evidence-media-collection">{state?.loading ? <Box className="world-loading-stripe"><Loader size={16} /><Text size="xs">Replacing media page…</Text></Box> : null}<ScrollArea.Autosize mah={570}><SimpleGrid cols={{ base: 2, sm: 3, lg: 4 }} spacing="xs" p="xs">{media.map((item) => <button key={item.media_id} type="button" className="world-evidence-media-card" onClick={() => onPreview(item)}><SafeImage src={item.media_reference ? mediaUrl(item.media_reference) : ""} alt="" className="world-evidence-media-thumb" fallback={<Stack align="center" gap={2}><ThemeIcon size={42} variant="light" color="gray"><IconPhoto size={21} /></ThemeIcon><Text size="10px" c="dimmed">Preview unavailable</Text></Stack>} /><span className="world-row-main"><Text component="span" size="xs" fw={800}>{shortId(item.media_id)}</Text><Text component="span" size="10px" c="dimmed">{formatOccurrence(item)}</Text><Text component="span" size="10px">{item.source || "Source not supplied"}</Text><Text component="span" size="10px" c="dimmed">Event {shortId(item.supporting_event_id)}</Text></span></button>)}</SimpleGrid></ScrollArea.Autosize></Paper>;
 }
 
 function FactRow({ label, value }) {
@@ -171,7 +171,7 @@ function mediaAvailabilityLabel(summary) {
 function effectiveScopeLabel(filters = {}) {
   const parts = [];
   if (filters.recent_activity) parts.push(humanize(filters.recent_activity));
-  else if (filters.date_from || filters.date_to) parts.push(`${formatDate(filters.date_from) || "Start"} to ${formatDate(filters.date_to) || "Now"}`);
+  else if (filters.date_from || filters.date_to) parts.push(`${(filters.date_from ? formatEventDate(filters.date_from) : "Start")} to ${(filters.date_to ? formatEventDate(filters.date_to) : "Now")}`);
   else parts.push("All recorded time");
   if (filters.locations?.length) parts.push(filters.locations.join(", "));
   parts.push(`${humanize(filters.missing_location || "INCLUDE")} missing locations`);
@@ -195,14 +195,4 @@ function shortId(value) {
   return text.length > 18 ? `${text.slice(0, 9)}…${text.slice(-6)}` : text;
 }
 
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
 
-function formatDateTime(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}

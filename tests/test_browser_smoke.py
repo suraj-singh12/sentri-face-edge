@@ -186,7 +186,7 @@ def _review_photos(page, tmp):
 
     for resolved in (2, 3):
         page.get_by_role("button", name="Discard", exact=True).first.click()
-        confirm = page.get_by_role("dialog", name="Discard this entire group?")
+        confirm = page.get_by_role("dialog", name="Discard this group?")
         confirm.get_by_role("button", name=re.compile("^Discard")).click()
         confirm.wait_for(state="hidden")
         expect(page.get_by_text(f"{resolved} of 3 faces resolved")).to_be_visible()
@@ -239,6 +239,54 @@ def test_operator_workflows_smoke(app):
     _review_photos(page, tmp)
     _correction_feedback(page)
     _saved_location_suggestions(page)
+    _erase_face(page, _server)
+    assert not errors, errors
+
+
+def _erase_face(page, server):
+    engine = server.engine
+    person = next(p.person for p in engine.store.list_persons() if p.person.name == "Smoke Person")
+    embedding = engine.store.list_embeddings_for_person(person.person_id)[0]
+    engine.delete_embedding(embedding.embedding_id, "smoke-erase-remove", actor={"username": "smoke-owner"}, source="smoke")
+    page.reload()
+    page.get_by_role("tab", name="People", exact=True).click()
+    page.get_by_role("button", name=re.compile(r"^Deleted Faces")).click()
+    page.get_by_role("button", name="Erase from live library").first.click()
+    dialog = page.get_by_role("dialog", name="Erase this face?")
+    typed = _field(dialog, "Type ERASE to confirm")
+    expect(typed).to_be_focused()
+    expect(dialog.get_by_role("button", name="Erase face", exact=True)).to_be_disabled()
+    dialog.get_by_role("button", name="Close").click()
+    dialog.wait_for(state="hidden")
+    assert any(face["embedding_id"] == embedding.embedding_id for face in engine.list_deleted_embeddings())
+    page.get_by_role("button", name="Erase from live library").first.click()
+    _field(dialog, "Type ERASE to confirm").fill("ERASE")
+    _field(dialog, "Type ERASE to confirm").press("Enter")
+    dialog.wait_for(state="hidden")
+    assert all(face["embedding_id"] != embedding.embedding_id for face in engine.list_deleted_embeddings())
+    _shot(page, "06-face-erased")
+
+
+def test_discard_session_asks_first_and_stays_until_confirmed(app):
+    page, errors, tmp, server = app
+    _sign_up(page)
+    page.get_by_role("tab", name="Review photos", exact=True).click()
+    inputs = page.locator("input[type=file][multiple]:not([webkitdirectory])")
+    inputs.first.set_input_files([str(_image(tmp / f"discard-{seed}.png", seed)) for seed in (61, 62)])
+    page.get_by_role("button", name="Confirm Encounter grouping").wait_for()
+    discard = page.get_by_role("button", name="Discard session", exact=True)
+    discard.click()
+    dialog = page.get_by_role("dialog", name="Discard this session?")
+    page.mouse.click(5, 5)
+    expect(dialog).to_be_visible()
+    page.keyboard.press("Escape")
+    dialog.wait_for(state="hidden")
+    assert server.engine.store.list_init_sessions()
+    discard.click()
+    dialog.get_by_role("button", name="Discard session", exact=True).click()
+    dialog.wait_for(state="hidden")
+    expect(page.get_by_text("Queue session and its pending photos were discarded")).to_be_visible()
+    assert server.engine.store.list_init_sessions() == []
     assert not errors, errors
 
 
@@ -258,11 +306,23 @@ def test_deleted_people_move_to_bin_and_restore_to_active(app):
 
     _people_card(page, "Bin Keeper").get_by_role("button", name="More actions").click()
     page.get_by_role("menuitem", name="Delete Person…").click()
-    dialog = page.get_by_role("dialog", name="Delete “Bin Keeper”?")
-    expect(dialog.get_by_text("This person moves to Bin")).to_be_visible()
+    dialog = page.get_by_role("dialog", name="Delete Bin Keeper?")
+    expect(dialog.get_by_text("Bin Keeper moves to Bin")).to_be_visible()
     expect(dialog).not_to_contain_text("permanently")
+    typed = _field(dialog, "Type DELETE to confirm")
+    expect(typed).to_be_focused()
+    confirm = dialog.get_by_role("button", name="Delete person", exact=True)
+    typed.fill("delete")
+    typed.press("Enter")
+    expect(confirm).to_be_disabled()
+    expect(dialog).to_be_visible()
+    page.keyboard.press("Escape")
+    dialog.wait_for(state="hidden")
+    assert store.get_person(binned.person_id) is not None
+    _people_card(page, "Bin Keeper").get_by_role("button", name="More actions").click()
+    page.get_by_role("menuitem", name="Delete Person…").click()
     _field(dialog, "Type DELETE to confirm").fill("DELETE")
-    dialog.get_by_role("button", name="Delete Person", exact=True).click()
+    _field(dialog, "Type DELETE to confirm").press("Enter")
     expect(page.get_by_text("Bin Keeper moved to Bin.", exact=False)).to_be_visible()
     _shot(page, "bin-01-deleted")
     assert store.get_person(binned.person_id) is None
@@ -285,8 +345,8 @@ def test_deleted_people_move_to_bin_and_restore_to_active(app):
     _shot(page, "bin-02-bin")
 
     bin_card.get_by_role("button", name="Restore", exact=True).click()
-    dialog = page.get_by_role("dialog", name="Restore “Bin Keeper”?")
-    dialog.get_by_role("button", name="Restore Person", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Restore Bin Keeper?")
+    dialog.get_by_role("button", name="Restore person", exact=True).click()
     expect(page.get_by_text("Restored from Bin. This person is active again.")).to_be_visible()
     expect(page.get_by_text("Bin is empty.")).to_be_visible()
     restored = store.get_person(binned.person_id)
@@ -417,6 +477,13 @@ def test_failed_attach_media_keeps_retry_and_cancel_until_cancelled(served_app):
         expect(page.get_by_role("button", name="Retry Attach Media")).to_be_enabled()
     _shot(page, "53-attach-retry-kept")
     page.get_by_role("button", name="Cancel Attach Media").click()
+    confirm = page.get_by_role("dialog", name=re.compile("^Cancel attaching"))
+    confirm.get_by_role("button", name="Keep draft").click()
+    confirm.wait_for(state="hidden")
+    expect(page.get_by_role("button", name="Retry Attach Media")).to_be_visible()
+    page.get_by_role("button", name="Cancel Attach Media").click()
+    confirm.get_by_role("button", name="Cancel attachment").click()
+    confirm.wait_for(state="hidden")
     expect(page.get_by_text("Attach Media draft")).to_have_count(0)
     assert server.engine.store.list_init_sessions() == []
     assert errors == []

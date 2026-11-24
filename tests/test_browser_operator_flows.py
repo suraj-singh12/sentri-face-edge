@@ -342,7 +342,7 @@ def test_archive_restore_and_delete_keep_history(app):
 
     page.get_by_role("button", name="More", exact=True).click()
     page.get_by_role("menuitem", name=re.compile("^Archive")).click()
-    dialog = page.get_by_role("dialog", name="Archive this person?")
+    dialog = page.get_by_role("dialog", name="Archive Life Alpha?")
     expect(dialog).to_be_visible()
     page.keyboard.press("Escape")
     dialog.wait_for(state="hidden")
@@ -356,7 +356,7 @@ def test_archive_restore_and_delete_keep_history(app):
     page.get_by_role("button", name=re.compile(r"^Archived \d")).click()
     page.get_by_text("Life Alpha").first.click()
     page.get_by_role("button", name="Restore", exact=True).click()
-    restore = page.get_by_role("dialog", name="Restore this person?")
+    restore = page.get_by_role("dialog", name="Restore Life Alpha?")
     restore.get_by_role("button", name=re.compile("^Restore")).click()
     expect(page.get_by_text("Person restored").first).to_be_visible()
     restore.wait_for(state="hidden")
@@ -364,8 +364,8 @@ def test_archive_restore_and_delete_keep_history(app):
 
     page.get_by_role("button", name="More", exact=True).click()
     page.get_by_role("menuitem", name=re.compile("^Delete Person")).click()
-    dialog = page.get_by_role("dialog", name=re.compile(r"^Delete .Life Alpha.\?$"))
-    expect(dialog.get_by_text("This person moves to Bin")).to_be_visible()
+    dialog = page.get_by_role("dialog", name="Delete Life Alpha?")
+    expect(dialog.get_by_text("Life Alpha moves to Bin")).to_be_visible()
     confirm = dialog.get_by_role("button", name=re.compile("^Delete"))
     dialog.get_by_label("Type DELETE to confirm").fill("delete")
     expect(confirm).to_be_disabled()
@@ -386,7 +386,7 @@ def test_backup_restore_replaces_data_after_cancel_and_keeps_safety_copy(app):
     _enroll_from_photo(page, app.tmp, "Kept Alpha", "Before backup", 41)
     _settings(page, "Backups & restore")
     page.get_by_role("button", name="Create Backup").first.click()
-    page.get_by_role("dialog").get_by_role("button", name="Create Backup").click()
+    page.get_by_role("dialog", name="Create a backup?").get_by_role("button", name="Create backup").click()
     rows = page.get_by_role("button", name=re.compile("^Restore backup"))
     expect(rows.first).to_be_enabled()
     backups_before = len(_backups(page))
@@ -395,7 +395,7 @@ def test_backup_restore_replaces_data_after_cancel_and_keeps_safety_copy(app):
     assert any("Later Bravo" in str(p) for p in _persons(page))
     _settings(page, "Backups & restore")
     rows.first.click()
-    dialog = page.get_by_role("dialog", name="Restore portable backup?")
+    dialog = page.get_by_role("dialog", name="Restore this backup?")
     dialog.get_by_role("button", name="Cancel").click()
     dialog.wait_for(state="hidden")
     assert any("Later Bravo" in str(p) for p in _persons(page))
@@ -407,3 +407,48 @@ def test_backup_restore_replaces_data_after_cancel_and_keeps_safety_copy(app):
     names = str(_persons(page))
     assert "Kept Alpha" in names and "Later Bravo" not in names
     assert len(_backups(page)) > backups_before
+
+
+CLOCK = re.compile(r"\b\d{1,2}:\d{2}\b")
+NO_TIME = re.compile(r"^\d{4}-\d{2}-\d{2} · Time unknown$")
+
+
+def _row_value(page, label):
+    row = page.get_by_text(label, exact=True).locator("xpath=..")
+    row.wait_for()
+    return row.locator("p, span, div").last.inner_text().strip()
+
+
+def test_event_without_time_shows_no_clock_in_world_and_person_graph(app, multi_face):
+    page = app.page()
+    _sign_up(page)
+    _check_photo(page, _wide_image(app.tmp / "pair.png", 2, 56), occasion="No time recorded")
+    _new_person_form(page, "Time Alpha")
+    page.get_by_role("button").filter(has_text=re.compile(r"^Face 02")).first.click()
+    _new_person_form(page, "Time Beta")
+    page.get_by_role("button", name="Complete Review").click()
+    expect(page.get_by_text("Review completed")).to_be_visible()
+
+    _tab(page, "Events")
+    expect(page.get_by_text(re.compile(r"\d{4}-\d{2}-\d{2} · Time unknown")).first).to_be_visible()
+
+    _tab(page, "World")
+    page.locator(".mantine-SegmentedControl-label", has_text="Connections").click()
+    page.locator(".world-person-row", has_text="Time Alpha").first.click()
+    page.get_by_role("button", name="Open scoped person").click()
+    page.locator(".mantine-SegmentedControl-label").filter(has_text="Events").first.click()
+    occurrence = page.locator(".world-person-event-row .world-row-main > :first-child").first
+    expect(occurrence).to_have_text(NO_TIME)
+    assert not CLOCK.search(occurrence.inner_text())
+    neighbour_text = page.locator(".world-person-shell, body").first.inner_text()
+    assert "12:00 AM" not in neighbour_text
+
+    _open_profile(page, "Time Alpha")
+    page.get_by_role("button", name="Open Person Graph").first.click()
+    page.locator("[aria-label='Open graph for Time Alpha']").first.click()
+    last_seen = _row_value(page, "Last seen")
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", last_seen), last_seen
+    page.locator(".person-graph-edge-hit").first.click(force=True)
+    for label in ("First occurrence", "Last occurrence", "Latest shared Encounter"):
+        value = _row_value(page, label)
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", value), (label, value)

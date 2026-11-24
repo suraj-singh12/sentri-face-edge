@@ -3,6 +3,7 @@ import { ActionIcon, Alert, AppShell, Avatar, Box, Button, Group, Loader, Mantin
 import { IconAlertTriangle, IconChevronDown, IconDatabaseExport, IconKey, IconLogout, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
 import { AuthGate } from "./components/AuthGate.jsx";
+import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
 import { ToastStack } from "./components/ToastStack.jsx";
 import { ModelGate } from "./components/ModelGate.jsx";
 import { RecoveryGate } from "./components/RecoveryGate.jsx";
@@ -270,7 +271,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               encounterReviews={state.queueEncounterReviews}
               attachment={state.queueAttachment}
               onRetryAttachment={guarded(actions.retryQueueAttachment)}
-              onCancelAttachment={guarded(actions.cancelQueueAttachment)}
+              onCancelAttachment={actions.cancelQueueAttachment}
               activeEncounter={state.queueActiveEncounter}
               visibleQueueGroups={state.queueVisibleGroups}
               queueSessionId={state.queueSessionId}
@@ -302,7 +303,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onCancelProcessing={actions.cancelQueueProcessing}
               onRefresh={guarded(() => actions.loadQueueGroups(state.queueSessionId))}
               onSelectSession={guarded(actions.selectQueueSession)}
-              onDiscardSession={guarded(actions.discardQueueSession)}
+              onDiscardSession={actions.discardQueueSession}
               onOpenGroup={actions.openQueueGroup}
               onToggleFace={actions.toggleQueueFace}
               onSelectAllFaces={actions.selectAllQueueFaces}
@@ -311,7 +312,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               onNewPerson={guarded(actions.queueNewPerson)}
               onSelectExisting={actions.queueSelectExisting}
               onDiscard={guarded(actions.queueDiscard)}
-              onDiscardGroup={guarded(actions.discardQueueGroup)}
+              onDiscardGroup={actions.discardQueueGroup}
               onSkip={guarded(actions.queueSkipGroup)}
               onResumeSkipped={guarded(actions.queueResumeSkipped)}
               onRejectSuggestedMatch={guarded(actions.queueRejectSuggestedMatch)}
@@ -430,7 +431,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               backupImporting={state.backupImporting}
               onRefresh={guarded(actions.loadEvents)}
               onCreateBackup={guarded(actions.createBackup)}
-              onDeleteBackup={guarded(actions.deleteBackup)}
+              onDeleteBackup={actions.requestDeleteBackup}
               onImportBackup={guarded(actions.importBackup)}
               onDownloadBackup={actions.downloadBackup}
               onRestoreBackup={actions.requestRestoreBackup}
@@ -441,81 +442,54 @@ function SentriFaceShell({ user, logout, changePassword }) {
             />
           </Tabs.Panel>
         </Tabs>
-        <Modal
+        <ConfirmDialog
           opened={state.backupModalOpen}
+          tone="safe"
+          title="Create a backup?"
+          message="Saves all people, photos and face data, then checks the backup is complete."
+          actionLabel="Create backup"
+          failureNote="Nothing changed."
+          busy={state.backupCreating}
           onClose={actions.cancelBackup}
-          title="Create a complete portable backup?"
-          centered
-          closeOnClickOutside={!state.backupCreating}
-          closeOnEscape={!state.backupCreating}
-        >
-          <Stack gap="md">
-            <Text size="sm" c="dimmed">
-              SentriFace will snapshot the database and copy every referenced original image and face crop. Files are deduplicated, checksummed, and verified before the backup is marked ready.
-            </Text>
-            <Group justify="flex-end">
-              <Button variant="default" onClick={actions.cancelBackup} disabled={state.backupCreating}>Cancel</Button>
-              <Button onClick={guarded(actions.createBackup)} loading={state.backupCreating}>Create Backup</Button>
-            </Group>
-          </Stack>
-        </Modal>
-        <Modal
+          onConfirm={actions.createBackup}
+        />
+        <ConfirmDialog
           opened={Boolean(state.duplicateImport)}
+          tone="caution"
+          title="Import a second copy?"
+          message="This backup is already in your list. You can delete either copy later."
+          item={backupItem(state.duplicateImport?.existing)}
+          note={state.duplicateImport?.retentionRemoves?.length ? { tone: "caution", text: retentionWarning(state.duplicateImport) } : null}
+          actionLabel="Import anyway"
+          failureNote="Nothing was imported."
+          busy={state.backupImporting}
           onClose={actions.cancelDuplicateImport}
-          title="This backup is already in the list"
-          centered
-        >
-          <Stack gap="md">
-            <Alert color="orange" icon={<IconAlertTriangle size={18} />}>
-              The file you chose is the same backup as{" "}
-              <Text span fw={800}>{state.duplicateImport?.existing ? backupLabel(state.duplicateImport.existing) : "one already listed"}</Text>
-              {state.duplicateImport?.existing?.created_at ? `, made ${formatBackupDateTime(state.duplicateImport.existing.created_at)}` : ""}.
-            </Alert>
-            {state.duplicateImport?.retentionRemoves?.length ? (
-              <Text size="sm">
-                Importing it again adds a second copy. SentriFace keeps up to {state.duplicateImport.retentionLimit} backups, so it also removes{" "}
-                {state.duplicateImport.retentionRemoves.map((backup) => `${backupLabel(backup)}, made ${formatBackupDateTime(backup.created_at)}`).join("; ")}.
-                You can delete either copy later.
-              </Text>
-            ) : (
-              <Text size="sm">
-                Importing it again adds a second copy. Nothing else changes, and you can delete either copy later.
-              </Text>
-            )}
-            <Group justify="flex-end">
-              <Button variant="default" onClick={actions.cancelDuplicateImport}>Cancel</Button>
-              <Button color="orange" onClick={guarded(actions.confirmDuplicateImport)} loading={state.backupImporting}>Import anyway</Button>
-            </Group>
-          </Stack>
-        </Modal>
-        <Modal
+          onConfirm={actions.confirmDuplicateImport}
+        />
+        <ConfirmDialog
           opened={Boolean(state.restoreBackupSelection)}
+          tone="caution"
+          title="Restore this backup?"
+          message="Current data is replaced. A safety copy is made first, so you can go back."
+          item={backupItem(state.restoreBackupSelection)}
+          actionLabel="Restore backup"
+          failureNote="Your current data was kept."
+          busy={state.backupRestoring}
           onClose={actions.cancelRestoreBackup}
-          title="Restore portable backup?"
-          centered
-          closeOnClickOutside={!state.backupRestoring}
-          closeOnEscape={!state.backupRestoring}
-        >
-          <Stack gap="md">
-            <Text size="sm">
-              This replaces the current identity database with{" "}
-              <Text span fw={800}>{state.restoreBackupSelection ? backupLabel(state.restoreBackupSelection) : "the selected backup"}</Text>
-              {" "}and restores its {state.restoreBackupSelection?.file_count || 0} referenced files.
-            </Text>
-            <Text size="sm" c="dimmed">
-              Before changing anything, SentriFace creates and verifies a complete safety backup of the current state. If restore or reload fails, it rolls back automatically.
-            </Text>
-            <Text size="sm" c="red" fw={700}>
-              Active recognition and queue screen state will be cleared after a successful restore.
-            </Text>
-            <Group justify="flex-end">
-              <Button variant="default" onClick={actions.cancelRestoreBackup} disabled={state.backupRestoring}>Cancel</Button>
-              <Button color="teal" onClick={guarded(actions.restoreBackup)} loading={state.backupRestoring}>
-                Restore Safely
-              </Button>
-            </Group>
-          </Stack>
-        </Modal>
+          onConfirm={actions.restoreBackup}
+        />
+        <ConfirmDialog
+          opened={Boolean(state.backupDeleteTarget)}
+          title="Delete this backup?"
+          message="The backup file is deleted from this computer. This can't be undone."
+          item={backupItem(state.backupDeleteTarget)}
+          note={backupDeleteNote(state.backups, state.backupDeleteTarget)}
+          typed="DELETE"
+          actionLabel="Delete backup"
+          failureNote="Nothing was deleted."
+          onClose={actions.cancelDeleteBackup}
+          onConfirm={actions.deleteBackup}
+        />
         <Modal opened={passwordOpen} onClose={() => setPasswordOpen(false)} title="Change password" centered>
           <Stack>
             <PasswordInput label="Current password" value={currentPassword} onChange={(event) => setCurrentPassword(event.currentTarget.value)} autoComplete="current-password" />
@@ -532,4 +506,28 @@ function SentriFaceShell({ user, logout, changePassword }) {
 function accountInitials(value) {
   const words = String(value || "U").trim().split(/\s+/).filter(Boolean);
   return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase() || "U";
+}
+
+function backupItem(backup) {
+  if (!backup) return null;
+  return { name: backupLabel(backup), detail: backup.created_at ? formatBackupDateTime(backup.created_at) : "" };
+}
+
+function retentionWarning(duplicate) {
+  const names = duplicate.retentionRemoves
+    .map((backup) => [backupLabel(backup), backup.created_at ? formatBackupDateTime(backup.created_at) : ""].filter(Boolean).join(" · "))
+    .join("; ");
+  const full = duplicate.retentionLimit ? `The list is full (${duplicate.retentionLimit})` : "The list is full";
+  return `${full}, so ${names} ${duplicate.retentionRemoves.length === 1 ? "is" : "are"} deleted.`;
+}
+
+function backupDeleteNote(backups = [], target) {
+  if (!target) return null;
+  const usable = (backup) => backup.verified && backup.complete && backup.portable && backup.restorable;
+  if (backups.some((backup) => backup.backup_id !== target.backup_id && usable(backup))) {
+    return { tone: "safe", text: "You still have another verified backup." };
+  }
+  return usable(target)
+    ? { tone: "danger", text: "This is your only verified backup. Without it, you can't restore." }
+    : { tone: "danger", text: "You have no other verified backup to restore from." };
 }

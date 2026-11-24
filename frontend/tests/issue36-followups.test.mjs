@@ -54,7 +54,7 @@ test('removal actions say what they remove', () => {
   assert.match(queue, /Removes only the selected faces from this group/);
   assert.match(queue, /No faces or people are deleted/);
   assert.match(queue, /The photo file is not deleted/);
-  assert.match(queue, /This removes the 1 pending face in this group\./);
+  assert.match(queue, /The 1 pending face in this group is removed\. Saved people stay\./);
   assert.doesNotMatch(queue, /removes all \{groupPendingDiscard/);
 });
 

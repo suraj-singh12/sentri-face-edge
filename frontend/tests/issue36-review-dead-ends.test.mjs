@@ -70,7 +70,7 @@ test('counts pluralize and unknown times read as unknown', async () => {
   assert.equal(plural(1, 'participant'), '1 participant');
   assert.equal(plural(2, 'participant'), '2 participants');
   assert.equal(formatSeenDateTime({ date: '2026-11-21' }), '2026-11-21 · Time unknown');
-  assert.equal(formatSeenDateTime({ date: '2026-11-21', time: '10:30' }), '2026-11-21, 10:30');
+  assert.equal(formatSeenDateTime({ date: '2026-11-21', time: '10:30' }), '2026-11-21 · 10:30');
 });
 
 test('Review photos confirmation no longer requires a typed Added by', () => {

@@ -28,6 +28,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
   const [backupRestoring, setBackupRestoring] = useState(false);
   const [restoreBackupSelection, setRestoreBackupSelection] = useState(null);
   const [duplicateImport, setDuplicateImport] = useState(null);
+  const [backupDeleteTarget, setBackupDeleteTarget] = useState(null);
   const backupInFlight = useRef(false);
   const restoreInFlight = useRef(false);
   const profileLoaded = useRef(false);
@@ -181,11 +182,11 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     if (backupInFlight.current) return;
     backupInFlight.current = true;
     setBackupCreating(true);
-    setBackupModalOpen(false);
     try {
       const payload = await apiPost("/api/backups", {});
       const backup = payload.backup;
       setBackups((current) => [backup, ...current.filter((item) => item.backup_id !== backup.backup_id)].slice(0, 10));
+      setBackupModalOpen(false);
       showToast(
         `${formatBackupDateTime(backup.created_at)} · ${formatBytes(backup.size_bytes)} · ${backup.file_count || 0} referenced file${backup.file_count === 1 ? "" : "s"}`,
         "teal",
@@ -195,11 +196,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
         },
       );
     } catch (error) {
-      showToast(
-        `${error.message || "Portable backup could not be created."}\nYour current data was not changed.`,
-        "red",
-        { title: "Portable backup could not be created.", autoClose: 7500 },
-      );
+      error.message = error.message || "Portable backup could not be created.";
       throw error;
     } finally {
       backupInFlight.current = false;
@@ -207,25 +204,18 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     }
   };
 
-  const deleteBackup = async (backupId) => {
+  const requestDeleteBackup = (backupId) => {
+    const backup = backups.find((item) => item.backup_id === backupId);
+    if (backup) setBackupDeleteTarget(backup);
+  };
+
+  const deleteBackup = async () => {
+    const backupId = backupDeleteTarget?.backup_id;
     if (!backupId) return;
-    const anotherVerified = backups.some((backup) => (
-      backup.backup_id !== backupId && backup.verified && backup.complete
-    ));
-    const recoveryStatus = anotherVerified
-      ? "Another verified complete backup will remain."
-      : "No other verified complete backup will remain.";
-    const typed = window.prompt(
-      `${recoveryStatus}\n\nType the backup ID to delete it:\n${backupId}`,
-      "",
-    );
-    if (typed !== backupId) {
-      if (typed !== null) showToast("Backup ID did not match; nothing was deleted.", "yellow");
-      return;
-    }
     const query = new URLSearchParams({ confirm: backupId });
     await apiDelete(`/api/backups/${encodeURIComponent(backupId)}?${query}`);
     setBackups((current) => current.filter((item) => item.backup_id !== backupId));
+    setBackupDeleteTarget(null);
     showToast("Portable backup deleted", "yellow");
   };
 
@@ -371,11 +361,7 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
       clearPersistedApplicationState();
       window.location.reload();
     } catch (error) {
-      showToast(
-        `${error.message || "Restore failed."}\nThe previous application state was kept or restored automatically.`,
-        "red",
-        { title: "Portable backup was not restored", autoClose: 9000 },
-      );
+      error.message = error.message || "Restore failed.";
       throw error;
     } finally {
       restoreInFlight.current = false;
@@ -402,11 +388,13 @@ export function useAppData({ activeView, capabilities = [], apiGet, apiPost, api
     backupRestoring,
     restoreBackupSelection,
     duplicateImport,
+    backupDeleteTarget,
+    requestDeleteBackup,
+    cancelDeleteBackup: () => setBackupDeleteTarget(null),
     cancelDuplicateImport: () => setDuplicateImport(null),
     confirmDuplicateImport: () => {
       if (!duplicateImport) return null;
       const { file, passphrase, retentionRemoves } = duplicateImport;
-      setDuplicateImport(null);
       return importBackup(file, passphrase, {
         allowDuplicate: true,
         approvedRemovals: retentionRemoves.map((backup) => backup.backup_id),

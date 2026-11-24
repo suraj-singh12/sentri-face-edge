@@ -744,8 +744,8 @@ function requireWorldRelationship(relationship) {
     || !relationship.target_person_id
     || !relationship.directionality
     || !relationship.strength_basis
-    || !relationship.first_occurrence_at
-    || !relationship.last_occurrence_at
+    || (relationship.first_occurrence_at !== null && !relationship.first_occurrence_at)
+    || (relationship.last_occurrence_at !== null && !relationship.last_occurrence_at)
     || !Number.isFinite(Number(relationship.evidence_count))
     || !Array.isArray(relationship.relationship_types)
     || !relationship.evidence_type_counts
