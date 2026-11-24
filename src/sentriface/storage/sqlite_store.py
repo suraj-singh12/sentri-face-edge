@@ -2181,7 +2181,7 @@ class SQLiteIdentityStore:
                 raise ValueError("These photos belong to a targeted Attach Media draft; Retry or Cancel it")
             if target_observation_id:
                 if len(media_groups) != 1:
-                    raise ValueError("Attach Media requires one existing Encounter")
+                    raise ValueError("Attach Media requires one existing Event")
                 _require_encounter_revision(conn, target_observation_id, expected_revision)
                 _require_no_encounter_amendment(conn, target_observation_id, session_id=session_id)
             existing_reviews = conn.execute(
@@ -2197,7 +2197,7 @@ class SQLiteIdentityStore:
                     for r in existing_reviews
                 ):
                     return _list_init_session_encounter_reviews(conn, session_id)
-                raise ValueError("Encounter grouping has already been confirmed for this session")
+                raise ValueError("Event grouping has already been confirmed for this session")
             media_rows = conn.execute(
                 "SELECT media_id, media_path FROM init_session_media WHERE session_id = ? AND excluded = 0 ORDER BY media_id",
                 (session_id,),
@@ -2205,7 +2205,7 @@ class SQLiteIdentityStore:
             known_media = {str(row["media_id"]): str(row["media_path"]) for row in media_rows}
             supplied = [media_id for group in media_groups for media_id in group]
             if not media_groups or any(not group for group in media_groups) or len(supplied) != len(set(supplied)) or not set(supplied).issubset(known_media):
-                raise ValueError("Every selected media item must belong to exactly one Encounter")
+                raise ValueError("Every selected media item must belong to exactly one Event")
             for media_id in supplied:
                 media_path = known_media[media_id]
                 previous = conn.execute(
@@ -2216,7 +2216,7 @@ class SQLiteIdentityStore:
                 ).fetchone()
                 if previous is not None:
                     raise ValueError(
-                        f"This media already belongs to finalized Encounter {previous['observation_id']}"
+                        f"This media already belongs to finalized Event {previous['observation_id']}"
                     )
             created_at = utc_now()
             staged_group_encounters: dict[str, set[int]] = {}
@@ -2250,7 +2250,7 @@ class SQLiteIdentityStore:
                     (session_id, *media_paths),
                 ).fetchall()
                 if not group_faces and not target_observation_id:
-                    raise ValueError("Each Encounter review needs at least one detected face")
+                    raise ValueError("Each Event needs at least one detected face")
                 for face in group_faces:
                     staged_group_encounters.setdefault(str(face["group_id"]), set()).add(sequence_number)
                     staged_face_encounter[str(face["init_face_id"])] = (str(face["group_id"]), sequence_number)
@@ -2289,9 +2289,9 @@ class SQLiteIdentityStore:
         with self._connect() as conn:
             review = conn.execute("SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,)).fetchone()
             if review is None or review["status"] != "IN_PROGRESS" or review["review_phase"] not in {"EVENT", "IDENTITIES"}:
-                raise ValueError("Event details can only be saved for the active Encounter review")
+                raise ValueError("Event details can only be saved for the active Event review")
             if review["target_observation_id"]:
-                raise ValueError("Use Correct Encounter to change finalized Event details")
+                raise ValueError("Use Correct Event to change finalized Event details")
             for person_id in event_details.get("event_mentioned_person_ids", []):
                 if conn.execute("SELECT 1 FROM persons WHERE person_id = ?", (person_id,)).fetchone() is None:
                     raise ValueError(f"Unknown Event Note mentioned person: {person_id}")
@@ -2388,7 +2388,7 @@ class SQLiteIdentityStore:
             if review["review_phase"] != "LEGACY" and review["review_phase"] != "IDENTITIES":
                 raise ValueError("Complete Event details before deciding identities")
             if review["review_phase"] == "IDENTITIES" and normalized_decision == "SKIP":
-                raise ValueError("Skip defers an identity group; it is not a final decision")
+                raise ValueError("Skip for now postpones an identity group; it is not a final decision")
             if normalized_decision == "ACCEPT_EXISTING_PERSON":
                 _require_active_review_person(conn, person_id)
                 new_person_key = new_person_name = None
@@ -2508,7 +2508,7 @@ class SQLiteIdentityStore:
             if review["status"] != "IN_PROGRESS":
                 raise ValueError("Only an in-progress review can be completed")
             if review["source"] == "reference-only":
-                raise ValueError("Confirm Reference Only without creating an Encounter")
+                raise ValueError("Confirm Reference Only without creating an Event")
             target_observation_id = review["target_observation_id"]
             original_participant_ids = []
             if target_observation_id:
@@ -2539,7 +2539,7 @@ class SQLiteIdentityStore:
                     ).fetchone()
                     if previous is not None:
                         raise ValueError(
-                            f"This media already belongs to finalized Encounter {previous['observation_id']}"
+                            f"This media already belongs to finalized Event {previous['observation_id']}"
                         )
             relation_rows: list[sqlite3.Row] = []
             if encounter_review:
@@ -2748,7 +2748,7 @@ class SQLiteIdentityStore:
                     (observation_id, media_path),
                 ).fetchone()
                 if media is None:
-                    raise ValueError("Accepted face has no attached Encounter media")
+                    raise ValueError("Accepted face has no attached Event media")
                 decision = conn.execute(
                     "SELECT recognition_detail FROM photo_review_faces WHERE review_id = ? AND face_id = ?",
                     (review_id, face_id),
@@ -3090,7 +3090,7 @@ class SQLiteIdentityStore:
             if embedding is None:
                 raise KeyError(f"Unknown active embedding: {embedding_id}")
             if conn.execute("SELECT 1 FROM biometric_enrollment_history WHERE embedding_id=?", (embedding_id,)).fetchone():
-                raise ValueError("Reference Only ownership cannot be moved; correct the Encounter or retire and deliberately add a Reference")
+                raise ValueError("Reference Only ownership cannot be moved; correct the Event or retire and deliberately add a Reference")
             raw_from_person_id = _raw_embedding_owner_person_id(conn, embedding)
             from_person_id = _effective_embedding_owner_person_id(conn, embedding)
             if from_person_id == target_person_id:
@@ -3241,7 +3241,7 @@ class SQLiteIdentityStore:
             )
             _require_reference_mutation_person(conn, person_id)
             if no_context_acknowledged is not True:
-                raise ValueError("Confirm that no reliable Encounter context is available")
+                raise ValueError("Confirm that no reliable Event context is available")
             review = conn.execute(
                 "SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,),
             ).fetchone()
@@ -3745,7 +3745,7 @@ class SQLiteIdentityStore:
             existing = _existing_committed_operation_result(conn, operation_id, "encounter.correct")
             if existing is not None:
                 if existing["observation_id"] != observation_id:
-                    raise KeyError("Operation ID belongs to another Encounter")
+                    raise KeyError("Operation ID belongs to another Event")
                 return existing
             _require_encounter_revision(conn, observation_id, expected_revision)
             _require_no_encounter_amendment(conn, observation_id)
@@ -3763,7 +3763,7 @@ class SQLiteIdentityStore:
             if event_details is not None:
                 allowed = {"date", "time", "end_time", "time_precision", "place_seen", "event_occasion", "event_context", "event_notes", "event_mentioned_person_ids"}
                 if not isinstance(event_details, dict) or set(event_details) - allowed:
-                    raise ValueError("Unknown Encounter metadata field")
+                    raise ValueError("Unknown Event detail field")
                 merged_details = {**_encounter_event_details(observation), **event_details}
                 observed_at, location, context = _review_encounter_metadata([merged_details])
                 for pid in context["event_mentioned_person_ids"]:
@@ -3817,7 +3817,7 @@ class SQLiteIdentityStore:
                         conn.execute("UPDATE persons SET biometric_status = 'NO_FACE', enrollment_status = 'placeholder' WHERE person_id = ?", (affected,))
             participants = _effective_observation_person_ids(conn, observation_id)
             if not participants:
-                raise ValueError("An Encounter needs at least one effective participant")
+                raise ValueError("An Event needs at least one participant")
             desired = _effective_encounter_relations(conn, observation_id)
             # Legacy finalized reviews have implicit positive pair authority; materialize it on first correction.
             if not conn.execute("SELECT 1 FROM encounter_relation_decisions WHERE observation_id = ?", (observation_id,)).fetchone():
@@ -3939,7 +3939,7 @@ class SQLiteIdentityStore:
         """Bounded read of finalized observations; mentions never become participants."""
         page_size = max(1, min(int(limit), 50))
         if context and context not in {"ordinary", "public", "unknown"}:
-            raise ValueError("Unknown Encounter context")
+            raise ValueError("Unknown Event context")
         if person_status and person_status not in {"PRESENT", "MENTIONED", "BOTH"}:
             raise ValueError("Unknown Person Event status")
         with self._connect() as conn:
@@ -3974,7 +3974,7 @@ class SQLiteIdentityStore:
                 try:
                     cursor_time, cursor_id = cursor.rsplit("|", 1)
                 except ValueError as exc:
-                    raise ValueError("Invalid Encounter page cursor") from exc
+                    raise ValueError("Invalid Events page; reload the Events list") from exc
                 conditions.append("(COALESCE(observed_at, created_at), observation_id) < (?, ?)")
                 arguments.extend((cursor_time, cursor_id))
             items: list[dict] = []
@@ -4038,7 +4038,7 @@ class SQLiteIdentityStore:
             conn.execute("BEGIN")
             row = _require_observation(conn, observation_id)
             if row["status"] != "FINALIZED":
-                raise KeyError(f"Unknown finalized Encounter: {observation_id}")
+                raise KeyError(f"Unknown finalized Event: {observation_id}")
             record = _encounter_read_record(conn, row)
             record["revision"] = _encounter_revision(conn, observation_id)
             record["event_details"] = _encounter_event_details(row)
@@ -7287,7 +7287,7 @@ class SQLiteIdentityStore:
                                      expected_revision: str | None) -> None:
         """Retain workflow ownership even when subsequent planning is rejected."""
         if not isinstance(expected_revision, str) or not expected_revision.strip():
-            raise ValueError("Attach Media requires an Encounter revision")
+            raise ValueError("Attach Media requires an Event revision")
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             session = conn.execute("SELECT * FROM init_sessions WHERE session_id = ?", (session_id,)).fetchone()
@@ -7297,12 +7297,12 @@ class SQLiteIdentityStore:
                 raise ValueError("This draft is closed")
             observation = _require_observation(conn, observation_id)
             if observation["status"] != "FINALIZED":
-                raise ValueError("Attach Media requires a finalized Encounter")
+                raise ValueError("Attach Media requires a finalized Event")
             if session["target_observation_id"] not in (None, observation_id):
-                raise ValueError("An Attach Media draft cannot change its target Encounter")
+                raise ValueError("An Attach Media draft cannot change its target Event")
             reviews = conn.execute("SELECT target_observation_id FROM photo_reviews WHERE session_id = ?", (session_id,)).fetchall()
             if any(row["target_observation_id"] != observation_id for row in reviews):
-                raise ValueError("Encounter grouping has already been confirmed for this session")
+                raise ValueError("Event grouping has already been confirmed for this session")
             # A materialized review owns its original revision precondition. A
             # pre-plan Retry may explicitly admit a fresh revision of this target.
             if not reviews:
@@ -7313,7 +7313,7 @@ class SQLiteIdentityStore:
                             target_observation_id: str | None = None,
                             expected_revision: str | None = None) -> InitSession:
         if target_observation_id and (not isinstance(expected_revision, str) or not expected_revision.strip()):
-            raise ValueError("Attach Media requires an Encounter revision")
+            raise ValueError("Attach Media requires an Event revision")
         session = InitSession(
             session_id=str(uuid.uuid4()),
             source_path=source_path,
@@ -7326,7 +7326,7 @@ class SQLiteIdentityStore:
             if target_observation_id:
                 observation = _require_observation(conn, target_observation_id)
                 if observation["status"] != "FINALIZED":
-                    raise ValueError("Attach Media requires a finalized Encounter")
+                    raise ValueError("Attach Media requires a finalized Event")
             conn.execute(
                 """
                 INSERT INTO init_sessions(session_id, source_path, status, created_at, quality_only,
@@ -7457,7 +7457,7 @@ class SQLiteIdentityStore:
         """Selection only: never remove managed media or historical authority."""
         with self._connect() as conn:
             if conn.execute("SELECT 1 FROM photo_reviews WHERE session_id = ?", (session_id,)).fetchone():
-                raise ValueError("Media selection is locked after Encounter grouping")
+                raise ValueError("Media selection is locked after Event grouping")
             cursor = conn.execute(
                 "UPDATE init_session_media SET excluded = ? WHERE session_id = ? AND media_id = ?",
                 (int(excluded), session_id, media_id),
@@ -8237,7 +8237,7 @@ def _review_relation_candidates(conn: sqlite3.Connection, review_id: str) -> lis
 def _encounter_review_read(conn: sqlite3.Connection, review_id: str) -> dict:
     row = conn.execute("SELECT * FROM photo_reviews WHERE review_id = ?", (review_id,)).fetchone()
     if row is None:
-        raise KeyError(f"Unknown Encounter review: {review_id}")
+        raise KeyError(f"Unknown Event review: {review_id}")
     media = [
         {"media_id": str(item["media_id"]), "media_path": str(item["media_path"])}
         for item in conn.execute(
@@ -9238,7 +9238,7 @@ def _effective_encounter_relations(conn, observation_id):
         if pair[0] == pair[1]:
             continue
         if pair in result and result[pair]["disposition"] != row["disposition"]:
-            raise ValueError(f"Encounter {observation_id} has conflicting canonical Relations")
+            raise ValueError(f"Event {observation_id} has conflicting Relations")
         # Row ordering chooses a provenance predecessor, never current support.
         result[pair] = {**dict(row), "support": _encounter_pair_support(conn, observation_id, *pair, media_by_person=media_by_person)}
     return result
@@ -9248,7 +9248,7 @@ def _write_encounter_relation_revisions(conn, observation_id, desired, operation
     existing = _effective_encounter_relations(conn, observation_id)
     review = conn.execute("SELECT review_id FROM photo_reviews WHERE observation_id = ? AND status = 'COMPLETED' ORDER BY completed_at LIMIT 1", (observation_id,)).fetchone()
     if not review:
-        raise ValueError("Encounter has no completed review authority")
+        raise ValueError("Event has no completed review")
     for row in conn.execute("SELECT * FROM encounter_relation_decisions WHERE observation_id = ? AND active = 1", (observation_id,)).fetchall():
         pair = tuple(sorted(_resolve_canonical_person_id(conn, str(row[key])) for key in ("first_person_id", "second_person_id")))
         if pair not in desired or (existing.get(pair, {}).get("decision_id") != row["decision_id"]) or any(row[key] != desired[pair][key] for key in ("disposition", "support")):
@@ -9307,7 +9307,7 @@ def _recalculate_observation_evidence(
         if first_person_id == second_person_id:
             continue
         if first_person_id not in participant_ids or second_person_id not in participant_ids:
-            raise ValueError("Encounter Relation no longer matches its participants")
+            raise ValueError("Event Relation no longer matches its participants")
         evidence_ids.append(_insert_relationship_evidence(
                 conn,
                 evidence_type="CO_OBSERVED",
@@ -9359,7 +9359,7 @@ def _revise_encounter_relations_for_identity_correction(
             changed.add(str(row["decision_id"]))
     for pair, pair_rows in mapped.items():
         if len({str(row["disposition"]) for row in pair_rows}) > 1:
-            raise ValueError(f"Encounter Relation conflict after identity correction for {pair[0]} and {pair[1]}")
+            raise ValueError(f"Event Relation conflict after identity correction for {pair[0]} and {pair[1]}")
     for row in self_rows:
         conn.execute("UPDATE encounter_relation_decisions SET active = 0 WHERE decision_id = ?", (row["decision_id"],))
     for pair, pair_rows in mapped.items():

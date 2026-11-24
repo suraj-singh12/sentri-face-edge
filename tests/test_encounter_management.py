@@ -10,7 +10,7 @@ from sentriface.models import DetectedFace, FaceBox, InitFace, QualityReport, Qu
 from sentriface.storage.sqlite_store import SQLiteIdentityStore, SCHEMA_VERSION, SchemaMigrationError, _schema_migrations
 from sentriface.integrity import ReadOnlyIntegrityChecker
 from sentriface.models import WorldGraphRequest, WorldDetailLevel
-from sentriface.errors import OperationRevertRefused
+from sentriface.errors import EncounterRelationConflict, OperationRevertRefused
 from tests import test_identity_corrections as correction_helpers
 
 
@@ -255,7 +255,7 @@ class EncounterManagementTest(unittest.TestCase):
         rid = self.amendment([self.a])
         with self.assertRaisesRegex(ValueError, 'active Attach'):
             self.correct('blocked', event_details={'place_seen': 'Elsewhere'})
-        with self.assertRaisesRegex(ValueError, 'active Encounter'):
+        with self.assertRaisesRegex(ValueError, 'unfinished Attach Media review'):
             self.store.archive_person(self.b.person_id, 'archive-blocked')
         self.store.complete_encounter_identity_review(rid)
         with patch('sentriface.storage.sqlite_store._replace_graph_projection', side_effect=RuntimeError('injected')):
@@ -405,8 +405,10 @@ class EncounterManagementTest(unittest.TestCase):
     def test_merge_relation_conflict_can_be_corrected_then_deduplicated(self):
         self.correct('add-for-merge', participant_correction={'action': 'ADD', 'person_id': self.c.person_id},
                      relations=[self.pair(self.a, self.c), self.pair(self.b, self.c, 'EXCLUDE')])
-        with self.assertRaisesRegex(ValueError, self.oid):
+        with self.assertRaisesRegex(EncounterRelationConflict, "combine conflicting Relation decisions in Event") as conflict:
             self.store.preview_identity_merge(self.b.person_id, self.a.person_id)
+        self.assertEqual(conflict.exception.observation_id, self.oid)
+        self.assertNotIn(self.oid, str(conflict.exception))
         self.correct('resolve-merge', relations=[self.pair(self.b, self.c)])
         self.store.execute_identity_merge(self.b.person_id, self.a.person_id, 'resolved-merge')
         self.assertEqual(set(self.store.get_encounter_read(self.oid)['participant_ids']), {self.a.person_id, self.c.person_id})

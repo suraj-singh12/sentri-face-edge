@@ -96,7 +96,7 @@ def test_lifecycle_early_validation_and_transaction_revalidation(tmp_path):
     store.save_encounter_review_event(review['review_id'], {'time_precision': 'unknown'})
     store.set_photo_review_face_decision(review['review_id'], face.init_face_id, 'ACCEPT_EXISTING_PERSON', person_id=a.person_id)
     for action in (lambda: store.validate_person_lifecycle_operation(a.person_id, 'archive', 'archive-person'), lambda: store.archive_person(a.person_id, 'archive')):
-        with pytest.raises(ValueError, match='active Encounter'): action()
+        with pytest.raises(ValueError, match='unfinished Event review'): action()
     assert store.get_operation('archive') is None
 
 @pytest.mark.parametrize('quality_state', ['GOOD', 'POOR_ACCEPTED', 'PROOF_ONLY'])
@@ -137,7 +137,7 @@ def test_guarded_lifecycle_does_not_make_safety_copy_and_allowed_archive_does(tm
         store.set_photo_review_face_decision(review['review_id'],face.init_face_id,'ACCEPT_EXISTING_PERSON',person_id=a.person_id)
         server.backups.create_backup=Mock(wraps=server.backups.create_backup)
         for operation_type,action in [('archive-person',lambda:store.archive_person(a.person_id,'archive')),('purge-person',lambda:store.permanently_delete_person(a.person_id,'delete'))]:
-            with pytest.raises(ValueError,match='active Encounter'):
+            with pytest.raises(ValueError,match='unfinished Event review'):
                 server.backed_up_people_deletion(operation_type,operation_type,'guard',action,person_id=a.person_id)
         server.backups.create_backup.assert_not_called()
         store.cancel_photo_review(review['review_id'])
