@@ -44,7 +44,7 @@ test("Events reads use one bounded backend query; corrections are explicit", asy
     read("../src/views/PeopleView.jsx"),
   ]);
   assert.match(appData, /apiGet\(`\/api\/encounters\?/);
-  assert.match(events, /Finalized Encounters, newest first/);
+  assert.match(events, /Newest first\. Mentions are shown separately/);
   assert.match(events, /Mentioned: /);
   assert.match(people, /<Tabs\.Tab value="events">Events<\/Tabs\.Tab>/);
   assert.match(people, /person_status/);

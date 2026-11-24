@@ -274,11 +274,11 @@ def _enroll_from_photo(page, tmp, name, occasion, seed):
 def _open_event(page, occasion):
     _tab(page, "Events")
     page.get_by_text(occasion).first.click()
-    page.get_by_role("button", name="Correct Encounter").wait_for()
+    page.get_by_role("button", name="Correct Event").wait_for()
 
 
 def _correct_occasion(page, value):
-    page.get_by_role("button", name="Correct Encounter").click()
+    page.get_by_role("button", name="Correct Event").click()
     dialog = page.get_by_role("dialog").filter(has=page.get_by_label("Event / occasion"))
     _field(dialog, "Event / occasion").fill(value)
     return dialog
@@ -387,7 +387,7 @@ def test_backup_restore_replaces_data_after_cancel_and_keeps_safety_copy(app):
     _settings(page, "Backups & restore")
     page.get_by_role("button", name="Create Backup").first.click()
     page.get_by_role("dialog", name="Create a backup?").get_by_role("button", name="Create backup").click()
-    rows = page.get_by_role("button", name=re.compile("^Restore backup"))
+    rows = page.get_by_role("button", name=re.compile("^Restore from Backup"))
     expect(rows.first).to_be_enabled()
     backups_before = len(_backups(page))
 
@@ -449,6 +449,6 @@ def test_event_without_time_shows_no_clock_in_world_and_person_graph(app, multi_
     last_seen = _row_value(page, "Last seen")
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", last_seen), last_seen
     page.locator(".person-graph-edge-hit").first.click(force=True)
-    for label in ("First occurrence", "Last occurrence", "Latest shared Encounter"):
+    for label in ("First occurrence", "Last occurrence", "Latest shared Event"):
         value = _row_value(page, label)
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", value), (label, value)

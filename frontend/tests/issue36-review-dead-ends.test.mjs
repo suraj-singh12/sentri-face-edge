@@ -53,8 +53,8 @@ test('deferred Encounter groups stay recoverable while other groups are pending'
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document=originalDocument;
   }
-  assert.match(html,/1 deferred/);
-  assert.match(html,/Review deferred now \(1\)/);
+  assert.match(html,/1 skipped/);
+  assert.match(html,/Review skipped now \(1\)/);
 });
 
 test('safety-copy folder hints match the platform and same-drive copies are flagged', async () => {

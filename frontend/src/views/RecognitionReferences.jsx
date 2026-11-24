@@ -29,14 +29,14 @@ export function RecognitionReferences({ opened, onClose, person, data = {}, acti
   return <Modal opened={opened} onClose={() => { if (!busy) onClose(); }} title="Recognition References" size="lg" closeButtonProps={{"aria-label":"Close Recognition References"}}>
     <Stack>
       <Text>Reference Only · {data.active_count || 0} / 4 active sources</Text>
-      <Text size="sm">Ordinary photographs with known date, place or occurrence belong in an Encounter. Reference Only is for a known Person when no reliable Encounter context is available. It creates no Encounter, sighting, recurrence, relationship or Event history.</Text>
-      {data.has_encounter_coverage && <Text size="sm" c="dimmed">This Person already has usable recognition coverage from Encounter photos. Add a Reference Only image only when no reliable Encounter context is available and it adds useful biometric value.</Text>}
+      <Text size="sm">Ordinary photographs with known date, place or occurrence belong in an Event. Reference Only is for a known Person when no reliable Event context is available. It creates no Event, sighting, recurrence or relationship history.</Text>
+      {data.has_encounter_coverage && <Text size="sm" c="dimmed">This Person already has usable recognition coverage from Event photos. Add a Reference Only image only when no reliable Event context is available and it adds useful biometric value.</Text>}
       {error && <Alert color="red">{error}</Alert>}
       {references.filter(r => r.active).length > data.active_count && <Text size="sm" c="dimmed">Legacy history contains multiple assignments for an exact image. It counts as one active source; retire each active historical assignment to free that source's slot.</Text>}
       {!adding && <Button variant="light" disabled={!canMutate || busy || data.active_count >= 4} onClick={() => { setAdding(true); setAcknowledged(false); }}>Add Reference Only</Button>}
       {adding && <Stack>
-        <Text>Upload a cropped image containing only this person's face. Do not upload group or scene photographs. If this photograph represents a known occurrence, use an Encounter instead.</Text>
-        <Checkbox label="No reliable Encounter context is available" checked={acknowledged} onChange={e => setAcknowledged(e.currentTarget.checked)} disabled={busy} />
+        <Text>Upload a cropped image containing only this person's face. Do not upload group or scene photographs. If this photograph represents a known occurrence, use an Event instead.</Text>
+        <Checkbox label="No reliable Event context is available" checked={acknowledged} onChange={e => setAcknowledged(e.currentTarget.checked)} disabled={busy} />
         {!draft && <Button component="label" disabled={!canMutate || !acknowledged || busy || data.active_count >= 4}>
           Select cropped Reference image
           <input type="file" accept="image/*" hidden disabled={!acknowledged || busy || data.active_count >= 4}
