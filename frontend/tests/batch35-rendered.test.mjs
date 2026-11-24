@@ -28,7 +28,7 @@ test('targeted pre-plan Attach drafts expose Retry/Cancel instead of ordinary En
   const owned=render(QueueView,{...props,attachment:{observation_id:'existing'}});
   assert.match(owned,/Retry Attach Media/);
   assert.match(owned,/Cancel Attach Media/);
-  assert.doesNotMatch(owned,/Confirm Encounter grouping/);
+  assert.doesNotMatch(owned,/Confirm Event grouping/);
   // Queue thumbnails obtain the session meta tag in the browser. Supply only
   // that DOM lookup while rendering the ordinary branch on the server.
   const originalDocument=globalThis.document;
@@ -40,12 +40,12 @@ test('targeted pre-plan Attach drafts expose Retry/Cancel instead of ordinary En
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document=originalDocument;
   }
-  assert.match(ordinary,/Confirm Encounter grouping/);
+  assert.match(ordinary,/Confirm Event grouping/);
   assert.doesNotMatch(ordinary,/Retry Attach Media/);
 });
 test('rendered deferred badge and completion distinguish Skip from accepted/discarded decisions', () => {
   const deferred=render(RecognizeView,recognitionProps({1:'SKIP',2:'ACCEPT_EXISTING_PERSON'}));
-  assert.match(deferred,/>Deferred</);assert.match(namedButton(deferred,'Complete Review'),/disabled=""/);
+  assert.match(deferred,/>Skipped</);assert.match(namedButton(deferred,'Complete Review'),/disabled=""/);
   const discarded=render(RecognizeView,recognitionProps({1:'EXCLUDE',2:'ACCEPT_NEW_PERSON'}));
   assert.match(discarded,/>Discarded</);assert.doesNotMatch(namedButton(discarded,'Complete Review'),/disabled=""/);
 });
@@ -80,7 +80,7 @@ test('accepted recognition identity comes from operator resolution, never an unr
       const summary=html.match(/class="recognition-face-summary"[^]*?<\/button>/)?.[0];
       assert.match(summary,new RegExp(`>${name}<`));
       assert.match(summary,/>Accepted</);
-      assert.match(html,/>Deferred</);
+      assert.match(html,/>Skipped</);
       if (name !== 'Proposal A') assert.doesNotMatch(summary,/>Proposal A</);
       if (new_person_name) assert.match(html,/New Person · pending completion/);
       else { assert.match(html,/Existing person/); assert.doesNotMatch(html,new RegExp(`ID ${person_id}`)); }

@@ -1590,8 +1590,8 @@ function PeopleGalleryView({
       >
         <Stack>
           {managementConflict && <Box>
-            <Text size="sm" c="red" role="alert">This merge would combine contradictory Encounter Relations. Correct the affected Encounter before retrying.</Text>
-            <Button mt="xs" variant="light" onClick={() => { setManagementDialog(null); onOpenEncounter?.(managementConflict); }}>Open conflicting Encounter</Button>
+            <Text size="sm" c="red" role="alert">This merge would combine contradictory Event Relations. Correct the affected Event before retrying.</Text>
+            <Button mt="xs" variant="light" onClick={() => { setManagementDialog(null); onOpenEncounter?.(managementConflict); }}>Open conflicting Event</Button>
           </Box>}
           <Text size="sm">
             <strong>{payload.person.name}</strong> will resolve to the selected person. Photos, sightings, notes, and other history keep their original provenance.
@@ -1735,7 +1735,7 @@ function PeopleProfilePhotos({
         <Group justify="space-between" mb="sm">
           <Box>
             <Text size="sm" fw={700}>Photos ({records.length})</Text>
-            <Text size="xs" c="dimmed">Reference faces and Encounter photos where this Person was observed. Select a photo to inspect its origin; enrolled faces can be managed below.</Text>
+            <Text size="xs" c="dimmed">Reference faces and Event photos where this Person was observed. Select a photo to inspect its origin; enrolled faces can be managed below.</Text>
           </Box>
         </Group>
         <Group gap="sm" mb="md" className="people-profile-thumb-row">
@@ -1771,7 +1771,7 @@ function PeopleProfilePhotos({
             ["Location", photoDetail.place_seen || "-"],
             ["Quality", selectedRecord?.qualityScore == null ? "-" : `${Math.round(selectedRecord.qualityScore * 100)}%`],
             ["Embedding", selectedRecord?.embeddingId ? "Indexed" : "-"],
-            ["Face origin", [...new Set(selectedRecord?.faceOrigins?.map((origin) => ({ ENCOUNTER: "Added from Encounter", STANDALONE_ENROLLMENT: "Reference Only", UNKNOWN_LEGACY: "Legacy origin unknown" })[origin.face_origin] || "Legacy origin unknown") || [])].join(", ") || "Legacy origin unknown"],
+            ["Face origin", [...new Set(selectedRecord?.faceOrigins?.map((origin) => ({ ENCOUNTER: "Added from Event", STANDALONE_ENROLLMENT: "Reference Only", UNKNOWN_LEGACY: "Legacy origin unknown" })[origin.face_origin] || "Legacy origin unknown") || [])].join(", ") || "Legacy origin unknown"],
             ["Face samples", selectedRecord?.embeddingIds?.length || "Historical media"],
             ["Rank", profile.rank || "-"],
           ]} />
@@ -1852,7 +1852,7 @@ function PeopleProfileAssociations({ person, people = [], canEdit, associations,
             Open Person Graph
           </Button>
         </Group>
-        <Text size="xs" c="dimmed" mb="sm">Removing a manual assertion preserves Encounter and note evidence. The relationship may remain visible.</Text>
+        <Text size="xs" c="dimmed" mb="sm">Removing a manual assertion preserves Event and note evidence. The relationship may remain visible.</Text>
         <Stack gap="xs">
           {associations.length ? associations.map((association) => {
             const associationHistorical = !personAllows(association.person, "OPEN");
@@ -1893,7 +1893,7 @@ function PeopleProfileAssociations({ person, people = [], canEdit, associations,
         </Stack>
       </Box>
       <Modal opened={adding} onClose={() => !busy && setAdding(false)} title="Add Association" centered>
-        <Stack><Text size="sm" c="dimmed">Record an operator assertion. It creates Manual Association evidence independently of Encounters and selected note mentions.</Text>
+        <Stack><Text size="sm" c="dimmed">Record an operator assertion. It creates Manual Association evidence independently of Events and selected note mentions.</Text>
           <Select searchable label="Person" value={target} onChange={setTarget} data={people.filter((p) => p.lifecycle_status === "ACTIVE" && p.person_id !== person.person_id).map((p) => ({ value: p.person_id, label: p.name }))} />
           {error && <Text c="red" role="alert">{error}</Text>}
           <Group justify="flex-end"><Button variant="default" disabled={busy} onClick={() => setAdding(false)}>Cancel</Button><Button loading={busy} disabled={!target} onClick={create}>Add Association</Button></Group>

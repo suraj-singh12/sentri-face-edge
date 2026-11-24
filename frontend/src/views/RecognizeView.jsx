@@ -216,7 +216,7 @@ export function RecognizeView({
   };
 
   if (targetPerson) return <Alert color="orange" title="Use Recognition References">
-    <Text>This older Add Face draft cannot be confirmed through Check a photo. Cancel it, then open {targetPerson.name}'s Recognition References to upload a cropped single-face image and acknowledge that no reliable Encounter context is available.</Text>
+    <Text>This older Add Face draft cannot be confirmed through Check a photo. Cancel it, then open {targetPerson.name}'s Recognition References to upload a cropped single-face image and acknowledge that no reliable Event context is available.</Text>
     <Button mt="sm" variant="default" onClick={onCancelTarget}>Cancel older enrollment draft</Button>
   </Alert>;
 
@@ -367,8 +367,8 @@ export function RecognizeView({
               onClick={() => onSkip(selectedFace?.index)}
               disabled={!canAdd || !selectedFace || selectedAccepted}
             >
-              Skip Face
-              <Text component="span" size="xs" fw={400}>Defer this face for later review</Text>
+              Skip for now
+              <Text component="span" size="xs" fw={400}>Come back to this face later</Text>
             </Button>
             <Button className="recognize-action recognize-action--clear" color="red" variant="light" leftSection={<IconTrash size={20} />} onClick={onClear} disabled={!recognition}>
               Clear
@@ -597,7 +597,7 @@ function RecognitionFaceCard({ face, inputSrc, imageSize, selected, accepted, re
           <Text size="sm" fw={700} className="recognition-face-label">{faceLabel}</Text>
           <PersonName name={accepted && !resolved ? "Accepted identity loading" : unknown ? "No match found" : best.name} fw={800} />
           <Badge size="xs" color={unknown ? "orange" : display.color} variant="light">
-            {reviewDecision === "SKIP" ? "Deferred" : reviewDecision === "EXCLUDE" ? "Discarded" : accepted ? "Accepted" : unknown ? "Human review" : manualMatch ? "Selected" : display.badge}
+            {reviewDecision === "SKIP" ? "Skipped" : reviewDecision === "EXCLUDE" ? "Discarded" : accepted ? "Accepted" : unknown ? "Human review" : manualMatch ? "Selected" : display.badge}
           </Badge>
         </Box>
         {selected ? <IconChevronUp size={18} /> : <IconChevronDown size={18} />}
