@@ -529,7 +529,7 @@ class ReadOnlyIntegrityChecker:
             for reference_id in _reference_integrity_errors(conn):
                 self._add("P11-REVIEW-001", "Invalid Reference source authority", entities={"reference_id": reference_id})
         for session_id in _attachment_ownership_errors(conn):
-            self._add("P11-REVIEW-001", "Attach Media draft ownership disagrees with its Encounter or reviews",
+            self._add("P11-REVIEW-001", "Attach Media draft ownership disagrees with its Event or reviews",
                       entities={"session_id": session_id})
         query = """
         SELECT r.review_id, r.status, r.observation_id, r.completed_operation_id, r.completed_at,

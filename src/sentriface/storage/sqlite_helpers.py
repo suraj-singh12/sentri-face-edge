@@ -346,7 +346,7 @@ def _require_reference_mutation_person(conn: sqlite3.Connection, person_id: str)
 
 def _require_reference_media_role(conn: sqlite3.Connection, media_id: str, person_id: str, key: bytes | None = None) -> None:
     if conn.execute("SELECT 1 FROM observation_media WHERE media_id = ?", (media_id,)).fetchone():
-        raise ValueError("Encounter media cannot become Reference Only; use its Encounter-derived sample")
+        raise ValueError("Event media cannot become Reference Only; use the face sample from that Event")
     # Legacy single-photo review APIs used a name/opaque media ID. Exact role
     # protection also compares their authenticated source bytes after relocation.
     for row in conn.execute("SELECT media_id, media_path FROM observation_media WHERE media_path IS NOT NULL"):
@@ -354,7 +354,7 @@ def _require_reference_media_role(conn: sqlite3.Connection, media_id: str, perso
         if len(identity) == 64 and all(c in "0123456789abcdef" for c in identity):
             continue
         if media_content_identity(row["media_path"], key) == media_id:
-            raise ValueError("Encounter media cannot become Reference Only; use its Encounter-derived sample")
+            raise ValueError("Event media cannot become Reference Only; use the face sample from that Event")
     for reference in _reference_records(conn):
         if reference["media_id"] == media_id and reference["canonical_person_id"] != person_id:
             raise ValueError("This Reference Only image already belongs to another Person")
@@ -2008,15 +2008,15 @@ def _encounter_revision(conn, observation_id, *, include_media_locations=False):
 
 def _require_encounter_revision(conn, observation_id, expected_revision):
     if _require_observation(conn, observation_id)["status"] != "FINALIZED":
-        raise ValueError("Only a finalized Encounter can be managed")
+        raise ValueError("Only a finalized Event can be managed")
     if not expected_revision or expected_revision != _encounter_revision(conn, observation_id):
-        raise ValueError("Encounter changed; reload it before correcting or attaching media")
+        raise ValueError("Event changed; reload it before correcting or attaching media")
 
 
 def _require_no_encounter_amendment(conn, observation_id, *, session_id=None):
     row = conn.execute("SELECT session_id FROM photo_reviews WHERE target_observation_id = ? AND status = 'IN_PROGRESS'", (observation_id,)).fetchone()
     if row and (not session_id or row["session_id"] != session_id):
-        raise ValueError("Finish or discard the active Attach Media review before correcting this Encounter")
+        raise ValueError("Finish or discard the active Attach Media review before correcting this Event")
 
 
 def _encounter_person_media(conn, observation_id, person_id):
@@ -2442,6 +2442,12 @@ def _list_raw_observation_participants(
     return [_observation_participant_from_row(conn, row) for row in rows]
 
 
+_EVENT_DETAIL_LABELS = {
+    "date": "date", "time": "start time", "end_time": "end time", "time_precision": "time option",
+    "place_seen": "place", "event_occasion": "occasion", "event_context": "context", "event_notes": "Event Notes",
+}
+
+
 def _review_encounter_metadata(details: list[dict]) -> tuple[str | None, str | None, dict]:
     """Resolve one event's metadata from finalized face decisions, rejecting conflicts."""
     fields = ("date", "time", "end_time", "time_precision", "place_seen", "event_occasion", "event_context", "event_notes")
@@ -2452,7 +2458,7 @@ def _review_encounter_metadata(details: list[dict]) -> tuple[str | None, str | N
             if not value:
                 continue
             if field in values and values[field] != value:
-                raise ValueError(f"Conflicting Encounter {field} across reviewed faces")
+                raise ValueError(f"Conflicting Event {_EVENT_DETAIL_LABELS[field]} across reviewed faces")
             values[field] = value
     date = values.get("date")
     start = values.get("time")
@@ -2463,29 +2469,29 @@ def _review_encounter_metadata(details: list[dict]) -> tuple[str | None, str | N
                 raise ValueError("invalid date width")
             datetime.strptime(date, "%Y-%m-%d")
         except ValueError as exc:
-            raise ValueError("Encounter date must use ISO format") from exc
-    for field, value in (("time", start), ("end_time", end)):
+            raise ValueError("Event date must use the YYYY-MM-DD format") from exc
+    for label, value in (("start time", start), ("end time", end)):
         if value:
             try:
                 if len(value) != 5 or value[2] != ":":
                     raise ValueError("invalid time width")
                 datetime.strptime(value, "%H:%M")
             except ValueError as exc:
-                raise ValueError(f"Encounter {field} must use HH:MM format") from exc
+                raise ValueError(f"Event {label} must use HH:MM format") from exc
     if start and not date:
-        raise ValueError("Encounter time requires a date")
+        raise ValueError("Event time requires a date")
     if end and not start:
-        raise ValueError("Encounter end time requires a start time")
+        raise ValueError("Event end time requires a start time")
     if start and end and end < start:
-        raise ValueError("Encounter end time precedes start time")
+        raise ValueError("Event end time is before its start time")
     precision = values.get("time_precision", "exact" if start else "unknown").lower()
     if precision not in {"exact", "approximate", "unknown"}:
-        raise ValueError("Encounter time precision must be exact, approximate, or unknown")
+        raise ValueError("Event time must be exact, approximate, or unknown")
     if (precision == "unknown") == bool(start):
-        raise ValueError("Encounter time and precision disagree")
+        raise ValueError("Event time does not match the selected time option")
     category = values.get("event_context", "unknown").lower()
     if category not in {"ordinary", "public", "unknown"}:
-        raise ValueError("Encounter context must be ordinary, public, or unknown")
+        raise ValueError("Event context must be ordinary, public, or unknown")
     mention_sets: set[tuple[str, ...]] = set()
     for detail in details:
         mentions = detail.get("event_mentioned_person_ids") or []
@@ -2495,7 +2501,7 @@ def _review_encounter_metadata(details: list[dict]) -> tuple[str | None, str | N
             raise ValueError("Event Note mentions must be selected person IDs")
         mention_sets.add(tuple(sorted(set(mentions))))
     if len(mention_sets) > 1:
-        raise ValueError("Conflicting Encounter Event Note mentions across reviewed faces")
+        raise ValueError("Conflicting Event Note mentions across reviewed faces")
     event_mentions = list(next(iter(mention_sets), ()))
     context = {
         "occasion": values.get("event_occasion") or None,
@@ -2658,7 +2664,7 @@ def _require_person_lifecycle_preconditions(conn, person_id, operation_type):
 def _require_no_active_encounter_draft_reference(conn: sqlite3.Connection, person_id: str) -> None:
     for amendment in conn.execute("SELECT target_observation_id FROM photo_reviews WHERE target_observation_id IS NOT NULL AND status = 'IN_PROGRESS'"):
         if _resolve_canonical_person_id(conn, person_id) in _effective_observation_person_ids(conn, str(amendment[0])):
-            raise ValueError("Person is referenced by an active Encounter amendment; finish or discard it first")
+            raise ValueError("Person is in an Event with an unfinished Attach Media review; finish or discard it first")
     selected = conn.execute(
         "SELECT r.review_id FROM photo_review_faces f "
         "JOIN photo_reviews r ON r.review_id = f.review_id "
@@ -2677,7 +2683,7 @@ def _require_no_active_encounter_draft_reference(conn: sqlite3.Connection, perso
         ).fetchone()
     if selected is not None:
         raise ValueError(
-            f"Person is selected in active Encounter draft {selected['review_id']}; complete or discard that draft first"
+            "Person is selected in an unfinished Event review; complete or discard that review first"
         )
 
 
@@ -2745,9 +2751,9 @@ def _preview_identity_merge(
         if prior is not None and prior != str(relation["disposition"]):
             event = _require_observation(conn, str(relation["observation_id"]))
             occasion = json.loads(event["context"] or "{}").get("occasion") or "Unnamed Event"
-            caption = f"{occasion}, {str(event['observed_at'] or 'Date unknown')[:10]}, {event['location'] or 'Location unknown'}"
+            caption = f"{occasion}, {str(event['observed_at'] or '')[:10] or 'Date unknown'}, {event['location'] or 'Location unknown'}"
             raise EncounterRelationConflict(
-                f"Merge would collapse distinct Encounter Relation decisions in Encounter {relation['observation_id']} ({caption}); find it in Global Events and correct Relations before merging",
+                f"Merge would combine conflicting Relation decisions in Event {caption}; find it in Global Events and correct its Relations before merging",
                 str(relation["observation_id"]),
             )
         relation_pairs[key] = str(relation["disposition"])

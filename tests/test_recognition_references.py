@@ -77,9 +77,9 @@ def test_store_cannot_confirm_non_single_face_admission(store, count):
 
 def test_ack_and_legacy_controller_cannot_bypass_admission(store):
     a=store.create_person('Alice'); stage(store,a,'missing-declaration')
-    with pytest.raises(ValueError,match='Encounter context'):
+    with pytest.raises(ValueError,match='Event context'):
         store.add_face_to_person('missing-declaration',a.person_id,'missing-ack')
-    with pytest.raises(ValueError,match='without creating an Encounter'):
+    with pytest.raises(ValueError,match='without creating an Event'):
         store.complete_photo_review('missing-declaration','wrong-workflow')
     stage(store,a,'legacy',source='check-photo')
     with pytest.raises(ValueError,match='admission flow'):
@@ -145,7 +145,7 @@ def test_reference_and_encounter_exact_media_roles_and_targeted_attach(store):
         store.save_init_session_media(store.create_init_session('/staged').session_id,[ref['source_image']])
     image=stage(store,a,'occurrence',(.2,.8),source='check-photo')
     oid=store.complete_photo_review('occurrence','finalize')['observation_id']
-    with pytest.raises(ValueError,match='Encounter media'):
+    with pytest.raises(ValueError,match='Event media'):
         store.validate_reference_media(str(image),a.person_id)
     session=store.create_init_session('/attach',target_observation_id=oid,expected_revision=store.get_encounter_read(oid)['revision'])
     with pytest.raises(ValueError,match='Reference Only'):
