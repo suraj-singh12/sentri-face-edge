@@ -825,7 +825,7 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
             <Text size="xs" c="dimmed" mt={5}>
               {person.is_placeholder ? "No usable recognition sample" : <>{photoCount} {photoCount === 1 ? "photo" : "photos"} <Text span mx={5}>·</Text> {sightings} {sightings === 1 ? "sighting" : "sightings"}</>}
             </Text>
-            <Text size="xs" c={person.last_seen_at ? "teal.4" : "dimmed"} mt={3}>{lastSeenLabelForCard(person.last_seen_at)}</Text>
+            <Text size="xs" c={person.last_seen_at ? "teal.4" : "dimmed"} mt={3}>{lastSeenLabelForCard(person.last_seen_at, person.sighting_count)}</Text>
           </Box>
         </Box>
         </Tooltip>
@@ -963,7 +963,8 @@ function priorityDetails(person) {
   return { label, color };
 }
 
-function lastSeenLabelForCard(value) {
+function lastSeenLabelForCard(value, sightingCount = 0) {
+  if (!value && Number(sightingCount) > 0) return "Seen · date unknown";
   const days = daysSince(value);
   if (!Number.isFinite(days)) return "Never seen";
   if (days < 1) return "Seen today";
@@ -2246,14 +2247,15 @@ function isSeenDetail(detail) {
 function sightingTimestamp(detail) {
   const date = detail?.seen_date || detail?.date || "";
   const time = detail?.seen_time || detail?.time || "00:00";
-  const parsed = new Date(date ? `${date}T${time}` : detail?.created_at || 0);
+  if (!date) return 0;
+  const parsed = new Date(`${date}T${time}`);
   return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
 }
 
 function lastSeenLabel(detail) {
   if (!detail) return "No sightings";
   const timestamp = sightingTimestamp(detail);
-  if (!timestamp) return "Sighting recorded";
+  if (!timestamp) return "Last seen · date unknown";
   const seen = new Date(timestamp);
   const today = new Date();
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();

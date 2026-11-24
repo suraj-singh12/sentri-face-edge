@@ -1119,7 +1119,7 @@ test("World Event workspace renders authoritative overview and four bounded chil
   assert.match(view, /data-world-level="EVENT"/);
   assert.match(view, /Finalized observation/);
   assert.match(view, /summary\.event_id/);
-  assert.match(view, /summary\.occurred_at/);
+  assert.match(view, /formatOccurrence\(summary\)/);
   assert.match(view, /Location not recorded/);
   assert.match(view, /summary\.participant_summary\.total_count/);
   assert.match(view, /summary\.participant_summary\.provenance_total_count/);

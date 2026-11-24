@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Badge, Box, Button, Card, FileButton, Group, Image, Select, SimpleGrid, Stack, Text, TextInput, Title, UnstyledButton } from "@mantine/core";
-import { mediaUrl, plural } from "../utils.js";
+import { formatEventWhen, mediaUrl, plural } from "../utils.js";
 
 import { EncounterDetailsModal } from "../components/EncounterDetailsModal.jsx";
 import { EncounterManagementModal } from "../components/EncounterManagementModal.jsx";
@@ -66,10 +66,7 @@ export function EventsView({ page, detail, people = [], onQuery, onOpen, onClose
 }
 
 export function eventDateTime(event) {
-  const date = event.observed_at?.slice(0, 10) || "Date unknown";
-  if (event.time_precision === "unknown") return `${date} · Time unknown`;
-  if (event.time_precision === "approximate") return `${date} · About ${event.start_time || "an unknown time"}`;
-  return `${date}${event.start_time ? ` · ${event.start_time}${event.end_time ? `–${event.end_time}` : ""}` : ""}`;
+  return formatEventWhen({ ...event, date: event.observed_at });
 }
 
 function contextLabel(context) {

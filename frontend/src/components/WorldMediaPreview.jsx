@@ -1,7 +1,7 @@
 import { Badge, Box, Divider, Group, Modal, Stack, Text, ThemeIcon } from "@mantine/core";
 import { IconPhoto } from "@tabler/icons-react";
 
-import { mediaUrl } from "../utils.js";
+import { formatOccurrence, mediaUrl } from "../utils.js";
 import { SafeImage } from "./Shared.jsx";
 
 export function WorldMediaPreview({ item, origin, opened, onClose }) {
@@ -16,7 +16,7 @@ export function WorldMediaPreview({ item, origin, opened, onClose }) {
           <Divider />
           <Stack gap={4} className="world-media-preview-facts">
             <PreviewRow label="Media ID" value={item.media_id} />
-            <PreviewRow label="Occurred" value={formatDateTime(item.occurred_at)} />
+            <PreviewRow label="Occurred" value={formatOccurrence(item)} />
             <PreviewRow label="Source" value={item.source || "Not supplied"} />
             <PreviewRow label="Supporting event" value={item.supporting_event_id || "Not supplied"} />
             <PreviewRow label="Supporting evidence" value={item.supporting_evidence_id || "Not supplied"} />
@@ -42,8 +42,3 @@ function originDescription(origin) {
   return `Opened from Event ${origin?.eventId || "—"}`;
 }
 
-function formatDateTime(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}

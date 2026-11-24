@@ -285,6 +285,7 @@ from sentriface.storage.sqlite_migrations import (
     _require_supported_schema_version,
 )
 from sentriface.storage.sqlite_world import (
+    _world_event_time,
     _WORLD_FILTERS_VERSION,
     _WORLD_CLUSTER_VERSION,
     _WORLD_RANKING_VERSION,
@@ -7447,6 +7448,7 @@ class SQLiteIdentityStore:
                         "observation_id": str(previous["observation_id"]),
                         "observed_at": previous["observed_at"],
                         "occasion": context.get("occasion"),
+                        "event_time": _world_event_time(previous["observed_at"], context),
                     } if previous else None,
                 })
             return media
@@ -8593,6 +8595,7 @@ def _world_discoveries_read(
         SELECT DISTINCT o.observation_id AS event_id,
                world_effective_person(p.observation_id, p.person_id) AS person_id,
                COALESCE(o.observed_at, o.created_at) AS occurred_at,
+               o.observed_at AS recorded_at, o.context AS event_context,
                o.instant_key AS time_key,
                o.instant_key / 86400000000 AS day,
                world_location_text(o.location) AS location,
@@ -8602,7 +8605,7 @@ def _world_discoveries_read(
           AND world_discovery_eligible(world_effective_person(p.observation_id, p.person_id)) = 1
 """ for source in sources)
     cte = f"""WITH normalized_events AS MATERIALIZED (
-        SELECT o.observation_id, o.observed_at, o.created_at, o.location, o.status,
+        SELECT o.observation_id, o.observed_at, o.created_at, o.location, o.status, o.context,
                world_time(COALESCE(o.observed_at, o.created_at)) AS instant_key
         FROM effective_observations o WHERE {event_scope}
     ), appearances AS MATERIALIZED ({appearances}
@@ -8643,6 +8646,7 @@ def _world_discoveries_read(
             supports[str(row["person_id"])].append({
                 "event_id": str(row["event_id"]), "occurred_at": str(row["occurred_at"]),
                 "location": row["location"] or None,
+                "event_time": _world_event_time(row["recorded_at"], row["event_context"]),
             })
         if multiple:
             location_rows = conn.execute(

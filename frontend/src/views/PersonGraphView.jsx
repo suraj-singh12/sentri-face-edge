@@ -25,7 +25,7 @@ import {
 } from "@tabler/icons-react";
 
 import { SafeImage } from "../components/Shared.jsx";
-import { mediaUrl } from "../utils.js";
+import { formatEventDate, mediaUrl } from "../utils.js";
 import {
   graphNodeNavigation,
 } from "../utils/personGraph.js";
@@ -334,7 +334,7 @@ function GraphInspector({ item, rootPersonId, nodes = [] }) {
         <InspectorRow label="Record state" value={node.state_indicator} />
         <InspectorRow label="Sightings" value={intelligence.observation_count ?? "—"} />
         <InspectorRow label="Frequency" value={intelligence.frequency_label || "—"} />
-        <InspectorRow label="Last seen" value={formatGraphDate(intelligence.last_seen_at)} />
+        <InspectorRow label="Last seen" value={intelligence.last_seen_at ? formatEventDate(intelligence.last_seen_at) : intelligence.observation_count ? "Date unknown" : "—"} />
         <Text size="xs" c="dimmed">Available actions are supplied by the backend: {node.allowed_actions.join(", ") || "none"}.</Text>
       </Stack>
     );
@@ -355,12 +355,12 @@ function GraphInspector({ item, rootPersonId, nodes = [] }) {
       <InspectorRow label="Evidence count" value={edge.evidence_count} />
       <InspectorRow label="Evidence types" value={edge.evidence_types.map(humanizeToken).join(", ") || "—"} />
       <InspectorRow label="Direction" value={humanizeToken(edge.directionality)} />
-      <InspectorRow label="First occurrence" value={formatGraphDate(edge.first_occurrence)} />
-      <InspectorRow label="Last occurrence" value={formatGraphDate(edge.last_occurrence)} />
+      <InspectorRow label="First occurrence" value={formatEventDate(edge.first_occurrence)} />
+      <InspectorRow label="Last occurrence" value={formatEventDate(edge.last_occurrence)} />
       <Divider />
       <Text size="xs" fw={700}>Provenance summary</Text>
       <InspectorRow label="Shared Encounters" value={provenance.distinct_encounter_count ?? "—"} />
-      <InspectorRow label="Latest shared Encounter" value={formatGraphDate(provenance.latest_shared_encounter_at)} />
+      <InspectorRow label="Latest shared Encounter" value={provenance.latest_shared_encounter_at ? formatEventDate(provenance.latest_shared_encounter_at) : provenance.distinct_encounter_count ? "Date unknown" : "—"} />
       {Object.entries(provenance.evidence_type_counts || {}).map(([type, count]) => (
         <InspectorRow key={type} label={humanizeToken(type)} value={count} />
       ))}
@@ -396,8 +396,3 @@ function humanizeToken(value) {
   return String(value || "—").toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 }
 
-function formatGraphDate(value) {
-  if (!value) return "—";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
-}
