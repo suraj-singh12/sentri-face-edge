@@ -1339,7 +1339,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                     "context", "participant_id", "mentioned_person_id", "person_id", "person_status",
                 }
                 if set(query) - allowed:
-                    raise ValueError("Unknown Encounter filter")
+                    raise ValueError("Unknown Events filter")
                 self._json(self.server.engine.query_encounters(**{
                     key: values[0] for key, values in query.items() if values
                 }))
@@ -1654,7 +1654,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                         faces=[face for face in group.faces if face.init_face_id in active_ids],
                     )
                     if not group.faces:
-                        raise KeyError("This identity group does not belong to the active Encounter")
+                        raise KeyError("This identity group does not belong to the active Event")
                 candidates = self.server.engine.ranked_people_for_init_group(group)
                 if active_review:
                     combined = self.server.engine.encounter_matches_for_init_group(group, active_review["review_id"], limit=False)
@@ -2101,7 +2101,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/encounter-correct":
                 allowed = {"observation_id", "operation_id", "expected_revision", "event_details", "participant_correction", "relations"}
                 if set(payload) - allowed:
-                    raise ValueError("Unknown Encounter correction field")
+                    raise ValueError("Unknown Event correction field")
                 result = self.server.engine.correct_encounter(
                     _required(payload, "observation_id"), _operation_id(payload),
                     expected_revision=_required(payload, "expected_revision"),
@@ -2931,7 +2931,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/queue-confirm-new":
                 session_id = _required(payload, "session_id")
                 if self.server.engine.list_init_session_encounter_reviews(session_id):
-                    raise ValueError("This Queue session uses Encounter review; complete the Encounter draft")
+                    raise ValueError("This session uses Event review; complete the Event review first")
                 mentioned_person_ids = payload.get("mentioned_person_ids", [])
                 if not isinstance(mentioned_person_ids, list):
                     raise KeyError("mentioned_person_ids must be a list")
@@ -2973,7 +2973,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/queue-confirm-existing":
                 session_id = _required(payload, "session_id")
                 if self.server.engine.list_init_session_encounter_reviews(session_id):
-                    raise ValueError("This Queue session uses Encounter review; complete the Encounter draft")
+                    raise ValueError("This session uses Event review; complete the Event review first")
                 person_id = _required(payload, "person_id")
                 accepted = self.server.engine.confirm_init_faces_existing(
                     session_id,
@@ -3018,7 +3018,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/queue-discard":
                 session_id = _required(payload, "session_id")
                 if self.server.engine.list_init_session_encounter_reviews(session_id):
-                    raise ValueError("Use the Encounter draft decision to exclude faces")
+                    raise ValueError("Use the Event review decision to exclude faces")
                 self.server.engine.discard_init_faces(
                     session_id,
                     _required(payload, "group_id"),
@@ -3042,7 +3042,7 @@ class SentriFaceApiHandler(SimpleHTTPRequestHandler):
                 if reviews:
                     active = next((item for item in reviews if item["status"] == "IN_PROGRESS" and item["phase"] == "IDENTITIES"), None)
                     if active is None:
-                        raise ValueError("Only an active Encounter identity group can be deferred")
+                        raise ValueError("Only an active Event identity group can be skipped for now")
                     resumed = self.server.engine.skip_encounter_identity_group(active["review_id"], group_id)
                     self.server.log_event("queue-skip", session_id=session_id, group_id=group_id)
                     self._json({"skipped": True, "resumed": resumed, "review": self.server.engine.get_encounter_review(active["review_id"])})

@@ -484,7 +484,7 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
                     "review", face, "ACCEPT_EXISTING_PERSON", person_id=person.person_id,
                     recognition_detail={"date": "2026-08-08", "time": "12:00", "place_seen": place},
                 )
-            with self.assertRaisesRegex(ValueError, "Conflicting Encounter place_seen"):
+            with self.assertRaisesRegex(ValueError, "Conflicting Event place"):
                 store.complete_photo_review("review", "conflict-op")
             self.assertIsNone(store.get_operation("conflict-op"))
             with sqlite3.connect(store.db_path) as conn:
@@ -684,7 +684,7 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
 
             duplicate_session = reopened.create_init_session("/managed/second-queue")
             reopened.save_init_session_media(duplicate_session.session_id, [media[0]])
-            with self.assertRaisesRegex(ValueError, "already belongs to finalized Encounter"):
+            with self.assertRaisesRegex(ValueError, "already belongs to finalized Event"):
                 reopened.plan_init_session_encounters(
                     duplicate_session.session_id,
                     [[item["media_id"] for item in reopened.list_init_session_media(duplicate_session.session_id)]],
@@ -719,7 +719,7 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
             by_path = {item["media_path"]: item for item in media}
             self.assertEqual(by_path[existing_path]["finalized_encounter"]["observation_id"], previous.observation_id)
             self.assertEqual(by_path[fresh_path]["face_count"], 1)
-            with self.assertRaisesRegex(ValueError, "already belongs to finalized Encounter"):
+            with self.assertRaisesRegex(ValueError, "already belongs to finalized Event"):
                 store.plan_init_session_encounters(session.session_id, [[item["media_id"] for item in media]])
             self.assertEqual(store.list_init_session_encounter_reviews(session.session_id), [])
             planned = store.plan_init_session_encounters(session.session_id, [[by_path[fresh_path]["media_id"]]])
@@ -759,7 +759,7 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
                 review_id, "skip-face-1", "ACCEPT_NEW_PERSON", new_person_name="Resolved",
             )
             self.assertEqual({item.status for item in engine.list_init_groups(session.session_id)}, {"pending"})
-            with self.assertRaisesRegex(ValueError, "defers"):
+            with self.assertRaisesRegex(ValueError, "postpones"):
                 store.set_photo_review_face_decision(review_id, "skip-face-0", "SKIP")
             engine.set_photo_review_face_decision(
                 review_id, "skip-face-0", "EXCLUDE",
@@ -955,7 +955,7 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
                 session.session_id, [[ids_by_path[media[0]]], [ids_by_path[media[1]]]],
             )
             self.assertEqual([item["phase"] for item in reviews], ["EVENT", "WAITING"])
-            with self.assertRaisesRegex(ValueError, "active Encounter"):
+            with self.assertRaisesRegex(ValueError, "active Event review"):
                 store.save_encounter_review_event(reviews[1]["review_id"], {"date": "2026-09-28"})
             first_id = reviews[0]["review_id"]
             store.save_encounter_review_event(first_id, {"date": "2026-09-28", "time_precision": "unknown"})
@@ -1001,11 +1001,11 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
                     review_id, f"guard-face-{index}", "ACCEPT_EXISTING_PERSON",
                     person_id=person.person_id,
                 )
-            with self.assertRaisesRegex(ValueError, "active Encounter draft"):
+            with self.assertRaisesRegex(ValueError, "unfinished Event review"):
                 store.archive_person(people[0].person_id, "guard-archive-op")
-            with self.assertRaisesRegex(ValueError, "active Encounter draft"):
+            with self.assertRaisesRegex(ValueError, "unfinished Event review"):
                 store.permanently_delete_person(people[0].person_id, "guard-delete-op")
-            with self.assertRaisesRegex(ValueError, "active Encounter draft"):
+            with self.assertRaisesRegex(ValueError, "unfinished Event review"):
                 store.preview_identity_merge(people[2].person_id, people[1].person_id)
             self.assertIsNone(store.get_operation("guard-archive-op"))
             self.assertIsNone(store.get_operation("guard-delete-op"))
@@ -1017,7 +1017,7 @@ class PhotoReviewFinalizationTest(unittest.TestCase):
                     review_id, pair["first_ref"], pair["second_ref"], disposition,
                 )
             store.complete_photo_review(review_id, "guard-complete-op")
-            with self.assertRaisesRegex(ValueError, "collapse distinct Encounter Relation decisions"):
+            with self.assertRaisesRegex(ValueError, "combine conflicting Relation decisions"):
                 store.preview_identity_merge(people[2].person_id, people[1].person_id)
 
     def test_graph_failure_rolls_back_every_authoritative_write(self) -> None:

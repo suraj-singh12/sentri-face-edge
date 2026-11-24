@@ -407,7 +407,7 @@ class FaceEngine:
         if review is None or review.source != "reference-only":
             raise ValueError("Use the cropped single-face Reference Only admission flow")
         if no_context_acknowledged is not True:
-            raise ValueError("Confirm that no reliable Encounter context is available")
+            raise ValueError("Confirm that no reliable Event context is available")
         if len(review.faces) != 1 or review.faces[0].person_id != person_id:
             raise ValueError("Reference confirmation must use its prepared Person")
         self.graph.set_photo_review_face_decision(review_id, "face-1", "ACCEPT_EXISTING_PERSON",
@@ -519,7 +519,7 @@ class FaceEngine:
             review = self.store.get_encounter_review(review_id)
             unresolved = {face["face_id"] for face in review["faces"] if face["decision"] in (None, "SKIP")}
             if review["session_id"] != session_id or review["phase"] != "IDENTITIES" or not set(face_ids).issubset(unresolved):
-                raise ValueError("Select unresolved faces from the active Encounter")
+                raise ValueError("Select unresolved faces from the active Event")
             faces = [face for group in self.list_init_groups(session_id) for face in group.faces if face.init_face_id in face_ids]
         else:
             faces = self._selected_init_faces(session_id, group_id, face_ids)
@@ -817,7 +817,7 @@ class FaceEngine:
     def skip_encounter_identity_group(self, review_id: str, group_id: str) -> int:
         review = self.store.get_encounter_review(review_id)
         if review["status"] != "IN_PROGRESS" or review["phase"] != "IDENTITIES":
-            raise ValueError("Only an active identity group can be deferred")
+            raise ValueError("Only an active identity group can be skipped for now")
         unresolved_ids = {face["face_id"] for face in review["faces"] if face["decision"] in (None, "SKIP")}
         group = self._get_init_group(review["session_id"], group_id)
         if group.status != "pending" or not any(face.init_face_id in unresolved_ids for face in group.faces):
@@ -1386,7 +1386,7 @@ class FaceEngine:
                 if session_id:
                     previous = self.store.get_init_session(session_id)
                     if previous is None or previous.target_observation_id != target_observation_id:
-                        raise ValueError("A scan retry must retain its target Encounter")
+                        raise ValueError("A scan retry must retain its target Event")
                     quality_only = previous.quality_only
                     retry_media = [Path(item["media_path"]) for item in self.store.list_init_session_media(session_id)]
                     if not retry_media:
