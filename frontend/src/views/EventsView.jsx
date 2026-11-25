@@ -32,7 +32,7 @@ export function EventsView({ page, detail, people = [], onQuery, onOpen, onClose
     await onQuery({ ...filters, cursor: remaining.at(-1) });
     setPageCursors(remaining);
   };
-  if (detail) return <EncounterDetail key={detail.observation_id} detail={detail} people={people} onClose={onClose} canAttach={canAttach} canCorrect={canCorrect} onCorrect={onCorrect} onNoChanges={onNoChanges} onAttach={onAttach} onReload={() => onOpen(detail.observation_id)} />;
+  if (detail) return <EncounterDetail key={detail.observation_id} detail={detail} people={people} onClose={onClose} canAttach={canAttach} canCorrect={canCorrect} onCorrect={onCorrect} onNoChanges={onNoChanges} onAttach={onAttach} onReload={async () => { const next = await onOpen(detail.observation_id); if (!next?.observation_id) throw new Error("The current Event could not be reloaded. Your unsaved correction is still here."); return next; }} />;
   return (
     <Stack gap="md">
       <Box><Title order={2}>Events</Title><Text size="sm" c="dimmed">Newest first. Mentions are shown separately from attendance.</Text></Box>

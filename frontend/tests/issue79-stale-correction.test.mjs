@@ -10,7 +10,8 @@ test("stale correction errors offer an explicit current-Event reload", async () 
     read("../src/components/EncounterDetailsModal.jsx"),
     read("../src/components/EncounterManagementModal.jsx"),
   ]);
-  assert.match(events, /onReload=\{\(\) => onOpen\(detail\.observation_id\)\}/);
+  assert.match(events, /const next = await onOpen\(detail\.observation_id\)/);
+  assert.match(events, /Your unsaved correction is still here/);
   assert.match(events, /reloadCurrentEvent/);
   for (const source of [details, management]) {
     assert.match(source, /Reload current Event/);
