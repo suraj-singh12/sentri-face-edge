@@ -133,7 +133,6 @@ export function QueueView({
       <EncounterDetailsModal opened={Boolean(queueSelectedGroup && activeEncounter?.phase === "EVENT" && eventDetails?.reviewId !== activeEncounter.review_id)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} onClose={onBack} />
       <Modal opened={proofOnlyDuplicateCandidates.length > 0} onClose={() => {}} title="Possible existing profile" centered>
         <Stack gap="md">
-    {targetDetails && <Text size="sm" fw={700} c="teal">Attaching media to {targetDetails.event_occasion || "the selected Event"}{targetDetails.date ? ` · ${targetDetails.date}` : ""}{targetDetails.place_seen ? ` · ${targetDetails.place_seen}` : ""}</Text>}
           <Text size="sm">A proof-only face may match an existing Person. It was not used in normal recognition.</Text>
           {proofOnlyDuplicateCandidates.map((candidate) => (
             <Card key={candidate.person_id} withBorder radius="md">
@@ -356,6 +355,7 @@ function EncounterRelations({ review, onDecide, onComplete, onDiscard, targetDet
   const candidates = review.relation_candidates || [];
   const complete = candidates.every((item) => decisions.has(`${item.first_ref}|${item.second_ref}`));
   return <Stack gap="md">
+    {targetDetails && <Text size="sm" fw={700} c="teal">Attaching media to {targetDetails.event_occasion || "the selected Event"}{targetDetails.date ? ` · ${targetDetails.date}` : ""}{targetDetails.place_seen ? ` · ${targetDetails.place_seen}` : ""}</Text>}
     <Box><Title order={2} size="h3">Review Relations</Title><Text size="sm" c="dimmed">{decisions.size} of {candidates.length} pairs decided. Choose which confirmed participant pairs this Event supports.</Text></Box>
     {candidates.length === 0 && <Card withBorder>{review.target_observation_id ? "No new participant pairs need a decision. Existing Event Relations are retained." : "Only one effective participant. There are no pairs to decide."}</Card>}
     {candidates.map((candidate) => {
@@ -920,6 +920,7 @@ function QueueGroupReview({ targetDetails = null,
 
   return (
     <Stack className="queue-group-review-v2" data-followup-open={Boolean(followup)}>
+      {targetDetails && <Text size="sm" fw={700} c="teal">Attaching media to {targetDetails.event_occasion || "the selected Event"}{targetDetails.date ? ` · ${targetDetails.date}` : ""}{targetDetails.place_seen ? ` · ${targetDetails.place_seen}` : ""}</Text>}
       <Group justify="space-between" align="center" className="queue-review-header">
         <Group gap="md">
           <ActionIcon variant="default" size="lg" aria-label="Back to review queue" onClick={onBack}><IconArrowLeft size={18} /></ActionIcon>
