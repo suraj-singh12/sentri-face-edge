@@ -17,7 +17,7 @@ export function encounterDetailsErrors(values, correction = false) {
   ]);
 }
 
-export function EncounterDetailsModal({ opened, values, people = [], onChange: change, onConfirm, onClose, correction = false, busy = false, error = "" }) {
+export function EncounterDetailsModal({ opened, values, people = [], onChange: change, onConfirm, onClose, correction = false, busy = false, error = "", onReload }) {
   const [errors, setErrors] = useState({});
   useEffect(() => { if (!opened) setErrors({}); }, [opened]);
   if (!values) return null;
@@ -51,7 +51,12 @@ export function EncounterDetailsModal({ opened, values, people = [], onChange: c
             onChange("eventMentionedPersonIds", [...new Set([...(values.eventMentionedPersonIds || []), person.person_id])]);
           }}>{person.name}{person.metadata?.rank ? ` · ${person.metadata.rank}` : ""}</Paper>)}
           {correction && <MultiSelect searchable label="Selected Event Note mentions" description="Selected Persons are mentioned, not automatically present or associated." data={people.map((person) => ({ value: person.person_id, label: person.name }))} value={values.eventMentionedPersonIds || []} onChange={(value) => onChange("eventMentionedPersonIds", value)} />}
-          {error && <Text c="red" role="alert">{error}</Text>}
+          {error && (
+            <Group justify="space-between" align="center" wrap="nowrap">
+              <Text c="red" role="alert">{error}{/stale|changed|reload/i.test(error) ? " Reloading discards this unsaved correction." : ""}</Text>
+              {/stale|changed|reload/i.test(error) && onReload && <Button type="button" size="compact-xs" variant="default" disabled={busy} onClick={onReload}>Reload current Event</Button>}
+            </Group>
+          )}
           <Group justify="flex-end">{onClose && <Button disabled={busy} variant="default" onClick={onClose}>Cancel</Button>}<Button loading={busy} type="submit">{correction ? "Save correction" : "Confirm Event"}</Button></Group>
         </Stack>
       </form>
