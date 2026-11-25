@@ -1059,9 +1059,21 @@ function PeopleGalleryView({
   const noteMentionCanCreate = notesEditOpen
     && activeMentionQuery.length >= 3
     && !noteMentionHasExactPerson;
+  const noteMentionDirectory = useMemo(() => {
+    const directory = new Map();
+    for (const person of people) directory.set(person.person_id, person);
+    for (const mention of profileNote.mentions || []) {
+      if (!directory.has(mention.raw_person_id)) {
+        directory.set(mention.raw_person_id, mention.person || {
+          person_id: mention.raw_person_id,
+          name: mention.display_name || mention.raw_person_id,
+        });
+      }
+    }
+    return directory;
+  }, [people, JSON.stringify(profileNote.mentions || [])]);
   const selectedNoteMentions = useMemo(() => selectedNoteMentionIds
-    .map((personId) => people.find((person) => person.person_id === personId))
-    .filter(Boolean), [JSON.stringify(selectedNoteMentionIds), people]);
+    .map((personId) => noteMentionDirectory.get(personId) || { person_id: personId, name: personId }), [JSON.stringify(selectedNoteMentionIds), noteMentionDirectory]);
   const [editValues, setEditValues] = useState(summaryProfile);
   const [editErrors, setEditErrors] = useState({});
   useEffect(() => { if (!editOpen) setEditErrors({}); }, [editOpen]);
