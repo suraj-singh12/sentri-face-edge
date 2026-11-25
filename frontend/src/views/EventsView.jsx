@@ -32,7 +32,7 @@ export function EventsView({ page, detail, people = [], onQuery, onOpen, onClose
     await onQuery({ ...filters, cursor: remaining.at(-1) });
     setPageCursors(remaining);
   };
-  if (detail) return <EncounterDetail key={detail.observation_id} detail={detail} people={people} onClose={onClose} canAttach={canAttach} canCorrect={canCorrect} onCorrect={onCorrect} onNoChanges={onNoChanges} onAttach={onAttach} />;
+  if (detail) return <EncounterDetail key={detail.observation_id} detail={detail} people={people} onClose={onClose} canAttach={canAttach} canCorrect={canCorrect} onCorrect={onCorrect} onNoChanges={onNoChanges} onAttach={onAttach} onReload={() => onOpen(detail.observation_id)} />;
   return (
     <Stack gap="md">
       <Box><Title order={2}>Events</Title><Text size="sm" c="dimmed">Newest first. Mentions are shown separately from attendance.</Text></Box>
@@ -79,7 +79,7 @@ const sameEventDetails = (original = {}, next) => Object.entries(next).every(([k
     : String(value ?? "") === String(original[key] ?? "")
 ));
 
-function EncounterDetail({ detail, people, onClose, canAttach, canCorrect, onCorrect, onNoChanges, onAttach }) {
+function EncounterDetail({ detail, people, onClose, canAttach, canCorrect, onCorrect, onNoChanges, onAttach, onReload }) {
   const [mode, setMode] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -118,6 +118,18 @@ function EncounterDetail({ detail, people, onClose, canAttach, canCorrect, onCor
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
   };
+  const reloadCurrentEvent = async () => {
+    setBusy(true);
+    try {
+      await onReload?.();
+      setMode(null);
+      setError("");
+    } catch (failure) {
+      setError(failure.message || "The Event could not be reloaded");
+    } finally {
+      setBusy(false);
+    }
+  };
   return <Stack gap="md" className="encounter-detail">
     <Group justify="space-between"><Title order={2}>{detail.occasion || "Unnamed Event"}</Title><Button variant="default" onClick={onClose}>Back to Events</Button></Group>
     <Group gap="sm"><Text>{eventDateTime(detail)} · {detail.location || "Location unknown"}</Text><Badge variant="light" tt="none">{contextLabel(detail.context)}</Badge></Group>
@@ -133,8 +145,8 @@ function EncounterDetail({ detail, people, onClose, canAttach, canCorrect, onCor
     <Text fw={700}>All Event media ({detail.media?.length || 0})</Text>
     <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }}>{(detail.media || []).map((item) => <Box key={item.media_id}>{item.media_path ? <Image src={mediaUrl(item.media_path)} alt="Event media" fit="contain" mah={300} /> : <Text>Media unavailable</Text>}</Box>)}</SimpleGrid>
     <details><summary>Correction and provenance history</summary><Stack gap="xs" mt="sm">{(detail.history || []).map((entry) => <Box key={entry.operation_id} className="encounter-list-row"><Text size="xs" c="dimmed">{entry.created_at?.slice(0, 10)} · {entry.actor?.display_name || entry.actor?.username || "Operator"}</Text><Text size="sm">{historyDescription(entry, names)}</Text></Box>)}{detail.history_has_more && <Text size="xs">Showing the latest 100 operations.</Text>}</Stack></details>
-    {mode === "metadata" && <EncounterDetailsModal opened correction values={values} people={[...people, ...(detail.mentioned_people || []).filter((p) => !people.some((candidate) => candidate.person_id === p.person_id))]} busy={busy} error={error} onChange={(field, value) => setValues((old) => ({ ...old, [field]: value }))} onClose={() => setMode(null)} onConfirm={saveMetadata} />}
-    {(mode === "participants" || mode === "relations") && <EncounterManagementModal key={mode} detail={detail} people={people} mode={mode} onClose={() => setMode(null)} onSave={save} onNoChanges={onNoChanges} />}
+    {mode === "metadata" && <EncounterDetailsModal opened correction values={values} people={[...people, ...(detail.mentioned_people || []).filter((p) => !people.some((candidate) => candidate.person_id === p.person_id))]} busy={busy} error={error} onChange={(field, value) => { setError(""); setValues((old) => ({ ...old, [field]: value })); }} onClose={() => setMode(null)} onConfirm={saveMetadata} onReload={reloadCurrentEvent} />}
+    {(mode === "participants" || mode === "relations") && <EncounterManagementModal key={mode} detail={detail} people={people} mode={mode} onClose={() => setMode(null)} onSave={save} onNoChanges={onNoChanges} onReload={reloadCurrentEvent} reloadBusy={busy} />}
   </Stack>;
 }
 
