@@ -179,7 +179,7 @@ export function QueueView({
           ) : encounterMedia.length > 0 && encounterReviews.length === 0 && !["running", "cancelling"].includes(queueProgress?.status) ? (
             <EncounterGrouping key={queueSessionId} media={encounterMedia} onConfirm={onPlanEncounters} onExclude={onMediaExcluded} />
           ) : activeEncounter?.phase === "RELATIONS" ? (
-            <EncounterRelations review={activeEncounter} onDecide={onDecideRelation} onComplete={onCompleteEncounter} onDiscard={onDiscardEncounter} />
+            <EncounterRelations review={activeEncounter} onDecide={onDecideRelation} onComplete={onCompleteEncounter} onDiscard={onDiscardEncounter} targetDetails={activeEncounter?.target_observation_id ? activeEncounter.event_details : null} />
           ) : queueSelectedGroup ? (
             <QueueGroupReview
               people={people}

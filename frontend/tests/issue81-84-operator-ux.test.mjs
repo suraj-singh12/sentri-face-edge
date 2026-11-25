@@ -9,6 +9,7 @@ test("Attach Media review keeps target Event context visible", async () => {
   assert.match(queue, /Attaching media to \{activeEncounter\.event_details\?\.event_occasion/);
   assert.match(queue, /activeEncounter\.event_details\?\.date/);
   assert.match(queue, /activeEncounter\.event_details\?\.place_seen/);
+  assert.match(queue, /EncounterRelations review=\{activeEncounter\}[\s\S]*targetDetails=/);
 });
 
 test("long Person Notes have an explicit read-only expansion path", async () => {
