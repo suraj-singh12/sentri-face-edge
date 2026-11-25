@@ -2945,10 +2945,19 @@ button {
 
 .people-profile-note-summary {
   line-height: 1.65;
+}
+
+.people-profile-note-text {
   max-height: 3.3em;
   overflow: hidden;
   white-space: pre-wrap;
 }
+
+.people-profile-note-expanded .people-profile-note-text {
+  max-height: none;
+  overflow: visible;
+}
+
 
 .people-note-person-chip {
   margin: 0 3px;
@@ -3137,6 +3146,15 @@ button {
   stroke-width: 18;
   vector-effect: non-scaling-stroke;
   cursor: pointer;
+}
+
+.person-graph-edge-layer g:focus {
+  outline: none;
+}
+
+.person-graph-edge-layer g:focus .person-graph-edge-line {
+  stroke: var(--mantine-color-cyan-3);
+  opacity: 1;
 }
 
 .person-graph-node-object {

@@ -180,7 +180,7 @@ export function QueueView({
           ) : encounterMedia.length > 0 && encounterReviews.length === 0 && !["running", "cancelling"].includes(queueProgress?.status) ? (
             <EncounterGrouping key={queueSessionId} media={encounterMedia} onConfirm={onPlanEncounters} onExclude={onMediaExcluded} />
           ) : activeEncounter?.phase === "RELATIONS" ? (
-            <EncounterRelations review={activeEncounter} onDecide={onDecideRelation} onComplete={onCompleteEncounter} onDiscard={() => setDiscardEncounterOpen(true)} />
+            <EncounterRelations review={activeEncounter} onDecide={onDecideRelation} onComplete={onCompleteEncounter} onDiscard={() => setDiscardEncounterOpen(true)} targetDetails={activeEncounter?.target_observation_id ? activeEncounter.event_details : null} />
           ) : queueSelectedGroup ? (
             <QueueGroupReview
               people={people}
@@ -212,6 +212,7 @@ export function QueueView({
               onGalleryBack={onGalleryBack}
               onLoadPeopleCandidates={onLoadPeopleCandidates}
               onBack={onBack}
+              targetDetails={activeEncounter?.target_observation_id ? activeEncounter.event_details : null}
             />
           ) : (
             <Stack>
@@ -219,6 +220,7 @@ export function QueueView({
               <Group justify="space-between">
                 <Box>
                   <Text fw={700}>Event {Number(activeEncounter.sequence_number || 0) + 1} of {encounterReviews.length}</Text>
+                  {activeEncounter.target_observation_id && <Text size="sm" fw={700} c="teal">Attaching media to {activeEncounter.event_details?.event_occasion || "the selected Event"}{activeEncounter.event_details?.date ? ` · ${activeEncounter.event_details.date}` : ""}{activeEncounter.event_details?.place_seen ? ` · ${activeEncounter.event_details.place_seen}` : ""}</Text>}
                   <Text size="sm" c="dimmed">{activeEncounter.identity_resolved} of {activeEncounter.identity_total} faces resolved. Event details are saved once for this Event.</Text>
                 </Box>
                 <Group>
@@ -362,11 +364,12 @@ function EncounterGrouping({ media, onConfirm, onExclude }) {
   </Stack>;
 }
 
-function EncounterRelations({ review, onDecide, onComplete, onDiscard }) {
+function EncounterRelations({ review, onDecide, onComplete, onDiscard, targetDetails = null }) {
   const decisions = new Map((review.relations || []).map((item) => [`${item.first_ref}|${item.second_ref}`, item.disposition]));
   const candidates = review.relation_candidates || [];
   const complete = candidates.every((item) => decisions.has(`${item.first_ref}|${item.second_ref}`));
   return <Stack gap="md">
+    {targetDetails && <Text size="sm" fw={700} c="teal">Attaching media to {targetDetails.event_occasion || "the selected Event"}{targetDetails.date ? ` · ${targetDetails.date}` : ""}{targetDetails.place_seen ? ` · ${targetDetails.place_seen}` : ""}</Text>}
     <Box><Title order={2} size="h3">Review Relations</Title><Text size="sm" c="dimmed">{decisions.size} of {candidates.length} pairs decided. Choose which confirmed participant pairs this Event supports.</Text></Box>
     {candidates.length === 0 && <Card withBorder>{review.target_observation_id ? "No new participant pairs need a decision. Existing Event Relations are retained." : "Only one effective participant. There are no pairs to decide."}</Card>}
     {candidates.map((candidate) => {
@@ -832,7 +835,7 @@ function QueuePreviewMosaic({ faces }) {
   );
 }
 
-function QueueGroupReview({
+function QueueGroupReview({ targetDetails = null,
   people,
   group,
   groups,
@@ -936,6 +939,7 @@ function QueueGroupReview({
 
   return (
     <Stack className="queue-group-review-v2" data-followup-open={Boolean(followup)}>
+      {targetDetails && <Text size="sm" fw={700} c="teal">Attaching media to {targetDetails.event_occasion || "the selected Event"}{targetDetails.date ? ` · ${targetDetails.date}` : ""}{targetDetails.place_seen ? ` · ${targetDetails.place_seen}` : ""}</Text>}
       <Group justify="space-between" align="center" className="queue-review-header">
         <Group gap="md">
           <ActionIcon variant="default" size="lg" aria-label="Back to review queue" onClick={onBack}><IconArrowLeft size={18} /></ActionIcon>
