@@ -33,7 +33,7 @@ test("profile uses normalized sightings, relationships, notes, and journal activ
 test("notes preserve backend mention identities and never match names to links", async () => {
   const view = await read("../src/views/PeopleView.jsx");
   assert.match(view, /profileNote\.mentioned_person_ids/);
-  assert.match(view, /sameIds\(selectedNoteMentionIds, previousMentionIds\)/);
+  assert.match(view, /sameIds\(effectiveMentionIds, previousMentionIds\)/);
   assert.match(view, /mention\.occurrence_id/);
   assert.match(view, /mention\.effective_person_id/);
   assert.doesNotMatch(view, /associationByName|escapeRegExp/);
