@@ -432,6 +432,41 @@ def test_second_window_is_blocked_until_use_this_window(app):
     assert not errors
 
 
+ANOTHER_WINDOW_WATCH = """
+window.__sawAnotherWindow = false;
+new MutationObserver(() => {
+  if (document.body && document.body.innerText.includes("open in another window")) window.__sawAnotherWindow = true;
+}).observe(document, { subtree: true, childList: true, characterData: true });
+"""
+
+
+def _watch_for_window_block(page):
+    """Record whether the next loaded page ever shows the "another window" screen."""
+    page.add_init_script(ANOTHER_WINDOW_WATCH)
+
+
+def test_reload_never_shows_another_window_even_if_the_release_is_late(app):
+    page, errors, _tmp, server = app
+    _sign_up(page)
+    release = server.auth.release_window
+    server.auth.release_window = lambda *args: (time.sleep(4), release(*args))
+    try:
+        _watch_for_window_block(page)
+        page.reload()
+        page.get_by_role("tab", name="Check a photo", exact=True).wait_for()
+        assert page.evaluate("window.__sawAnotherWindow") is False
+
+        # A second tab is still a second window.
+        second = page.context.new_page()
+        second.goto(page.url)
+        expect(second.get_by_role("heading", name="SentriFace is open in another window")).to_be_visible()
+        assert second.get_by_role("tab", name="Check a photo", exact=True).count() == 0
+        second.close()
+    finally:
+        server.auth.release_window = release
+    assert not errors
+
+
 def _reference_only_event(engine, tmp):
     import shutil
     import uuid

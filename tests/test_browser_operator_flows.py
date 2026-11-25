@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from test_browser_smoke import PASSWORD, _field, _image, _location, _sign_up, expect
+from test_browser_smoke import PASSWORD, _field, _image, _location, _sign_up, _watch_for_window_block, expect
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("SENTRIFACE_BROWSER_SMOKE"),
@@ -182,8 +182,10 @@ def test_multi_face_review_persists_only_after_every_face_is_decided(app, multi_
 
     page.get_by_role("button").filter(has_text=re.compile(r"^Face 02")).first.click()
     page.get_by_role("button", name="Discard Face").click()
+    _watch_for_window_block(page)
     page.reload()
     page.get_by_role("button").filter(has_text=re.compile(r"^Face 03")).first.wait_for()
+    assert page.evaluate("window.__sawAnotherWindow") is False
     expect(page.get_by_role("button", name="Complete Review")).to_be_disabled()
     assert _persons(page) == []
 

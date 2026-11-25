@@ -34,7 +34,7 @@ def server():
             thread.join(timeout=5)
 
 
-def request(server, method, path, payload=None, *, cookie="", window=""):
+def request(server, method, path, payload=None, *, cookie="", window="", reloaded_from=""):
     body = json.dumps(payload).encode() if payload is not None else None
     headers = {"X-SentriFace-Session": server.session_token}
     if body is not None:
@@ -43,6 +43,8 @@ def request(server, method, path, payload=None, *, cookie="", window=""):
         headers["Cookie"] = cookie
     if window:
         headers["X-SentriFace-Window"] = window
+    if reloaded_from:
+        headers["X-SentriFace-Reloaded-From"] = reloaded_from
     connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=20)
     try:
         connection.request(method, path, body=body, headers=headers)
@@ -122,6 +124,37 @@ def test_stale_or_released_window_is_taken_over_without_asking(server, monkeypat
     # Reload: the page releases its window first, so the reloaded page continues.
     request(server, "POST", "/api/auth/window", {"action": "release"}, cookie=cookie, window="window-two-1234")
     assert request(server, "GET", "/api/auth/status", cookie=cookie, window="window-three-1234")[1]["window"] == "active"
+
+
+def test_a_reloaded_tab_takes_over_its_own_window_before_the_release_arrives(server):
+    owner(server)
+    cookie, _ = login(server, "owner", OWNER_PASSWORD, window="window-old-1234")
+    # The reloaded page asks first; the old page's release is still on its way.
+    status, payload, _ = request(server, "GET", "/api/auth/status", cookie=cookie, window="window-new-1234", reloaded_from="window-old-1234")
+    assert status == 200 and payload["window"] == "active"
+    request(server, "POST", "/api/auth/window", {"action": "release"}, cookie=cookie, window="window-old-1234")
+    assert request(server, "GET", "/api/profile", cookie=cookie, window="window-new-1234")[0] == 200
+    assert request(server, "GET", "/api/profile", cookie=cookie, window="window-old-1234")[1]["code"] == "window_replaced"
+
+
+def test_reload_takeover_is_refused_unless_it_names_this_sessions_active_window(server):
+    owner(server)
+    login(server, "owner", OWNER_PASSWORD, window="window-one-1234")
+    # A newer sign-in ends the first session; its window cannot hand over the new one.
+    cookie, _ = login(server, "owner", OWNER_PASSWORD, window="window-two-1234")
+    for reloaded_from in ("window-one-1234", "window-unknown-1234", "bad id!"):
+        payload = request(server, "GET", "/api/auth/status", cookie=cookie, window="window-three-1234", reloaded_from=reloaded_from)[1]
+        assert payload["window"] == "in_use", reloaded_from
+
+    # A replaced window is no longer the active owner, so it cannot hand over either.
+    request(server, "POST", "/api/auth/window", {"action": "claim"}, cookie=cookie, window="window-three-1234")
+    payload = request(server, "GET", "/api/auth/status", cookie=cookie, window="window-four-1234", reloaded_from="window-two-1234")[1]
+    assert payload["window"] == "in_use"
+
+    # Only the status check carries the takeover; other requests stay blocked.
+    status, refused, _ = request(server, "GET", "/api/profile", cookie=cookie, window="window-four-1234", reloaded_from="window-three-1234")
+    assert status == 409 and refused["code"] == "window_in_use"
+    assert request(server, "GET", "/api/profile", cookie=cookie, window="window-three-1234")[0] == 200
 
 
 def test_window_check_ins_do_not_count_as_activity(server):

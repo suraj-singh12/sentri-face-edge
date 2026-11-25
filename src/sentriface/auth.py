@@ -267,9 +267,14 @@ class AuthService:
                 return None
             return self._ended_sessions.get(_digest(token))
 
-    def use_window(self, token: str | None, window_id: str | None, *, claim: bool = False) -> str:
-        """Return this window's state: active, in_use, replaced, or none."""
+    def use_window(self, token: str | None, window_id: str | None, *, claim: bool = False, reloaded_from: str | None = None) -> str:
+        """Return this window's state: active, in_use, replaced, or none.
+
+        reloaded_from names the window a same-tab reload replaces; it takes over
+        only while that window is still this session's active window.
+        """
         window_id = _window_id(window_id)
+        reloaded_from = _window_id(reloaded_from)
         if not token or not window_id:
             return "none"
         now = datetime.now(timezone.utc)
@@ -282,7 +287,8 @@ class AuthService:
                 or session.window_seen_at is None
                 or now - session.window_seen_at > timedelta(seconds=WINDOW_STALE_SECONDS)
             )
-            if claim or owner_closed or session.window_id == window_id:
+            reload_handover = reloaded_from is not None and reloaded_from == session.window_id
+            if claim or reload_handover or owner_closed or session.window_id == window_id:
                 if session.window_id and session.window_id != window_id:
                     session.replaced_windows = [*session.replaced_windows[-15:], session.window_id]
                 session.replaced_windows = [item for item in session.replaced_windows if item != window_id]
