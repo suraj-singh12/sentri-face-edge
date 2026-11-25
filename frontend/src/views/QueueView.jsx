@@ -217,6 +217,7 @@ export function QueueView({
               <Group justify="space-between">
                 <Box>
                   <Text fw={700}>Event {Number(activeEncounter.sequence_number || 0) + 1} of {encounterReviews.length}</Text>
+                  {activeEncounter.target_observation_id && <Text size="sm" fw={700} c="teal">Attaching media to {activeEncounter.event_details?.event_occasion || "the selected Event"}{activeEncounter.event_details?.date ? ` · ${activeEncounter.event_details.date}` : ""}{activeEncounter.event_details?.place_seen ? ` · ${activeEncounter.event_details.place_seen}` : ""}</Text>}
                   <Text size="sm" c="dimmed">{activeEncounter.identity_resolved} of {activeEncounter.identity_total} faces resolved. Event details are saved once for this Event.</Text>
                 </Box>
                 <Group>

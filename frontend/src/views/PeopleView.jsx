@@ -1306,6 +1306,7 @@ function PeopleGalleryView({
           </Menu>
         </Group>
       </Group>
+      {!canEdit && !canDestroy && <Text size="sm" c="dimmed">Read-only access: profile editing, notes, face management, and lifecycle actions require an Operator or Administrator account.</Text>}
 
       <Group align="flex-start" wrap="nowrap" className="people-profile-hero">
         <ProfilePhoto path={selectedRecord?.thumbPath || payload.person.representative_image || selectedPath} name={payload.person.name} />
@@ -2050,10 +2051,13 @@ function ProfilePhoto({ path, name }) {
 }
 
 function ProfileNoteSummary({ note, onOpen }) {
+  const [expanded, setExpanded] = useState(false);
   if (!note.content.trim()) return <Text size="sm" c="dimmed">No notes added.</Text>;
+  const clipped = note.content.length > 180 || note.content.split("\n").length > 2;
   return (
-    <Stack gap="xs" className="people-profile-note-summary">
+    <Stack gap="xs" className={expanded ? "people-profile-note-summary people-profile-note-expanded" : "people-profile-note-summary"}>
       <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{note.content}</Text>
+      {clipped && <Button size="compact-xs" variant="subtle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>{expanded ? "Show less" : "Read full note"}</Button>}
       <Group gap="xs">
         {(note.mentions || []).map((mention) => (
           <Badge

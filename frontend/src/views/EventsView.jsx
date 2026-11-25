@@ -121,6 +121,7 @@ function EncounterDetail({ detail, people, onClose, canAttach, canCorrect, onCor
   return <Stack gap="md" className="encounter-detail">
     <Group justify="space-between"><Title order={2}>{detail.occasion || "Unnamed Event"}</Title><Button variant="default" onClick={onClose}>Back to Events</Button></Group>
     <Group gap="sm"><Text>{eventDateTime(detail)} · {detail.location || "Location unknown"}</Text><Badge variant="light" tt="none">{contextLabel(detail.context)}</Badge></Group>
+    {!canAttach && !canCorrect && <Text size="sm" c="dimmed">Read-only access: Attach Media and Event corrections require an Operator or Administrator account.</Text>}
     <Group gap="xs">
       {canAttach && <FileButton multiple accept="image/*" onChange={async (files) => { if (!files?.length) return; setBusy(true); setError(""); try { await onAttach(detail, files); } catch (failure) { setError(failure.message); } finally { setBusy(false); } }}>{(props) => <Button {...props} disabled={busy}>Attach Media</Button>}</FileButton>}
       {canCorrect && <><Button variant="default" onClick={() => open("metadata")}>Correct Event</Button><Button variant="default" onClick={() => open("participants")}>Correct Participants</Button><Button variant="default" onClick={() => open("relations")}>Correct Relations</Button></>}

@@ -2950,6 +2950,11 @@ button {
   white-space: pre-wrap;
 }
 
+.people-profile-note-expanded {
+  max-height: none;
+  overflow: visible;
+}
+
 .people-note-person-chip {
   margin: 0 3px;
   vertical-align: middle;
@@ -3137,6 +3142,15 @@ button {
   stroke-width: 18;
   vector-effect: non-scaling-stroke;
   cursor: pointer;
+}
+
+.person-graph-edge-layer g:focus {
+  outline: none;
+}
+
+.person-graph-edge-layer g:focus .person-graph-edge-line {
+  stroke: var(--mantine-color-cyan-3);
+  opacity: 1;
 }
 
 .person-graph-node-object {
