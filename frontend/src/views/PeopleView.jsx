@@ -62,6 +62,7 @@ import {
   IconUser,
   IconUserPlus,
   IconUsers,
+  IconX,
 } from "@tabler/icons-react";
 
 import { EmptyCard, ImageFrame, NAME_TOOLTIP_PROPS, PersonName, SafeImage } from "../components/Shared.jsx";
@@ -79,7 +80,7 @@ import {
   mediaUrl,
   personProfile,
   personAllows,
-  requirePersonContract, plural, requiredFieldErrors } from "../utils.js";
+  requirePersonContract, plural, requiredFieldErrors, noteMentionIdsForContent } from "../utils.js";
 export function PeopleView({
   canEdit = false,
   canDestroy = false,
@@ -1058,6 +1059,9 @@ function PeopleGalleryView({
   const noteMentionCanCreate = notesEditOpen
     && activeMentionQuery.length >= 3
     && !noteMentionHasExactPerson;
+  const selectedNoteMentions = useMemo(() => selectedNoteMentionIds
+    .map((personId) => people.find((person) => person.person_id === personId))
+    .filter(Boolean), [JSON.stringify(selectedNoteMentionIds), people]);
   const [editValues, setEditValues] = useState(summaryProfile);
   const [editErrors, setEditErrors] = useState({});
   useEffect(() => { if (!editOpen) setEditErrors({}); }, [editOpen]);
@@ -1138,18 +1142,26 @@ function PeopleGalleryView({
       console.error(error);
     }
   };
+  const updateNotesDraft = (value) => {
+    setNotesDraft(value);
+    if (!String(value || "").trim()) setSelectedNoteMentionIds([]);
+  };
+  const removeNoteMention = (personId) => {
+    setSelectedNoteMentionIds((current) => current.filter((item) => item !== personId));
+  };
   const saveNotes = async () => {
     if (notesBusy) return false;
     const previousNotes = profileNote.content;
     const previousMentionIds = profileNote.mentioned_person_ids || [];
-    if (notesDraft.trim() === previousNotes && sameIds(selectedNoteMentionIds, previousMentionIds)) {
+    const effectiveMentionIds = noteMentionIdsForContent(notesDraft, selectedNoteMentionIds);
+    if (notesDraft.trim() === previousNotes && sameIds(effectiveMentionIds, previousMentionIds)) {
       setNotesEditOpen(false);
       return false;
     }
     setNotesBusy(true);
     try {
       const result = await onSaveNotes(
-        payload.person.person_id, notesDraft, previousNotes, selectedNoteMentionIds,
+        payload.person.person_id, notesDraft, previousNotes, effectiveMentionIds,
       );
       if (result?.updated) {
         setNotesDraft(result.notes);
@@ -1461,8 +1473,29 @@ function PeopleGalleryView({
             value={notesDraft}
             disabled={notesBusy}
             placeholder="Add a short summary or detail about this person"
-            onChange={(event) => setNotesDraft(event.currentTarget.value)}
+            onChange={(event) => updateNotesDraft(event.currentTarget.value)}
           />
+          {selectedNoteMentions.length > 0 && (
+            <Box>
+              <Text size="xs" fw={700}>Selected mentions</Text>
+              <Group gap={6} mt={4}>
+                {selectedNoteMentions.map((person) => (
+                  <Button
+                    key={person.person_id}
+                    type="button"
+                    size="compact-xs"
+                    variant="light"
+                    color="gray"
+                    rightSection={<IconX size={12} />}
+                    aria-label={`Remove mention ${person.name}`}
+                    onClick={() => removeNoteMention(person.person_id)}
+                  >
+                    @{person.name}
+                  </Button>
+                ))}
+              </Group>
+            </Box>
+          )}
           {(noteMentionSuggestions.length > 0 || noteMentionCanCreate) && (
             <Stack gap={4} className="people-note-mention-suggestions">
               {noteMentionSuggestions.map((candidate) => (

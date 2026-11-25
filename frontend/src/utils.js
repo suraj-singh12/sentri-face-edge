@@ -216,6 +216,12 @@ export function eventContextLabel(context) {
   return EVENT_CONTEXT_LABELS[context] || "Unknown";
 }
 
+
+export function noteMentionIdsForContent(content, mentionIds) {
+  if (!String(content || "").trim()) return [];
+  return [...new Set((mentionIds || []).map(String).filter(Boolean))];
+}
+
 export function requiredFieldErrors(values, fields) {
   const errors = {};
   for (const [key, label] of fields) {
