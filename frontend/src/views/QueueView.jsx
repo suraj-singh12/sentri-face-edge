@@ -125,6 +125,7 @@ export function QueueView({
   onBack,
 }) {
   const [discardSessionOpen, setDiscardSessionOpen] = useState(false);
+  const [discardEncounterOpen, setDiscardEncounterOpen] = useState(false);
   const [groupPendingDiscard, setGroupPendingDiscard] = useState(null);
   const [cancelAttachmentOpen, setCancelAttachmentOpen] = useState(false);
   const attachmentPhotoCount = encounterMedia.filter((item) => !item.finalized_encounter && !item.excluded).length;
@@ -179,7 +180,7 @@ export function QueueView({
           ) : encounterMedia.length > 0 && encounterReviews.length === 0 && !["running", "cancelling"].includes(queueProgress?.status) ? (
             <EncounterGrouping key={queueSessionId} media={encounterMedia} onConfirm={onPlanEncounters} onExclude={onMediaExcluded} />
           ) : activeEncounter?.phase === "RELATIONS" ? (
-            <EncounterRelations review={activeEncounter} onDecide={onDecideRelation} onComplete={onCompleteEncounter} onDiscard={onDiscardEncounter} />
+            <EncounterRelations review={activeEncounter} onDecide={onDecideRelation} onComplete={onCompleteEncounter} onDiscard={() => setDiscardEncounterOpen(true)} />
           ) : queueSelectedGroup ? (
             <QueueGroupReview
               people={people}
@@ -200,6 +201,7 @@ export function QueueView({
               onSelectExisting={onSelectExisting}
               onDiscard={onDiscard}
               onDiscardGroup={() => setGroupPendingDiscard(queueSelectedGroup)}
+              eventDetailsIncomplete={Boolean(activeEncounter && !activeEncounter.event_details_complete)}
               onSkip={onSkip}
               onRejectSuggestedMatch={onRejectSuggestedMatch}
               onFollowupChange={onFollowupChange}
@@ -220,7 +222,7 @@ export function QueueView({
                   <Text size="sm" c="dimmed">{activeEncounter.identity_resolved} of {activeEncounter.identity_total} faces resolved. Event details are saved once for this Event.</Text>
                 </Box>
                 <Group>
-                  <Button variant="light" color="red" onClick={onDiscardEncounter}>Discard Event</Button>
+                  <Button variant="light" color="red" onClick={() => setDiscardEncounterOpen(true)}>Discard Event</Button>
                   <Button disabled={!activeEncounter.event_details_complete || activeEncounter.identity_resolved !== activeEncounter.identity_total} onClick={onCompleteIdentities}>Continue to Relations</Button>
                 </Group>
               </Group>
@@ -264,6 +266,17 @@ export function QueueView({
         onConfirm={async () => {
           await onDiscardGroup(groupPendingDiscard);
           setGroupPendingDiscard(null);
+        }}
+      />
+      <ConfirmDialog
+        opened={discardEncounterOpen}
+        title="Discard this Event draft?"
+        message="Pending review decisions for this Event are removed. Uploaded photos and saved people stay on this device."
+        actionLabel="Discard Event"
+        onClose={() => setDiscardEncounterOpen(false)}
+        onConfirm={async () => {
+          await onDiscardEncounter();
+          setDiscardEncounterOpen(false);
         }}
       />
       <ConfirmDialog
@@ -834,6 +847,7 @@ function QueueGroupReview({
   onSelectExisting,
   onDiscard,
   onDiscardGroup,
+  eventDetailsIncomplete = false,
   onSkip,
   onRejectSuggestedMatch,
   onFollowupChange,
@@ -853,6 +867,8 @@ function QueueGroupReview({
   const [zoom, setZoom] = useState(1);
   const [syncZoom, setSyncZoom] = useState(true);
   const [peoplePickerOpen, setPeoplePickerOpen] = useState(false);
+  const [clearFacesOpen, setClearFacesOpen] = useState(false);
+  const [discardFacesOpen, setDiscardFacesOpen] = useState(false);
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleQuery, setPeopleQuery] = useState("");
   const [peoplePickerMode, setPeoplePickerMode] = useState("biometric");
@@ -929,7 +945,9 @@ function QueueGroupReview({
           </Box>
         </Group>
         <Group gap="xs">
-          <Button size="xs" color="red" variant="light" leftSection={<IconTrash size={15} />} onClick={onDiscardGroup} disabled={accepted}>Discard group</Button>
+          {eventDetailsIncomplete
+            ? <Text size="xs" c="dimmed">Complete Event details before discarding a group</Text>
+            : <Button size="xs" color="red" variant="light" leftSection={<IconTrash size={15} />} onClick={onDiscardGroup} disabled={accepted}>Discard group</Button>}
           <Text size="sm" c="dimmed">Group {currentIndex + 1} of {groups.length}</Text>
           <ActionIcon variant="default" disabled={currentIndex <= 0} onClick={() => onOpenGroup(groups[currentIndex - 1])}><IconChevronLeft size={18} /></ActionIcon>
           <ActionIcon variant="default" disabled={currentIndex >= groups.length - 1} onClick={() => onOpenGroup(groups[currentIndex + 1])}><IconChevronRight size={18} /></ActionIcon>
@@ -952,7 +970,7 @@ function QueueGroupReview({
                 </Box>
                 <Group gap={6}>
                   <Button size="compact-xs" variant="subtle" onClick={onSelectAllFaces} disabled={accepted}>Select all</Button>
-                  <Button size="compact-xs" variant="subtle" color="gray" onClick={onClearFaces} disabled={accepted}>Clear</Button>
+                  <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setClearFacesOpen(true)} disabled={accepted || !selectedCount}>Clear</Button>
                 </Group>
               </Group>
               <QueueIncomingGrid faces={group.faces} selectedFaces={selectedFaces} accepted={accepted} onToggleFace={onToggleFace} />
@@ -1006,7 +1024,7 @@ function QueueGroupReview({
           {best ? `Accept ${selectedCount} as ${best.name}` : "Choose a person to accept"}
         </Button>
         <Button variant="light" leftSection={<IconUserPlus size={18} />} onClick={() => { scrollToFollowup(); onNewPerson(); }} disabled={!selectedCount || accepted}>Create new person</Button>
-        <Button variant="light" color="red" leftSection={<IconTrash size={18} />} onClick={onDiscard} disabled={!selectedCount || accepted} title="Removes only the selected faces from this group. Unselected faces stay.">{selectedCount ? `Discard ${plural(selectedCount, "selected face")}` : "Discard selected faces"}</Button>
+        <Button variant="light" color="red" leftSection={<IconTrash size={18} />} onClick={() => setDiscardFacesOpen(true)} disabled={!selectedCount || accepted} title="Removes only the selected faces from this group. Unselected faces stay.">{selectedCount ? `Discard ${plural(selectedCount, "selected face")}` : "Discard selected faces"}</Button>
         <Button variant="default" color="orange" leftSection={<IconX size={18} />} onClick={onRejectSuggestedMatch} disabled={!automaticKnown || automaticBest?.draft_created || Boolean(manualPerson) || accepted} title="Stops suggesting this person for this group. No faces or people are deleted.">{automaticKnown && automaticBest?.name ? `Not ${automaticBest.name}` : "Reject suggested match"}</Button>
         <Button variant="subtle" color="gray" rightSection={<IconChevronRight size={17} />} onClick={onSkip} disabled={accepted}>Skip for now</Button>
       </Group>
@@ -1032,6 +1050,28 @@ function QueueGroupReview({
           onNewPerson();
         }}
         onSelect={choosePerson}
+      />
+      <ConfirmDialog
+        opened={clearFacesOpen}
+        title="Clear selected photos?"
+        message="Only the current photo selection is cleared. No photos, faces, or people are deleted."
+        actionLabel="Clear selection"
+        onClose={() => setClearFacesOpen(false)}
+        onConfirm={() => {
+          onClearFaces();
+          setClearFacesOpen(false);
+        }}
+      />
+      <ConfirmDialog
+        opened={discardFacesOpen}
+        title={selectedCount === 1 ? "Discard 1 selected face?" : `Discard ${selectedCount} selected faces?`}
+        message="Only the selected faces are removed from this group. Unselected faces and saved people stay."
+        actionLabel="Discard selected"
+        onClose={() => setDiscardFacesOpen(false)}
+        onConfirm={async () => {
+          await onDiscard();
+          setDiscardFacesOpen(false);
+        }}
       />
     </Stack>
   );
