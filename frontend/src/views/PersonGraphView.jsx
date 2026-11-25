@@ -210,7 +210,7 @@ export function PersonGraphView({ state, onBack, onRefresh, onOpenNode }) {
                 const strokeWidth = 1.5 + Math.min(8, Number(edge.relationship_strength)) * 0.35;
                 const choose = () => setSelected({ type: "edge", value: edge });
                 return (
-                  <g key={edge.edge_id} role="button" tabIndex={0} aria-label={`Inspect relationship evidence, strength ${edge.relationship_strength}`} onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); choose(); } }}>
+                  <g key={edge.edge_id} role="button" tabIndex={0} aria-label={`Inspect relationship evidence, strength ${edge.relationship_strength}`} onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); choose(); } }} onClick={choose}>
                     <line
                       x1={source.x}
                       y1={source.y}

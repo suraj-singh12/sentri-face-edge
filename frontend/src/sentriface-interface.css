@@ -2945,15 +2945,19 @@ button {
 
 .people-profile-note-summary {
   line-height: 1.65;
+}
+
+.people-profile-note-text {
   max-height: 3.3em;
   overflow: hidden;
   white-space: pre-wrap;
 }
 
-.people-profile-note-expanded {
+.people-profile-note-expanded .people-profile-note-text {
   max-height: none;
   overflow: visible;
 }
+
 
 .people-note-person-chip {
   margin: 0 3px;

@@ -2056,7 +2056,7 @@ function ProfileNoteSummary({ note, onOpen }) {
   const clipped = note.content.length > 180 || note.content.split("\n").length > 2;
   return (
     <Stack gap="xs" className={expanded ? "people-profile-note-summary people-profile-note-expanded" : "people-profile-note-summary"}>
-      <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{note.content}</Text>
+      <Text size="sm" className="people-profile-note-text">{note.content}</Text>
       {clipped && <Button size="compact-xs" variant="subtle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>{expanded ? "Show less" : "Read full note"}</Button>}
       <Group gap="xs">
         {(note.mentions || []).map((mention) => (

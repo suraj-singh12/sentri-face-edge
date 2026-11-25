@@ -133,6 +133,7 @@ export function QueueView({
       <EncounterDetailsModal opened={Boolean(queueSelectedGroup && activeEncounter?.phase === "EVENT" && eventDetails?.reviewId !== activeEncounter.review_id)} values={eventDraft} people={people} onChange={onEventChange} onConfirm={onEventConfirm} onClose={onBack} />
       <Modal opened={proofOnlyDuplicateCandidates.length > 0} onClose={() => {}} title="Possible existing profile" centered>
         <Stack gap="md">
+    {targetDetails && <Text size="sm" fw={700} c="teal">Attaching media to {targetDetails.event_occasion || "the selected Event"}{targetDetails.date ? ` · ${targetDetails.date}` : ""}{targetDetails.place_seen ? ` · ${targetDetails.place_seen}` : ""}</Text>}
           <Text size="sm">A proof-only face may match an existing Person. It was not used in normal recognition.</Text>
           {proofOnlyDuplicateCandidates.map((candidate) => (
             <Card key={candidate.person_id} withBorder radius="md">
@@ -210,6 +211,7 @@ export function QueueView({
               onGalleryBack={onGalleryBack}
               onLoadPeopleCandidates={onLoadPeopleCandidates}
               onBack={onBack}
+              targetDetails={activeEncounter?.target_observation_id ? activeEncounter.event_details : null}
             />
           ) : (
             <Stack>
@@ -349,7 +351,7 @@ function EncounterGrouping({ media, onConfirm, onExclude }) {
   </Stack>;
 }
 
-function EncounterRelations({ review, onDecide, onComplete, onDiscard }) {
+function EncounterRelations({ review, onDecide, onComplete, onDiscard, targetDetails = null }) {
   const decisions = new Map((review.relations || []).map((item) => [`${item.first_ref}|${item.second_ref}`, item.disposition]));
   const candidates = review.relation_candidates || [];
   const complete = candidates.every((item) => decisions.has(`${item.first_ref}|${item.second_ref}`));
@@ -817,7 +819,7 @@ function QueuePreviewMosaic({ faces }) {
   );
 }
 
-function QueueGroupReview({
+function QueueGroupReview({ targetDetails = null,
   people,
   group,
   groups,
