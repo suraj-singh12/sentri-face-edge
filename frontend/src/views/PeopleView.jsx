@@ -1144,7 +1144,6 @@ function PeopleGalleryView({
   };
   const updateNotesDraft = (value) => {
     setNotesDraft(value);
-    if (!String(value || "").trim()) setSelectedNoteMentionIds([]);
   };
   const removeNoteMention = (personId) => {
     setSelectedNoteMentionIds((current) => current.filter((item) => item !== personId));

@@ -17,6 +17,5 @@ test("note editor exposes selected mentions and sends the emptied-note removal",
   assert.match(view, /Selected mentions/);
   assert.match(view, /Remove mention \$\{person\.name\}/);
   assert.match(view, /noteMentionIdsForContent\(notesDraft, selectedNoteMentionIds\)/);
-  assert.match(view, /if \(!String\(value \|\| ""\)\.trim\(\)\) setSelectedNoteMentionIds\(\[\]\)/);
   assert.match(view, /payload\.person\.person_id, notesDraft, previousNotes, effectiveMentionIds/);
 });
