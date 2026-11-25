@@ -21,4 +21,6 @@ test("group discard is not offered before Event details are complete", async () 
   const view = await read("../src/views/QueueView.jsx");
   assert.match(view, /eventDetailsIncomplete=\{Boolean\(activeEncounter && !activeEncounter\.event_details_complete\)\}/);
   assert.match(view, /Complete Event details before discarding a group/);
+  assert.match(view, /Complete Event details before discarding</);
+  assert.equal((view.match(/eventDetailsIncomplete=\{Boolean\(activeEncounter && !activeEncounter\.event_details_complete\)\}/g) || []).length, 2);
 });

@@ -235,6 +235,7 @@ export function QueueView({
               onCancelProcessing={onCancelProcessing}
               onOpen={onOpenGroup}
               onDiscardGroup={setGroupPendingDiscard}
+              eventDetailsIncomplete={Boolean(activeEncounter && !activeEncounter.event_details_complete)}
               onResumeSkipped={onResumeSkipped}
               onViewPeople={onViewPeople}
               encounterReview={Boolean(activeEncounter)}
@@ -491,7 +492,7 @@ function QueueInputPanel({ sessions, sessionId, pendingCount, onFiles, onFolder,
   );
 }
 
-function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing, onOpen, onDiscardGroup, onResumeSkipped, onViewPeople, encounterReview = false }) {
+function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing, onOpen, onDiscardGroup, eventDetailsIncomplete = false, onResumeSkipped, onViewPeople, encounterReview = false }) {
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("confidence");
   const pendingGroups = groups.filter((group) => group.status === "pending" && group.faces.length);
@@ -592,7 +593,9 @@ function QueueGroupList({ groups, progress, sessionId, stats, onCancelProcessing
                       </Group>
                       <Group gap="xs" wrap="nowrap" className="queue-row-actions">
                         {best?.draft_created && <Badge>Drafted</Badge>}
-                        <Button color="red" variant="light" leftSection={<IconTrash size={16} />} onClick={(event) => { event.stopPropagation(); onDiscardGroup(group); }}>Discard</Button>
+                        {eventDetailsIncomplete
+                          ? <Text size="xs" c="dimmed">Complete Event details before discarding</Text>
+                          : <Button color="red" variant="light" leftSection={<IconTrash size={16} />} onClick={(event) => { event.stopPropagation(); onDiscardGroup(group); }}>Discard</Button>}
                         <Button className="queue-row-action" variant="default" rightSection={<IconChevronRight size={17} />} onClick={(event) => { event.stopPropagation(); onOpen(group); }}>Review</Button>
                       </Group>
                     </Group>
