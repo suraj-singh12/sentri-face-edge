@@ -15,7 +15,7 @@
 | Event corrections/attach media | — | ✔ | ✔ | — | ✔ | buttons present; execution not completed |
 | World Explore canvas/inspector/filters | ✔ | ✔ | ✔ | ✔ | ✔ | discovery click, canvas, inspector, evidence filter analysis |
 | World Connections | ✔ | ✔ | ✔ | ✔ | ✔ | tab reached; deep drilldowns not completed |
-| Settings: License | ✔ visible | ✔ | ✔ | ✔ | ✔ | read |
+| Settings: License | — no Settings tab | ✔ | ✔ | ✔ | ✔ | read |
 | Settings: Backups — create | — | — | ✔ executed | — | ✔ | backup created successfully; list populated |
 | Settings: User accounts | — | — | — | — | ✔ | read; role badges, MUST CHANGE PASSWORD state |
 | Settings: Integrity/System/Activity/About | partial | partial | partial | ✔ technical sections | ✔ | captured; not deeply exercised |

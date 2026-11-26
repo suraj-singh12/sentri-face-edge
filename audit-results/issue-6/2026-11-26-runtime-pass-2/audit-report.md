@@ -39,7 +39,7 @@ No P0 defects were found: no security, data-integrity or critical-functional fai
 | Event corrections/attach media | — | ✔ | ✔ | — | ✔ | buttons present; execution not completed |
 | World Explore canvas/inspector/filters | ✔ | ✔ | ✔ | ✔ | ✔ | discovery click, canvas, inspector, evidence filter analysis |
 | World Connections | ✔ | ✔ | ✔ | ✔ | ✔ | tab reached; deep drilldowns not completed |
-| Settings: License | ✔ visible | ✔ | ✔ | ✔ | ✔ | read |
+| Settings: License | — no Settings tab | ✔ | ✔ | ✔ | ✔ | read |
 | Settings: Backups — create | — | — | ✔ executed | — | ✔ | backup created successfully; list populated |
 | Settings: User accounts | — | — | — | — | ✔ | read; role badges, MUST CHANGE PASSWORD state |
 | Settings: Integrity/System/Activity/About | partial | partial | partial | ✔ technical sections | ✔ | captured; not deeply exercised |
@@ -73,8 +73,8 @@ Recommendation: rank exact match first, then prefix matches, then substring; sho
 
 **A-02 · Mandatory unexplained "With how many individuals" blocks completion silently**
 Location: review queue, new-person and accept-existing followup forms. Roles: operator+.
-Repro: resolve a group identity and leave the count untouched → Confirm does nothing. No inline error, no scroll to the offending field, no "unknown" option. The same data is labeled "With how many individuals" in creation but "Number of individuals" in profile edit.
-Impact: dead-end in the product's highest-frequency workflow; forces inventing numeric data for every sighting even when unknown.
+Repro: resolve a group identity and leave the count untouched → Confirm does nothing. **Corrected 2026-11-26 per video re-verification:** an inline "Number of individuals is required" message DOES appear on the first click — the original "no inline error" claim was inaccurate. What remains defective: no "unknown" option, repeated clicks add no further guidance, the field is unexplained, and the same data is labeled "With how many individuals" in creation but "Number of individuals" in profile edit.
+Impact: friction in the product's highest-frequency workflow; forces inventing numeric data for every sighting even when unknown.
 Recommendation: optional with explicit "unknown" or sensible default; surface validation errors inline at the field with a summary jump-link; unify the label.
 
 **A-04 · Disabled unexplained primary action in group review**
@@ -147,7 +147,7 @@ An operator confirming quickly silently records today's date for older photos; t
 - Role permission gating broadly correct (F33-adjacent): viewer/technician correctly lack ingestion affordances; custodian = operator + destroy per backend roles.
 
 **Still present / regressed:**
-- **F40** safety-copy banner role-unaware — confirmed still present: viewer sees "Your safety copy needs attention — the owner can check it under Settings" and cannot act.
+- **F40** safety-copy banner role-unaware — confirmed still present and stronger than previously documented: the viewer has **no Settings tab at all**, yet sees "Your safety copy needs attention — the owner can check it under Settings" — a directive referencing a screen the viewer cannot even open. (Video-verified 2026-11-26.)
 - **F04/F13** feedback placement/language density — the banner stack and redundant match messaging (A-03, A-14) are the same class of problem in current form.
 - **F28-adjacent** (misleading scope-wide empty claims) — A-11 is the same defect class in World Explore: filtered-empty presented as actually-empty.
 
