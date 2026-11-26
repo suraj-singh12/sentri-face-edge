@@ -670,7 +670,7 @@ function RecognitionPeoplePicker({ opened, people, allPeople, mode, onMode, load
                 <PersonName name={person.name} fw={800} />
                 <Group wrap="wrap" gap={6}>
                   <Badge size="xs" variant="light" color={person.match ? candidateDisplay.color : "gray"}>
-                    {mode === "no_face" ? "No face enrolled" : person.match ? candidateDisplay.badge : "No references"}
+                    {mode === "no_face" ? "No face enrolled" : person.match ? candidateDisplay.badge : "Manual only"}
                   </Badge>
                 </Group>
                 <Text size="xs" c="dimmed">{person.embedding_count || 0} reference photo{Number(person.embedding_count || 0) === 1 ? "" : "s"}</Text>

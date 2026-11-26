@@ -2801,7 +2801,7 @@ class SQLiteIdentityStore:
                         str(observed_at or "").split("T", 1)[0],
                         str(encounter_context.get("start_time") or ""),
                         str(location or ""),
-                        int(detail.get("individual_count") or len(participant_ids)),
+                        int(detail["individual_count"] if detail.get("individual_count") is not None else len(participant_ids)),
                         str(encounter_context.get("occasion") or ""),
                         _optional_text(detail.get("rank")),
                         _optional_text(detail.get("country")),

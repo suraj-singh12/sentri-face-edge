@@ -30,7 +30,9 @@ test("weak queue matches use a human-controlled People picker", () => {
   assert.match(queue, /setManualPerson\(null\);[\s\S]*onGalleryBack\(\);[\s\S]*onNewPerson\(\);/);
   assert.match(queue, /person\.match\?\.classification === "unknown"/);
   assert.match(queue, /#\{person\.match\.rank\}/);
-  assert.match(queue, /onClick=\{\(\) => \{ scrollToFollowup\(\); onAcceptExisting\(best\); \}\}/);
+  assert.match(queue, /if \(!best\) \{\s*openPeoplePicker\(\);\s*return;\s*\}/);
+  assert.match(queue, /scrollToFollowup\(\);\s*onAcceptExisting\(best\);/);
+  assert.match(queue, /disabled=\{!selectedCount \|\| accepted\}/);
   assert.match(queue, /const choosePerson = \(person\) => \{\s*onSelectExisting\(\);/);
   assert.match(queue, /View reference photos/);
   assert.doesNotMatch(queue, /face\?\.crop_path \|\| face\?\.source_image/);

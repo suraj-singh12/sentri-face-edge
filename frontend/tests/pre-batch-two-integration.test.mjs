@@ -5,14 +5,14 @@ import { browsePeopleCandidates } from "../src/utils/profileBrowse.js";
 
 const read = async (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("Browse keeps ranked biometric order and shows only actual NO_FACE profiles separately", () => {
+test("Browse keeps ranked biometric order, retains manual-only enrolled profiles, and shows actual NO_FACE profiles separately", () => {
   const ranked = [
     { person_id: "b", name: "B", biometric_status: "ENROLLED", match: { rank: 1, score: 0.9 } },
     { person_id: "n", name: "No Face", biometric_status: "NO_FACE", match: null },
     { person_id: "proof", name: "Proof Only", biometric_status: "ENROLLED", match: null },
     { person_id: "a", name: "A", biometric_status: "ENROLLED", match: { rank: 3, score: 0.8 } },
   ];
-  assert.deepEqual(browsePeopleCandidates(ranked, [], "biometric"), [ranked[0], ranked[3]]);
+  assert.deepEqual(browsePeopleCandidates(ranked, [], "biometric"), [ranked[0], ranked[2], ranked[3]]);
   const people = [
     { person_id: "proof", name: "Proof Only", lifecycle_status: "ACTIVE", biometric_status: "ENROLLED" },
     { person_id: "z", name: "Zed", lifecycle_status: "ACTIVE", biometric_status: "NO_FACE" },

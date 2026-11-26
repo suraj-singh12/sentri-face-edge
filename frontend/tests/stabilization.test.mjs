@@ -3,6 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 import { COUNTRY_OPTIONS, filterCountries } from "../src/countries.js";
+import { browsePeopleCandidates } from "../src/utils/profileBrowse.js";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 
@@ -14,11 +15,25 @@ test("offline country picker browses and filters after three characters", () => 
   assert.equal(filterCountries({ options, search: "in" }), options);
   assert.ok(filterCountries({ options, search: "IND" }).some((item) => item.value === "India"));
   assert.ok(filterCountries({ options, search: "iNd" }).length < options.length);
+  const indiaMatches = filterCountries({ options, search: "india" });
+  assert.equal(indiaMatches[0]?.value, "India");
+  assert.ok(indiaMatches.findIndex((item) => item.value === "India") < indiaMatches.findIndex((item) => item.value === "British Indian Ocean Territory"));
+  const indMatches = filterCountries({ options, search: "ind" });
+  assert.equal(indMatches[0]?.value, "India");
   assert.equal(filterCountries({ options, search: "" }), options);
   const picker = read("../src/components/CountrySelect.jsx");
   assert.match(picker, /searchable/);
   assert.match(picker, /filter=\{filterCountries\}/);
   assert.match(picker, /onChange=\{\(selected\) => onChange\(selected \|\| ""\)\}/);
+});
+
+test("manual People pickers retain enrolled active people when no automatic candidate exists", () => {
+  const ranked = [
+    { person_id: "p-match", name: "Matched", biometric_status: "ENROLLED", match: { score: 0.4 } },
+    { person_id: "p-manual", name: "Manual Only", biometric_status: "ENROLLED", match: null },
+    { person_id: "p-placeholder", name: "No Face", biometric_status: "NO_FACE", match: null },
+  ];
+  assert.deepEqual(browsePeopleCandidates(ranked, [], "biometric").map((person) => person.person_id), ["p-match", "p-manual"]);
 });
 
 test("every person profile entry uses the effective API default", () => {

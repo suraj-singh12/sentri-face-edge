@@ -9,5 +9,5 @@ export function browsePeopleCandidates(rankedPeople, allPeople, mode) {
       .filter((person) => person.lifecycle_status === "ACTIVE" && person.biometric_status === "NO_FACE")
       .sort((left, right) => left.name.localeCompare(right.name) || left.person_id.localeCompare(right.person_id));
   }
-  return (rankedPeople || []).filter((person) => person.biometric_status === "ENROLLED" && person.match);
+  return (rankedPeople || []).filter((person) => person.biometric_status === "ENROLLED");
 }
