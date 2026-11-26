@@ -44,6 +44,13 @@ class Person:
     canonical_person_id: str | None = None
     identity_status: str = "IDENTIFIED"
     biometric_status: str = "NO_FACE"
+    restore_until: str | None = None
+
+
+def person_recovery_status(restore_until: str | None, now: str) -> str:
+    if restore_until is None or datetime.fromisoformat(now) >= datetime.fromisoformat(restore_until):
+        return "EXPIRED"
+    return "RECOVERABLE"
 
 
 @dataclass(frozen=True)

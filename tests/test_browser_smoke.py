@@ -308,6 +308,7 @@ def test_deleted_people_move_to_bin_and_restore_to_active(app):
     page.get_by_role("menuitem", name="Delete Person…").click()
     dialog = page.get_by_role("dialog", name="Delete Bin Keeper?")
     expect(dialog.get_by_text("Bin Keeper moves to Bin")).to_be_visible()
+    expect(dialog).to_contain_text("can be restored for 30 days")
     expect(dialog).not_to_contain_text("permanently")
     typed = _field(dialog, "Type DELETE to confirm")
     expect(typed).to_be_focused()
@@ -348,7 +349,7 @@ def test_deleted_people_move_to_bin_and_restore_to_active(app):
     dialog = page.get_by_role("dialog", name="Restore Bin Keeper?")
     dialog.get_by_role("button", name="Restore person", exact=True).click()
     expect(page.get_by_text("Restored from Bin. This person is active again.")).to_be_visible()
-    expect(page.get_by_text("Bin is empty.")).to_be_visible()
+    expect(page.get_by_text("No recoverable profiles.")).to_be_visible()
     restored = store.get_person(binned.person_id)
     assert restored is not None and restored.deleted_at is None
     page.get_by_role("button", name=re.compile(r"^All People")).click()
@@ -658,3 +659,70 @@ def test_toasts_move_are_remembered_reset_and_never_cover_dialog_buttons(app):
     _assert_dialog_buttons_uncovered(page, dialog, room=False)
     _shot(page, "58-dialog-narrow")
     assert errors == []
+
+
+def test_people_bin_filters_and_refuses_stale_restore(served_app, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    page, errors, _, server = served_app
+    store = server.engine.store
+    opened_at = datetime.now(timezone.utc)
+    clock = opened_at - timedelta(days=31)
+    monkeypatch.setattr("sentriface.storage.sqlite_store.utc_now", lambda: clock.isoformat())
+    monkeypatch.setattr("sentriface.api_payloads.utc_now", lambda: clock.isoformat())
+    expired = store.create_person("Expired Example")
+    store.soft_delete_person(expired.person_id, "example-expired")
+    clock = opened_at - timedelta(days=12)
+    recoverable = store.create_person("Recoverable Example")
+    store.soft_delete_person(recoverable.person_id, "example-recoverable")
+    clock = opened_at
+
+    _sign_up(page)
+    page.get_by_role("tab", name="People", exact=True).click()
+    page.get_by_role("button", name=re.compile(r"^Bin\b")).click()
+    collection = page.get_by_role("combobox", name="Deleted People collection")
+    cards = page.locator(".people-person-card")
+    count = page.get_by_text("Profiles in this view", exact=True).locator("..")
+    page.get_by_text("Account created", exact=True).wait_for(state="hidden")
+    expect(collection).to_have_value("Recoverable Profiles")
+    expect(cards).to_have_count(1)
+    expect(count.get_by_text("1", exact=True)).to_be_visible()
+    expect(cards).to_contain_text("Recoverable Example")
+    expect(cards).to_contain_text("18 days left")
+    expect(cards.get_by_role("button", name="Restore", exact=True)).to_be_enabled()
+    _shot(page, "issue-90-recoverable")
+
+    def select_collection(label):
+        collection.click()
+        page.get_by_role("option", name=label, exact=True).click()
+        expect(collection).to_have_value(label)
+
+    select_collection("Event Deleted Profiles")
+    expect(page.get_by_text("No profiles deleted through an Event.")).to_be_visible()
+    expect(cards).to_have_count(0)
+    expect(count.get_by_text("0", exact=True)).to_be_visible()
+    _shot(page, "issue-90-event-deleted")
+
+    select_collection("Permanently Deleted Profiles")
+    expect(cards).to_have_count(1)
+    expect(cards).to_contain_text("Expired Example")
+    expect(cards).to_have_class(re.compile(r"\bpeople-person-card--expired\b"))
+    expect(cards.get_by_text("Non-recoverable — this profile cannot be restored.")).to_be_visible()
+    expect(cards.get_by_role("button")).to_have_count(0)
+    _shot(page, "issue-90-permanently-deleted")
+
+    select_collection("Recoverable Profiles")
+    cards.get_by_role("button", name="Restore", exact=True).click()
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_be_visible()
+    clock = opened_at + timedelta(days=18)
+    with page.expect_response(lambda response: response.url.endswith("/api/person-restore")) as result:
+        dialog.get_by_role("button", name="Restore person", exact=True).click()
+    assert result.value.status == 422
+    assert result.value.json()["reason"] == "person_recovery_expired"
+    expect(dialog).to_be_hidden()
+    expect(page.get_by_text("No recoverable profiles.")).to_be_visible()
+    select_collection("Permanently Deleted Profiles")
+    expect(cards).to_have_count(2)
+    expect(count.get_by_text("2", exact=True)).to_be_visible()
+    assert not errors

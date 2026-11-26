@@ -134,6 +134,31 @@ class AuthenticationApiTest(unittest.TestCase):
             self.assertEqual(self._request(server, "DELETE", f"/api/backups/{backup_id}?confirm={backup_id}", cookie=login("technician"))[0], 403)
             self.assertEqual(self._request(server, "POST", "/api/backups/restore", {"backup_id": backup_id}, cookie=login("technician"))[0], 403)
 
+    def test_expired_person_refuses_an_authenticated_direct_restore(self) -> None:
+        with self._running_server() as server:
+            server.auth.signup_initial("owner", "Owner", PASSWORD)
+            cookie = self._login_cookie(server, "owner", PASSWORD)
+            person = server.engine.store.create_person("Expired profile")
+            server.engine.store.soft_delete_person(person.person_id, "expire-profile")
+            with server.engine.store._connect() as conn:
+                conn.execute("UPDATE persons SET restore_until = ? WHERE person_id = ?", (
+                    "2000-01-01T00:00:00+00:00", person.person_id,
+                ))
+            _, collection, _ = self._request(server, "GET", "/api/persons", cookie=cookie)
+            _, profile, _ = self._request(
+                server, "GET", f"/api/person?person_id={person.person_id}&view=raw", cookie=cookie,
+            )
+            for item in (collection["archived_persons"][0], profile["person"]):
+                self.assertEqual(item["recovery_status"], "EXPIRED")
+                self.assertEqual(item["allowed_actions"], ["VIEW_HISTORY"])
+            operation_id = str(uuid4())
+            status, payload, _ = self._request(server, "POST", "/api/person-restore", {
+                "person_id": person.person_id, "operation_id": operation_id,
+            }, cookie=cookie)
+            self.assertEqual(status, 422)
+            self.assertEqual(payload["reason"], "person_recovery_expired")
+            self.assertIsNone(server.engine.store.get_operation(operation_id))
+
     def test_ended_sessions_report_why_they_ended(self) -> None:
         with self._running_server() as server:
             admin, _ = server.auth.signup_initial("owner", "Owner", PASSWORD)

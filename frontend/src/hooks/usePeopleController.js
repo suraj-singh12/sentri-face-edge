@@ -303,10 +303,21 @@ export function usePeopleController({
   };
 
   const restorePerson = async (personId, { openProfile = true } = {}) => {
-    const result = await apiPost("/api/person-restore", {
-      person_id: personId,
-      operation_id: operationId(),
-    });
+    let result;
+    try {
+      result = await apiPost("/api/person-restore", {
+        person_id: personId,
+        operation_id: operationId(),
+      });
+    } catch (error) {
+      if (!["person_recovery_expired", "person_restore_stale"].includes(error.reason)) throw error;
+      await loadPeople({ dedupe: false });
+      if (galleryRef.current?.person?.person_id === personId) {
+        const profile = await loadPerson(personId, true);
+        setPeopleGallery((current) => current?.person?.person_id === personId ? profile : current);
+      }
+      return null;
+    }
     await invalidatePersonGraph(result);
     await loadPeople({ dedupe: false });
     if (openProfile) setPeopleGallery(await loadPerson(result.person_id || personId));
@@ -329,7 +340,7 @@ export function usePeopleController({
     await loadPeople({ dedupe: false });
     await loadDeletedFaces({ dedupe: false });
     showToast(
-      `${result.person_name || "This person"} moved to Bin. Their history is kept, and you can restore them from Bin. A safety backup was created first.`,
+      `${result.person_name || "This person"} moved to Bin. Their history is kept. You can restore them from Bin for 30 days. A safety backup was created first.`,
       "teal",
       { title: "Person deleted", autoClose: 9000 },
     );

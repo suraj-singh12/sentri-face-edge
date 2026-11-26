@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 import sqlite3
 import struct
 import tempfile
@@ -8,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from sentriface.backup_service import BackupService
+from sentriface.errors import InputValidationError
 from sentriface.storage.sqlite_store import (
     SCHEMA_VERSION,
     SQLiteIdentityStore,
@@ -238,6 +241,74 @@ class IdentityLifecycleTest(unittest.TestCase):
             self.assertEqual(store.restore_person(person.person_id, "restore-deleted-1"), restored)
             with self.assertRaisesRegex(KeyError, "Only archived or deleted"):
                 store.restore_person(person.person_id, "restore-active-1")
+
+    def test_person_recovery_window_uses_delete_transition_and_guards_restore(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            person = store.create_person("Recoverable")
+            clock = "sentriface.storage.sqlite_store.utc_now"
+            with patch(clock, return_value="2026-01-01T00:00:00+00:00"):
+                store.archive_person(person.person_id, "archive")
+            with patch(clock, return_value="2026-02-01T00:00:00+00:00"):
+                store.soft_delete_person(person.person_id, "delete")
+            with patch(clock, return_value="2026-02-02T00:00:00+00:00"):
+                store.soft_delete_person(person.person_id, "delete")
+                store.permanently_delete_person(person.person_id, "delete-again")
+            historical = store.get_person(person.person_id, include_archived=True)
+            self.assertEqual(historical.deleted_at, "2026-01-01T00:00:00+00:00")
+            self.assertEqual(historical.restore_until, "2026-03-03T00:00:00+00:00")
+
+            with patch(clock, return_value="2026-03-02T23:59:59.999999+00:00"):
+                restored = store.restore_person(person.person_id, "restore")
+                self.assertEqual(store.restore_person(person.person_id, "restore"), restored)
+            self.assertIsNone(store.get_person(person.person_id).restore_until)
+            with patch(clock, return_value="2026-03-03T00:00:00+00:00"):
+                store.soft_delete_person(person.person_id, "new-delete")
+                with self.assertRaisesRegex(InputValidationError, "changed since the original Restore"):
+                    store.restore_person(person.person_id, "restore")
+            historical = store.get_person(person.person_id, include_archived=True)
+            self.assertEqual(historical.restore_until, "2026-04-02T00:00:00+00:00")
+
+            for i, now in enumerate(("2026-04-02T00:00:00+00:00", "2026-04-03T00:00:00+00:00")):
+                operation_id = f"expired-{i}"
+                with patch(clock, return_value=now):
+                    with self.assertRaisesRegex(InputValidationError, "Non-recoverable"):
+                        store.restore_person(person.person_id, operation_id)
+                self.assertIsNone(store.get_operation(operation_id))
+                self.assertEqual(store.get_person(person.person_id, include_archived=True), historical)
+
+    def test_v36_person_recovery_grace_period_and_backup_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            active = store.create_person("Active")
+            archived = store.create_person("Archived")
+            deleted = store.create_person("Deleted")
+            source = store.create_person("Source")
+            store.archive_person(archived.person_id, "archive")
+            store.execute_identity_merge(source.person_id, active.person_id, "merge")
+            with patch("sentriface.storage.sqlite_store.utc_now", return_value="2025-01-01T00:00:00+00:00"):
+                store.soft_delete_person(deleted.person_id, "old-delete")
+            with store._connect() as conn:
+                conn.execute("ALTER TABLE persons DROP COLUMN restore_until")
+                conn.execute("PRAGMA user_version = 36")
+            with patch("sentriface.storage.sqlite_store.utc_now", return_value="2026-04-01T09:00:00+00:00"):
+                store.initialize()
+            store.initialize()
+
+            historical = store.get_person(deleted.person_id, include_archived=True)
+            self.assertEqual(historical.deleted_at, "2025-01-01T00:00:00+00:00")
+            self.assertEqual(historical.restore_until, "2026-05-01T09:00:00+00:00")
+            for person in (active, archived, source):
+                self.assertIsNone(store.get_person(person.person_id, include_archived=True).restore_until)
+            with store._connect() as conn:
+                self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+            backups = BackupService(store.db_path, store.backup_dir)
+            backup = backups.create_backup()
+            self.assertTrue(backup.restorable)
+            result = backups.restore_backup(backup.backup_id, str(uuid.uuid4()))
+            self.assertEqual(result["outcome"], "COMMITTED")
+            self.assertEqual(store.get_person(deleted.person_id, include_archived=True), historical)
 
     def test_legacy_permanent_delete_entry_point_now_tombstones(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

@@ -2374,6 +2374,14 @@ button {
   text-align: left;
 }
 
+.people-person-card--expired {
+  background: var(--mantine-color-default-hover);
+}
+
+.people-person-card--expired .people-card-image-wrap {
+  filter: grayscale(1);
+}
+
 .people-group-stack {
   min-width: 0;
 }

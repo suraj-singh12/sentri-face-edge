@@ -25,7 +25,7 @@ def _downgrade_to_v35(store):
 def test_fresh_database_has_the_flag_column_defaulting_to_unflagged(store):
     _add_account(store)
     with store._connect() as conn:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 36
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert conn.execute("SELECT must_change_password FROM app_users").fetchone()[0] == 0
 
 
