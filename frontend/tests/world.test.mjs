@@ -1388,6 +1388,12 @@ test("Saved locations validate backend value/count records and bounded pages", (
   assert.throws(() => requireWorldDiscoveryContract({ ...payload, available_facets: { locations: [{ value: "Delhi", count: -1 }] } }, { collection }));
 });
 
+test("Explore canvas reselection retains focused Person detail metadata", async () => {
+  const hook = await read("../src/hooks/useWorldExplore.js");
+  assert.match(hook, /members\.people\.map\(\(member\)/);
+  assert.match(hook, /member\.canonical_person_id === person\.canonical_person_id \? person : member/);
+});
+
 test("Explore v2 renders compact criteria and authoritative type-specific Inspectors", async (t) => {
   const { createServer } = await import("vite");
   const React = await import("react");
