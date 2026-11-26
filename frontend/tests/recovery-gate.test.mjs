@@ -26,6 +26,7 @@ test("the application keeps warning until the safety copy is ready", () => {
   assert.match(app, /IconBell/);
   assert.match(app, /shell-notification-popover/);
   assert.match(app, /<Popover opened=\{notificationsOpen\}/);
+  assert.match(app, /trapFocus returnFocus/);
   assert.match(app, /setNotificationsOpen\(\(open\) => !open\)/);
   assert.match(app, /aria-expanded=\{notificationsOpen\}/);
   assert.match(app, /setNotificationsOpen\(false\); actions\.requestBackup\(\)/);

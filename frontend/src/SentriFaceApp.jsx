@@ -129,7 +129,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
                 </ActionIcon>
               </Tooltip>
               {shellNotifications.length ? (
-                <Popover opened={notificationsOpen} onChange={setNotificationsOpen} width={360} position="bottom-end" offset={8} shadow="md">
+                <Popover opened={notificationsOpen} onChange={setNotificationsOpen} trapFocus returnFocus width={360} position="bottom-end" offset={8} shadow="md">
                   <Popover.Target>
                     <ActionIcon variant="subtle" size={36} onClick={() => setNotificationsOpen((open) => !open)} aria-label={`${shellNotifications.length} notifications`} aria-expanded={notificationsOpen} className="shell-notification-button">
                       <IconBell size={18} />
