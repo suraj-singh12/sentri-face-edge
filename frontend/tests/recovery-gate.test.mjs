@@ -26,5 +26,8 @@ test("the application keeps warning until the safety copy is ready", () => {
   assert.match(app, /canOpenSettings && state\.profile/);
   assert.match(app, /IconBell/);
   assert.match(app, /shell-notification-popover/);
+  assert.match(app, /<Popover opened=\{notificationsOpen\}/);
+  assert.match(app, /setNotificationsOpen\(false\); actions\.requestBackup\(\)/);
+  assert.match(app, /action: canOpenSettings/);
   assert.match(app, /Backup recommended/);
 });
