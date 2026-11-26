@@ -78,9 +78,9 @@ function SentriFaceShell({ user, logout, changePassword }) {
   const canBackups = can("backups");
   const showBackupReminder = canBackups && !licenseRestricted && backupReminderDue(state.lastDataChange, state.backups);
   const canOpenSettings = visibleViews.includes("debug");
-  const showRecoveryWarning = canOpenSettings && state.profile && !state.profile.recovery_readiness?.ready;
+  const showRecoveryWarning = state.profile && !state.profile.recovery_readiness?.ready;
   const shellNotifications = [
-    showRecoveryWarning ? { color: "red", title: "Your safety copy needs attention", body: "Your latest external backup is not available. The owner can check it under Settings.", action: <Button variant="subtle" color="red" size="compact-xs" onClick={() => actions.setActiveView("debug")}>Settings</Button> } : null,
+    showRecoveryWarning ? { color: "red", title: "Your safety copy needs attention", body: "Your latest external backup is not available. The owner can check it under Settings.", action: canOpenSettings ? <Button variant="subtle" color="red" size="compact-xs" onClick={() => actions.setActiveView("debug")}>Settings</Button> : null } : null,
     showBackupReminder ? { color: "blue", title: "Backup recommended", body: "You have changes since your last backup.", action: <Button variant="subtle" size="compact-xs" loading={state.backupCreating} onClick={actions.requestBackup}>Back up</Button> } : null,
     state.profile?.runtime === "dev" ? { color: "yellow", title: "Demo mode", body: "Results are simulated for testing and are not real face matches." } : null,
     state.profile?.model_usage?.research_only ? { color: "orange", title: "Personal or research use only", body: "The selected model files are not approved here for business or paid use." } : null,
