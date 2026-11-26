@@ -4625,3 +4625,52 @@ html[data-toast-layers="1"] :is(.mantine-Modal-overlay, .mantine-Drawer-overlay)
   right: 0;
   cursor: pointer;
 }
+
+.shell-notification-button {
+  position: relative;
+}
+
+.shell-notification-count {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--mantine-color-red-6);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--mantine-color-body);
+}
+
+.shell-notification-row {
+  --shell-notification-color: var(--mantine-color-yellow-6);
+  padding: 9px 10px;
+  border-radius: var(--mantine-radius-md);
+  border-left: 3px solid var(--shell-notification-color);
+  background: color-mix(in srgb, var(--shell-notification-color) 8%, transparent);
+  margin: 4px 6px;
+}
+
+.shell-notification-row[data-color="red"] {
+  --shell-notification-color: var(--mantine-color-red-6);
+}
+
+.shell-notification-row[data-color="orange"] {
+  --shell-notification-color: var(--mantine-color-orange-6);
+}
+
+.shell-notification-row[data-color="blue"] {
+  --shell-notification-color: var(--mantine-color-blue-6);
+}
+
+.shell-notification-icon {
+  color: var(--shell-notification-color);
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
