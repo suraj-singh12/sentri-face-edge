@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActionIcon, Alert, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Menu, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, UnstyledButton, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
+import { ActionIcon, Alert, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Menu, Modal, PasswordInput, Popover, Stack, Tabs, Text, Title, Tooltip, UnstyledButton, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { IconAlertTriangle, IconBell, IconChevronDown, IconDatabaseExport, IconKey, IconLogout, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
 import { AuthGate } from "./components/AuthGate.jsx";
@@ -75,13 +75,14 @@ function SentriFaceShell({ user, logout, changePassword }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const canBackups = can("backups");
   const showBackupReminder = canBackups && !licenseRestricted && backupReminderDue(state.lastDataChange, state.backups);
   const canOpenSettings = visibleViews.includes("debug");
   const showRecoveryWarning = state.profile && !state.profile.recovery_readiness?.ready;
   const shellNotifications = [
-    showRecoveryWarning ? { color: "red", title: "Your safety copy needs attention", body: "Your latest external backup is not available. The owner can check it under Settings.", action: canOpenSettings ? <Button variant="subtle" color="red" size="compact-xs" onClick={() => actions.setActiveView("debug")}>Settings</Button> : null } : null,
-    showBackupReminder ? { color: "blue", title: "Backup recommended", body: "You have changes since your last backup.", action: <Button variant="subtle" size="compact-xs" loading={state.backupCreating} onClick={actions.requestBackup}>Back up</Button> } : null,
+    showRecoveryWarning ? { color: "red", title: "Your safety copy needs attention", body: "Your latest external backup is not available. The owner can check it under Settings.", action: canOpenSettings ? <Button variant="subtle" color="red" size="compact-xs" onClick={() => { setNotificationsOpen(false); actions.setActiveView("debug"); }}>Settings</Button> : null } : null,
+    showBackupReminder ? { color: "blue", title: "Backup recommended", body: "You have changes since your last backup.", action: <Button variant="subtle" size="compact-xs" loading={state.backupCreating} onClick={() => { setNotificationsOpen(false); actions.requestBackup(); }}>Back up</Button> } : null,
     state.profile?.runtime === "dev" ? { color: "yellow", title: "Demo mode", body: "Results are simulated for testing and are not real face matches." } : null,
     state.profile?.model_usage?.research_only ? { color: "orange", title: "Personal or research use only", body: "The selected model files are not approved here for business or paid use." } : null,
     state.profile?.index?.degraded_reason ? { color: "yellow", title: "Compatibility mode", body: "Face search is still available, but may be slower than usual." } : null,
@@ -128,15 +129,15 @@ function SentriFaceShell({ user, logout, changePassword }) {
                 </ActionIcon>
               </Tooltip>
               {shellNotifications.length ? (
-                <Menu shadow="md" width={360} position="bottom-end" offset={8}>
-                  <Menu.Target>
+                <Popover opened={notificationsOpen} onChange={setNotificationsOpen} width={360} position="bottom-end" offset={8} shadow="md">
+                  <Popover.Target>
                     <ActionIcon variant="subtle" size={36} aria-label={`${shellNotifications.length} notifications`} className="shell-notification-button">
                       <IconBell size={18} />
                       <span className="shell-notification-count">{shellNotifications.length}</span>
                     </ActionIcon>
-                  </Menu.Target>
-                  <Menu.Dropdown className="shell-notification-popover">
-                    <Menu.Label>Notifications</Menu.Label>
+                  </Popover.Target>
+                  <Popover.Dropdown className="shell-notification-popover">
+                    <Text size="xs" fw={800} mb={6}>Notifications</Text>
                     {shellNotifications.map((notice) => (
                       <Box key={notice.title} className="shell-notification-row" data-color={notice.color}>
                         <Group align="flex-start" wrap="nowrap" gap="sm">
@@ -149,8 +150,8 @@ function SentriFaceShell({ user, logout, changePassword }) {
                         </Group>
                       </Box>
                     ))}
-                  </Menu.Dropdown>
-                </Menu>
+                  </Popover.Dropdown>
+                </Popover>
               ) : null}
               <Tooltip label="Refresh">
                 <ActionIcon variant="subtle" size={36} onClick={guarded(actions.reloadAppData)} disabled={state.refreshing} aria-label={state.refreshing ? "Refreshing" : "Refresh"}>
