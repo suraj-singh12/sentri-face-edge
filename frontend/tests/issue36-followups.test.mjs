@@ -34,6 +34,8 @@ test('required forms report missing fields inline instead of browser bubbles', (
   assert.deepEqual(encounterDetailsErrors({}, true), {});
   assert.deepEqual(Object.keys(followupErrors({ action: 'new' })), ['rank', 'name', 'country', 'importance', 'individualCount']);
   assert.deepEqual(Object.keys(followupErrors({ action: 'existing', individualCount: '2' })), []);
+  assert.deepEqual(Object.keys(followupErrors({ action: 'existing', individualCount: '0' })), []);
+  assert.deepEqual(Object.keys(followupErrors({ action: 'existing', individualCount: 0 })), []);
   for (const file of ['components/AuthGate.jsx', 'components/EncounterDetailsModal.jsx', 'components/RecognitionFollowupForm.jsx']) {
     assert.match(source(file), /noValidate/, file);
   }

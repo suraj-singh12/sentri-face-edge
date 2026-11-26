@@ -1027,7 +1027,14 @@ function QueueGroupReview({ targetDetails = null,
       )}
 
       <Group grow className="queue-review-actionbar">
-        <Button leftSection={<IconCheck size={18} />} onClick={() => { scrollToFollowup(); onAcceptExisting(best); }} disabled={!best || !selectedCount || accepted}>
+        <Button leftSection={<IconCheck size={18} />} onClick={() => {
+          if (!best) {
+            openPeoplePicker();
+            return;
+          }
+          scrollToFollowup();
+          onAcceptExisting(best);
+        }} disabled={!selectedCount || accepted}>
           {best ? `Accept ${selectedCount} as ${best.name}` : "Choose a person to accept"}
         </Button>
         <Button variant="light" leftSection={<IconUserPlus size={18} />} onClick={() => { scrollToFollowup(); onNewPerson(); }} disabled={!selectedCount || accepted}>Create new person</Button>
@@ -1241,7 +1248,7 @@ function PeoplePicker({ opened, people, allPeople, mode, onMode, loading, query,
                 <Group wrap="wrap" gap={6}>
                   {person.draft_created && <Badge size="xs">Drafted</Badge>}
                   <Badge size="xs" variant="light" color={person.match ? candidateDisplay.color : "gray"}>
-                    {mode === "no_face" ? "No face enrolled" : person.match ? candidateDisplay.badge : "No references"}
+                    {mode === "no_face" ? "No face enrolled" : person.match ? candidateDisplay.badge : "Manual only"}
                   </Badge>
                 </Group>
                 <Text size="xs" c="dimmed">{person.embedding_count || 0} reference photo{Number(person.embedding_count || 0) === 1 ? "" : "s"}</Text>

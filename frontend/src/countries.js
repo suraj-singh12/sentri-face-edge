@@ -253,5 +253,15 @@ export const COUNTRY_OPTIONS = [
 
 export function filterCountries({ options, search }) {
   const query = String(search || "").trim().toLocaleLowerCase();
-  return query.length < 3 ? options : options.filter((option) => String(option.label ?? option).toLocaleLowerCase().includes(query));
+  if (query.length < 3) return options;
+  const exact = [];
+  const prefix = [];
+  const substring = [];
+  for (const option of options) {
+    const label = String(option.label ?? option).toLocaleLowerCase();
+    if (label === query) exact.push(option);
+    else if (label.startsWith(query)) prefix.push(option);
+    else if (label.includes(query)) substring.push(option);
+  }
+  return [...exact, ...prefix, ...substring];
 }

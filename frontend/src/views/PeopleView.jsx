@@ -2147,7 +2147,7 @@ function newPlaceholderValues(name = "") {
     date,
     time,
     placeSeen: "",
-    individualCount: "",
+    individualCount: "0",
     eventOccasion: "",
     addedBy: "",
     notes: "",
