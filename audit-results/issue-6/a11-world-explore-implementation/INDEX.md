@@ -1,6 +1,6 @@
 # A-11 World Explore implementation evidence
 
-Implementation commit under review: `06f002f283738fbca24e4c4cde803d90673ee47f` on `feature/issue-6-a11-world-explore-clarity`.
+Implementation commit under review: `2c9117d18159bcd5a592f41bec373b29fab70ce6` on `feature/issue-6-a11-world-explore-clarity`.
 
 ## Runtime evidence
 
@@ -14,11 +14,11 @@ Synthetic development runtime, disposable `a11-world-authority` fixture, graph r
 | Evidence-type exclusion | `screenshots/type-excluded-inspector.png` | `1 relationship uses unselected evidence types`; selected=0, excluded=1, all-evidence=1 |
 | Weaker-links wording ON/OFF | `screenshots/weaker-links-in-view-on.png`, `screenshots/weaker-links-in-view-off.png` | `Weaker links in view`; functionality remains visual-only |
 
-Full-window captures and browser text snapshots are beside those images. `data/implementation-api-verification.json` contains the same-revision API visibility metadata for the four focused People.
+Full-window captures and browser text snapshots are beside those images. `data/implementation-api-verification.json` contains the same-revision API visibility metadata for the four focused People. `data/canvas-reselection-verification.json` verifies that reselecting the focused Person canvas node preserves those explanations.
 
 ## Focused regression results
 
-- `npm --prefix frontend test`: 212 passed, 0 failed.
+- `npm --prefix frontend test`: 213 passed, 0 failed.
 - `npm --prefix frontend run build`: passed; generated `ui_static` rebuilt from `frontend/`.
 - `python -m pytest tests/test_world_graph_v2.py tests/test_world_intelligence.py -q`: 102 passed, 17 subtests passed.
 - The backend regression uses `relationship_limit=1` while the focused Person has three total relationships and verifies exact counts remain selected=1, qualifying=0, below-minimum=1, evidence-type-excluded=2, all-evidence=3 in both weaker-toggle states. This covers coexistence without deriving totals from a paginated result.
