@@ -1008,9 +1008,9 @@
 }
 
 .queue-suggestion-hero {
-  flex: 0 0 158px;
-  width: 158px;
-  height: 158px;
+  flex: 0 0 150px;
+  width: 150px;
+  height: 150px;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -1033,7 +1033,32 @@
 
 .queue-suggestion-copy .mantine-Badge-root {
   flex: 0 0 auto;
-  min-width: 104px;
+}
+
+.queue-suggestion-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.queue-suggestion-review {
+  min-height: 267px;
+}
+
+.queue-suggestion-empty {
+  flex: 1 1 auto;
+  min-height: 128px;
+  text-align: center;
+}
+
+.queue-suggestion-initials {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--mantine-color-teal-7);
+  background: var(--mantine-color-teal-1);
+  font-weight: 800;
 }
 
 .queue-people-picker-grid {
