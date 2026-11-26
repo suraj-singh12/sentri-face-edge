@@ -153,7 +153,7 @@ Recognition output is non-authoritative proposal data. Only explicit operator fi
 
 ### Person and canonical identity
 
-`Person` is a stable historical identity node with one explicit lifecycle state: `ACTIVE`, `ARCHIVED`, `DELETED`, or `MERGED`. Archived and deleted nodes remain in graph history; graph projections render them inactive/non-clickable. The Archived People collection separately permits authorized historical profile navigation and Restore. A merged source also remains historically addressable.
+`Person` is a stable historical identity node with one explicit lifecycle state: `ACTIVE`, `ARCHIVED`, `DELETED`, or `MERGED`. Archived and deleted nodes remain in graph history; graph projections render them inactive/non-clickable. The Archived People collection separately permits authorized historical profile navigation and Restore. A merged source also remains historically addressable. Independently deleted Persons can be restored for 30 days from the Delete transition. Schema v37 stores that UTC deadline separately from historical `deleted_at` and gives pre-existing tombstones a fresh 30 days on migration. Expiry is read-time eligibility and leaves all records intact. An older database backup can restore an earlier timeline. Recovery expiry uses the normal system clock, so clock rollback can reopen a clock-derived window; no cross-backup or anti-clock-tampering permanence is provided.
 
 Raw identity is the person ID stored on the authoritative historical record. Effective identity is that raw ID resolved through the explicit, transitive canonical mapping. A merged source resolves to one active canonical survivor. Current-view reads may group by effective identity, but they do not rewrite the raw owner or participant ID.
 
@@ -361,13 +361,13 @@ The active contract now supports bounded overview relationships, cluster ranking
 
 P10-E and P10-F are complete and frozen. The final consolidated sparse/dense cold/warm performance artifact records latency, SQL count, payload, and returned-item measurements; dense-B Python peak-allocation tracing remains explicitly not practical because it distorts runtime. Completion of that gate transfers no authority to the frontend.
 
-## Current repository map (schema version 36)
+## Current repository map (schema version 37)
 
 | Concern | Current implementation |
 | --- | --- |
 | Domain types | `src/sentriface/models.py`: `Person`, `Note`, `NoteRevision`, `Observation`, `ObservationMedia`, `ObservationParticipant`, `RelationshipEvidence`, `GraphNode`, `GraphConnection`, `GlobalGraphProjection`, plus existing biometric, queue, profile, and legacy-association types |
 | Storage boundary | `src/sentriface/contracts.py::IdentityStore` |
-| Database and migrations | `src/sentriface/storage/sqlite_store.py`: `SCHEMA_VERSION`, `SQLiteIdentityStore.initialize()`, and the validated `_schema_migrations()` registry through `_migrate_35_to_36` (most `_migrate_*` steps live in `sqlite_migrations.py` and are re-exported); `_connect()` enables foreign keys and commits/rolls back a connection-scoped transaction |
+| Database and migrations | `src/sentriface/storage/sqlite_store.py`: `SCHEMA_VERSION`, `SQLiteIdentityStore.initialize()`, and the validated `_schema_migrations()` registry through `_migrate_36_to_37` (most `_migrate_*` steps live in `sqlite_migrations.py` and are re-exported); `_connect()` enables foreign keys and commits/rolls back a connection-scoped transaction |
 | Current tables | `persons`, `notes`, `note_revisions`, `note_revision_mentions`, `note_mentions`, `observations`, `observation_media`, historical `observation_participants`, immutable `observation_face_assignments`, append-only `encounter_metadata_revisions` and `encounter_participant_revisions`, the `effective_observations` read view, durable `encounter_relation_decisions`, `identity_corrections`, `biometric_enrollment_history`, normalized `merge_operations`, `merge_affected_items`, and `merge_conflict_resolutions`, revisioned `relationship_evidence`, derived `graph_connections`, plus existing biometric, queue, sighting, journal, auth, settings, and legacy `person_associations` tables |
 | Application service | `src/sentriface/graph_service.py::GlobalIdentityGraphService` is the single normalized evidence/projection boundary; `src/sentriface/engine.py::FaceEngine` owns it as `graph` alongside existing recognition and identity services |
 | Correction service | `src/sentriface/correction_service.py::IdentityCorrectionService` centralizes P7 observation correction, Move Face, and Add Face commands and routes graph-affecting work through `GlobalIdentityGraphService` |

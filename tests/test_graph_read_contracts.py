@@ -3,12 +3,15 @@ from __future__ import annotations
 import tempfile
 import unittest
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from sentriface.api_server import _person_graph_read_payload, _world_graph_read_payload
 from sentriface.graph_read_service import GraphReadService
 from sentriface.graph_service import GlobalIdentityGraphService
-from sentriface.models import GraphReadFilter
+from sentriface.errors import InputValidationError
+from sentriface.models import GraphReadFilter, WorldGraphRequest, WorldReadFilter
 from sentriface.storage.sqlite_store import (
     SCHEMA_VERSION,
     SQLiteIdentityStore,
@@ -188,7 +191,55 @@ class GraphReadContractsTest(unittest.TestCase):
             self.assertEqual([item.person_id for item in archived.nodes], [field.person_id])
             self.assertEqual(archived.nodes[0].state_indicator, "HISTORICAL")
             self.assertEqual([item.person_id for item in tombstoned.nodes], [deleted.person_id])
-            self.assertEqual(tombstoned.nodes[0].allowed_actions, ("VIEW_HISTORY", "RESTORE"))
+            self.assertEqual(tombstoned.nodes[0].allowed_actions, ("VIEW_HISTORY",))
+
+    def test_person_expiry_preserves_populated_library_and_read_models(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            root = store.create_person("Root")
+            deleted = store.create_person("Participant")
+            wrong = store.create_person("Wrong identity")
+            alias = store.create_person("Alias")
+            store.add_embedding(deleted.person_id, (1.0, 0.0), 0.9)
+            observation_id = self._observe(
+                store, "expiry-event", [root.person_id, wrong.person_id],
+                observed_at="2026-01-01T10:00:00+00:00", location="Gate",
+            )
+            store.correct_observation_identity(observation_id, wrong.person_id, deleted.person_id, "correct")
+            store.execute_identity_merge(alias.person_id, deleted.person_id, "merge-alias")
+            store.create_note(root.person_id, "Independent note", "save-note", mentioned_person_ids=[wrong.person_id])
+            clock = "sentriface.storage.sqlite_store.utc_now"
+            with patch(clock, return_value="2026-01-02T00:00:00+00:00"):
+                store.soft_delete_person(deleted.person_id, "delete-participant")
+
+            read_service = GraphReadService(store)
+
+            def snapshot():
+                with store._connect() as conn:
+                    rows = tuple(conn.iterdump())
+                world = [
+                    replace(read_service.world_graph_v2(WorldGraphRequest(
+                        as_of="2026-02-01T00:00:00+00:00", view=view,
+                        filters=WorldReadFilter(evidence_type=("CO_OBSERVED", "NOTE_REFERENCE")),
+                    )), generated_at="")
+                    for view in ("CURRENT", "EXPLORE")
+                ]
+                return (
+                    rows,
+                    store.list_embeddings(),
+                    store.query_encounters(),
+                    store.list_person_sightings(deleted.person_id),
+                    store.resolve_canonical_person_id(alias.person_id),
+                    replace(read_service.person_graph(root.person_id), generated_at=""),
+                    world,
+                )
+
+            with patch(clock, return_value="2026-01-31T23:59:59+00:00"):
+                before = snapshot()
+            with patch(clock, return_value="2026-02-01T00:00:00+00:00"):
+                with self.assertRaisesRegex(InputValidationError, "Non-recoverable"):
+                    store.restore_person(deleted.person_id, "expired-restore")
+                self.assertEqual(snapshot(), before)
 
     def test_world_contract_has_revision_timestamp_counts_and_ui_ready_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

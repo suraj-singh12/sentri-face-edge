@@ -55,7 +55,8 @@ test("People separates Archived from Bin; deleted people restore from Bin withou
   assert.match(view, /key: "archived", label: "Archived"[^\n]*\n\s*\{ key: "bin", label: "Bin"/);
   assert.match(view, /archivedPeople\.filter\(\(person\) => !isBinned\(person\)\)/);
   assert.match(view, /archivedPeople\.filter\(isBinned\)/);
-  assert.match(view, /isBinned\(person\) && personAllows\(person, "RESTORE"\)/);
+  assert.match(view, /person\.recovery_status === "RECOVERABLE"/);
+  assert.match(view, /recoverable && personAllows\(person, "RESTORE"\)/);
   assert.match(view, /onRestore\(restoreTarget\.person_id, \{ openProfile: false \}\)/);
   assert.doesNotMatch(view, /permanently\?/);
   assert.doesNotMatch(view, /Delete entire profile/);

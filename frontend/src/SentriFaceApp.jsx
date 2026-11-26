@@ -342,6 +342,7 @@ function SentriFaceShell({ user, logout, changePassword }) {
               peopleGalleryImage={state.peopleGalleryImage}
               personGraph={state.personGraph}
               onRefresh={guarded(() => actions.refreshAll({ force: true }))}
+              onPeopleRefresh={guarded(() => actions.loadPeople({ dedupe: false }))}
               onOpen={guarded(actions.peopleOpen)}
               onCreateIdentifiedPerson={guarded(actions.createIdentifiedPerson)}
               onOpenGraph={guarded(actions.openPersonGraph)}

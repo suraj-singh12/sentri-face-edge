@@ -38,6 +38,8 @@ from sentriface.models import (
     PersonIntelligence,
     PersonGraphReadModel,
     PersonSummary,
+    person_recovery_status,
+    utc_now,
     QualityReport,
     RecognitionDetail,
     RejectedFace,
@@ -94,12 +96,17 @@ def _rejected(rejected: RejectedFace, index: int) -> dict[str, Any]:
 def _person(person: Person) -> dict[str, Any]:
     lifecycle_status = person.lifecycle_status
     effective_person_id = person.canonical_person_id or person.person_id
+    recovery_status = (
+        person_recovery_status(person.restore_until, utc_now()) if lifecycle_status == "DELETED" else None
+    )
     return {
         "person_id": person.person_id,
         "name": person.name,
         "metadata": person.metadata,
         "created_at": person.created_at,
         "deleted_at": person.deleted_at,
+        "restore_until": person.restore_until,
+        "recovery_status": recovery_status,
         "lifecycle_status": lifecycle_status,
         "canonical_person_id": person.canonical_person_id,
         "effective_person_id": effective_person_id,
@@ -112,7 +119,7 @@ def _person(person: Person) -> dict[str, Any]:
         "enrollment_status": person.enrollment_status,
         "is_placeholder": person.enrollment_status == "placeholder",
         "notes": person.notes,
-        "allowed_actions": _allowed_person_actions(lifecycle_status),
+        "allowed_actions": _allowed_person_actions(lifecycle_status, recovery_status),
     }
 
 
@@ -165,14 +172,15 @@ def _person_summary_from_embeddings(
     return payload
 
 
-def _allowed_person_actions(lifecycle_status: str) -> list[str]:
+def _allowed_person_actions(lifecycle_status: str, recovery_status: str | None = None) -> list[str]:
+    if lifecycle_status == "DELETED":
+        return ["VIEW_HISTORY", "RESTORE"] if recovery_status == "RECOVERABLE" else ["VIEW_HISTORY"]
     return {
         "ACTIVE": [
             "OPEN", "EDIT", "EDIT_NOTES", "FAVORITE", "MANAGE_FACES",
             "ARCHIVE", "DELETE", "MERGE",
         ],
         "ARCHIVED": ["VIEW_HISTORY", "RESTORE", "DELETE"],
-        "DELETED": ["VIEW_HISTORY", "RESTORE"],
         "MERGED": ["VIEW_HISTORY", "OPEN_CANONICAL"],
     }.get(lifecycle_status, [])
 

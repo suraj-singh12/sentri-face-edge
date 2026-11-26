@@ -353,7 +353,7 @@ def _restore_archived_person_in_transaction(
         cursor = conn.execute(
             """
             UPDATE persons
-            SET lifecycle_status = 'ACTIVE', deleted_at = NULL, lifecycle_changed_at = ?
+            SET lifecycle_status = 'ACTIVE', deleted_at = NULL, restore_until = NULL, lifecycle_changed_at = ?
             WHERE person_id = ? AND lifecycle_status = ?
             """,
             (utc_now(), person_id, row["lifecycle_status"]),

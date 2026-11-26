@@ -1730,13 +1730,14 @@ def _graph_node_matches(node: GraphReadNode, filters: GraphReadFilter) -> bool:
 
 
 def _graph_allowed_actions(lifecycle_status: str) -> tuple[str, ...]:
+    # Graph inspectors leave deleted-profile Restore to the Bin, which shows current eligibility.
     return {
         "ACTIVE": (
             "OPEN", "EDIT", "EDIT_NOTES", "FAVORITE", "MANAGE_FACES",
             "ARCHIVE", "DELETE", "MERGE",
         ),
         "ARCHIVED": ("VIEW_HISTORY", "RESTORE", "DELETE"),
-        "DELETED": ("VIEW_HISTORY", "RESTORE"),
+        "DELETED": ("VIEW_HISTORY",),
         "MERGED": ("VIEW_HISTORY", "OPEN_CANONICAL"),
     }.get(lifecycle_status, ("VIEW_HISTORY",))
 
@@ -3638,6 +3639,7 @@ def _person_from_row(row: sqlite3.Row) -> Person:
         deleted_at=row["deleted_at"],
         enrollment_status=row["enrollment_status"],
         notes=row["notes"] if "notes" in row.keys() else "",
+        restore_until=row["restore_until"] if "restore_until" in row.keys() else None,
         lifecycle_status=row["lifecycle_status"] if "lifecycle_status" in row.keys() else (
             "ARCHIVED" if row["deleted_at"] else "ACTIVE"
         ),
