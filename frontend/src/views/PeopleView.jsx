@@ -92,6 +92,7 @@ export function PeopleView({
   peopleGalleryImage,
   personGraph,
   onRefresh,
+  onPeopleRefresh,
   onOpen,
   onCreateIdentifiedPerson,
   onOpenGraph,
@@ -120,6 +121,7 @@ export function PeopleView({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [binFilter, setBinFilter] = useState("RECOVERABLE");
   const [groupBy, setGroupBy] = useState("country");
   const [sort, setSort] = useState("priority");
   const [viewMode, setViewMode] = useState("grid");
@@ -137,9 +139,55 @@ export function PeopleView({
   const collectionKey = filter === "archived" || filter === "bin" ? filter : "active";
   const archivedCollection = useMemo(() => archivedPeople.filter((person) => !isBinned(person)), [archivedPeople]);
   const binCollection = useMemo(() => archivedPeople.filter(isBinned), [archivedPeople]);
-  const collectionStats = peopleReadModel?.statistics?.[collectionKey] || {};
+  const [, setRecoveryTick] = useState(0);
+  const recoveryNow = Date.now();
+  const peopleRefreshRef = useRef(onPeopleRefresh);
+  useEffect(() => { peopleRefreshRef.current = onPeopleRefresh; }, [onPeopleRefresh]);
+  useEffect(() => {
+    if (filter === "bin") peopleRefreshRef.current?.();
+  }, [filter]);
+  useEffect(() => {
+    if (filter !== "bin") return undefined;
+    let timer = null;
+    const schedule = () => {
+      const now = Date.now();
+      const deadlines = binCollection
+        .filter((person) => person.recovery_status === "RECOVERABLE")
+        .map((person) => Date.parse(person.restore_until))
+        .filter((deadline) => Number.isFinite(deadline) && deadline > now);
+      if (!deadlines.length) return;
+      const nextDeadline = Math.min(...deadlines);
+      const nextMinute = now - (now % 60_000) + 60_000;
+      const nextAt = Math.min(nextDeadline, nextMinute);
+      timer = window.setTimeout(() => {
+        const firedAt = Date.now();
+        setRecoveryTick((tick) => tick + 1);
+        if (firedAt >= nextDeadline) peopleRefreshRef.current?.();
+        schedule();
+      }, Math.max(100, nextAt - now + (nextAt === nextDeadline ? 100 : 0)));
+    };
+    schedule();
+    return () => window.clearTimeout(timer);
+  }, [binCollection, filter]);
+  const effectiveBinCollection = useMemo(
+    () => binCollection.map((person) => {
+      const deadline = Date.parse(person.restore_until);
+      return person.recovery_status === "RECOVERABLE" && Number.isFinite(deadline) && deadline <= recoveryNow
+        ? { ...person, recovery_status: "EXPIRED" }
+        : person;
+    }),
+    [binCollection, recoveryNow],
+  );
+  const selectedBinProfiles = useMemo(
+    () => effectiveBinCollection.filter((person) => person.recovery_status === binFilter),
+    [effectiveBinCollection, binFilter],
+  );
+  const collectionStats = filter === "bin" ? {
+    people_count: selectedBinProfiles.length,
+    embedding_count: selectedBinProfiles.reduce((count, person) => count + Number(person.embedding_count || 0), 0),
+  } : peopleReadModel?.statistics?.[collectionKey] || {};
   const visiblePeople = useMemo(() => {
-    const collection = filter === "archived" ? archivedCollection : filter === "bin" ? binCollection : people;
+    const collection = filter === "archived" ? archivedCollection : filter === "bin" ? selectedBinProfiles : people;
     const filtered = collection
       .filter((person) => {
         if (filter === "favorites" && !person.favorite) return false;
@@ -163,7 +211,7 @@ export function PeopleView({
       (rank.get(left.person_id) ?? Number.MAX_SAFE_INTEGER)
       - (rank.get(right.person_id) ?? Number.MAX_SAFE_INTEGER)
     ));
-  }, [archivedCollection, binCollection, collectionKey, filter, normalizedQuery, people, peopleReadModel, sort]);
+  }, [archivedCollection, selectedBinProfiles, collectionKey, filter, normalizedQuery, people, peopleReadModel, sort]);
   const pageCount = Number(pageSize);
   const totalPages = Math.max(1, Math.ceil(visiblePeople.length / pageCount));
   const safePage = Math.min(page, totalPages);
@@ -181,7 +229,7 @@ export function PeopleView({
   useEffect(() => {
     setPage(1);
     resultsRef.current?.scrollTo({ top: 0 });
-  }, [filter, groupBy, normalizedQuery, pageSize, sort, viewMode]);
+  }, [filter, binFilter, groupBy, normalizedQuery, pageSize, sort, viewMode]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -250,7 +298,7 @@ export function PeopleView({
                   <Group gap="xs" align="baseline">
                     <Title order={3} size="h4">{filter === "deleted" ? "Deleted Faces" : filter === "bin" ? "Bin" : filter === "archived" ? "Archived" : "People"}</Title>
                     <Text size="xs" c="dimmed">
-                      ({filter === "deleted" ? deletedFaces.length : filter === "archived" ? archivedCollection.length : filter === "bin" ? binCollection.length : people.length})
+                      ({filter === "deleted" ? deletedFaces.length : filter === "archived" ? archivedCollection.length : filter === "bin" ? selectedBinProfiles.length : people.length})
                     </Text>
                   </Group>
                   <Text size="sm" c="dimmed">
@@ -259,7 +307,7 @@ export function PeopleView({
                       : filter === "archived"
                         ? "Restore archived identities or review their history"
                         : filter === "bin"
-                          ? "Deleted people keep their history. Restore someone to make them active again."
+                          ? "Deleted people keep their photos and history. Restore is available for 30 days."
                           : "Manage and browse all known identities"}
                   </Text>
                 </Box>
@@ -276,6 +324,16 @@ export function PeopleView({
                   </Group>
                 ) : (
                   <Group gap="sm" align="flex-start">
+                    {filter === "bin" && (
+                      <Select
+                        aria-label="Deleted People collection"
+                        value={binFilter}
+                        onChange={setBinFilter}
+                        data={BIN_PROFILE_FILTERS}
+                        allowDeselect={false}
+                        w={240}
+                      />
+                    )}
                     <PeopleToolbar
                       query={query}
                       filter={filter}
@@ -319,13 +377,16 @@ export function PeopleView({
                         groupBy={groupBy}
                         viewMode={viewMode}
                         canDestroy={canDestroy}
+                        now={recoveryNow}
                         onOpen={onOpen}
                         onFavorite={toggleFavorite}
                         onDelete={setDeleteTarget}
                         onRestore={setRestoreTarget}
                       />
                     ) : (
-                      <EmptyCard text={filter === "bin" && !binCollection.length ? "Bin is empty." : "No people match the current search."} />
+                      <EmptyCard text={filter === "bin" && !selectedBinProfiles.length
+                        ? BIN_EMPTY_MESSAGES[binFilter]
+                        : "No people match the current search."} />
                     )}
                   </Box>
                   <PeoplePagination
@@ -404,7 +465,17 @@ export function PeopleView({
   );
 }
 
-const DELETE_PERSON_MESSAGE = "moves to Bin. Photos and history are kept; restore anytime.";
+const BIN_PROFILE_FILTERS = [
+  { value: "RECOVERABLE", label: "Recoverable Profiles" },
+  { value: "EVENT_DELETED", label: "Event Deleted Profiles" },
+  { value: "EXPIRED", label: "Permanently Deleted Profiles" },
+];
+const BIN_EMPTY_MESSAGES = {
+  RECOVERABLE: "No recoverable profiles.",
+  EVENT_DELETED: "No profiles deleted through an Event.",
+  EXPIRED: "No permanently deleted profiles.",
+};
+const DELETE_PERSON_MESSAGE = "moves to Bin and can be restored for 30 days. Photos and history are kept.";
 const RESTORE_PERSON_MESSAGE = "returns to People and recognition, with all photos and history.";
 
 function isBinned(person) {
@@ -680,7 +751,7 @@ function DeletedFacesPanel({ faces, onOpenPerson, onRestore, onPurge }) {
 function PeopleStatsStrip({ statistics, collection }) {
   const historical = collection === "archived" || collection === "bin";
   const stats = collection === "bin" ? [
-    { label: "In Bin", value: statistics.people_count || 0, icon: IconTrash, color: "gray" },
+    { label: "Profiles in this view", value: statistics.people_count || 0, icon: IconTrash, color: "gray" },
     { label: "Retained Photos", value: Number(statistics.embedding_count || 0).toLocaleString(), icon: IconImageInPicture, color: "violet" },
   ] : historical ? [
     { label: "Archived Records", value: statistics.people_count || 0, icon: IconArchive, color: "gray" },
@@ -715,7 +786,7 @@ function PeopleStatsStrip({ statistics, collection }) {
   );
 }
 
-function PeopleResults({ people, groupBy, viewMode, canDestroy, onOpen, onFavorite, onDelete, onRestore }) {
+function PeopleResults({ people, groupBy, viewMode, canDestroy, now, onOpen, onFavorite, onDelete, onRestore }) {
   const groups = useMemo(() => groupPeople(people, groupBy), [groupBy, people]);
   const groupSignature = groups.map((group) => group.label).join("\u0000");
   const [closedGroups, setClosedGroups] = useState(new Set());
@@ -736,6 +807,7 @@ function PeopleResults({ people, groupBy, viewMode, canDestroy, onOpen, onFavori
             favorite={Boolean(person.favorite)}
             viewMode={viewMode}
             canDestroy={canDestroy}
+            now={now}
             onOpen={() => onOpen(person.person_id, { archived: isHistorical })}
             onFavorite={() => onFavorite(person)}
             onDelete={() => onDelete(person)}
@@ -782,12 +854,15 @@ function PeopleResults({ people, groupBy, viewMode, canDestroy, onOpen, onFavori
   );
 }
 
-function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite, onDelete, onRestore }) {
-  const cardClass = viewMode === "list" ? "people-person-card people-person-card--list" : "people-person-card";
+function PersonCard({ person, favorite, viewMode, canDestroy, now, onOpen, onFavorite, onDelete, onRestore }) {
+  const expired = person.recovery_status === "EXPIRED";
+  const cardClass = `people-person-card${viewMode === "list" ? " people-person-card--list" : ""}${expired ? " people-person-card--expired" : ""}`;
   const lifecycleStatus = requirePersonContract(person).lifecycle_status;
   const historical = lifecycleStatus !== "ACTIVE";
   const canOpen = lifecycleStatus === "ACTIVE" || (lifecycleStatus === "ARCHIVED" && personAllows(person, "VIEW_HISTORY"));
-  const restoreFromBin = isBinned(person) && personAllows(person, "RESTORE");
+  const recoverable = person.recovery_status === "RECOVERABLE";
+  const restoreFromBin = recoverable && personAllows(person, "RESTORE");
+  const remainingHours = recoverable ? Math.ceil((Date.parse(person.restore_until) - (now || Date.now())) / 3_600_000) : 0;
   const openPerson = () => {
     if (canOpen) onOpen(person.person_id);
   };
@@ -827,6 +902,13 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
               {person.is_placeholder ? "No usable recognition sample" : <>{photoCount} {photoCount === 1 ? "photo" : "photos"} <Text span mx={5}>·</Text> {sightings} {sightings === 1 ? "sighting" : "sightings"}</>}
             </Text>
             <Text size="xs" c={person.last_seen_at ? "teal.4" : "dimmed"} mt={3}>{lastSeenLabelForCard(person.last_seen_at, person.sighting_count)}</Text>
+            {recoverable && (
+              <Text size="xs" c="dimmed" mt={5}>
+                {remainingHours >= 24 ? `${plural(Math.ceil(remainingHours / 24), "day")} left`
+                  : remainingHours > 1 ? `${plural(remainingHours, "hour")} left` : "Less than an hour left"}
+              </Text>
+            )}
+            {expired && <Text size="xs" mt={5}>Non-recoverable — this profile cannot be restored.</Text>}
           </Box>
         </Box>
         </Tooltip>
@@ -842,35 +924,37 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
         >
           {favorite ? <IconStar size={15} fill="currentColor" /> : <IconStar size={15} />}
         </ActionIcon>}
-        <Group justify="space-between" wrap="nowrap" className="people-card-actions">
-          {restoreFromBin ? (
-            <Button fullWidth size="compact-xs" variant="subtle" leftSection={<IconRestore size={14} />} disabled={!canDestroy} onClick={(event) => { event.stopPropagation(); onRestore(); }}>
-              Restore
-            </Button>
-          ) : (
-            <Button fullWidth size="compact-xs" variant="subtle" disabled={!canOpen} onClick={(event) => { event.stopPropagation(); openPerson(); }}>
-              {canOpen ? "Open profile" : lifecycleStatusLabel(lifecycleStatus)}
-            </Button>
-          )}
-          <Menu withinPortal position="bottom-end">
-            <Menu.Target>
-              <ActionIcon variant="subtle" onClick={(event) => event.stopPropagation()} aria-label="More actions"><IconDots size={16} /></ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown onClick={(event) => event.stopPropagation()}>
-              <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => navigator.clipboard?.writeText(person.person_id)}>
-                Copy ID
-              </Menu.Item>
-              {personAllows(person, "DELETE") && (
-                <>
-                  <Menu.Divider />
-                  <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={onDelete}>
-                    Delete Person…
-                  </Menu.Item>
-                </>
-              )}
-            </Menu.Dropdown>
-          </Menu>
-        </Group>
+        {!expired && (
+          <Group justify="space-between" wrap="nowrap" className="people-card-actions">
+            {restoreFromBin ? (
+              <Button fullWidth size="compact-xs" variant="subtle" leftSection={<IconRestore size={14} />} disabled={!canDestroy} onClick={(event) => { event.stopPropagation(); onRestore(); }}>
+                Restore
+              </Button>
+            ) : (
+              <Button fullWidth size="compact-xs" variant="subtle" disabled={!canOpen} onClick={(event) => { event.stopPropagation(); openPerson(); }}>
+                {canOpen ? "Open profile" : lifecycleStatusLabel(lifecycleStatus)}
+              </Button>
+            )}
+            <Menu withinPortal position="bottom-end">
+              <Menu.Target>
+                <ActionIcon variant="subtle" onClick={(event) => event.stopPropagation()} aria-label="More actions"><IconDots size={16} /></ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown onClick={(event) => event.stopPropagation()}>
+                <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => navigator.clipboard?.writeText(person.person_id)}>
+                  Copy ID
+                </Menu.Item>
+                {personAllows(person, "DELETE") && (
+                  <>
+                    <Menu.Divider />
+                    <Menu.Item color="red" leftSection={<IconTrash size={14} />} disabled={!canDestroy} onClick={onDelete}>
+                      Delete Person…
+                    </Menu.Item>
+                  </>
+                )}
+              </Menu.Dropdown>
+            </Menu>
+          </Group>
+        )}
       </Stack>
     </Card>
   );

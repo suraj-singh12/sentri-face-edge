@@ -226,6 +226,26 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("--compare-threads requires --runtime onnx", output.getvalue())
 
+    def test_restore_person_cli_refuses_expired_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            data_dir = Path(temp)
+            config = replace(
+                config_for_hardware(assess_hardware(), data_dir=data_dir),
+                storage_key=load_or_create_master_key(data_dir),
+            )
+            engine = build_dev_engine(data_dir, config)
+            engine.initialize()
+            person = engine.store.create_person("Expired CLI profile")
+            with patch("sentriface.storage.sqlite_store.utc_now", return_value="2000-01-01T00:00:00+00:00"):
+                engine.store.soft_delete_person(person.person_id, "expire-cli")
+            output = io.StringIO()
+            with patch("sys.argv", [
+                "sentriface", "--json", "--data-dir", str(data_dir), "restore-person", person.person_id,
+            ]), redirect_stdout(output):
+                self.assertEqual(cli.main(), 1)
+            self.assertIn("Non-recoverable", json.loads(output.getvalue())["error"])
+            self.assertEqual(engine.store.get_person(person.person_id, include_archived=True).lifecycle_status, "DELETED")
+
     def test_face_delete_cli_creates_backup_and_supports_restore(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

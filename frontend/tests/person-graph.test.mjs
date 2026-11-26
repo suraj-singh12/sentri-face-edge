@@ -140,7 +140,8 @@ test("graph-affecting operations share explicit invalidation", async () => {
     "person-merge",
     "person-photo-move",
   ]) {
-    assert.match(people, new RegExp(`${endpoint}[\\s\\S]{0,500}invalidatePersonGraph\\(`));
+    const handler = people.slice(people.indexOf(`"/api/${endpoint}"`)).split("\n  };", 1)[0];
+    assert.match(handler, /invalidatePersonGraph\(/);
   }
   assert.match(recognize, /photo-review-complete[\s\S]{0,500}onGraphMutation\?\.\(result\)/);
   assert.match(queue, /queue-confirm-existing/);

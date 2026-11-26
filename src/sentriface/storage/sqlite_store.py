@@ -17,6 +17,7 @@ from typing import Callable
 from sentriface.backup_service import BackupError, BackupService
 from sentriface.errors import (
     EncounterRelationConflict,
+    InputValidationError,
     GraphProjectionPostcheckError,
     GraphProjectionRebuildRefused,
     StructuredRepairRefused,
@@ -89,6 +90,7 @@ from sentriface.models import (
     WorldReadLimits,
     WorldRelationship,
     utc_now,
+    person_recovery_status,
 )
 from sentriface.media_registry import media_content_identity, require_existing_media
 
@@ -100,6 +102,7 @@ from sentriface.storage.sqlite_constants import (
     SCHEMA_VERSION,
     EMBEDDING_RECOGNITION_STATES,
     DELETED_FACE_RETENTION_DAYS,
+    DELETED_PERSON_RECOVERY_DAYS,
     PERSON_LIFECYCLE_STATUSES,
     RESTORABLE_PERSON_LIFECYCLE_STATUSES,
     PERSON_IDENTITY_STATUSES,
@@ -696,6 +699,7 @@ class SQLiteIdentityStore:
                     canonical_person_id=row["canonical_person_id"],
                     identity_status=row["identity_status"],
                     biometric_status=row["biometric_status"],
+                    restore_until=row["restore_until"],
                 ),
                 embedding_count=effective_embedding_counts.get(
                     row_canonical_ids[str(row["person_id"])], 0,
@@ -5183,15 +5187,26 @@ class SQLiteIdentityStore:
     ) -> dict:
         with self._connect() as conn:
             existing = _begin_person_operation(conn, operation_id, "restore-person")
-            if existing:
-                return existing
+            if existing and existing["person_id"] != person_id:
+                raise ValueError("Restore operation ID belongs to a different person")
             row = conn.execute(
-                "SELECT lifecycle_status, deleted_at, metadata FROM persons WHERE person_id = ?",
+                "SELECT lifecycle_status, restore_until FROM persons WHERE person_id = ?",
                 (person_id,),
             ).fetchone()
             if row is None:
                 raise KeyError(f"Unknown person: {person_id}")
             previous_status = row["lifecycle_status"]
+            if previous_status == "DELETED" and person_recovery_status(row["restore_until"], utc_now()) == "EXPIRED":
+                raise InputValidationError(
+                    "Non-recoverable — this profile cannot be restored.", reason="person_recovery_expired",
+                )
+            if existing:
+                if previous_status != "ACTIVE":
+                    raise InputValidationError(
+                        "This profile changed since the original Restore. Refresh and try again.",
+                        reason="person_restore_stale",
+                    )
+                return existing
             if previous_status not in RESTORABLE_PERSON_LIFECYCLE_STATUSES:
                 raise KeyError(f"Only archived or deleted people can be restored: {person_id}")
             _begin_journal_operation(
@@ -5862,14 +5877,16 @@ class SQLiteIdentityStore:
                 affected_entities=[{"entity_type": "person", "entity_id": person_id}],
                 details={"previous_status": person["lifecycle_status"]},
             )
-            deleted_at = person["deleted_at"] or utc_now()
+            now = utc_now()
+            deleted_at = person["deleted_at"] or now
+            restore_until = (datetime.fromisoformat(now) + timedelta(days=DELETED_PERSON_RECOVERY_DAYS)).isoformat()
             cursor = conn.execute(
                 """
                 UPDATE persons
-                SET lifecycle_status = 'DELETED', deleted_at = ?, lifecycle_changed_at = ?
+                SET lifecycle_status = 'DELETED', deleted_at = ?, lifecycle_changed_at = ?, restore_until = ?
                 WHERE person_id = ? AND lifecycle_status <> 'DELETED'
                 """,
-                (deleted_at, deleted_at, person_id),
+                (deleted_at, deleted_at, restore_until, person_id),
             )
             counts = _person_historical_counts(conn, person_id)
             result = {
@@ -7905,6 +7922,19 @@ def _migrate_35_to_36(conn: sqlite3.Connection) -> None:
         "    CHECK(must_change_password IN (0,1));\n") + "PRAGMA user_version = 36;")
 
 
+def _migrate_36_to_37(conn: sqlite3.Connection) -> None:
+    """Give existing Person tombstones a fresh recovery window."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(persons)")}
+    if "restore_until" not in columns:
+        conn.execute("ALTER TABLE persons ADD COLUMN restore_until TEXT")
+    restore_until = (datetime.fromisoformat(utc_now()) + timedelta(days=DELETED_PERSON_RECOVERY_DAYS)).isoformat()
+    conn.execute(
+        "UPDATE persons SET restore_until = ? WHERE lifecycle_status = 'DELETED' AND restore_until IS NULL",
+        (restore_until,),
+    )
+    conn.execute("PRAGMA user_version = 37")
+
+
 def _migrate_34_to_35(conn: sqlite3.Connection) -> None:
     """Erased faces become retained stubs so Event and correction history stay valid."""
     columns = {row[1] for row in conn.execute("PRAGMA table_info(embeddings)").fetchall()}
@@ -8011,6 +8041,7 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         SchemaMigration(33, 34, _migrate_33_to_34),
         SchemaMigration(34, 35, _migrate_34_to_35),
         SchemaMigration(35, 36, _migrate_35_to_36),
+        SchemaMigration(36, 37, _migrate_36_to_37),
     )
 
 
