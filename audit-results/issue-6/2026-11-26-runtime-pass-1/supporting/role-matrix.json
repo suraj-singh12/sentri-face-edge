@@ -1,0 +1,93 @@
+[
+  {
+    "role": "Viewer",
+    "nav": [
+      "Check a photo",
+      "People",
+      "Events",
+      "World"
+    ],
+    "initial_contains_readonly": false,
+    "profile_readonly_explanation": true,
+    "profile_has_edit": true,
+    "profile_has_add_face": true,
+    "long_note_expand": true,
+    "event_readonly_explanation": true,
+    "event_has_correct": false,
+    "event_has_attach": true
+  },
+  {
+    "role": "Operator",
+    "nav": [
+      "Check a photo",
+      "Review photos",
+      "People",
+      "Events",
+      "World"
+    ],
+    "initial_contains_readonly": false,
+    "profile_readonly_explanation": false,
+    "profile_has_edit": true,
+    "profile_has_add_face": true,
+    "long_note_expand": true,
+    "event_readonly_explanation": false,
+    "event_has_correct": false,
+    "event_has_attach": true
+  },
+  {
+    "role": "Custodian",
+    "nav": [
+      "Check a photo",
+      "Review photos",
+      "People",
+      "Events",
+      "World",
+      "Settings"
+    ],
+    "initial_contains_readonly": false,
+    "profile_readonly_explanation": false,
+    "profile_has_edit": true,
+    "profile_has_add_face": true,
+    "long_note_expand": true,
+    "event_readonly_explanation": false,
+    "event_has_correct": true,
+    "event_has_attach": true
+  },
+  {
+    "role": "Technician",
+    "nav": [
+      "Check a photo",
+      "People",
+      "Events",
+      "World",
+      "Settings"
+    ],
+    "initial_contains_readonly": false,
+    "profile_readonly_explanation": true,
+    "profile_has_edit": true,
+    "profile_has_add_face": true,
+    "long_note_expand": true,
+    "event_readonly_explanation": true,
+    "event_has_correct": false,
+    "event_has_attach": true
+  },
+  {
+    "role": "Administrator",
+    "nav": [
+      "Check a photo",
+      "Review photos",
+      "People",
+      "Events",
+      "World",
+      "Settings"
+    ],
+    "initial_contains_readonly": false,
+    "profile_readonly_explanation": false,
+    "profile_has_edit": true,
+    "profile_has_add_face": true,
+    "long_note_expand": true,
+    "event_readonly_explanation": false,
+    "event_has_correct": true,
+    "event_has_attach": true
+  }
+]

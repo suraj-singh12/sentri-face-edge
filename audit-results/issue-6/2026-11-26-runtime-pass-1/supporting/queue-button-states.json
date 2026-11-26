@@ -1,0 +1,82 @@
+[
+  {
+    "t": "Settings",
+    "disabled": false
+  },
+  {
+    "t": "Back up now",
+    "disabled": false
+  },
+  {
+    "t": "Check a photo",
+    "disabled": false
+  },
+  {
+    "t": "Review photos",
+    "disabled": false
+  },
+  {
+    "t": "People",
+    "disabled": false
+  },
+  {
+    "t": "Events",
+    "disabled": false
+  },
+  {
+    "t": "World",
+    "disabled": false
+  },
+  {
+    "t": "Settings",
+    "disabled": false
+  },
+  {
+    "t": "Images",
+    "disabled": false
+  },
+  {
+    "t": "Folder",
+    "disabled": false
+  },
+  {
+    "t": "",
+    "disabled": false
+  },
+  {
+    "t": "Refresh",
+    "disabled": false
+  },
+  {
+    "t": "Discard session",
+    "disabled": false
+  },
+  {
+    "t": "Discard Event",
+    "disabled": false
+  },
+  {
+    "t": "Continue to Relations",
+    "disabled": true
+  },
+  {
+    "t": "All",
+    "disabled": false
+  },
+  {
+    "t": "Strong similarity",
+    "disabled": false
+  },
+  {
+    "t": "Needs review",
+    "disabled": false
+  },
+  {
+    "t": "Discard",
+    "disabled": false
+  },
+  {
+    "t": "Review",
+    "disabled": false
+  }
+]

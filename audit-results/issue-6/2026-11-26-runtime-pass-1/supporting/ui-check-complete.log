@@ -1,0 +1,186 @@
+OK screenshot 50-check-photo/event-details-filled
+OK screenshot 50-check-photo/event-details-confirmed
+OK check event details 
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Prefer quality photos for recognition
+
+Input Image
+
+Uploaded photo
+
+Load Another
+1 FACE DETECTED
+Face 01
+
+Face Quality
+
+1 FACE
+
+Face 01
+
+Fair
+
+90
+
+Missing landmarks
+
+Quality
+
+Detection
+
+Recognition Results
+
+Best matches from your people database
+
+1 DETECTED
+
+Face 01
+
+No match found
+
+HUMAN REVIEW
+
+No person met the recognition threshold.
+
+Browse People
+Create new person
+
+Showing 1 of 1 face
+
+Accept
+Select a confident match
+New Person
+Create a person from Face 01
+Skip for now
+Come back to this face later
+Clear
+Reset and try another photo
+Discard Face
+Complete Review
+
+1 face still needs Accept or Discard. Skipped faces stay undecided.
+inputs [{'i': 0, 'type': 'file', 'ph': '', 'val': '', 'vis': False, 'role': None}, {'i': 1, 'type': 'checkbox', 'ph': '', 'val': 'on', 'vis': True, 'role': 'switch'}]
+buttons ['Settings', 'Back up now', 'Check a photo', 'Review photos', 'People', 'Events', 'World', 'Settings', 'Load Another', 'Face 01\n\nFair\n\n90\n\nMissing landmarks\n\nQuality\n\nDetection', 'Face 01\n\nNo match found\n\nHUMAN REVIEW', 'Browse People', 'Create new person', 'Accept\nSelect a confident match', 'New Person\nCreate a person from Face 01', 'Skip for now\nCome back to this face later', 'Clear\nReset and try another photo', 'Discard Face', 'Complete Review']
+OK screenshot 50-check-photo/new-person-form
+OK new person path 
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Prefer quality photos for recognition
+
+Input Image
+
+Uploaded photo
+
+Load Another
+1 FACE DETECTED
+Face 01
+
+Face Quality
+
+1 FACE
+
+Face 01
+
+Fair
+
+90
+
+Missing landmarks
+
+Quality
+
+Detection
+
+Recognition Results
+
+Best matches from your people database
+
+1 DETECTED
+
+Face 01
+
+No match found
+
+HUMAN REVIEW
+
+No person met the recognition threshold.
+
+Browse People
+Create new person
+
+Showing 1 of 1 face
+
+Accept
+Select a confident match
+New Person
+Create a person from Face 01
+Skip for now
+Come back to this face later
+Clear
+Reset and try another photo
+Discard Face
+Complete Review
+
+1 face still needs Accept or Discard. Skipped faces stay undecided.
+
+Add New Person Details
+
+Rank *
+Name *
+Country *
+Tag *
+With how many individuals *
+
+Inherited Event
+
+Check Photo Audit Event · 2026-11-26 · Time unknown · Audit Lab · Unknown context
+
+Sighting Notes
+
+Saved with this person in this Event
+
+This information helps you keep a context of when and where this person was seen.
+
+Confirm
+Clear
+Fill new person details
+inputs2 [{'i': 0, 'type': 'file', 'ph': '', 'val': '', 'vis': False, 'role': None}, {'i': 1, 'type': 'checkbox', 'ph': '', 'val': 'on', 'vis': True, 'role': 'switch'}, {'i': 2, 'type': 'text', 'ph': '', 'val': '', 'vis': True, 'role': None}, {'i': 3, 'type': 'text', 'ph': '', 'val': '', 'vis': True, 'role': None}, {'i': 4, 'type': 'text', 'ph': 'Browse or search countries', 'val': '', 'vis': True, 'role': 'combobox'}, {'i': 5, 'type': 'hidden', 'ph': '', 'val': '', 'vis': False, 'role': None}, {'i': 6, 'type': 'text', 'ph': '', 'val': 'Regular', 'vis': True, 'role': 'combobox'}, {'i': 7, 'type': 'hidden', 'ph': '', 'val': 'Regular', 'vis': False, 'role': None}, {'i': 8, 'type': 'text', 'ph': 'Select count', 'val': '', 'vis': True, 'role': None}, {'i': 9, 'type': 'textarea', 'ph': '', 'val': '', 'vis': True, 'role': None}, {'i': 10, 'type': 'textarea', 'ph': '', 'val': 'x', 'vis': True, 'role': None}]

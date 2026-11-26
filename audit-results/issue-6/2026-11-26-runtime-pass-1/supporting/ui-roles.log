@@ -1,0 +1,72 @@
+OK signout 
+OK screenshot auth/viewer1-login-filled
+OK screenshot auth/viewer1-signed-in
+OK login viewer1
+OK screenshot 40-roles/viewer/landing
+OK nav People 
+OK screenshot 40-roles/viewer/bilal-profile
+OK screenshot 40-roles/viewer/bilal-long-note-expanded
+OK screenshot 40-roles/viewer/events-list
+OK nav Events 
+OK screenshot 40-roles/viewer/event-detail
+OK screenshot 40-roles/viewer/world
+OK nav World 
+OK signout 
+OK screenshot auth/operator1-login-filled
+OK screenshot auth/operator1-signed-in
+OK login operator1
+OK screenshot 40-roles/operator/landing
+OK nav People 
+OK screenshot 40-roles/operator/bilal-profile
+OK screenshot 40-roles/operator/bilal-long-note-expanded
+OK screenshot 40-roles/operator/events-list
+OK nav Events 
+OK screenshot 40-roles/operator/event-detail
+OK screenshot 40-roles/operator/world
+OK nav World 
+OK signout 
+OK screenshot auth/custodian1-login-filled
+OK screenshot auth/custodian1-signed-in
+OK login custodian1
+OK screenshot 40-roles/custodian/landing
+OK nav People 
+OK screenshot 40-roles/custodian/bilal-profile
+OK screenshot 40-roles/custodian/bilal-long-note-expanded
+OK screenshot 40-roles/custodian/events-list
+OK nav Events 
+OK screenshot 40-roles/custodian/event-detail
+OK screenshot 40-roles/custodian/settings
+OK nav Settings 
+OK screenshot 40-roles/custodian/world
+OK nav World 
+OK signout 
+OK screenshot auth/technician1-login-filled
+OK screenshot auth/technician1-signed-in
+OK login technician1
+OK screenshot 40-roles/technician/landing
+OK nav People 
+OK screenshot 40-roles/technician/bilal-profile
+OK screenshot 40-roles/technician/bilal-long-note-expanded
+OK screenshot 40-roles/technician/events-list
+OK nav Events 
+OK screenshot 40-roles/technician/event-detail
+OK screenshot 40-roles/technician/settings
+OK nav Settings 
+OK screenshot 40-roles/technician/world
+OK nav World 
+OK signout 
+OK screenshot auth/owner-login-filled
+OK screenshot auth/owner-signed-in
+OK login owner
+OK screenshot 40-roles/administrator/landing
+OK nav People 
+OK screenshot 40-roles/administrator/bilal-profile
+OK screenshot 40-roles/administrator/bilal-long-note-expanded
+OK screenshot 40-roles/administrator/events-list
+OK nav Events 
+OK screenshot 40-roles/administrator/event-detail
+OK screenshot 40-roles/administrator/settings
+OK nav Settings 
+OK screenshot 40-roles/administrator/world
+OK nav World 
+OK signout 

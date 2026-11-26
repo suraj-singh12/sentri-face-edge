@@ -1,0 +1,72 @@
+people {'Asha Rao': 'b3bc0822-542b-481d-a2f0-ef0d807e2336', 'Bilal Khan': '2e69dd90-61cc-4c2a-b40b-a52246bba0b8', 'Carla Mendes': '0ca3d5e1-1edb-486c-99a3-e8c116762143', 'Devika Iyer': '7b6f68e3-0485-47b4-b6bd-aa43e2b551b3', 'Zedekiah Vale': 'b30d6053-c32e-4c73-8039-0de802bfa541'}
+existing events 0
+finalized Observation(observation_id='1048e346-4f7b-40f9-b562-c8b908144071', status='FINALIZED', observed_at='2026-11-21T09:30:00+00:00', location='Audit Lab', context={'context': 'internal', 'end_time': '10:00', 'event_notes': 'Shared synthetic audit briefing fixture.', 'individual_count': 2, 'occasion': 'Morning Audit Briefing', 'start_time': '09:30', 'time_precision': 'exact'}, source='fixture-seed', created_operation_id='6d45de94-428e-425f-8091-88cf89bad5a5', created_at='2026-11-26T03:27:12.930382+00:00', updated_at='2026-11-26T03:27:12.942719+00:00', finalized_at='2026-11-26T03:27:12.942719+00:00')
+finalized2 Observation(observation_id='053c89fa-fb9a-487f-8b99-4c02b83b7edd', status='FINALIZED', observed_at='2026-11-22T14:00:00+00:00', location='Audit Lab', context={'context': 'internal', 'end_time': '', 'event_notes': 'Single participant fixture.', 'individual_count': 1, 'occasion': 'Afternoon Audit', 'start_time': '14:00', 'time_precision': 'approximate'}, source='fixture-seed', created_operation_id='2a12897e-b658-4174-b7a4-e87e37c83731', created_at='2026-11-26T03:27:12.946684+00:00', updated_at='2026-11-26T03:27:12.954558+00:00', finalized_at='2026-11-26T03:27:12.954558+00:00')
+events now 2
+{
+  "events": [
+    {
+      "observation_id": "053c89fa-fb9a-487f-8b99-4c02b83b7edd",
+      "sort_at": "2026-11-22T14:00:00+00:00",
+      "observed_at": "2026-11-22T14:00:00+00:00",
+      "occasion": "Afternoon Audit",
+      "start_time": "14:00",
+      "end_time": "",
+      "time_precision": "approximate",
+      "location": "Audit Lab",
+      "context": "unknown",
+      "event_notes": "Single participant fixture.",
+      "participant_ids": [
+        "7b6f68e3-0485-47b4-b6bd-aa43e2b551b3"
+      ],
+      "participants": [
+        {
+          "person_id": "7b6f68e3-0485-47b4-b6bd-aa43e2b551b3",
+          "name": "Devika Iyer"
+        }
+      ],
+      "mentioned_person_ids": [],
+      "mentioned_people": [],
+      "media_count": 0,
+      "created_operation_id": "2a12897e-b658-4174-b7a4-e87e37c83731",
+      "finalized_at": "2026-11-26T03:27:12.954558+00:00"
+    },
+    {
+      "observation_id": "1048e346-4f7b-40f9-b562-c8b908144071",
+      "sort_at": "2026-11-21T09:30:00+00:00",
+      "observed_at": "2026-11-21T09:30:00+00:00",
+      "occasion": "Morning Audit Briefing",
+      "start_time": "09:30",
+      "end_time": "10:00",
+      "time_precision": "exact",
+      "location": "Audit Lab",
+      "context": "unknown",
+      "event_notes": "Shared synthetic audit briefing fixture.",
+      "participant_ids": [
+        "0ca3d5e1-1edb-486c-99a3-e8c116762143",
+        "2e69dd90-61cc-4c2a-b40b-a52246bba0b8",
+        "b3bc0822-542b-481d-a2f0-ef0d807e2336"
+      ],
+      "participants": [
+        {
+          "person_id": "0ca3d5e1-1edb-486c-99a3-e8c116762143",
+          "name": "Carla Mendes"
+        },
+        {
+          "person_id": "2e69dd90-61cc-4c2a-b40b-a52246bba0b8",
+          "name": "Bilal Khan"
+        },
+        {
+          "person_id": "b3bc0822-542b-481d-a2f0-ef0d807e2336",
+          "name": "Asha Rao"
+        }
+      ],
+      "mentioned_person_ids": [],
+      "mentioned_people": [],
+      "media_count": 0,
+      "created_operation_id": "6d45de94-428e-425f-8091-88cf89bad5a5",
+      "finalized_at": "2026-11-26T03:27:12.942719+00:00"
+    }
+  ],
+  "next_cursor": null
+}

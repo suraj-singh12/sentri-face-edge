@@ -1,0 +1,146 @@
+OK screenshot auth/owner-signed-in
+OK login owner
+OK nav People 
+menu text ap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. Mention: @Asha Rao
+
+Read full note
+@ASHA RAO
+Overview
+Photos (0)
+Sightings (1)
+Events
+Associations (2)
+Activity (4)
+
+Identity Information
+
+Rank
+
+Analyst
+
+Country
+
+India
+
+Tag
+
+Regular
+
+Created
+
+Nov 26, 2026, 03:25 AM
+
+Added by
+
+Audit Owner
+
+Latest Sighting
+
+Location
+
+Audit Lab
+
+Date & Time
+
+2026-11-21 · 09:30–10:00
+
+Source
+
+Morning Audit Briefing
+
+Added by
+
+System
+
+Recent Sightings
+
+2026-11-21 · 09:30–10:00
+
+Audit Lab
+
+View All Sightings
+Edit profile
+Edit notes
+editnotes err Locator.click: Timeout 1500ms exceeded.
+Call log:
+  - waiting for get_by_text("Edit Notes", exact=True).last
+
+OK screenshot 60-notes/editor-opened-probe
+buttons [{'i': 0, 't': '', 'aria': 'Switch to light mode', 'vis': True, 'disabled': False}, {'i': 1, 't': '', 'aria': 'Refresh', 'vis': True, 'disabled': False}, {'i': 2, 't': '', 'aria': 'Create backup now', 'vis': True, 'disabled': False}, {'i': 3, 't': 'AOAudit Owneradministrator', 'aria': 'Open account menu', 'vis': True, 'disabled': False}, {'i': 4, 't': 'Settings', 'aria': None, 'vis': True, 'disabled': False}, {'i': 5, 't': 'Back up now', 'aria': None, 'vis': True, 'disabled': False}, {'i': 6, 't': 'Check a photo', 'aria': None, 'vis': True, 'disabled': False}, {'i': 7, 't': 'Review photos', 'aria': None, 'vis': True, 'disabled': False}, {'i': 8, 't': 'People', 'aria': None, 'vis': True, 'disabled': False}, {'i': 9, 't': 'Events', 'aria': None, 'vis': True, 'disabled': False}, {'i': 10, 't': 'World', 'aria': None, 'vis': True, 'disabled': False}, {'i': 11, 't': 'Settings', 'aria': None, 'vis': True, 'disabled': False}, {'i': 12, 't': '', 'aria': 'Back to people', 'vis': True, 'disabled': False}, {'i': 13, 't': 'Open Person Graph', 'aria': None, 'vis': True, 'disabled': False}, {'i': 14, 't': 'Add Face', 'aria': None, 'vis': True, 'disabled': False}, {'i': 15, 't': 'Manage faces', 'aria': None, 'vis': True, 'disabled': False}, {'i': 16, 't': 'Edit', 'aria': None, 'vis': True, 'disabled': False}, {'i': 17, 't': 'Archive', 'aria': None, 'vis': True, 'disabled': False}, {'i': 18, 't': 'Manage Recognition References', 'aria': None, 'vis': True, 'disabled': False}, {'i': 19, 't': 'More', 'aria': None, 'vis': True, 'disabled': False}, {'i': 20, 't': '', 'aria': 'Add favorite', 'vis': True, 'disabled': False}, {'i': 21, 't': 'Read full note', 'aria': None, 'vis': True, 'disabled': False}, {'i': 22, 't': '@Asha Rao', 'aria': None, 'vis': True, 'disabled': False}, {'i': 23, 't': 'Overview', 'aria': None, 'vis': True, 'disabled': False}, {'i': 24, 't': 'Photos (0)', 'aria': None, 'vis': True, 'disabled': False}, {'i': 25, 't': 'Sightings (1)', 'aria': None, 'vis': True, 'disabled': False}, {'i': 26, 't': 'Events', 'aria': None, 'vis': True, 'disabled': False}, {'i': 27, 't': 'Associations (2)', 'aria': None, 'vis': True, 'disabled': False}, {'i': 28, 't': 'Activity (4)', 'aria': None, 'vis': True, 'disabled': False}, {'i': 29, 't': 'LocationAudit LabDate & Time2026-11-21 · 09:30–10:00SourceMorning Audit BriefingAdded bySystem', 'aria': None, 'vis': True, 'disabled': False}, {'i': 30, 't': '2026-11-21 · 09:30–10:00Audit Lab', 'aria': None, 'vis': True, 'disabled': False}, {'i': 31, 't': 'View All Sightings', 'aria': None, 'vis': True, 'disabled': False}, {'i': 32, 't': 'Edit profile', 'aria': None, 'vis': True, 'disabled': False}, {'i': 33, 't': 'Edit notes', 'aria': None, 'vis': True, 'disabled': False}]
+inputs []
+lal Khan
+
+Analyst
+
+•
+
+India
+
+REGULAR
+AUDIT-FIXTURE
+0 PHOTOS
+LAST SEEN NOV 21
+NO ORDINARY RECOGNITION SAMPLE
+
+Notes
+
+This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read path. Mention: @Asha Rao
+
+Read full note
+@ASHA RAO
+Overview
+Photos (0)
+Sightings (1)
+Events
+Associations (2)
+Activity (4)
+
+Identity Information
+
+Rank
+
+Analyst
+
+Country
+
+India
+
+Tag
+
+Regular
+
+Created
+
+Nov 26, 2026, 03:25 AM
+
+Added by
+
+Audit Owner
+
+Latest Sighting
+
+Location
+
+Audit Lab
+
+Date & Time
+
+2026-11-21 · 09:30–10:00
+
+Source
+
+Morning Audit Briefing
+
+Added by
+
+System
+
+Recent Sightings
+
+2026-11-21 · 09:30–10:00
+
+Audit Lab
+
+View All Sightings
+Edit profile
+Edit notes

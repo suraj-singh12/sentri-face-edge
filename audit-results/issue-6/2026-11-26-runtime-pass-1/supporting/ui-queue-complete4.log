@@ -1,0 +1,94 @@
+OK screenshot 32-queue-complete/followup-form
+OK accept asha 
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Prefer quality photos for recognition
+
+Low-quality face samples may reduce recognition accuracy and may produce poorer or less reliable matches.
+
+Attaching media to Morning Audit Briefing · 2026-11-21 · Audit Lab
+
+Review this group
+1 PHOTO
+
+Decide which photos belong to the suggested person.
+
+Discard group
+
+Group 1 of 1
+
+Summary
+Compare
+
+Incoming photos
+
+Only selected photos are included in your decision.
+
+Select all
+Clear
+
+Included
+
+WARN
+Peek In
+
+Selected person
+
+Chosen manually for these faces.
+
+Browse People
+
+Asha Rao
+
+SELECTED
+
+Existing person in People
+
+View reference photos
+
+Asha Rao
+
+1 photo
+
+Existing Person Sighting
+
+With how many individuals *
+
+Inherited Event
+
+Morning Audit Briefing · 2026-11-21 · 09:30–10:00 · Audit Lab · Unknown context
+
+Sighting Notes
+
+Saved with this person in this Event
+
+This information helps you keep a context of when and where this person was seen.
+
+Confirm
+Clear
+Accept 1 as Asha Rao
+Create new person
+Discard 1 selected face
+Reject suggested match
+Skip for now
+inputs [{'i': 0, 'tag': 'INPUT', 'type': 'checkbox', 'ph': '', 'val': 'on', 'vis': True}, {'i': 1, 'tag': 'INPUT', 'type': 'text', 'ph': 'Select count', 'val': '', 'vis': True}, {'i': 2, 'tag': 'TEXTAREA', 'type': 'textarea', 'ph': '', 'val': '', 'vis': True}, {'i': 3, 'tag': 'TEXTAREA', 'type': 'textarea', 'ph': '', 'val': 'x', 'vis': True}]
+buttons ['Settings', 'Back up now', 'Check a photo', 'Review photos', 'People', 'Events', 'World', 'Settings', '', 'Discard group', '', '', 'Summary', 'Compare', 'Select all', 'Clear', '', 'Peek In', 'Browse People', 'View reference photos', '', '', 'Confirm', 'Clear', 'Accept 1 as Asha Rao', 'Create new person', 'Discard 1 selected face', 'Reject suggested match', 'Skip for now']

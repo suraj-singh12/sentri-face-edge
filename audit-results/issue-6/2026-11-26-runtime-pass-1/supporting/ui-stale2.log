@@ -1,0 +1,65 @@
+OK screenshot auth/owner-signed-in
+OK login owner
+OK nav Events 
+OK screenshot 70-stale/modal-before-external-change
+OK stale modal edit 
+OK stale external mutation peration_id': 'dfb4a37f-b402-4722-8a02-19d531705f42', 'finalized_at': '2026-11-26T03:40:23.808684+00:00'}, 'participant_correction': None, 'graph_evidence_ids': [], 'historical_relations': [], 'effective_relations': []}
+after revision 4e940d15ddb271f62a47924d8bd70eec967f01093f996c52191390b7f10418ed
+
+OK screenshot 70-stale/stale-error-with-reload
+VERIFIED F08/PR87 stale correction recovery story. |  | Event / occasion | Date | Time | Location |  | Type 3 letters to see saved locations. Pick one to reuse it, or create a new one. |  | SAVED LOCATION | Context | Event Notes |  | Type @ and three characters, then select a Person to record an explicit mention. |  | Selected Event Note mentions |  | Selected Persons are mentioned, not automatically present or associated. |  | Event changed; reload it before correcting or attaching media Reloading discards this unsaved correction. |  | Reload current Event | Cancel | Save correction
+OK screenshot 70-stale/after-reload-current-event
+VERIFIED stale reload control 
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Check Photo Audit Event
+Back to Events
+
+2026-11-26 · Time unknown · Audit Lab
+
+Unknown
+Attach Media
+Correct Event
+Correct Participants
+Correct Relations
+
+Participants (1)
+
+New Audit Person
+
+Event Note
+
+Changed outside the open correction modal to create a controlled stale revision.
+
+Selected mentions: None
+
+Sighting Notes
+
+New Audit Person: Created through Check a photo audit workflow.
+
+Relations
+
+No explicit pair decisions recorded.
+
+All Event media (1)
+
+Correction and provenance history

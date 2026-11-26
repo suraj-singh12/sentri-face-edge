@@ -1,0 +1,143 @@
+OK nav World 
+OK screenshot 40-world/populated-explore
+VERIFIED world populated explore e | Events | World | Settings | Explore | Connections | Min. evidence strength | Evidence · 1/3 | Apply | Reset | Weaker links | ON |  | Discover |  | Period-based |  | 7d | 30d | 90d | Frequent | Multiple locations |  | Independent of Period |  | Recently seen | Clusters | Carla Mendes | 1 | Bilal Khan | 1 | Devika Iyer | 1 | New Audit Person | 1 | Asha Rao | 1 |  | 5 of 5 |  | Next |  | Canvas |  | Reset canvas |  | Select a discovery or cluster to explore its relationships. |  | Inspector |  | Select a Person, cluster or direct relationship.
+buttons ['Settings', 'Check a photo', 'Review photos', 'People', 'Events', 'World', 'Settings', '', 'More filters', 'Apply scope', 'Reset', 'Asha RaoAnalyst · India · NO FACE1events2relations2evidenceACTIVE', 'Bilal KhanAnalyst · India · NO FACE1events1relations1evidenceACTIVE', 'Carla MendesAnalyst · India · NO FACE1events1relations1evidenceACTIVE', 'Devika IyerAnalyst · India · NO FACE1events1relations1evidenceACTIVE', 'New Audit PersonAnalyst · India · ENROLLED1events0relations0evidenceACTIVE', 'Zedekiah ValeObserver · India · NO FACE0events1relations1evidenceACTIVE', 'AnalystManual Audit Person · India · NO FACE0events0relations0evidenceARCHIVED', 'Cluster 13 membersAsha Rao, Bilal Khan, Zedekiah Vale2 evidence · 2 relationships · 2 event contributions', 'Cluster 22 membersCarla Mendes, Devika Iyer1 evidence · 1 relationships · 2 event contributions', '', '', 'Evidence · 1/3', 'Apply', 'Reset', 'Weaker links\nON', 'Frequent', 'Multiple locations', 'Recently seen', 'Clusters', 'Carla Mendes\n1', 'Bilal Khan\n1', 'Devika Iyer\n1', 'New Audit Person\n1', 'Asha Rao\n1', 'Next', 'Reset canvas', '', '', '']
+OK screenshot 40-world/populated-connections
+VERIFIED world connections populated hips · 2 event contributions | Cluster 2 | 2 MEMBERS | Carla Mendes, Devika Iyer | 1 evidence · 1 relationships · 2 event contributions |  | Measured patterns |  | Deterministic facts returned for this scope |  | 0 |  | No measured patterns |  | SentriFace did not return a supported pattern for this scope. |  | World inspector |  | Select a person, cluster, relationship, or pattern to see why it appears and the facts behind it. |  | World summarizes recorded evidence in this scope. Groups and rankings update when the evidence changes.
+iew refreshed
+World changed, so the previous revision-bound hierarchy was closed.
+Time
+From
+To
+Location
+Missing location
+Order
+More filters
+Apply scope
+Reset
+
+7
+
+Effective people
+
+3
+
+Finalized events
+
+3
+
+Relationships
+
+2
+
+Evidence clusters
+
+1
+
+No missing-location count
+
+Overview
+Clusters
+Relationships
+Patterns
+
+Page 1 · 7 of 7
+
+Ranked people
+
+People in this scope, ranked by evidence
+
+7
+Asha Rao
+Analyst · India · NO FACE
+1
+events
+2
+relations
+2
+evidence
+ACTIVE
+Bilal Khan
+Analyst · India · NO FACE
+1
+events
+1
+relations
+1
+evidence
+ACTIVE
+Carla Mendes
+Analyst · India · NO FACE
+1
+events
+1
+relations
+1
+evidence
+ACTIVE
+Devika Iyer
+Analyst · India · NO FACE
+1
+events
+1
+relations
+1
+evidence
+ACTIVE
+New Audit Person
+Analyst · India · ENROLLED
+1
+events
+0
+relations
+0
+evidence
+ACTIVE
+Zedekiah Vale
+Observer · India · NO FACE
+0
+events
+1
+relations
+1
+evidence
+ACTIVE
+Analyst
+Manual Audit Person · India · NO FACE
+0
+events
+0
+relations
+0
+evidence
+ARCHIVED
+
+Evidence-connected clusters
+
+Revision-bound summaries, not affiliations
+
+2
+Cluster 1
+3 MEMBERS
+Asha Rao, Bilal Khan, Zedekiah Vale
+2 evidence · 2 relationships · 2 event contributions
+Cluster 2
+2 MEMBERS
+Carla Mendes, Devika Iyer
+1 evidence · 1 relationships · 2 event contributions
+
+Measured patterns
+
+Deterministic facts returned for this scope
+
+0
+
+No measured patterns
+
+SentriFace did not return a supported pattern for this scope.
+
+World inspector
+
+Select a person, cluster, relationship, or pattern to see why it appears and the facts behind it.
+
+World summarizes recorded evidence in this scope. Groups and rankings update when the evidence changes.

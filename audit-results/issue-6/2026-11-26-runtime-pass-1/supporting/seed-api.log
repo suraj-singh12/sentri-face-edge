@@ -1,0 +1,24 @@
+login owner 200
+/api/person-create 200 {"person":{"person_id":"b3bc0822-542b-481d-a2f0-ef0d807e2336","name":"Asha Rao","metadata":{"rank":"Analyst","country":"India","importance":"Regular","tags":["audit-fixture"],"adde
+/api/person-create 200 {"person":{"person_id":"2e69dd90-61cc-4c2a-b40b-a52246bba0b8","name":"Bilal Khan","metadata":{"rank":"Analyst","country":"India","importance":"Regular","tags":["audit-fixture"],"ad
+/api/person-create 200 {"person":{"person_id":"0ca3d5e1-1edb-486c-99a3-e8c116762143","name":"Carla Mendes","metadata":{"rank":"Analyst","country":"India","importance":"Regular","tags":["audit-fixture"],"
+/api/person-create 200 {"person":{"person_id":"7b6f68e3-0485-47b4-b6bd-aa43e2b551b3","name":"Devika Iyer","metadata":{"rank":"Analyst","country":"India","importance":"Regular","tags":["audit-fixture"],"a
+/api/person-create 200 {"person":{"person_id":"b30d6053-c32e-4c73-8039-0de802bfa541","name":"Zedekiah Vale","metadata":{"rank":"Observer","country":"India","importance":"Regular","tags":["audit-fixture"]
+people {'Asha Rao': 'b3bc0822-542b-481d-a2f0-ef0d807e2336', 'Bilal Khan': '2e69dd90-61cc-4c2a-b40b-a52246bba0b8', 'Carla Mendes': '0ca3d5e1-1edb-486c-99a3-e8c116762143', 'Devika Iyer': '7b6f68e3-0485-47b4-b6bd-aa43e2b551b3', 'Zedekiah Vale': 'b30d6053-c32e-4c73-8039-0de802bfa541'}
+/api/person-notes 200 {"updated":true,"notes":"This is a long audit note paragraph with important context, repeated so the reading panel must either wrap, scroll, clip, or provide an obvious full-read p
+/api/person-notes 200 {"updated":true,"notes":"Met during the morning audit briefing with @Bilal Khan and @Zedekiah Vale.","change":{"change_id":"46ca2b0f-e5e6-4721-a5aa-e9b89f81ed05","person_id":"b3bc0
+/api/person-association 200 {"evidence_id":"49c64a8c-3ce3-5674-aa0d-df2e848281a0","person_ids":["0ca3d5e1-1edb-486c-99a3-e8c116762143","7b6f68e3-0485-47b4-b6bd-aa43e2b551b3"]}
+/api/encounters?limit=20 200 {"events":[],"next_cursor":null}
+/api/users 201 {"user":{"user_id":"da1af892-272f-4f6a-bea4-fc10b3bd9645","username":"viewer1","display_name":"Viewer User","roles":["viewer"],"capabilities":["recognize","view"],"disabled":false,
+/api/users 201 {"user":{"user_id":"2593b190-23bd-4cea-affa-62e8f99aba6c","username":"operator1","display_name":"Operator User","roles":["operator"],"capabilities":["add","recognize","view"],"disa
+/api/users 201 {"user":{"user_id":"a25c7e82-4762-4890-9d74-e85f02f27285","username":"custodian1","display_name":"Custodian User","roles":["custodian"],"capabilities":["add","backup_delete","backu
+/api/users 201 {"user":{"user_id":"8f4892e4-0fd9-4ea6-a254-9db1d8288122","username":"technician1","display_name":"Technician User","roles":["technician"],"capabilities":["backups","recognize","te
+login viewer1 200
+set-password viewer1 200 {"session_ended":null,"window":"active","window_heartbeat_seconds":15,"setup_required":false,"authen
+login operator1 200
+set-password operator1 200 {"session_ended":null,"window":"active","window_heartbeat_seconds":15,"setup_required":false,"authen
+login custodian1 200
+set-password custodian1 200 {"session_ended":null,"window":"active","window_heartbeat_seconds":15,"setup_required":false,"authen
+login technician1 200
+set-password technician1 200 {"session_ended":null,"window":"active","window_heartbeat_seconds":15,"setup_required":false,"authen
+/api/persons 401 {"error":"You signed in from another window. Only one window can be used at a time.","code":"authentication_required","s

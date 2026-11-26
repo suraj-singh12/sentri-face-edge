@@ -1,0 +1,177 @@
+OK screenshot 32-queue-complete/person-picker-no-biometric
+ge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Prefer quality photos for recognition
+
+Low-quality face samples may reduce recognition accuracy and may produce poorer or less reliable matches.
+
+Attaching media to Morning Audit Briefing · 2026-11-21 · Audit Lab
+
+Review this group
+1 PHOTO
+
+Decide which photos belong to the suggested person.
+
+Discard group
+
+Group 1 of 1
+
+Summary
+Compare
+
+Incoming photos
+
+Only selected photos are included in your decision.
+
+Select all
+Clear
+
+Included
+
+WARN
+Peek In
+
+Weak match
+
+No reliable automatic match. Choose the correct person yourself.
+
+Browse People
+
+Human review needed
+
+WEAK MATCH
+
+No candidate was found in People.
+
+Choose a person to accept
+Create new person
+Discard 1 selected face
+Reject suggested match
+Skip for now
+Browse People
+
+Choose who the selected incoming photos belong to.
+
+New person
+
+Asha Rao
+
+Analyst · India
+
+NO FACE ENROLLED
+
+Bilal Khan
+
+Analyst · India
+
+NO FACE ENROLLED
+
+Carla Mendes
+
+Analyst · India
+
+NO FACE ENROLLED
+
+Devika Iyer
+
+Analyst · India
+
+NO FACE ENROLLED
+
+Zedekiah Vale
+
+Observer · India
+
+NO FACE ENROLLED
+OK screenshot 32-queue-complete/person-selected-asha
+OK select Asha 
+buttons ['Settings', 'Back up now', 'Check a photo', 'Review photos', 'People', 'Events', 'World', 'Settings', '', 'Discard group', '', '', 'Summary', 'Compare', 'Select all', 'Clear', '', 'Peek In', 'Browse People', 'View reference photos', 'Accept 1 as Asha Rao', 'Create new person', 'Discard 1 selected face', 'Reject suggested match', 'Skip for now']
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Prefer quality photos for recognition
+
+Low-quality face samples may reduce recognition accuracy and may produce poorer or less reliable matches.
+
+Attaching media to Morning Audit Briefing · 2026-11-21 · Audit Lab
+
+Review this group
+1 PHOTO
+
+Decide which photos belong to the suggested person.
+
+Discard group
+
+Group 1 of 1
+
+Summary
+Compare
+
+Incoming photos
+
+Only selected photos are included in your decision.
+
+Select all
+Clear
+
+Included
+
+WARN
+Peek In
+
+Selected person
+
+Chosen manually for these faces.
+
+Browse People
+
+Asha Rao
+
+SELECTED
+
+Existing person in People
+
+View reference photos
+Accept 1 as Asha Rao
+Create new person
+Discard 1 selected face
+Reject suggested match
+Skip for now
+inputs [{'type': 'checkbox', 'ph': '', 'val': 'on', 'vis': True}]

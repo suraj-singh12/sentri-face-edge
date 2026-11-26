@@ -1,0 +1,74 @@
+[
+  {
+    "screen": "Check a photo",
+    "opened": false
+  },
+  {
+    "screen": "Review photos",
+    "opened": false
+  },
+  {
+    "screen": "People",
+    "opened": false
+  },
+  {
+    "screen": "Events",
+    "opened": false
+  },
+  {
+    "screen": "World",
+    "opened": false
+  },
+  {
+    "screen": "Settings",
+    "opened": true
+  },
+  {
+    "screen": "01-people/filter-popover",
+    "opened": false
+  },
+  {
+    "screen": "01-people/group-menu",
+    "opened": false
+  },
+  {
+    "screen": "01-people/sort-menu",
+    "opened": false
+  },
+  {
+    "screen": "01-people/add-person-dialog",
+    "opened": false
+  },
+  {
+    "screen": "05-world/connections",
+    "opened": false
+  },
+  {
+    "screen": "05-world/explore-toggle",
+    "opened": false
+  },
+  {
+    "screen": "settings Settings",
+    "opened": true
+  },
+  {
+    "screen": "settings Check a photo",
+    "opened": true
+  },
+  {
+    "screen": "settings Review photos",
+    "opened": true
+  },
+  {
+    "screen": "settings People",
+    "opened": true
+  },
+  {
+    "screen": "settings Events",
+    "opened": true
+  },
+  {
+    "screen": "settings World",
+    "opened": true
+  }
+]

@@ -1,0 +1,81 @@
+OK screenshot 32-queue-complete/count-options
+ERROR count select Locator.click: Timeout 1500ms exceeded.
+Call log:
+  - waiting for get_by_role("option", name="2")
+
+OK screenshot 32-queue-complete/followup-filled
+OK screenshot 32-queue-complete/after-confirm
+OK confirm followup 
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Prefer quality photos for recognition
+
+Low-quality face samples may reduce recognition accuracy and may produce poorer or less reliable matches.
+
+Add Photos
+
+Every detected face becomes a review item.
+
+Drop folder here
+
+Images stay on this device
+
+Images
+Folder
+
+Session
+
+Active session
+Refresh
+Discard session
+
+Flow
+
+Upload
+
+Review groups
+
+Confirm people
+
+Event 1 of 1
+
+Attaching media to Morning Audit Briefing · 2026-11-21 · Audit Lab
+
+1 of 1 faces resolved. Event details are saved once for this Event.
+
+Discard Event
+Continue to Relations
+Review Queue
+
+Review each face group and confirm who it belongs to.
+
+0 GROUPS
+All
+Strong similarity
+Needs review
+
+No groups match this filter.
+
+Showing 0 of 0 pending groups
+
+Identity decision saved to Event draft
+buttons ['Settings', 'Back up now', 'Check a photo', 'Review photos', 'People', 'Events', 'World', 'Settings', 'Images', 'Folder', '', 'Refresh', 'Discard session', 'Discard Event', 'Continue to Relations', 'All', 'Strong similarity', 'Needs review']

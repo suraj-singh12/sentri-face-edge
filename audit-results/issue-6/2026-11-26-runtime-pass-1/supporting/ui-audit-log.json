@@ -1,0 +1,26 @@
+[
+  {
+    "time": 1795665127.056178,
+    "step": "screenshot",
+    "status": "ok",
+    "detail": "auth/technician1-login-filled"
+  },
+  {
+    "time": 1795665129.2213426,
+    "step": "screenshot",
+    "status": "ok",
+    "detail": "auth/technician1-signed-in"
+  },
+  {
+    "time": 1795665129.221369,
+    "step": "login",
+    "status": "ok",
+    "detail": "technician1"
+  },
+  {
+    "time": 1795665129.2246723,
+    "step": "technician backup affordance visible",
+    "status": "not-visible",
+    "detail": "backup visible=False"
+  }
+]

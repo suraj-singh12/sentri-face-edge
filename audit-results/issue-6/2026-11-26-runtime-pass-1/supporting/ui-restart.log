@@ -1,0 +1,75 @@
+OK screenshot 80-restart/after-server-restart-reload
+OK browser reload after server restart 
+OK screenshot auth/owner-login-filled
+OK screenshot auth/owner-signed-in
+OK login owner
+OK screenshot 80-restart/post-restart-shell
+VERIFIED post-restart data shell shell visible
+OK nav People 
+OK screenshot 80-restart/people-persisted
+VERIFIED post-restart people persistence names present=[True, True, True]
+OK nav Events 
+OK screenshot 80-restart/events-persisted
+VERIFIED post-restart event persistence Check event/media marker present: (True, True)
+OK nav Review photos 
+OK screenshot 80-restart/review-session-resumed
+VERIFIED review scan-session persistence after restart  | Low-quality face samples may reduce recognition accuracy and may produce poorer or less reliable matches. |  | Add Photos |  | Every detected face becomes a review item. |  | Drop folder here |  | Images stay on this device |  | Images | Folder |  | Session |  | Active session | Refresh | Discard session |  | Flow |  | Upload |  | Review groups |  | Confirm people |  | Attaching media to Morning Audit Briefing · 2026-11-21 · Audit Lab |  | Review Relations |  | 0 of 0 pairs decided. Choose which confirmed participant pairs this Event supports. |  | No new participant pairs need a decision. Existing Event Relations are retained. | Discard Event | Complete Review
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Prefer quality photos for recognition
+
+Low-quality face samples may reduce recognition accuracy and may produce poorer or less reliable matches.
+
+Add Photos
+
+Every detected face becomes a review item.
+
+Drop folder here
+
+Images stay on this device
+
+Images
+Folder
+
+Session
+
+Active session
+Refresh
+Discard session
+
+Flow
+
+Upload
+
+Review groups
+
+Confirm people
+
+Attaching media to Morning Audit Briefing · 2026-11-21 · Audit Lab
+
+Review Relations
+
+0 of 0 pairs decided. Choose which confirmed participant pairs this Event supports.
+
+No new participant pairs need a decision. Existing Event Relations are retained.
+Discard Event
+Complete Review
