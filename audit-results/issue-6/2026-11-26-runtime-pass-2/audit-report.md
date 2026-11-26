@@ -1,6 +1,8 @@
 # SentriFace Edge — Comprehensive Pre-release UI/UX Audit
 **Issue #6 · Branch `v2-hardening-followups` @ `613b352f` · Audit date 2026-11-26 · Single-agent fresh pass**
 
+> **Amended 2026-11-26 by operator decision — see [operator-decisions.md](operator-decisions.md), which is authoritative:** A-11's World default minimum relationship strength of 2 and A-09's default Event date are **intentional behaviour and must remain unchanged**. No fixes are approved; all other improvement-plan items are pending explicit design approval. Where this report recommends otherwise, the decisions register supersedes it.
+
 Method: the running application was exercised in a real browser (Playwright-driven Chromium, 1440×900 and 760×900, light and dark themes) against a realistic seeded dataset — 5 finalized multi-person events with cross-event overlap, 15 people (including photos, duplicates, favorites, archived), 5 role accounts. Every role was signed in and its permissions verified. Review-queue ingestion, recognition, people, events, world, settings, mutations (archive/restore/delete/bin/merge), backups, forced password change and permission gating were all exercised end-to-end. ~55 evidence screenshots in `shots/`. Findings were verified against source where behavior was ambiguous. Dev-mode artifacts (synthetic whole-image face detection, demo-mode banner) are excluded or explicitly flagged.
 
 ---
@@ -9,9 +11,9 @@ Method: the running application was exercised in a real browser (Playwright-driv
 
 **Not yet production-ready — close, with a small number of high-impact workflow defects to resolve.** The application is substantially improved since the previous audit: the visual language is consistent and refined, dark theme is high quality, destructive actions are well-guarded (type-to-confirm, automatic pre-action backups, clear reassurance copy), provenance is visible throughout, role enforcement is honest ("hidden controls are only a convenience"), and the queue-driven ingestion journey is genuinely guided.
 
-The remaining gaps cluster in four themes:
+The remaining gaps cluster in four themes (theme 1 since reclassified — see amendment above):
 
-1. **Default-empty World**: the signature exploration feature presents as broken for typical small/realistic datasets because of filter defaults and factually-worded empty claims (A-11).
+1. **Default-empty World**: the signature exploration feature presents as broken for typical small/realistic datasets because of filter defaults and factually-worded empty claims (A-11) — **RECLASSIFIED: the default is intentional per operator decision; only the zero-state wording remains, pending design approval.**
 2. **Silent validation and dead-end states in the review queue** — the highest-frequency workflow in the product: mandatory unexplained counts, disabled unexplained primary actions, redundant competing messaging (A-02, A-03, A-04).
 3. **Discoverability of identity-data entry** — notes have no visible affordance; country/location autocomplete actively misfiling data (A-01, A-12).
 4. **Chrome noise** — permanent undismissable banner stack, redundant badges, jargon chips that erode the otherwise strong visual craft (A-13, A-14, A-07).
@@ -55,11 +57,11 @@ No P0 defects were found: no security, data-integrity or critical-functional fai
 
 ### P1 — broken or broken-feeling workflows
 
-**A-11 · World Explore hides typical relationships by default and reports them as absent**
+**A-11 · World Explore hides typical relationships by default and reports them as absent** — ⚠️ **RECLASSIFIED BY OPERATOR: the strength-2 default is intentional and must remain unchanged.** The observation below stands as documentation of behavior; the recommendation to change the default is withdrawn. Only the filter-aware zero-state wording question remains, pending design approval.
 Location: World → Explore. Roles: all.
 Repro: fresh dataset with people co-observed in exactly one event → open World → click a person in Discover → canvas shows a lone node; Inspector reads "0 Relationships / 0 Evidence records" — while the same person's profile Associations tab correctly lists the co-observed relationship. Root cause (source-verified): default filters are `evidence_type: ["CO_OBSERVED"]` **and** `min_relationship_strength: 2` (`utils/world.js:898`); a single co-observation has strength 1, so it is filtered out before rendering. The "Weaker links ON" toggle only affects canvas display of already-fetched edges — it cannot reveal filtered-out data. The Inspector states "0 Evidence records" as fact rather than "hidden by current filters". In small deployments — the normal case for this product — essentially every relationship is single-strength, so World appears empty/broken on first use.
 Impact: the product's signature exploration feature undermines trust; users conclude the graph is broken.
-Recommendation: default min strength to 1; make the inspector's zero-state filter-aware ("2 relationships hidden by current filter settings — show weaker links"); consider renaming "Weaker links" to what it does.
+Recommendation (amended): DO NOT change the default (operator decision). The only residual design question is whether to make the inspector's zero-state filter-aware ("2 relationships hidden by current filter settings — show weaker links"); consider renaming "Weaker links" to what it does.
 
 ### P2 — interaction and usability deficiencies
 
@@ -101,10 +103,10 @@ Source-verified: biometric-mode browse requires `person.match` non-null; people 
 Impact: potential dead-end for exactly the people who most need manual assignment.
 Recommendation: include enrolled-but-ineligible people in manual browse with a clear "not recognition-eligible" marker (manual assignment is a human decision, not recognition inference — no invariant is violated).
 
-**A-09 · Event date is required and prefilled with today**
+**A-09 · Event date is required and prefilled with today** — ⚠️ **WITHDRAWN BY OPERATOR: intentional behaviour, must remain unchanged.** Documented here for completeness only; no action.
 Location: encounter details modal. Roles: operator+.
 An operator confirming quickly silently records today's date for older photos; the product supports undated/imprecise events elsewhere, but the form offers no "date unknown" path. Given the product's temporal-precision rules, silently-wrong exact dates are worse than honestly-unknown ones.
-Recommendation: allow unknown dates explicitly; avoid prefilling today without an operator gesture.
+~~Recommendation: allow unknown dates explicitly~~ — withdrawn; intentional behaviour per operator decision.
 
 ### P3 — consistency, polish, minor defects
 
@@ -158,12 +160,12 @@ Recommendation: allow unknown dates explicitly; avoid prefilling today without a
 ## 5. Improvement plan (prioritized, bounded)
 
 **Wave 1 — workflow-critical quick wins (est. small, high value):**
-1. World defaults: min strength 1 + filter-aware zero-state wording (A-11). *Small, highest trust-impact-per-line.*
+1. ~~World defaults~~ — **removed per operator decision**: the strength-2 default is intentional. (Only filter-aware zero-state wording may be proposed, pending design approval.)
 2. Review queue: inline validation errors + optional/unknown count + unify label (A-02); re-path the disabled primary action (A-04); deduplicate match messaging, fix badge truncation (A-03).
 3. Country/location autocomplete ranking (A-01). *Small, prevents ongoing data corruption.*
 
 **Wave 2 — discoverability and data honesty:**
-4. Notes card affordance (A-12); event date-unknown path (A-09); browse-picker inclusion of ineligible-enrolled people with clear marking (A-22 — needs one design decision).
+4. Notes card affordance (A-12); ~~event date-unknown path (A-09)~~ — removed per operator decision; browse-picker inclusion of ineligible-enrolled people with clear marking (A-22 — needs one design decision).
 
 **Wave 3 — chrome and consistency:**
 5. Banner consolidation + role-awareness + dismissability (A-14, completes F40); Tag/Tags rename + explanations (A-05); menu consolidation (A-17, A-18); photo "Added" disambiguation (A-06); date-format unification (A-19); badge/chip jargon cleanup (A-07, A-13, A-15).

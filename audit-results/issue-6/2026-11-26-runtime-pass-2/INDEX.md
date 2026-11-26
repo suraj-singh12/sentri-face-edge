@@ -11,6 +11,10 @@ Additive evidence only. This pass is an independent fresh audit of the same prod
 - Roles exercised through real UI sign-in: Viewer, Operator, Custodian, Technician, Administrator/owner — including forced first-sign-in password change for each role account.
 - Product source was not modified. No fixes were implemented. No production data touched.
 
+## Operator decisions (authoritative disposition)
+
+**[operator-decisions.md](operator-decisions.md)** — recorded 2026-11-26: A-11's World default minimum relationship strength 2 and A-09's default Event date are **intentional and must remain unchanged**; no fixes approved; all improvement-plan items pending explicit design approval; A-22 and the coverage gaps pending investigation. This register supersedes the report where they disagree.
+
 ## Canonical reports
 
 - [Complete audit report](audit-report.md) — production-readiness assessment, A-01–A-24 findings with priorities/impact/recommendations, F-series reconciliation, bounded improvement plan.
