@@ -1459,7 +1459,7 @@ function PeopleGalleryView({
             <Text size="sm" fw={800}>Notes</Text>
             {canEditNotes && profileNote.content.trim() ? <Button size="compact-xs" variant="default" onClick={openNotesEdit}>Edit note</Button> : null}
           </Group>
-          {profileNote.content.trim() ? <ProfileNoteSummary note={profileNote} onOpen={onOpen} /> : canEdit ? (
+          {profileNote.content.trim() ? <ProfileNoteSummary note={profileNote} onOpen={onOpen} /> : canEditNotes ? (
             <Stack align="center" justify="center" gap={6} className="people-profile-notes-empty">
               <Text size="xs" c="dimmed">No notes yet</Text>
               <Button size="compact-xs" onClick={openNotesEdit}>Add note</Button>
