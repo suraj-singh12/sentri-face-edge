@@ -34,7 +34,14 @@ test("weak queue matches use a human-controlled People picker", () => {
   assert.match(queue, /scrollToFollowup\(\);\s*onAcceptExisting\(best\);/);
   assert.match(queue, /disabled=\{!selectedCount \|\| accepted\}/);
   assert.match(queue, /const choosePerson = \(person\) => \{\s*onSelectExisting\(\);/);
-  assert.match(queue, /View reference photos/);
+  assert.match(queue, /Compare photos/);
+  assert.match(queue, /Exact match/);
+  assert.match(queue, /Possible match/);
+  assert.match(queue, /Recognition review/);
+  assert.match(queue, /No match found/);
+  assert.match(queue, /Recognition score \$\{score\}%/);
+  assert.match(css, /queue-suggestion-review/);
+  assert.match(css, /queue-suggestion-initials/);
   assert.doesNotMatch(queue, /face\?\.crop_path \|\| face\?\.source_image/);
   assert.match(css, /\.queue-person-picker-card\s*\{[^}]*min-height:\s*210px;/s);
   assert.match(css, /\.queue-person-picker-photo\s*\{[^}]*height:\s*132px;/s);
