@@ -1,0 +1,271 @@
+{
+  "graph_revision": "g26",
+  "as_of": "2026-11-26T07:19:10.231516+00:00",
+  "generated_at": "2026-11-26T07:19:10.656800+00:00",
+  "requested_detail_level": "PERSON",
+  "returned_detail_level": "PERSON",
+  "focus": {
+    "type": "PERSON",
+    "id": "ba9ccf01-3af1-4bd1-92e0-87dab448344a"
+  },
+  "requested_filters": {
+    "date_from": null,
+    "date_to": null,
+    "recent_activity": null,
+    "locations": [],
+    "missing_location": "INCLUDE",
+    "lifecycle": [],
+    "identity_state": [],
+    "biometric_state": [],
+    "country": [],
+    "rank": [],
+    "priority": [],
+    "evidence_type": [
+      "CO_OBSERVED"
+    ],
+    "relationship_type": [],
+    "min_relationship_strength": 1,
+    "activity": [],
+    "pattern_type": []
+  },
+  "effective_filters": {
+    "date_from": null,
+    "date_to": null,
+    "recent_activity": null,
+    "locations": [],
+    "missing_location": "INCLUDE",
+    "lifecycle": [],
+    "identity_state": [],
+    "biometric_state": [],
+    "country": [],
+    "rank": [],
+    "priority": [],
+    "evidence_type": [
+      "CO_OBSERVED"
+    ],
+    "relationship_type": [],
+    "min_relationship_strength": 1,
+    "activity": [],
+    "pattern_type": []
+  },
+  "ranking": "SALIENCE",
+  "limits": {
+    "people": 25,
+    "clusters": 10,
+    "events": 25,
+    "evidence": 25,
+    "media": 25,
+    "relationships": 50,
+    "patterns": 10,
+    "provenance": 100,
+    "facets": 100
+  },
+  "scope_totals": {
+    "people": 1,
+    "relationships": 0,
+    "clusters": 0,
+    "finalized_events": 1
+  },
+  "available_facets": {
+    "filter_semantics_version": "world-filters-v1",
+    "ranking_version": "descriptive-salience-v1",
+    "clustering_version": "connected-evidence-components-v1",
+    "calculation_version": "world-descriptive-v1",
+    "intelligence_extension_version": "world-intelligence-v1"
+  },
+  "returned_counts": {
+    "people": 1,
+    "clusters": 0,
+    "events": 0,
+    "evidence": 0,
+    "relationships": 0,
+    "patterns": 0,
+    "media": 0,
+    "discoveries": 0
+  },
+  "pagination": {
+    "RELATIONSHIPS": {
+      "collection": "RELATIONSHIPS",
+      "total_count": 0,
+      "returned_count": 0,
+      "has_more": false,
+      "next_cursor": null,
+      "truncated": false,
+      "truncation_reason": null
+    },
+    "EVENTS": {
+      "collection": "EVENTS",
+      "total_count": 1,
+      "returned_count": 0,
+      "has_more": true,
+      "next_cursor": null,
+      "truncated": true,
+      "truncation_reason": "collection_not_requested"
+    }
+  },
+  "truncated": true,
+  "has_more": false,
+  "next_cursor": null,
+  "people": [
+    {
+      "canonical_person_id": "ba9ccf01-3af1-4bd1-92e0-87dab448344a",
+      "historical_person_ids": [],
+      "display_name": "Type Alpha",
+      "lifecycle_state": "ACTIVE",
+      "identity_state": "IDENTIFIED",
+      "biometric_state": "NO_FACE",
+      "display": {
+        "country": "India",
+        "rank": "Analyst"
+      },
+      "intelligence_summary": {
+        "relationship_count": 0,
+        "relationship_evidence_count": 0,
+        "activity_bucket": "LOW"
+      },
+      "importance_indicators": [
+        {
+          "factor": "explicit_priority",
+          "value": "Regular",
+          "kind": "OPERATOR_ASSERTED"
+        },
+        {
+          "factor": "finalized_event_count",
+          "value": 1,
+          "kind": "MEASURED"
+        },
+        {
+          "factor": "relationship_count",
+          "value": 0,
+          "kind": "MEASURED"
+        },
+        {
+          "factor": "evidence_count",
+          "value": 0,
+          "kind": "MEASURED"
+        }
+      ],
+      "activity_summary": {
+        "finalized_event_count": 1,
+        "activity_bucket": "LOW",
+        "state": "LOADED"
+      },
+      "ranking": {
+        "applied": false,
+        "intent": "SALIENCE",
+        "rank_position": null,
+        "ranking_reason": "Requested person focus; global ranking was not used to select this object.",
+        "metrics": {
+          "finalized_events": 1,
+          "relationships": 0,
+          "evidence_records": 0,
+          "operator_priority": "Regular"
+        },
+        "metrics_state": "LOADED",
+        "deterministic_tie_break": [
+          "operator_priority",
+          "finalized_events",
+          "evidence_records",
+          "display_name",
+          "canonical_person_id"
+        ],
+        "value_semantics": "deterministic_ordering_not_confidence"
+      },
+      "allowed_actions": [
+        "OPEN",
+        "EDIT",
+        "EDIT_NOTES",
+        "FAVORITE",
+        "MANAGE_FACES",
+        "ARCHIVE",
+        "DELETE",
+        "MERGE"
+      ],
+      "explanation": {
+        "summary": "Requested person focus; global ranking was not used to select this object.",
+        "basis_type": "PERSON_RANKING",
+        "factual_factors": [
+          {
+            "factor": "explicit_priority",
+            "value": "Regular",
+            "kind": "OPERATOR_ASSERTED"
+          },
+          {
+            "factor": "finalized_event_count",
+            "value": 1,
+            "kind": "MEASURED"
+          },
+          {
+            "factor": "relationship_count",
+            "value": 0,
+            "kind": "MEASURED"
+          },
+          {
+            "factor": "evidence_count",
+            "value": 0,
+            "kind": "MEASURED"
+          }
+        ],
+        "derived_factors": [
+          {
+            "factor": "ranking_intent",
+            "value": "SALIENCE"
+          }
+        ],
+        "calculation_version": "descriptive-salience-v1",
+        "evidence_types": [],
+        "evidence_count": 0,
+        "first_occurrence_at": null,
+        "last_occurrence_at": null,
+        "calculation_scope": {
+          "as_of": "2026-11-26T07:19:10.231516+00:00",
+          "date_from": null,
+          "date_to": null,
+          "recent_activity": null,
+          "locations": [],
+          "missing_location": "INCLUDE",
+          "filter_semantics_version": "world-filters-v1"
+        },
+        "strongest_factors": [
+          {
+            "factor": "explicit_priority",
+            "value": "Regular",
+            "kind": "OPERATOR_ASSERTED"
+          },
+          {
+            "factor": "finalized_event_count",
+            "value": 1,
+            "kind": "MEASURED"
+          },
+          {
+            "factor": "relationship_count",
+            "value": 0,
+            "kind": "MEASURED"
+          }
+        ],
+        "method": "deterministic_lexicographic_ordering",
+        "threshold": null,
+        "sample": null,
+        "limitations": [
+          "No probabilistic importance or identity confidence is calculated."
+        ]
+      },
+      "analytics_state": "LOADED",
+      "cluster_memberships": []
+    }
+  ],
+  "clusters": [],
+  "events": [],
+  "evidence": [],
+  "relationships": [],
+  "patterns": [],
+  "media": [],
+  "discoveries": [],
+  "discovery_context": {},
+  "contract": "sentriface.world-graph",
+  "contract_version": 2,
+  "filter_semantics_version": "world-filters-v1",
+  "ranking_version": "descriptive-salience-v1",
+  "clustering_version": "connected-evidence-components-v1",
+  "calculation_version": "world-descriptive-v1"
+}
