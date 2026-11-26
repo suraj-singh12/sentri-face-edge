@@ -737,33 +737,31 @@ def test_people_bin_refreshes_expiry_while_open(served_app):
     store.soft_delete_person(expiring.person_id, "expiring-open-bin")
 
     _sign_up(page)
-    deadline = datetime.now(timezone.utc) + timedelta(seconds=4)
-    deadline_monotonic = time.monotonic() + 4
+    deadline = datetime.now(timezone.utc) + timedelta(seconds=6)
+    deadline_monotonic = time.monotonic() + 6
     with store._connect() as conn:
         conn.execute(
             "UPDATE persons SET restore_until = ? WHERE person_id = ?",
             (deadline.isoformat(), expiring.person_id),
         )
-    people_response_times = []
-
-    def capture_people_response(response):
-        if response.url.endswith("/api/persons") and response.request.method == "GET":
-            people_response_times.append(time.monotonic())
-
-    page.on("response", capture_people_response)
     page.get_by_role("tab", name="People", exact=True).click()
     page.get_by_role("button", name=re.compile(r"^Bin\b")).click()
     cards = page.locator(".people-person-card")
     expect(cards).to_have_count(1)
     expect(cards.get_by_role("button", name="Restore", exact=True)).to_be_visible()
 
-    expect(page.get_by_text("No recoverable profiles.")).to_be_visible(timeout=10000)
+    with page.expect_response(
+        lambda item: (
+            item.url.endswith("/api/persons")
+            and item.request.method == "GET"
+            and time.monotonic() >= deadline_monotonic
+        ),
+        timeout=12000,
+    ) as response_info:
+        expect(page.get_by_text("No recoverable profiles.")).to_be_visible(timeout=10000)
+    response = response_info.value
+    assert response.status == 200
     expect(cards).to_have_count(0)
-    for _ in range(40):
-        if any(response_at >= deadline_monotonic for response_at in people_response_times):
-            break
-        time.sleep(0.05)
-    assert any(response_at >= deadline_monotonic for response_at in people_response_times)
 
     page.get_by_role("combobox", name="Deleted People collection").click()
     page.get_by_role("option", name="Permanently Deleted Profiles", exact=True).click()

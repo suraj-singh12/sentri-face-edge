@@ -92,6 +92,7 @@ export function PeopleView({
   peopleGalleryImage,
   personGraph,
   onRefresh,
+  onPeopleRefresh,
   onOpen,
   onCreateIdentifiedPerson,
   onOpenGraph,
@@ -140,10 +141,10 @@ export function PeopleView({
   const binCollection = useMemo(() => archivedPeople.filter(isBinned), [archivedPeople]);
   const [, setRecoveryTick] = useState(0);
   const recoveryNow = Date.now();
-  const refreshRef = useRef(onRefresh);
-  useEffect(() => { refreshRef.current = onRefresh; }, [onRefresh]);
+  const peopleRefreshRef = useRef(onPeopleRefresh);
+  useEffect(() => { peopleRefreshRef.current = onPeopleRefresh; }, [onPeopleRefresh]);
   useEffect(() => {
-    if (filter === "bin") refreshRef.current?.();
+    if (filter === "bin") peopleRefreshRef.current?.();
   }, [filter]);
   useEffect(() => {
     if (filter !== "bin") return undefined;
@@ -161,7 +162,7 @@ export function PeopleView({
       timer = window.setTimeout(() => {
         const firedAt = Date.now();
         setRecoveryTick((tick) => tick + 1);
-        if (firedAt >= nextDeadline) refreshRef.current?.();
+        if (firedAt >= nextDeadline) peopleRefreshRef.current?.();
         schedule();
       }, Math.max(100, nextAt - now + (nextAt === nextDeadline ? 100 : 0)));
     };
