@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActionIcon, Alert, AppShell, Avatar, Box, Button, Group, Loader, MantineProvider, Menu, Modal, PasswordInput, Stack, Tabs, Text, Title, Tooltip, UnstyledButton, rem, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
-import { IconAlertTriangle, IconChevronDown, IconDatabaseExport, IconKey, IconLogout, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
+import { IconAlertTriangle, IconBell, IconChevronDown, IconDatabaseExport, IconKey, IconLogout, IconMoon, IconRefresh, IconSun } from "@tabler/icons-react";
 
 import { AuthGate } from "./components/AuthGate.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
@@ -77,6 +77,15 @@ function SentriFaceShell({ user, logout, changePassword }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const canBackups = can("backups");
   const showBackupReminder = canBackups && !licenseRestricted && backupReminderDue(state.lastDataChange, state.backups);
+  const canOpenSettings = visibleViews.includes("debug");
+  const showRecoveryWarning = canOpenSettings && state.profile && !state.profile.recovery_readiness?.ready;
+  const shellNotifications = [
+    showRecoveryWarning ? { color: "red", title: "Your safety copy needs attention", body: "Your latest external backup is not available. The owner can check it under Settings.", action: <Button variant="subtle" color="red" size="compact-xs" onClick={() => actions.setActiveView("debug")}>Settings</Button> } : null,
+    showBackupReminder ? { color: "blue", title: "Backup recommended", body: "You have changes since your last backup.", action: <Button variant="subtle" size="compact-xs" loading={state.backupCreating} onClick={actions.requestBackup}>Back up</Button> } : null,
+    state.profile?.runtime === "dev" ? { color: "yellow", title: "Demo mode", body: "Results are simulated for testing and are not real face matches." } : null,
+    state.profile?.model_usage?.research_only ? { color: "orange", title: "Personal or research use only", body: "The selected model files are not approved here for business or paid use." } : null,
+    state.profile?.index?.degraded_reason ? { color: "yellow", title: "Compatibility mode", body: "Face search is still available, but may be slower than usual." } : null,
+  ].filter(Boolean);
   useEffect(() => {
     if (!canBackups) return undefined;
     const refreshBackups = () => actions.loadBackups({ silent: true, dedupe: false }).catch(() => {});
@@ -118,6 +127,31 @@ function SentriFaceShell({ user, logout, changePassword }) {
                   {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
                 </ActionIcon>
               </Tooltip>
+              {shellNotifications.length ? (
+                <Menu shadow="md" width={360} position="bottom-end" offset={8}>
+                  <Menu.Target>
+                    <ActionIcon variant="subtle" size={36} aria-label={`${shellNotifications.length} notifications`} className="shell-notification-button">
+                      <IconBell size={18} />
+                      <span className="shell-notification-count">{shellNotifications.length}</span>
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown className="shell-notification-popover">
+                    <Menu.Label>Notifications</Menu.Label>
+                    {shellNotifications.map((notice) => (
+                      <Box key={notice.title} className="shell-notification-row" data-color={notice.color}>
+                        <Group align="flex-start" wrap="nowrap" gap="sm">
+                          <IconAlertTriangle size={16} className="shell-notification-icon" aria-hidden="true" />
+                          <Box style={{ flex: 1 }}>
+                            <Text size="xs" fw={800}>{notice.title}</Text>
+                            <Text size="xs" c="dimmed">{notice.body}</Text>
+                          </Box>
+                          {notice.action}
+                        </Group>
+                      </Box>
+                    ))}
+                  </Menu.Dropdown>
+                </Menu>
+              ) : null}
               <Tooltip label="Refresh">
                 <ActionIcon variant="subtle" size={36} onClick={guarded(actions.reloadAppData)} disabled={state.refreshing} aria-label={state.refreshing ? "Refreshing" : "Refresh"}>
                   {state.refreshing ? <Loader size={18} /> : <IconRefresh size={18} />}
@@ -174,41 +208,6 @@ function SentriFaceShell({ user, logout, changePassword }) {
           {licenseRestricted ? (
             <ShellNotice color="orange" title="Activation required">
               Product operations are disabled. License activation, backups, restore, integrity recovery, model prerequisites, and support remain available.
-            </ShellNotice>
-          ) : null}
-          {state.profile && !state.profile.recovery_readiness?.ready ? (
-            <ShellNotice
-              color="red"
-              title="Your safety copy needs attention"
-              action={visibleViews.includes("debug") ? (
-                <Button variant="subtle" color="red" size="compact-xs" onClick={() => actions.setActiveView("debug")}>Settings</Button>
-              ) : null}
-            >
-              Your latest external backup is not available. The owner can check it under Settings.
-            </ShellNotice>
-          ) : null}
-          {showBackupReminder ? (
-            <ShellNotice
-              color="blue"
-              title="You have changes since your last backup"
-              action={<Button variant="subtle" size="compact-xs" loading={state.backupCreating} onClick={actions.requestBackup}>Back up now</Button>}
-            >
-              Back up now so a recent copy of your people, photos and events is safe.
-            </ShellNotice>
-          ) : null}
-          {state.profile?.runtime === "dev" ? (
-            <ShellNotice color="yellow" title="Demo mode is active">
-              Results are simulated for testing and are not real face matches.
-            </ShellNotice>
-          ) : null}
-          {state.profile?.model_usage?.research_only ? (
-            <ShellNotice color="orange" title="Personal or research use only">
-              The selected model files are not approved here for business or paid use.
-            </ShellNotice>
-          ) : null}
-          {state.profile?.index?.degraded_reason ? (
-            <ShellNotice color="yellow" title="Search is using compatibility mode">
-              Face search is still available, but may be slower than usual.
             </ShellNotice>
           ) : null}
         </Stack>

@@ -22,4 +22,9 @@ test("the application keeps warning until the safety copy is ready", () => {
   assert.match(app, /owner can check it under Settings/);
   assert.match(app, /className="shell-notice"/);
   assert.match(app, /actions\.setActiveView\("debug"\)/);
+  assert.match(app, /shellNotifications/);
+  assert.match(app, /canOpenSettings && state\.profile/);
+  assert.match(app, /IconBell/);
+  assert.match(app, /shell-notification-popover/);
+  assert.match(app, /Backup recommended/);
 });
