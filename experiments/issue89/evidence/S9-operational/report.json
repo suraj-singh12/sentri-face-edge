@@ -1,0 +1,867 @@
+{
+ "pending_attach": {
+  "status": 409,
+  "code": "pending_attach_media"
+ },
+ "attach_discard_restores_B": {
+  "db_tables_different": {
+   "init_sessions": [
+    8,
+    9,
+    0,
+    1
+   ],
+   "photo_review_faces": [
+    19,
+    20,
+    0,
+    1
+   ],
+   "photo_review_media": [
+    16,
+    17,
+    0,
+    1
+   ],
+   "photo_reviews": [
+    9,
+    10,
+    0,
+    1
+   ]
+  },
+  "files_equal": false,
+  "files": [
+   37,
+   38,
+   0,
+   1
+  ],
+  "eligibility_equal": true,
+  "api_total": 311,
+  "api_different": [],
+  "api_order_only": [],
+  "recognition_different": [],
+  "integrity": {
+   "A": "PASS",
+   "B": "PASS",
+   "A_findings": [],
+   "B_findings": []
+  }
+ },
+ "unauthorized_viewer": {
+  "status": 403,
+  "code": "permission_denied"
+ },
+ "unauthorized_operator": {
+  "status": 403,
+  "code": "permission_denied"
+ },
+ "unauthorized_technician": {
+  "status": 403,
+  "code": "permission_denied"
+ },
+ "unauthenticated": {
+  "status": 401,
+  "code": "authentication_required"
+ },
+ "stale_revision": {
+  "status": 409,
+  "code": "stale_revision"
+ },
+ "transaction_failure": {
+  "observation_media": "injected failure before deleting observation_media",
+  "observation_media.equal_after_rollback": {
+   "db_tables_different": {},
+   "files_equal": true,
+   "files": [
+    38,
+    38,
+    0,
+    0
+   ],
+   "eligibility_equal": true,
+   "api_total": 311,
+   "api_different": [],
+   "api_order_only": [],
+   "recognition_different": [],
+   "integrity": {
+    "A": "PASS",
+    "B": "PASS",
+    "A_findings": [],
+    "B_findings": []
+   }
+  },
+  "observations": "injected failure before deleting observations",
+  "observations.equal_after_rollback": {
+   "db_tables_different": {},
+   "files_equal": true,
+   "files": [
+    38,
+    38,
+    0,
+    0
+   ],
+   "eligibility_equal": true,
+   "api_total": 311,
+   "api_different": [],
+   "api_order_only": [],
+   "recognition_different": [],
+   "integrity": {
+    "A": "PASS",
+    "B": "PASS",
+    "A_findings": [],
+    "B_findings": []
+   }
+  },
+  "persons": "injected failure before deleting persons",
+  "persons.equal_after_rollback": {
+   "db_tables_different": {},
+   "files_equal": true,
+   "files": [
+    38,
+    38,
+    0,
+    0
+   ],
+   "eligibility_equal": true,
+   "api_total": 311,
+   "api_different": [],
+   "api_order_only": [],
+   "recognition_different": [],
+   "integrity": {
+    "A": "PASS",
+    "B": "PASS",
+    "A_findings": [],
+    "B_findings": []
+   }
+  }
+ },
+ "crash_delete_result_keys": [
+  "candidate_files",
+  "deleted",
+  "embeddings_erased",
+  "embeddings_retained",
+  "graph_validation_ok",
+  "journal_policy",
+  "observation_id",
+  "orphaned_operations",
+  "persons_erased",
+  "persons_retained",
+  "reverted_operations",
+  "session_source_paths"
+ ],
+ "stale_index_recognition": [
+  {
+   "probe": "alder-8",
+   "matches": [
+    [
+     "Alder",
+     0.6636
+    ],
+    [
+     "Juniper Two",
+     0.0812
+    ]
+   ]
+  },
+  {
+   "probe": "birch-8",
+   "matches": [
+    [
+     "Birch",
+     0.6963
+    ],
+    [
+     "Iris",
+     0.0645
+    ]
+   ]
+  },
+  {
+   "probe": "cedar-8",
+   "matches": [
+    [
+     "Cedar",
+     0.4234
+    ],
+    [
+     "Juniper",
+     0.0681
+    ]
+   ]
+  },
+  {
+   "probe": "dogwood-8",
+   "matches": [
+    [
+     "Dogwood",
+     0.6175
+    ],
+    [
+     "Juniper Two",
+     0.1078
+    ]
+   ]
+  },
+  {
+   "probe": "elm-8",
+   "matches": [
+    [
+     "Cedar",
+     0.1302
+    ],
+    [
+     "Alder",
+     0.0824
+    ]
+   ]
+  },
+  {
+   "probe": "fir-8",
+   "matches": [
+    [
+     "Alder",
+     0.1096
+    ],
+    [
+     "Birch",
+     0.1031
+    ]
+   ]
+  },
+  {
+   "probe": "ginkgo-8",
+   "matches": [
+    [
+     "Juniper",
+     0.1291
+    ],
+    [
+     "Juniper Two",
+     0.0747
+    ]
+   ]
+  },
+  {
+   "probe": "hazel-8",
+   "matches": [
+    [
+     "Hazel",
+     0.6339
+    ],
+    [
+     "Birch",
+     0.21
+    ]
+   ]
+  },
+  {
+   "probe": "iris-8",
+   "matches": [
+    [
+     "Iris",
+     0.7192
+    ],
+    [
+     "Alder",
+     0.0698
+    ]
+   ]
+  },
+  {
+   "probe": "juniper-8",
+   "matches": [
+    [
+     "Juniper Two",
+     0.7447
+    ],
+    [
+     "Juniper",
+     0.6373
+    ]
+   ]
+  },
+  {
+   "probe": "kauri-8",
+   "matches": [
+    [
+     "Birch",
+     0.2154
+    ],
+    [
+     "Cedar",
+     0.1182
+    ]
+   ]
+  },
+  {
+   "probe": "laurel-8",
+   "matches": [
+    [
+     "Birch",
+     0.1036
+    ],
+    [
+     "Cedar",
+     0.0817
+    ]
+   ]
+  },
+  {
+   "probe": "maple-8",
+   "matches": [
+    [
+     "Birch",
+     0.1149
+    ],
+    [
+     "Alder",
+     0.1098
+    ]
+   ]
+  },
+  {
+   "probe": "nutmeg-8",
+   "matches": [
+    [
+     "Alder",
+     0.1179
+    ],
+    [
+     "Dogwood",
+     0.0696
+    ]
+   ]
+  }
+ ],
+ "stale_index_has_erased_people": [],
+ "index_vs_db": {
+  "index_backend": {
+   "requested": "hnswlib",
+   "actual": "linear",
+   "degraded_reason": null
+  },
+  "db_embeddings": 16
+ },
+ "after_crash_vs_A": {
+  "db_tables_different": {
+   "app_users": [
+    1,
+    4,
+    1,
+    4
+   ],
+   "auth_audit": [
+    2,
+    11,
+    2,
+    11
+   ],
+   "graph_state": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "operation_journal": [
+    12,
+    15,
+    0,
+    3
+   ],
+   "operation_journal_status_history": [
+    24,
+    32,
+    0,
+    8
+   ]
+  },
+  "files_equal": false,
+  "files": [
+   32,
+   38,
+   0,
+   6
+  ],
+  "eligibility_equal": true,
+  "api_total": 254,
+  "api_different": [],
+  "api_order_only": [
+   "world.connections.CLUSTERS",
+   "world.connections.PEOPLE",
+   "world.connections.cluster[Hazel,Juniper Two].MEMBERS",
+   "world.connections.cluster[Hazel,Juniper Two].RELATIONSHIPS",
+   "world.connections.cluster[Iris,Juniper].MEMBERS",
+   "world.connections.cluster[Iris,Juniper].RELATIONSHIPS",
+   "world.explore-all-1.CLUSTERS",
+   "world.explore-all-1.PEOPLE",
+   "world.explore-all-1.cluster[Hazel,Juniper Two].MEMBERS",
+   "world.explore-all-1.cluster[Hazel,Juniper Two].RELATIONSHIPS",
+   "world.explore-all-1.cluster[Iris,Juniper].MEMBERS",
+   "world.explore-all-1.cluster[Iris,Juniper].RELATIONSHIPS"
+  ],
+  "recognition_different": [],
+  "integrity": {
+   "A": "PASS",
+   "B": "PASS",
+   "A_findings": [],
+   "B_findings": []
+  }
+ },
+ "cleanup_journal_pending": true,
+ "after_restart_vs_A": {
+  "db_tables_different": {
+   "app_users": [
+    1,
+    4,
+    1,
+    4
+   ],
+   "auth_audit": [
+    2,
+    12,
+    2,
+    12
+   ],
+   "graph_state": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "operation_journal": [
+    12,
+    15,
+    0,
+    3
+   ],
+   "operation_journal_status_history": [
+    24,
+    32,
+    0,
+    8
+   ]
+  },
+  "files_equal": true,
+  "files": [
+   32,
+   32,
+   0,
+   0
+  ],
+  "eligibility_equal": true,
+  "api_total": 254,
+  "api_different": [],
+  "api_order_only": [
+   "world.connections.CLUSTERS",
+   "world.connections.PEOPLE",
+   "world.connections.cluster[Hazel,Juniper Two].MEMBERS",
+   "world.connections.cluster[Hazel,Juniper Two].RELATIONSHIPS",
+   "world.connections.cluster[Iris,Juniper].MEMBERS",
+   "world.connections.cluster[Iris,Juniper].RELATIONSHIPS",
+   "world.explore-all-1.CLUSTERS",
+   "world.explore-all-1.PEOPLE",
+   "world.explore-all-1.cluster[Hazel,Juniper Two].MEMBERS",
+   "world.explore-all-1.cluster[Hazel,Juniper Two].RELATIONSHIPS",
+   "world.explore-all-1.cluster[Iris,Juniper].MEMBERS",
+   "world.explore-all-1.cluster[Iris,Juniper].RELATIONSHIPS"
+  ],
+  "recognition_different": [],
+  "integrity": {
+   "A": "PASS",
+   "B": "PASS",
+   "A_findings": [],
+   "B_findings": []
+  }
+ },
+ "cleanup_journal_after_restart": false,
+ "replay_same_operation": {
+  "status": 200,
+  "replayed": true
+ },
+ "repeat_new_operation": {
+  "status": 409,
+  "code": "event_not_found"
+ },
+ "backups": [
+  [
+   "backup_2026-11-26_12-45-35_before-event-delete-0b3a36ec",
+   "before-event-delete-0b3a36ec"
+  ]
+ ],
+ "restore_older_backup": {
+  "status": 200,
+  "x_present": true,
+  "vs_A": {
+   "db_tables_different": {
+    "app_users": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "auth_audit": [
+     2,
+     3,
+     2,
+     3
+    ],
+    "biometric_enrollment_history": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "embeddings": [
+     16,
+     19,
+     16,
+     19
+    ],
+    "encounter_relation_decisions": [
+     9,
+     12,
+     0,
+     3
+    ],
+    "graph_connections": [
+     10,
+     14,
+     0,
+     4
+    ],
+    "graph_state": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "init_faces": [
+     0,
+     1,
+     0,
+     1
+    ],
+    "init_session_media": [
+     0,
+     1,
+     0,
+     1
+    ],
+    "init_sessions": [
+     7,
+     9,
+     0,
+     2
+    ],
+    "note_mentions": [
+     2,
+     3,
+     0,
+     1
+    ],
+    "note_revision_mentions": [
+     2,
+     3,
+     0,
+     1
+    ],
+    "note_revisions": [
+     2,
+     3,
+     0,
+     1
+    ],
+    "notes": [
+     2,
+     3,
+     0,
+     1
+    ],
+    "observation_face_assignments": [
+     15,
+     18,
+     0,
+     3
+    ],
+    "observation_media": [
+     13,
+     15,
+     13,
+     15
+    ],
+    "observation_participants": [
+     15,
+     18,
+     0,
+     3
+    ],
+    "observations": [
+     7,
+     8,
+     0,
+     1
+    ],
+    "operation_journal": [
+     12,
+     15,
+     0,
+     3
+    ],
+    "operation_journal_status_history": [
+     24,
+     30,
+     0,
+     6
+    ],
+    "persons": [
+     9,
+     12,
+     0,
+     3
+    ],
+    "photo_review_faces": [
+     16,
+     20,
+     0,
+     4
+    ],
+    "photo_review_media": [
+     14,
+     17,
+     14,
+     17
+    ],
+    "photo_reviews": [
+     8,
+     10,
+     8,
+     10
+    ],
+    "recognition_details": [
+     15,
+     18,
+     15,
+     18
+    ],
+    "relationship_evidence": [
+     11,
+     15,
+     0,
+     4
+    ]
+   },
+   "files_equal": false,
+   "files": [
+    32,
+    69,
+    0,
+    37
+   ],
+   "eligibility_equal": false,
+   "api_total": 315,
+   "api_different": [
+    "event[Event-X]",
+    "event[Meeting-1]",
+    "event[Meeting-2]",
+    "event[Meeting-3]",
+    "event[Meeting-4]",
+    "event[Meeting-5]",
+    "event[Meeting-6]",
+    "event[Meeting-7]",
+    "events",
+    "events.location[Goa]",
+    "events.pages(limit=2)",
+    "events.search[Goa]",
+    "person[Alder].effective",
+    "person[Alder].events-mentioned",
+    "person[Alder].events-person",
+    "person[Alder].graph",
+    "person[Alder].neighbors",
+    "person[Alder].raw",
+    "person[Alder].relationship-graph",
+    "person[Alder].sightings",
+    "person[Birch].effective",
+    "person[Birch].events-person",
+    "person[Birch].graph",
+    "person[Birch].intelligence",
+    "person[Birch].neighbors",
+    "person[Birch].raw",
+    "person[Birch].relationship-graph",
+    "person[Birch].sightings",
+    "person[Cedar].effective",
+    "person[Cedar].events-person",
+    "person[Cedar].graph",
+    "person[Cedar].neighbors",
+    "person[Cedar].raw",
+    "person[Cedar].relationship-graph",
+    "person[Cedar].sightings",
+    "person[Dogwood].effective",
+    "person[Dogwood].events-person",
+    "person[Dogwood].graph",
+    "person[Dogwood].neighbors",
+    "person[Dogwood].raw",
+    "person[Dogwood].relationship-graph",
+    "person[Dogwood].sightings",
+    "person[Elm].effective",
+    "person[Elm].graph",
+    "person[Elm].neighbors",
+    "person[Elm].raw",
+    "person[Elm].relationship-graph",
+    "person[Fir].effective",
+    "person[Fir].events-mentioned",
+    "person[Fir].events-participant",
+    "person[Fir].events-person",
+    "person[Fir].graph",
+    "person[Fir].intelligence",
+    "person[Fir].neighbors",
+    "person[Fir].raw",
+    "person[Fir].relationship-graph",
+    "person[Fir].sightings",
+    "person[Ginkgo].effective",
+    "person[Ginkgo].events-mentioned",
+    "person[Ginkgo].events-participant",
+    "person[Ginkgo].events-person",
+    "person[Ginkgo].graph",
+    "person[Ginkgo].intelligence",
+    "person[Ginkgo].neighbors",
+    "person[Ginkgo].raw",
+    "person[Ginkgo].relationship-graph",
+    "person[Ginkgo].sightings",
+    "person[Hazel].effective",
+    "person[Hazel].events-person",
+    "person[Hazel].graph",
+    "person[Hazel].neighbors",
+    "person[Hazel].raw",
+    "person[Hazel].relationship-graph",
+    "person[Hazel].sightings",
+    "person[Iris].effective",
+    "person[Iris].events-person",
+    "person[Iris].graph",
+    "person[Iris].neighbors",
+    "person[Iris].raw",
+    "person[Iris].relationship-graph",
+    "person[Iris].sightings",
+    "person[Juniper Two].effective",
+    "person[Juniper Two].events-person",
+    "person[Juniper Two].graph",
+    "person[Juniper Two].neighbors",
+    "person[Juniper Two].raw",
+    "person[Juniper Two].relationship-graph",
+    "person[Juniper Two].sightings",
+    "person[Juniper].effective",
+    "person[Juniper].events-person",
+    "person[Juniper].graph",
+    "person[Juniper].neighbors",
+    "person[Juniper].raw",
+    "person[Juniper].relationship-graph",
+    "person[Juniper].sightings",
+    "person[Kauri].effective",
+    "person[Kauri].events-mentioned",
+    "person[Kauri].events-participant",
+    "person[Kauri].events-person",
+    "person[Kauri].graph",
+    "person[Kauri].intelligence",
+    "person[Kauri].neighbors",
+    "person[Kauri].raw",
+    "person[Kauri].relationship-graph",
+    "person[Kauri].sightings",
+    "persons",
+    "queue-sessions",
+    "world.connections.CLUSTERS",
+    "world.connections.MOST_FREQUENTLY_SEEN[30]",
+    "world.connections.MOST_FREQUENTLY_SEEN[90]",
+    "world.connections.PATTERNS",
+    "world.connections.PEOPLE",
+    "world.connections.RELATIONSHIPS",
+    "world.connections.cluster[Alder,Birch,Cedar,Dogwood,Elm,Fir,Ginkgo,Kauri].MEMBERS",
+    "world.connections.cluster[Alder,Birch,Cedar,Dogwood,Elm,Fir,Ginkgo,Kauri].RELATIONSHIPS",
+    "world.connections.cluster[Alder,Birch,Cedar,Dogwood,Elm].MEMBERS",
+    "world.connections.cluster[Alder,Birch,Cedar,Dogwood,Elm].RELATIONSHIPS",
+    "world.connections.person[Alder].EVENTS",
+    "world.connections.person[Alder].RELATIONSHIPS",
+    "world.connections.person[Birch].EVENTS",
+    "world.connections.person[Birch].RELATIONSHIPS",
+    "world.connections.person[Cedar].EVENTS",
+    "world.connections.person[Cedar].RELATIONSHIPS",
+    "world.connections.person[Dogwood].EVENTS",
+    "world.connections.person[Dogwood].RELATIONSHIPS",
+    "world.connections.person[Elm].EVENTS",
+    "world.connections.person[Elm].RELATIONSHIPS",
+    "world.connections.person[Fir].EVENTS",
+    "world.connections.person[Fir].RELATIONSHIPS",
+    "world.connections.person[Ginkgo].EVENTS",
+    "world.connections.person[Ginkgo].RELATIONSHIPS",
+    "world.connections.person[Kauri].EVENTS",
+    "world.connections.person[Kauri].RELATIONSHIPS",
+    "world.explore-all-1.CLUSTERS",
+    "world.explore-all-1.MOST_FREQUENTLY_SEEN[30]",
+    "world.explore-all-1.MOST_FREQUENTLY_SEEN[90]",
+    "world.explore-all-1.PATTERNS",
+    "world.explore-all-1.PEOPLE",
+    "world.explore-all-1.RELATIONSHIPS",
+    "world.explore-all-1.cluster[Alder,Birch,Cedar,Dogwood,Elm,Fir,Ginkgo,Kauri].MEMBERS",
+    "world.explore-all-1.cluster[Alder,Birch,Cedar,Dogwood,Elm,Fir,Ginkgo,Kauri].RELATIONSHIPS",
+    "world.explore-all-1.cluster[Alder,Birch,Cedar,Dogwood,Elm].MEMBERS",
+    "world.explore-all-1.cluster[Alder,Birch,Cedar,Dogwood,Elm].RELATIONSHIPS",
+    "world.explore-all-1.event[Event-X].EVIDENCE",
+    "world.explore-all-1.event[Event-X].MEDIA",
+    "world.explore-all-1.event[Event-X].PARTICIPANTS",
+    "world.explore-all-1.event[Event-X].PROVENANCE",
+    "world.explore-all-1.event[Meeting-1].MEDIA",
+    "world.explore-all-1.event[Meeting-2].MEDIA",
+    "world.explore-all-1.event[Meeting-3].MEDIA",
+    "world.explore-all-1.event[Meeting-4].MEDIA",
+    "world.explore-all-1.event[Meeting-5].MEDIA",
+    "world.explore-all-1.event[Meeting-6].MEDIA",
+    "world.explore-all-1.event[Meeting-7].MEDIA",
+    "world.explore-all-1.person[Alder].EVENTS",
+    "world.explore-all-1.person[Alder].RELATIONSHIPS",
+    "world.explore-all-1.person[Birch].EVENTS",
+    "world.explore-all-1.person[Birch].RELATIONSHIPS",
+    "world.explore-all-1.person[Cedar].EVENTS",
+    "world.explore-all-1.person[Cedar].RELATIONSHIPS",
+    "world.explore-all-1.person[Dogwood].EVENTS",
+    "world.explore-all-1.person[Dogwood].RELATIONSHIPS",
+    "world.explore-all-1.person[Elm].EVENTS",
+    "world.explore-all-1.person[Elm].RELATIONSHIPS",
+    "world.explore-all-1.person[Fir].EVENTS",
+    "world.explore-all-1.person[Fir].RELATIONSHIPS",
+    "world.explore-all-1.person[Ginkgo].EVENTS",
+    "world.explore-all-1.person[Ginkgo].RELATIONSHIPS",
+    "world.explore-all-1.person[Kauri].EVENTS",
+    "world.explore-all-1.person[Kauri].RELATIONSHIPS",
+    "world.explore-all-1.relationship[3dd010e3-da9d-507a-8aa8-9173aeb4356d|5f771d01-54f9-5908-b7a5-0e554c492459].EVIDENCE",
+    "world.explore-all-1.relationship[5f771d01-54f9-5908-b7a5-0e554c492459|9308c440-c131-577b-a8f1-bb9524d448e1].EVIDENCE",
+    "world.explore-all-1.relationship[5f771d01-54f9-5908-b7a5-0e554c492459|cb485316-85b3-5be4-9ab1-55963a2b3b9f].EVIDENCE",
+    "world.explore-all-1.relationship[9308c440-c131-577b-a8f1-bb9524d448e1|cb485316-85b3-5be4-9ab1-55963a2b3b9f].EVIDENCE",
+    "world.explore.CLUSTERS",
+    "world.explore.MOST_FREQUENTLY_SEEN[30]",
+    "world.explore.MOST_FREQUENTLY_SEEN[90]",
+    "world.explore.PATTERNS",
+    "world.explore.PEOPLE",
+    "world.explore.RELATIONSHIPS",
+    "world.explore.person[Fir].EVENTS",
+    "world.explore.person[Fir].RELATIONSHIPS",
+    "world.explore.person[Ginkgo].EVENTS",
+    "world.explore.person[Ginkgo].RELATIONSHIPS",
+    "world.explore.person[Kauri].EVENTS",
+    "world.explore.person[Kauri].RELATIONSHIPS"
+   ],
+   "api_order_only": [],
+   "recognition_different": [
+    "linear.quality_only=True",
+    "linear.quality_only=False",
+    "hnsw.quality_only=True",
+    "hnsw.quality_only=False"
+   ],
+   "integrity": {
+    "A": "PASS",
+    "B": "PASS",
+    "A_findings": [],
+    "B_findings": []
+   }
+  }
+ }
+}

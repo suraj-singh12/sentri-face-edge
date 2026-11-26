@@ -1,0 +1,80 @@
+{
+ "1-people": {
+  "identical_text": false,
+  "diff": [
+   "-0",
+   "+3",
+   "-01:50 PM",
+   "+01:51 PM"
+  ]
+ },
+ "2-person": {
+  "identical_text": true,
+  "diff": []
+ },
+ "3-events": {
+  "identical_text": false,
+  "diff": [
+   "+Event-X",
+   "+Ordinary / small",
+   "+2026-05-20 \u00b7 Time unknown \u00b7 Goa",
+   "+Participants: Fir, Ginkgo, Kauri",
+   "+Mentioned: Alder",
+   "+3 participants \u00b7 2 media \u00b7 1 mention"
+  ]
+ },
+ "4-world-explore": {
+  "identical_text": true,
+  "diff": []
+ },
+ "5-world-connections": {
+  "identical_text": false,
+  "diff": [
+   "-Nov 26, 01:50 PM",
+   "+Nov 26, 01:51 PM",
+   "+12",
+   "+Effective people",
+   "-Effective people",
+   "-8",
+   "-Page 1 \u00b7 9 of 9",
+   "+Page 1 \u00b7 12 of 12",
+   "-9",
+   "+12",
+   "+Fir",
+   "+ENROLLED",
+   "+1",
+   "+events",
+   "+0",
+   "+relations",
+   "+0",
+   "+evidence",
+   "+DELETED",
+   "+Ginkgo",
+   "+ENROLLED",
+   "+1",
+   "+events",
+   "+0",
+   "+relations",
+   "+0",
+   "+evidence",
+   "+DELETED",
+   "+Kauri",
+   "+ENROLLED",
+   "+1",
+   "+events",
+   "+0",
+   "+relations",
+   "+0",
+   "+evidence",
+   "+DELETED"
+  ]
+ },
+ "6-check-a-photo": {
+  "identical_text": true,
+  "diff": []
+ },
+ "_page_errors": {
+  "identical_text": true,
+  "diff": []
+ }
+}

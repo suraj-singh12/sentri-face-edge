@@ -1,0 +1,1510 @@
+{
+ "source": "LFW funneled (local research copy, not committed)",
+ "detector": "buffalo_s det_500m.onnx",
+ "recognizer": "buffalo_s w600k_mbf.onnx",
+ "max_cross_identity_similarity": 0.1906,
+ "identities": [
+  "Alder",
+  "Birch",
+  "Cedar",
+  "Dogwood",
+  "Elm",
+  "Fir",
+  "Ginkgo",
+  "Hazel",
+  "Iris",
+  "Juniper",
+  "Kauri",
+  "Laurel",
+  "Maple",
+  "Nutmeg"
+ ],
+ "photos": {
+  "alder-0": {
+   "file": "alder-0.jpg",
+   "sha256": "e5a7e81053483a3551eddb8e30f433f948f031b7a8ee10b53dfe30c012f7d29d",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-1": {
+   "file": "alder-1.jpg",
+   "sha256": "36c21ba5c1972f6691cd15ccfceb09ef29db81e07b053589411be8a79c977f93",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-2": {
+   "file": "alder-2.jpg",
+   "sha256": "be5934a8d5978488e1b444c3ac29fbff1f10dafc5f2a7acd74ab0b35df4576a3",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-3": {
+   "file": "alder-3.jpg",
+   "sha256": "89dfc0609a4c35afddb53ba4cae6905a60b1703a13739208c56835e4e014b9db",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-4": {
+   "file": "alder-4.jpg",
+   "sha256": "cc007e43ac624a2acf1c68dfb948b4db17399acfa39cf0ec5c227401338c4e8a",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-5": {
+   "file": "alder-5.jpg",
+   "sha256": "f99b9023c0b86caa713fe333224af9fb7093a8f269e7b0426c18c1bf880a8e3c",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-6": {
+   "file": "alder-6.jpg",
+   "sha256": "d677aea73b489237a4c937a4bfdf67ca5db1df4080ad41dfdd09a60045277fd0",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-7": {
+   "file": "alder-7.jpg",
+   "sha256": "9b3aef5b9ac3d97be0110329f89286e142a962cfeaed88537253565f34bdab8c",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-8": {
+   "file": "alder-8.jpg",
+   "sha256": "fbf9787275ab9aa3a5b4bdc96a6220be2202981fd562fe99c525d32d21945eb6",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-9": {
+   "file": "alder-9.jpg",
+   "sha256": "27780f3358e4ba6d52229b8b051b27141d60f3e7f2fe2cf2d518e44f6d5bb57b",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-0": {
+   "file": "birch-0.jpg",
+   "sha256": "c33ee4872af925c4f6697d183021ed73380496c7718eefd3f54d596d52f4ab66",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-1": {
+   "file": "birch-1.jpg",
+   "sha256": "a94d4f439625ac0b606d91bf21ab1b9f4ac783b41e8d3647c14ac016616145e8",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-2": {
+   "file": "birch-2.jpg",
+   "sha256": "457456442b7713adef57126d2349874842eb4834c97032e7ecec11231a4f0b29",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-3": {
+   "file": "birch-3.jpg",
+   "sha256": "adb5bfac30295982b290fba1eca7467e651ba8f3ac350e65e5066cece3379a9d",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-4": {
+   "file": "birch-4.jpg",
+   "sha256": "55e6c22205547e66da215c48e7a02c4b4a3214e47c9656378e149593bb31086f",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-5": {
+   "file": "birch-5.jpg",
+   "sha256": "f478ef1082f1450bdb373230a938abfb800c83568bc5ff6ad772226ac76e5175",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-6": {
+   "file": "birch-6.jpg",
+   "sha256": "9d9fb0e7d3cb0ccb8a6f162163bf629c50975f9a30e82ee2cc878240cc2500dc",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-7": {
+   "file": "birch-7.jpg",
+   "sha256": "b148fb3ee9a72981ad1248b414c40e17e4d7d69d46a0d0aa1ed53ffe9315de4c",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-8": {
+   "file": "birch-8.jpg",
+   "sha256": "2f29c8688082dfcda4cc58f747644a5643b843c052eb6a3f9105e548f266c18d",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "birch-9": {
+   "file": "birch-9.jpg",
+   "sha256": "3bd14516cb0fa82ebdd34c796b8c541e91bf586bdfa55dd7b740a2146dadd4de",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-0": {
+   "file": "cedar-0.jpg",
+   "sha256": "23446c3c9528d447534dfffbbbb18cf55b037b2cfdfdca99148be215cb5a297a",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-1": {
+   "file": "cedar-1.jpg",
+   "sha256": "6abeaa18da2830d82bafc61cbc00c24a9f5e518fa1a01b4ce373dae0595f32ec",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-2": {
+   "file": "cedar-2.jpg",
+   "sha256": "cf9dd0c7637fd4096ca3cfafe186e646b4ad5090c6f95f33abc8dd2f21347aea",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-3": {
+   "file": "cedar-3.jpg",
+   "sha256": "f14fa3227a0c05279ab702cb9921672b3f86b7d90419d925c8649d39ab5d000e",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-4": {
+   "file": "cedar-4.jpg",
+   "sha256": "e64baf8d438de893333ee888697e9c8daa4f82ac222f6f559b8e009b1666a132",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-5": {
+   "file": "cedar-5.jpg",
+   "sha256": "c8b6ac31ae84c960e19e7fad8b5b4a229c4fd164a83c6e4f30f64d5c555086a9",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-6": {
+   "file": "cedar-6.jpg",
+   "sha256": "902ae55e8625707e8eac50e9b11d72efeb87f89f746a08cf612bb8c07456283a",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-7": {
+   "file": "cedar-7.jpg",
+   "sha256": "5bf5183ceb4c0da22aed0a7f482cf85ec282f8a11644f6447d6f5e1a2c0e7b43",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-8": {
+   "file": "cedar-8.jpg",
+   "sha256": "54d98d50ab93229a81e14d77a52576bfb45f306a841ec56dee92903308d91669",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "cedar-9": {
+   "file": "cedar-9.jpg",
+   "sha256": "56a602d9e1dd1b216e08549cf0519e73b736a97e095a03a3a516f552d71b3879",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-0": {
+   "file": "dogwood-0.jpg",
+   "sha256": "bf7951785bb3aa7ef8dd6e1440bf592ce1ff20d22e62ac72f23d4c5a7824618b",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-1": {
+   "file": "dogwood-1.jpg",
+   "sha256": "5242d8db1f731ed604d9d7a2359b179c7355d4f569c56918530b42c5b84b8445",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-2": {
+   "file": "dogwood-2.jpg",
+   "sha256": "f16f3007e254ff19e4da1c3d95764d60f67311cf53a184da3a25d884d58fe0ea",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-3": {
+   "file": "dogwood-3.jpg",
+   "sha256": "49c53e97ab45ee31b0e40ba406214bf0b98694523b69c99fb6bc79e87a6e6eec",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-4": {
+   "file": "dogwood-4.jpg",
+   "sha256": "71f1924f898ba80fbeb1d1dc1c1bdbaef34aec3491e94828fbfedd96afca37ea",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-5": {
+   "file": "dogwood-5.jpg",
+   "sha256": "5a5337aaa0d6a3261e4397953cc13583ea8d07d483fef094f59973ed1fd8f8b2",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-6": {
+   "file": "dogwood-6.jpg",
+   "sha256": "644f8d19ddaa2348ff808088464de1fc1b858f0a11cfe6e1dbeedd7bec8b8f81",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-7": {
+   "file": "dogwood-7.jpg",
+   "sha256": "8e6af95286bba6b907db24d552e6c5a6fcb2e2377e58eb112dc10495f6bd724d",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-8": {
+   "file": "dogwood-8.jpg",
+   "sha256": "688ad8d86954732816115b7cb2c92066a7f3563dbcedd087aa742acf7a3186ee",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "dogwood-9": {
+   "file": "dogwood-9.jpg",
+   "sha256": "5e9d4c4e8e7aab63ac3d0dfcda767f7ef9a8bb6236ea76c838d5c83f1db0cbc3",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-0": {
+   "file": "elm-0.jpg",
+   "sha256": "4a123fb361e189989bd0be6cf2bdae9584dc333d7d1c51b409c3d0bc57996476",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-1": {
+   "file": "elm-1.jpg",
+   "sha256": "f899ed6f62367dbf07c850fe9d57fc3ebceef8171e46b4c95560d036d1ee0d4f",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-2": {
+   "file": "elm-2.jpg",
+   "sha256": "51301127e9bbbd00096a2eea5a4875bbfc402f1329951e79b979b3a0ba59ace8",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-3": {
+   "file": "elm-3.jpg",
+   "sha256": "55a127a2835607b28d9768a65a9e5619e8a1668b44e84c3854208162ac9ccad7",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-4": {
+   "file": "elm-4.jpg",
+   "sha256": "9a3b28f270eb9a0d4e74a09ea783da92800ba89ae46a7765d9a0779e69eb11f5",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-5": {
+   "file": "elm-5.jpg",
+   "sha256": "9362c5abb49d8735f99cfffa49073e0c95e80be476af045ada6ab54dece06712",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-6": {
+   "file": "elm-6.jpg",
+   "sha256": "2103bbbb9befff8fbb8048d5db2e9c05da067eeee878a5c0cfd9fa86d825bc7c",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-7": {
+   "file": "elm-7.jpg",
+   "sha256": "d63068a72a940919fe684f01185ae0072b68740c66455d001679cce8e716f542",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-8": {
+   "file": "elm-8.jpg",
+   "sha256": "c34c458daf4469d16c6771d9ea40a01139f12f6c2ffb52fd750f976028eb2bd0",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "elm-9": {
+   "file": "elm-9.jpg",
+   "sha256": "103f52ee55a7355d316693540843b84f70a2f8e375f3a62cd000c883b565c290",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-0": {
+   "file": "fir-0.jpg",
+   "sha256": "17fb3a8a14f7f2a2c3adb6bbbc24a5f9cb09f7c21f542c2edd2128ae421d21d8",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-1": {
+   "file": "fir-1.jpg",
+   "sha256": "02fb20361d1c267d1667c2d6c1f70262f8e070311ceded9cb19eb6da867539b5",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-2": {
+   "file": "fir-2.jpg",
+   "sha256": "067a83152da84a2c118d7e7f976a0eadee266277d7ac7e47f0e65dd175a0967a",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-3": {
+   "file": "fir-3.jpg",
+   "sha256": "0710f6bf0e48d12b484d6e5414cbf96c559f4f4db50959bc59b7720a31dcc6e3",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-4": {
+   "file": "fir-4.jpg",
+   "sha256": "96f7f4b2530d1ce1197b31194636a7771081d381096e9e9f9cbd0d54974adfed",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-5": {
+   "file": "fir-5.jpg",
+   "sha256": "67e8a2043da25c6ca8c6f6c1dcec8c51d93890f6ad30829255835efc822c1f5e",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-6": {
+   "file": "fir-6.jpg",
+   "sha256": "cd811492a4426aa1b15ec5a0102ca589b067ebc12347ac949915d8359290baac",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-7": {
+   "file": "fir-7.jpg",
+   "sha256": "75cf9fc96605131e1783ab4e99d1cf1279c3106edc1481cd2c913353a9bb4cdc",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-8": {
+   "file": "fir-8.jpg",
+   "sha256": "5e2626954daaaf95d617b8c27f410227154e02c5f3741c3dd61fafc4b3fb59ff",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "fir-9": {
+   "file": "fir-9.jpg",
+   "sha256": "6404fc84020c51a05971aaccd72e0f9c9aa99ea36ba63c5c410ed468b063d8fa",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-0": {
+   "file": "ginkgo-0.jpg",
+   "sha256": "b978b96a11f1ba744f8a7d3bd794e56f1145d57366ffeac56e63013e62cecfd3",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-1": {
+   "file": "ginkgo-1.jpg",
+   "sha256": "fd9050c14034252952a067f4a984f7cd45fe045458f824ddcd775d4c44b972c1",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-2": {
+   "file": "ginkgo-2.jpg",
+   "sha256": "94968744e7d15106c57d87ca3f4b0957d8f26242804e3b288353117c91ab8964",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-3": {
+   "file": "ginkgo-3.jpg",
+   "sha256": "f2b7f3b11eb45fc21c40449e7636d3348784884f3dcd2c60974b08674dc9aff0",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-4": {
+   "file": "ginkgo-4.jpg",
+   "sha256": "486cc3c9126fbe1d0e84c0b910795b823cd0168ef51fc0b2f25d668ffd024815",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-5": {
+   "file": "ginkgo-5.jpg",
+   "sha256": "29d80b5279ea7bded541d443ae516413dc33e580bb0e3c86c24b53dd26caf031",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-6": {
+   "file": "ginkgo-6.jpg",
+   "sha256": "4b9e10eb858fe84a0d6209c88944622a10ebd524818cea87a18c092a9f4d4223",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-7": {
+   "file": "ginkgo-7.jpg",
+   "sha256": "0364aa116307db2ef5c3e8b25c734802b5eff73fda8efedd48622aea7d10af23",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-8": {
+   "file": "ginkgo-8.jpg",
+   "sha256": "18f65156020f5f97ee8ca161df0a4d8ab732be497ca7b9813c7cca4ebb425475",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "ginkgo-9": {
+   "file": "ginkgo-9.jpg",
+   "sha256": "7ebc4925a9012f45eb6ccc6fca8d3f97031a5509ac48e06eb57609ff88a6a978",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-0": {
+   "file": "hazel-0.jpg",
+   "sha256": "24e2b892ffa6cdd66ac66ab04e009399d3f93e8e14444c433bda0c30085ed219",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-1": {
+   "file": "hazel-1.jpg",
+   "sha256": "614f62be7911079f9e6e9547ba73818bce98c8435bb4f63d4e51be1d59e98c9e",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-2": {
+   "file": "hazel-2.jpg",
+   "sha256": "b092cb4539f2cd2dfaabbb8caf4912a4b30da5855ae9eed9f506134d9a93e1c6",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-3": {
+   "file": "hazel-3.jpg",
+   "sha256": "ef0e081a0147f7af49228cec8c766d0e3fe98d745e277d4dced7b7c910592644",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-4": {
+   "file": "hazel-4.jpg",
+   "sha256": "764d6d5cf207d16c57e472285c155e7c93a48c9c8d0e3577a6153b25b150261f",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-5": {
+   "file": "hazel-5.jpg",
+   "sha256": "3ee94ee0f3a2181673533301673cfd5fb05ad1e6172f8d75d3d137062a8ad4e0",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-6": {
+   "file": "hazel-6.jpg",
+   "sha256": "fd490b104d8838081df0428addc19e4d804089343c5ffeff27d63d6a21339c3d",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-7": {
+   "file": "hazel-7.jpg",
+   "sha256": "dadb8a7f406a1da068b51d4b05ecbe8d43d826cbcac67c64fcc08be921ab24b0",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-8": {
+   "file": "hazel-8.jpg",
+   "sha256": "39f798dbbb2180f3445a3bff512fe47df87e41f5a224dbd4bd170e804715915a",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "hazel-9": {
+   "file": "hazel-9.jpg",
+   "sha256": "cbc0576cb7f074619bc9c642ff4d3996148ee634d5ac3e5295aef513a4ada455",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-0": {
+   "file": "iris-0.jpg",
+   "sha256": "0ee535ffde030ad7a4aa2b818f44971be84818a0fbece9172eefce459d4143d4",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-1": {
+   "file": "iris-1.jpg",
+   "sha256": "a2111e0cd538ae488e5336624d958f680d3a6c5877fbf7328a1fe4356f5cbc17",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-2": {
+   "file": "iris-2.jpg",
+   "sha256": "23c92eec59d0586719a2152b301e53653ec66eb7a32cf833e237bc3e9ab7d124",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-3": {
+   "file": "iris-3.jpg",
+   "sha256": "37d0ee222fe6d7a826891218e2bea486e67d92eca60fbb73d88de75d4e254e1e",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-4": {
+   "file": "iris-4.jpg",
+   "sha256": "66fd56ca65967b44f9e605685703c5ea82725d24dcd171d92de2f1c1a634e7d6",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-5": {
+   "file": "iris-5.jpg",
+   "sha256": "d7f40f3b2a1a335e2e8ba636887da7a9292c638cef89f1832a2a03ab5357b11c",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-6": {
+   "file": "iris-6.jpg",
+   "sha256": "c7a2866fa61d841f9800859d72c8e7e789fe75f97b5991ab15cb531b7f33b0f7",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-7": {
+   "file": "iris-7.jpg",
+   "sha256": "0e387cfaadd843fbf9ddf657d251c122a5a74e4e6401cc64aec628c0861fc020",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-8": {
+   "file": "iris-8.jpg",
+   "sha256": "4ecf612941efb55404eec86632a6e0cc03e511608839fff6ea166d87b40cdb66",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "iris-9": {
+   "file": "iris-9.jpg",
+   "sha256": "16857facf04e30d2b26469a6d7f9d73a5c4c9f3713318a0b4f2c8be8b2597000",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-0": {
+   "file": "juniper-0.jpg",
+   "sha256": "93c401b8c85d1049acc7b9c73b07c2fe81a0a7ed4de8d4691a2d392da8f320aa",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-1": {
+   "file": "juniper-1.jpg",
+   "sha256": "fe23f4e1208fd87071262845961b4810baede8b08b1accdb9134bace3afda3b6",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-2": {
+   "file": "juniper-2.jpg",
+   "sha256": "9a9b3d4e46c3fa56e1afa11cd7cd111368cdf704a29aebe29f9ba7e0b2735358",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-3": {
+   "file": "juniper-3.jpg",
+   "sha256": "4866ec7e94883182c17d9e0977623184b5dbcaf0528906a335529840bfb61d02",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-4": {
+   "file": "juniper-4.jpg",
+   "sha256": "57f7c753641ae783b490e6f6251f4d0321f91dc668a487107861320833e42408",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-5": {
+   "file": "juniper-5.jpg",
+   "sha256": "4279670625fb820d730e9229b27c96a0c45ada63db221eeca3df2770ba6871e0",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-6": {
+   "file": "juniper-6.jpg",
+   "sha256": "d6aa5dfcacd2cbe95cdf4424d8e0d40b7be9e06c99583d0e71e57f01b361e2a6",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-7": {
+   "file": "juniper-7.jpg",
+   "sha256": "6ec4135f30de641e816ae09c5c93cf1a1783be159421e1be4381a7054d080dee",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-8": {
+   "file": "juniper-8.jpg",
+   "sha256": "4b9a82ba6414e2e0f0684f649dac8585106c8ddaa7b15edc47e52d2fdfec9e8a",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "juniper-9": {
+   "file": "juniper-9.jpg",
+   "sha256": "c663594e8a2aeae3de76cdd158e34c8e503f23042c908b7d090948de95f9b9e7",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-0": {
+   "file": "kauri-0.jpg",
+   "sha256": "64a76676be400a72dc32d8015e096ce1338de6ff223cf1d8c3bf1d5d4a9422c9",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-1": {
+   "file": "kauri-1.jpg",
+   "sha256": "7b882d4fa7a9cda36d5d669a744f3fa3bc29f0ec27b782c7d4dd791da773c4cd",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-2": {
+   "file": "kauri-2.jpg",
+   "sha256": "1c10813341b94b3413ac00d8687509c619490dcb873ead5bf32f33e89acbe8da",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-3": {
+   "file": "kauri-3.jpg",
+   "sha256": "e8ecc3ac03979c8c4cc64483fc01b56e5ea6d54fe5c497643680813ad90d30aa",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-4": {
+   "file": "kauri-4.jpg",
+   "sha256": "8ec325eaa004341ceb86042c2c5f91b528843f52daa493bd98bc60117b4cde37",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-5": {
+   "file": "kauri-5.jpg",
+   "sha256": "210af86353e9093bfb05b5a94b87d28b9f3874905e260ef5b75ae48f63119222",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-6": {
+   "file": "kauri-6.jpg",
+   "sha256": "22c90e3b3e1386e56816f8bb5926b3778e68fc7daa1f81cb0f9b80ea29a8c8ec",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-7": {
+   "file": "kauri-7.jpg",
+   "sha256": "1aa8cd23238cede6c357fe17b13c958c8c1a3bf5bf631c517e0fe8cd04ebf1f8",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-8": {
+   "file": "kauri-8.jpg",
+   "sha256": "1325ff7af5dfe0268eac7b8f26557fb5eefef395985b103dc623ca168fa89c34",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "kauri-9": {
+   "file": "kauri-9.jpg",
+   "sha256": "71d7d1d3040192ddf68ea63cbdc7692eb38a9c7ef3fe206a3ae3c169f7179ddd",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-0": {
+   "file": "laurel-0.jpg",
+   "sha256": "d884aa2883bfb0c56a25a76eccda4904e7ed0f752c56abb3c09371fa371f2407",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-1": {
+   "file": "laurel-1.jpg",
+   "sha256": "fe6396a9b4a7ef8b0b114eb902193d19aad68b7cb4ca0720a39599d2fe6e3c78",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-2": {
+   "file": "laurel-2.jpg",
+   "sha256": "159f3c4d01e7cb9a2d80c8d85baa0994dcb792b874c29a6ce3b8afab94332b0c",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-3": {
+   "file": "laurel-3.jpg",
+   "sha256": "9be4259a5280a3fdf65dcb2bcc4db8be32cd17ba51d6f9aedf941ed9d8e54b8c",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-4": {
+   "file": "laurel-4.jpg",
+   "sha256": "376135f0451275abc9198cd35179c5b183b63a8623e91c86b5706923f6a8d9b7",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-5": {
+   "file": "laurel-5.jpg",
+   "sha256": "07a332ecc0809911439bb2992998c91b9a9006fd5235f60b80a4a8dfc3058f40",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-6": {
+   "file": "laurel-6.jpg",
+   "sha256": "be7000515130d24750994cd223fa77cd1cf6b72e0103059ae2762b7f35efbe0c",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-7": {
+   "file": "laurel-7.jpg",
+   "sha256": "55f73a42072a83a4a3b9467e7f5340802288f3d80052b4d68378c01e1dde001d",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-8": {
+   "file": "laurel-8.jpg",
+   "sha256": "9a90d84c598ca17e77590e4414514bb836f6cd9d4e188b7a15fd38879cf1d412",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "laurel-9": {
+   "file": "laurel-9.jpg",
+   "sha256": "5efe12b39432a0e020f9ce5943f9530489976df93f00df62261749e285a07194",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-0": {
+   "file": "maple-0.jpg",
+   "sha256": "5fe54661eb44e80851d75bccfa6b637a71eb1280993aee3928ea6d10001b1c9e",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-1": {
+   "file": "maple-1.jpg",
+   "sha256": "4f1a5a8a489d2744f947654481ff801b9036fb76083601bf0ac7c3ccbd00f802",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-2": {
+   "file": "maple-2.jpg",
+   "sha256": "72b470c62d993d9cb0976615cee886a23e0a7be52ddee288892f7e9c6865ea9c",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-3": {
+   "file": "maple-3.jpg",
+   "sha256": "755556dee7f57b49460158e22afad42229e85a3822eb0d73ea2320a317aa507d",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-4": {
+   "file": "maple-4.jpg",
+   "sha256": "e70bbf6f47ab9642017b483cfaece381de17813e2a96d196bbb9ef772dcc601c",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-5": {
+   "file": "maple-5.jpg",
+   "sha256": "e1f14058ca7a4028a6a0833fd689659063ad9643a36ca2dd2fc0c313727a3e27",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-6": {
+   "file": "maple-6.jpg",
+   "sha256": "4da91161538b3efc97178711bed2eb043e7ba0bf0cf6878a77235e944bce7435",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-7": {
+   "file": "maple-7.jpg",
+   "sha256": "7455a34274d1f0b25f141049d37593ffa01c4e4b75828b2ac516d3c484976c8f",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-8": {
+   "file": "maple-8.jpg",
+   "sha256": "fd354803533030a7a7df5f8b8362f65104690b29fbcb9bef17b03f27a5333c81",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "maple-9": {
+   "file": "maple-9.jpg",
+   "sha256": "91bb14dfd0ac9f63c2b0f0520418f3e1ce9cf538d867600957f98dd89fcb22a2",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-0": {
+   "file": "nutmeg-0.jpg",
+   "sha256": "66095e2dddeeca7148f0a10513a0116fe1d661c01841ba4d7fc52867bae742ff",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-1": {
+   "file": "nutmeg-1.jpg",
+   "sha256": "85bbda831ef219928c0bbbfd0f313585d4e51607382307959dc8e38765faf334",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-2": {
+   "file": "nutmeg-2.jpg",
+   "sha256": "9f283c6132a0b9c2c013cf3a5b4e48c6f6ad334f1e763f8a09ea445d6ac49571",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-3": {
+   "file": "nutmeg-3.jpg",
+   "sha256": "8947e114b6e45d4fa9dc85142b69f0cc7c6012f916e47f8300b5b4a8e3ce7bbd",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-4": {
+   "file": "nutmeg-4.jpg",
+   "sha256": "d55a60b01dd26b1bb8300ee38ccfa2e99ab7f29fb0b1e0828626ea336af8ae67",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-5": {
+   "file": "nutmeg-5.jpg",
+   "sha256": "66e414e4dc3d36a3063dec1f1ea58fc2d3d84f8408800d6e780be9f9b2e97e7d",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-6": {
+   "file": "nutmeg-6.jpg",
+   "sha256": "d678114376f12f2ed62d36729457df380abdf9b791d0baa272b84b39251d1499",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-7": {
+   "file": "nutmeg-7.jpg",
+   "sha256": "b14ff09f113c15dbe05b1a3fda3e0f031686bc456caf53c9e3542c144317ff99",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-8": {
+   "file": "nutmeg-8.jpg",
+   "sha256": "777715395a4d2fa6fffe3217ea75ea1b7d95aab3dca0b2bbdc2895ebf1520de1",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "nutmeg-9": {
+   "file": "nutmeg-9.jpg",
+   "sha256": "15f83bffb459076a7951eef299df30cb3542f3b0db1750dc00831d605f9d9ecc",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "single",
+   "detected": 1
+  },
+  "alder-blur": {
+   "file": "alder-blur.jpg",
+   "sha256": "2f2e7b4c62c174fb2b4909820bd8dfff5ab7b75acdcc209dfa4614cb29b7c4e3",
+   "faces": [
+    "Alder"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "birch-blur": {
+   "file": "birch-blur.jpg",
+   "sha256": "814a1eb522577aea42c93172d28b07f9d11284a4db988995d378d9d365e39f6c",
+   "faces": [
+    "Birch"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "cedar-blur": {
+   "file": "cedar-blur.jpg",
+   "sha256": "3917223069ef177bf7976b7b7e004f64101bb51a292dc695fccb14d729044761",
+   "faces": [
+    "Cedar"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "dogwood-blur": {
+   "file": "dogwood-blur.jpg",
+   "sha256": "50875f91cec6150aa7525de854ffd48c76cddae2c0e8f4dda885c0f7c51ab8ae",
+   "faces": [
+    "Dogwood"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "elm-blur": {
+   "file": "elm-blur.jpg",
+   "sha256": "67fe6a69dc4dd1ca4a8d3392915620b2fc807128addecc72b6c8768c731fe176",
+   "faces": [
+    "Elm"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "fir-blur": {
+   "file": "fir-blur.jpg",
+   "sha256": "23483cbb063a5e2afbd834b866a4ed19c57c83cfbedf23db89ed5f91e0191b12",
+   "faces": [
+    "Fir"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "ginkgo-blur": {
+   "file": "ginkgo-blur.jpg",
+   "sha256": "90b844f4b2c0a83df69a5789b639e22ac08e1146b7a982d793b099ff68e8d67c",
+   "faces": [
+    "Ginkgo"
+   ],
+   "kind": "blurred",
+   "detected": 0
+  },
+  "hazel-blur": {
+   "file": "hazel-blur.jpg",
+   "sha256": "288c11a69a3c30723b12bf58fbf2a7a1f7ea42da37d2911e46ed545e94527335",
+   "faces": [
+    "Hazel"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "iris-blur": {
+   "file": "iris-blur.jpg",
+   "sha256": "a520b701e7d504897d06a15b16c252183aa7e153899c14685be29d939f33bcc0",
+   "faces": [
+    "Iris"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "juniper-blur": {
+   "file": "juniper-blur.jpg",
+   "sha256": "c69b3d3b5af523e847d8e4fd10b6a8b513b2b55780084f823c79ebea3bdb1f08",
+   "faces": [
+    "Juniper"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "kauri-blur": {
+   "file": "kauri-blur.jpg",
+   "sha256": "7333de73e8a4dba4faad56047edea6b67c6791b92cc12c700e37cb519979ed53",
+   "faces": [
+    "Kauri"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "laurel-blur": {
+   "file": "laurel-blur.jpg",
+   "sha256": "5b05bbb18ae467b73cd1cfd765806a88a5df50d79c03f1cd02b58b2b5716458a",
+   "faces": [
+    "Laurel"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "maple-blur": {
+   "file": "maple-blur.jpg",
+   "sha256": "01fe274d8742e12d32009e782cbddd21f4d2198b9e7cf0c187c8cff3be000f66",
+   "faces": [
+    "Maple"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "nutmeg-blur": {
+   "file": "nutmeg-blur.jpg",
+   "sha256": "59c10068c530c1a6905fff13c44345ab0ddd256a8cfa34ab1c357f89e940be94",
+   "faces": [
+    "Nutmeg"
+   ],
+   "kind": "blurred",
+   "detected": 1
+  },
+  "scene": {
+   "file": "scene.jpg",
+   "sha256": "422d7c61c30e44113cc75baa4c7d342384c6c81130765a9e68e51ba547893e5c",
+   "faces": [],
+   "kind": "scene",
+   "detected": 0
+  },
+  "scene-2": {
+   "file": "scene-2.jpg",
+   "sha256": "8090abdc2675f3afdb294e6e3a9a0bd20f62fa2227cf495e8f8e2beca590bd95",
+   "faces": [],
+   "kind": "scene",
+   "detected": 0
+  },
+  "pair-alder-birch-1": {
+   "file": "pair-alder-birch-1.jpg",
+   "sha256": "3916808c7abd6925be6090e10a09ea6e8487b584c743ab7c0670495b763599ea",
+   "faces": [
+    "Alder",
+    "Birch"
+   ],
+   "kind": "composite",
+   "parts": [
+    "alder-1",
+    "birch-1"
+   ],
+   "detected": 2
+  },
+  "alder-1+cedar-1": {
+   "file": "alder-1+cedar-1.jpg",
+   "sha256": "0a95db7ab28177a3558342d7876d7f1f680b205ba01bc7c2371ff60807982be2",
+   "faces": [
+    "Alder",
+    "Cedar"
+   ],
+   "kind": "composite",
+   "parts": [
+    "alder-1",
+    "cedar-1"
+   ],
+   "detected": 2
+  },
+  "birch-2+cedar-2+dogwood-2": {
+   "file": "birch-2+cedar-2+dogwood-2.jpg",
+   "sha256": "46a90612e27f350622d8e96edf3f46026bc270be770ff35b401c13b4e670c1ac",
+   "faces": [
+    "Birch",
+    "Cedar",
+    "Dogwood"
+   ],
+   "kind": "composite",
+   "parts": [
+    "birch-2",
+    "cedar-2",
+    "dogwood-2"
+   ],
+   "detected": 3
+  },
+  "fir-0+ginkgo-0": {
+   "file": "fir-0+ginkgo-0.jpg",
+   "sha256": "c9b26f8cb57fa72f9750d9ab2d0c6f52c15a9be1faadb1c5caf973a071f35811",
+   "faces": [
+    "Fir",
+    "Ginkgo"
+   ],
+   "kind": "composite",
+   "parts": [
+    "fir-0",
+    "ginkgo-0"
+   ],
+   "detected": 2
+  },
+  "dogwood-5+iris-5": {
+   "file": "dogwood-5+iris-5.jpg",
+   "sha256": "b2a73e375a3f56864d4c092fc17a9232ac2d10f4644daf9b5364795e2fb68594",
+   "faces": [
+    "Dogwood",
+    "Iris"
+   ],
+   "kind": "composite",
+   "parts": [
+    "dogwood-5",
+    "iris-5"
+   ],
+   "detected": 2
+  },
+  "birch-6+dogwood-6": {
+   "file": "birch-6+dogwood-6.jpg",
+   "sha256": "857c0dc1a129189ef289f15c074f804ec4905db20962504db4157bf5ee569e4b",
+   "faces": [
+    "Birch",
+    "Dogwood"
+   ],
+   "kind": "composite",
+   "parts": [
+    "birch-6",
+    "dogwood-6"
+   ],
+   "detected": 2
+  }
+ }
+}

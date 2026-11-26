@@ -1,0 +1,56 @@
+{
+ "summary": {
+  "db_tables_different": {
+   "app_users": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "auth_audit": [
+    2,
+    2,
+    2,
+    2
+   ]
+  },
+  "files_equal": true,
+  "files": [
+   32,
+   32,
+   0,
+   0
+  ],
+  "eligibility_equal": true,
+  "api_total": 254,
+  "api_different": [],
+  "api_order_only": [],
+  "recognition_different": [],
+  "integrity": {
+   "A": "PASS",
+   "B": "PASS",
+   "A_findings": [],
+   "B_findings": []
+  }
+ },
+ "db_detail": {
+  "app_users": {
+   "only_first": [
+    "{\"created_at\": \"2026-11-26T12:47:14+00:00\", \"disabled\": 0, \"display_name\": \"Fixture Custodian\", \"failed_attempts\": 0, \"last_login_at\": \"2026-11-26T12:47:21+00:00\", \"locked_until\": null, \"must_change_password\": 0, \"password_hash\": \"$argon2id$v=19$m=65536,t=3,p=4$5nFHtIbiky1lWrG/HszQ5A$L972m3j5IMfj+n28WQtZ0mjlJBC4X0KjD9vXc6EIewc\", \"roles\": \"[\\\"administrator\\\"]\", \"updated_at\": \"2026-11-26T12:47:21+00:00\", \"user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\", \"username\": \"custodian\", \"username_norm\": \"custodian\"}"
+   ],
+   "only_second": [
+    "{\"created_at\": \"2026-11-26T12:47:29+00:00\", \"disabled\": 0, \"display_name\": \"Fixture Custodian\", \"failed_attempts\": 0, \"last_login_at\": \"2026-11-26T12:47:35+00:00\", \"locked_until\": null, \"must_change_password\": 0, \"password_hash\": \"$argon2id$v=19$m=65536,t=3,p=4$Ot1z8+Aq1qjdd3glBOUopw$l34t/jhSu4AwDPlasSmk248MYHCuhtuQXXXBNkFaYcg\", \"roles\": \"[\\\"administrator\\\"]\", \"updated_at\": \"2026-11-26T12:47:35+00:00\", \"user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\", \"username\": \"custodian\", \"username_norm\": \"custodian\"}"
+   ]
+  },
+  "auth_audit": {
+   "only_first": [
+    "{\"action\": \"initial-signup\", \"actor_user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\", \"audit_id\": \"4c8bfc1d-ad9a-58b1-a7cd-50c4d747fcb9\", \"created_at\": \"2026-11-26T12:47:14+00:00\", \"details\": \"{}\", \"target_user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\"}",
+    "{\"action\": \"login\", \"actor_user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\", \"audit_id\": \"279063c1-78ab-48fb-a38e-52dd3cd06e1b\", \"created_at\": \"2026-11-26T12:47:21+00:00\", \"details\": \"{}\", \"target_user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\"}"
+   ],
+   "only_second": [
+    "{\"action\": \"initial-signup\", \"actor_user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\", \"audit_id\": \"4c8bfc1d-ad9a-58b1-a7cd-50c4d747fcb9\", \"created_at\": \"2026-11-26T12:47:29+00:00\", \"details\": \"{}\", \"target_user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\"}",
+    "{\"action\": \"login\", \"actor_user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\", \"audit_id\": \"12113524-39b6-4671-88f4-be46b3a7768c\", \"created_at\": \"2026-11-26T12:47:35+00:00\", \"details\": \"{}\", \"target_user_id\": \"6d2b7911-9ad9-5630-bb29-ab4dbdbc536c\"}"
+   ]
+  }
+ }
+}

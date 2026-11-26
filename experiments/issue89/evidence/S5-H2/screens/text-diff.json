@@ -1,0 +1,33 @@
+{
+ "1-people": {
+  "identical_text": false,
+  "diff": [
+   "-01:42 PM",
+   "+01:43 PM"
+  ]
+ },
+ "2-person": {
+  "identical_text": true,
+  "diff": []
+ },
+ "3-events": {
+  "identical_text": true,
+  "diff": []
+ },
+ "4-world-explore": {
+  "identical_text": true,
+  "diff": []
+ },
+ "5-world-connections": {
+  "identical_text": true,
+  "diff": []
+ },
+ "6-check-a-photo": {
+  "identical_text": true,
+  "diff": []
+ },
+ "_page_errors": {
+  "identical_text": true,
+  "diff": []
+ }
+}

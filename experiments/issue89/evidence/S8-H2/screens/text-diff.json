@@ -1,0 +1,69 @@
+{
+ "1-people": {
+  "identical_text": false,
+  "diff": [
+   "-9",
+   "+10",
+   "-0",
+   "+1",
+   "-(9)",
+   "+(10)",
+   "-9",
+   "+10",
+   "-0",
+   "+1",
+   "-2 PEOPLE",
+   "+3 PEOPLE",
+   "+Nutmeg",
+   "+-",
+   "+UNSPECIFIED",
+   "+No usable recognition sample",
+   "+Never seen",
+   "+Open profile",
+   "-Showing 1 to 9 of 9 people",
+   "+Showing 1 to 10 of 10 people"
+  ]
+ },
+ "2-person": {
+  "identical_text": true,
+  "diff": []
+ },
+ "3-events": {
+  "identical_text": true,
+  "diff": []
+ },
+ "4-world-explore": {
+  "identical_text": true,
+  "diff": []
+ },
+ "5-world-connections": {
+  "identical_text": false,
+  "diff": [
+   "-Nov 26, 01:46 PM",
+   "+Nov 26, 01:47 PM",
+   "-9",
+   "+10",
+   "-Page 1 \u00b7 9 of 9",
+   "+Page 1 \u00b7 10 of 10",
+   "-9",
+   "+10",
+   "+Nutmeg",
+   "+- \u00b7 - \u00b7 NO FACE",
+   "+0",
+   "+events",
+   "+0",
+   "+relations",
+   "+0",
+   "+evidence",
+   "+ACTIVE"
+  ]
+ },
+ "6-check-a-photo": {
+  "identical_text": true,
+  "diff": []
+ },
+ "_page_errors": {
+  "identical_text": true,
+  "diff": []
+ }
+}
