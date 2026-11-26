@@ -1258,6 +1258,59 @@ class WorldGraphV2Test(unittest.TestCase):
             self.assertEqual(len(person.events), 1)
             self.assertEqual(len(person.people[0].cluster_memberships), 1)
 
+    def test_explore_person_relationship_visibility_counts_exact_hidden_reasons(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = self._store(Path(temp))
+            focus = store.create_person("Visibility focus")
+            below = store.create_person("Below threshold")
+            excluded_one = store.create_person("Evidence excluded one")
+            excluded_two = store.create_person("Evidence excluded two")
+            isolated = store.create_person("Isolated")
+            self._observe(
+                store, "visibility-below", [focus.person_id, below.person_id],
+                observed_at="2026-08-01T10:00:00+00:00", location="HQ",
+            )
+            store.create_manual_association(
+                focus.person_id, excluded_one.person_id, "visibility-manual-one",
+            )
+            store.create_manual_association(
+                focus.person_id, excluded_two.person_id, "visibility-manual-two",
+            )
+            service = GraphReadService(store)
+            filters = WorldReadFilter(
+                evidence_type=("CO_OBSERVED",), min_relationship_strength=2,
+            )
+
+            def read(person_id: str, include_below: bool):
+                return service.world_graph_v2(WorldGraphRequest(
+                    detail_level=WorldDetailLevel.PERSON, focus_type="PERSON",
+                    focus_id=person_id, collection=WorldCollection.RELATIONSHIPS,
+                    filters=filters, limits=WorldReadLimits(relationships=1),
+                    view="EXPLORE", include_below_threshold=include_below,
+                ))
+
+            for include_below in (False, True):
+                with self.subTest(include_below_threshold=include_below):
+                    detail = read(focus.person_id, include_below)
+                    visibility = detail.people[0].intelligence_summary["relationship_visibility"]
+                    self.assertEqual(visibility["selected_relationship_count"], 1)
+                    self.assertEqual(visibility["qualifying_relationship_count"], 0)
+                    self.assertEqual(visibility["below_minimum_count"], 1)
+                    self.assertEqual(visibility["evidence_type_excluded_count"], 2)
+                    self.assertEqual(visibility["all_evidence_relationship_count"], 3)
+                    self.assertEqual(
+                        visibility["semantics"],
+                        "ACTIVE_AUTHORITATIVE_RELATIONSHIPS_IN_EFFECTIVE_SCOPE",
+                    )
+
+            empty = read(isolated.person_id, False)
+            visibility = empty.people[0].intelligence_summary["relationship_visibility"]
+            self.assertEqual(visibility["selected_relationship_count"], 0)
+            self.assertEqual(visibility["qualifying_relationship_count"], 0)
+            self.assertEqual(visibility["below_minimum_count"], 0)
+            self.assertEqual(visibility["evidence_type_excluded_count"], 0)
+            self.assertEqual(visibility["all_evidence_relationship_count"], 0)
+
     def test_payload_is_v2_typed_and_does_not_expose_storage_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             store = self._store(Path(temp))

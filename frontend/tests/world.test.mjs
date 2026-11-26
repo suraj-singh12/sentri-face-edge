@@ -21,6 +21,7 @@ import {
   requireWorldEvidenceContract,
   requireWorldPersonContract,
   requireWorldScopeContract,
+  relationshipVisibilityMessages,
   worldEvidenceMediaRequestState,
   worldEntryMode,
   worldRetainedHierarchyIsCurrent,
@@ -1411,7 +1412,7 @@ test("Explore v2 renders compact criteria and authoritative type-specific Inspec
       const markup = render(ExploreWeakerControl, { value, onChange: noop });
       assert.match(markup, new RegExp(`aria-pressed="${value}"`));
       assert.match(markup, new RegExp(`>${value ? "ON" : "OFF"}<`));
-      assert.match(markup, /aria-label="Weaker links"/);
+      assert.match(markup, /aria-label="Weaker links in view"/);
     }
   });
   await t.test("Discovery groups retain one active choice and local day options", () => {
@@ -1429,10 +1430,29 @@ test("Explore v2 renders compact criteria and authoritative type-specific Inspec
     assert.match(markup, /data-inspector-type="person"/);
     assert.match(markup, /explore-inspector-number[^>]*>11</);
     assert.match(markup, />Asha</);
-    assert.match(markup, /Relationships/);
-    assert.match(markup, /Evidence records/);
+    assert.match(markup, /Qualifying relationships/);
+    assert.match(markup, /Qualifying evidence/);
     assert.match(markup, /Inspect supporting proof/);
     assert.doesNotMatch(markup, /777/);
+  });
+  await t.test("Person inspector explains exact hidden relationship reasons", () => {
+    const visibility = {
+      selected_relationship_count: 1,
+      qualifying_relationship_count: 0,
+      below_minimum_count: 1,
+      evidence_type_excluded_count: 2,
+      all_evidence_relationship_count: 3,
+      semantics: "ACTIVE_AUTHORITATIVE_RELATIONSHIPS_IN_EFFECTIVE_SCOPE",
+    };
+    const value = person({
+      analytics_state: "LOADED",
+      activity_summary: { finalized_event_count: 0 },
+      intelligence_summary: { relationship_count: 0, relationship_evidence_count: 0, relationship_visibility: visibility },
+    });
+    const markup = render(WorldExploreInspector, { selected: { type: "person", value }, onFocus: noop, onProof: noop });
+    assert.match(markup, /1 relationship below minimum strength/);
+    assert.match(markup, /2 relationships use unselected evidence types/);
+    assert.deepEqual(relationshipVisibilityMessages({ relationship_visibility: { ...visibility, below_minimum_count: 0, evidence_type_excluded_count: 0, all_evidence_relationship_count: 0 } }), ["No relationships in current scope"]);
   });
   await t.test("Unloaded Person activity stays unavailable while genuine zero stays zero", () => {
     const unavailable = render(WorldExploreInspector, { selected: { type: "person", value: person() } });

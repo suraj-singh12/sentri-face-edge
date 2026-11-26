@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Avatar, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput, Paper, Popover, SegmentedControl, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Alert, Avatar, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput, Paper, Popover, SegmentedControl, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
 import { IconChevronDown } from "@tabler/icons-react";
 import { useWorldExplore } from "../hooks/useWorldExplore.js";
 import { formatEventDate } from "../utils.js";
-import { EXPLORE_DEFAULT_FILTERS, validateExploreCriteria } from "../utils/world.js";
+import { EXPLORE_DEFAULT_FILTERS, relationshipVisibilityMessages, validateExploreCriteria } from "../utils/world.js";
 import { WorldExploreCanvas } from "./WorldExploreCanvas.jsx";
 import { WorldRelationshipProof } from "./WorldRelationshipProof.jsx";
 import { WorldView } from "./WorldView.jsx";
@@ -89,7 +89,9 @@ export function ExploreEvidenceControl({ value, onChange }) {
 }
 
 export function ExploreWeakerControl({ value, onChange }) {
-  return <Button size="xs" className="explore-weaker-control" variant={value ? "light" : "default"} aria-label="Weaker links" aria-pressed={value} onClick={() => onChange(!value)} rightSection={<Badge size="sm" variant={value ? "filled" : "light"} color={value ? "teal" : "gray"}>{value ? "ON" : "OFF"}</Badge>}>Weaker links</Button>;
+  return <Tooltip label="Shows relationships below the minimum strength only when both people are already visible.">
+    <Button size="xs" className="explore-weaker-control" variant={value ? "light" : "default"} aria-label="Weaker links in view" aria-pressed={value} onClick={() => onChange(!value)} rightSection={<Badge size="sm" variant={value ? "filled" : "light"} color={value ? "teal" : "gray"}>{value ? "ON" : "OFF"}</Badge>}>Weaker links in view</Button>
+  </Tooltip>;
 }
 
 export function ExploreDiscoveryControls({ collection, onCollection, period, onPeriod }) {
@@ -115,18 +117,20 @@ export function WorldExploreInspector({ selected, people = [], onFocus, onProof,
   const primary = person ? (loaded ? value.activity_summary?.finalized_event_count : null) : cluster ? value.member_count : value?.selected_evidence_strength;
   const primaryLabel = person ? "Events" : cluster ? "Cluster members" : "Selected evidence strength";
   const caption = person ? (loaded ? "Distinct Event appearances in the applied World scope." : "Event activity is not loaded. Focus this Person to view it.") : cluster ? "People connected by qualifying evidence under the applied criteria." : "Active records from the selected evidence types under the applied criteria.";
-  const secondary = person && loaded ? [["Relationships", value.intelligence_summary?.relationship_count], ["Evidence records", value.intelligence_summary?.relationship_evidence_count]] : cluster ? [["Qualifying relationships", value.evidence_basis?.relationship_count], ["Evidence records", value.evidence_basis?.evidence_count]] : relationship ? [["Supporting Events", value.encounter_recurrence?.count]] : [];
+  const secondary = person && loaded ? [["Qualifying relationships", value.intelligence_summary?.relationship_count], ["Qualifying evidence", value.intelligence_summary?.relationship_evidence_count]] : cluster ? [["Qualifying relationships", value.evidence_basis?.relationship_count], ["Qualifying evidence", value.evidence_basis?.evidence_count]] : relationship ? [["Supporting Events", value.encounter_recurrence?.count]] : [];
   const context = person ? "Event activity and relationships are measured separately. Inspect source records and provenance in supporting proof."
     : cluster ? "Membership follows qualifying evidence under the applied criteria. Shared membership does not imply a direct relationship between every pair."
       : value?.qualifies_for_cluster ? "This direct relationship contributes to cluster membership under the applied criteria."
         : "This direct relationship is below threshold and does not contribute to cluster membership.";
   const metrics = secondary.filter(([, count]) => countAvailable(count));
+  const visibilityMessages = person && loaded ? relationshipVisibilityMessages(value.intelligence_summary) : [];
   return <Paper withBorder radius="md" className="explore-inspector" data-inspector-type={type || "empty"}>
     <Text size="sm" fw={600}>Inspector</Text>
     <Box ref={bodyRef} className="explore-inspector-body">{!selected ? <Text size="sm" c="dimmed">Select a Person, cluster or direct relationship.</Text> : <Stack gap="sm">
       <Box className="explore-inspector-subject"><Badge size="xs" variant="light">{person ? "Person" : cluster ? "Cluster" : "Direct relationship"}</Badge><Group wrap="nowrap" gap="sm" mt="xs" align="flex-start">{person && <Avatar color="teal" radius="md" size={38}>{value.display_name?.split(/\s+/u).slice(0, 2).map((part) => part[0]).join("")}</Avatar>}<Text component="h3" className="explore-inspector-title">{title}</Text></Group>{person && <Group gap={5} mt="xs"><Badge size="xs" variant="outline" color="gray">{humanize(value.lifecycle_state)}</Badge><Badge size="xs" variant="outline" color="gray">{humanize(value.identity_state)}</Badge></Group>}</Box>
       <Paper withBorder radius="md" className="explore-inspector-finding"><Text size="xs" fw={600}>{primaryLabel}</Text><Group justify="space-between" gap="xs" mt={4}><Text className="explore-inspector-number">{countAvailable(primary) ? primary : "—"}</Text>{relationship && <Badge size="xs" variant="light" color={value.qualifies_for_cluster ? "teal" : "gray"}>{value.qualifies_for_cluster ? "Qualifies" : "Below threshold"}</Badge>}</Group><Text size="xs" c="dimmed" mt={5}>{caption}</Text></Paper>
       {metrics.length > 0 && <SimpleGrid cols={metrics.length === 1 ? 1 : 2} spacing="xs" className="explore-inspector-metrics">{metrics.map(([label, count]) => <Paper withBorder radius="md" p="xs" key={label}><Text size="xl" fw={700}>{count}</Text><Text size="xs" c="dimmed">{label}</Text></Paper>)}</SimpleGrid>}
+      {visibilityMessages.length > 0 && <Stack gap={2} className="explore-inspector-visibility">{visibilityMessages.map((message) => <Text size="xs" c="dimmed" key={message}>{message}</Text>)}</Stack>}
       {relationship && <InspectorSection title="Supporting evidence">{Object.entries(value.evidence_type_counts || {}).map(([kind, count]) => <Group key={kind} justify="space-between" gap="xs" wrap="nowrap" className="explore-inspector-row"><Text size="xs">{TYPES.find(([id]) => id === kind)?.[1] || humanize(kind)}</Text><Text size="xs" fw={600}>{count}</Text></Group>)}</InspectorSection>}
       <InspectorSection title="Context"><Text size="xs" c="dimmed">{context}</Text>{relationship && <>{value.first_occurrence_at && <InspectorFact label="First recorded" value={formatEventDate(value.first_occurrence_at)} />}{value.last_occurrence_at && <InspectorFact label="Last recorded" value={formatEventDate(value.last_occurrence_at)} />}</>}{person && [value.display?.rank, value.display?.country].filter(Boolean).length > 0 && <Text size="xs" mt={6}>{[value.display?.rank, value.display?.country].filter(Boolean).join(" · ")}</Text>}</InspectorSection>
       {cluster && value.member_preview?.length > 0 && <InspectorSection title="Member preview"><Text size="xs">{value.member_preview.map((member) => member.display_name).join(", ")}</Text>{value.member_preview_state?.has_more && <Text size="xs" c="dimmed">More members in supporting proof.</Text>}</InspectorSection>}
