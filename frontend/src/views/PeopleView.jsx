@@ -138,9 +138,48 @@ export function PeopleView({
   const collectionKey = filter === "archived" || filter === "bin" ? filter : "active";
   const archivedCollection = useMemo(() => archivedPeople.filter((person) => !isBinned(person)), [archivedPeople]);
   const binCollection = useMemo(() => archivedPeople.filter(isBinned), [archivedPeople]);
+  const [, setRecoveryTick] = useState(0);
+  const recoveryNow = Date.now();
+  const refreshRef = useRef(onRefresh);
+  useEffect(() => { refreshRef.current = onRefresh; }, [onRefresh]);
+  useEffect(() => {
+    if (filter === "bin") refreshRef.current?.();
+  }, [filter]);
+  useEffect(() => {
+    if (filter !== "bin") return undefined;
+    let timer = null;
+    const schedule = () => {
+      const now = Date.now();
+      const deadlines = binCollection
+        .filter((person) => person.recovery_status === "RECOVERABLE")
+        .map((person) => Date.parse(person.restore_until))
+        .filter((deadline) => Number.isFinite(deadline) && deadline > now);
+      if (!deadlines.length) return;
+      const nextDeadline = Math.min(...deadlines);
+      const nextMinute = now - (now % 60_000) + 60_000;
+      const nextAt = Math.min(nextDeadline, nextMinute);
+      timer = window.setTimeout(() => {
+        const firedAt = Date.now();
+        setRecoveryTick((tick) => tick + 1);
+        if (firedAt >= nextDeadline) refreshRef.current?.();
+        schedule();
+      }, Math.max(100, nextAt - now + (nextAt === nextDeadline ? 100 : 0)));
+    };
+    schedule();
+    return () => window.clearTimeout(timer);
+  }, [binCollection, filter]);
+  const effectiveBinCollection = useMemo(
+    () => binCollection.map((person) => {
+      const deadline = Date.parse(person.restore_until);
+      return person.recovery_status === "RECOVERABLE" && Number.isFinite(deadline) && deadline <= recoveryNow
+        ? { ...person, recovery_status: "EXPIRED" }
+        : person;
+    }),
+    [binCollection, recoveryNow],
+  );
   const selectedBinProfiles = useMemo(
-    () => binCollection.filter((person) => person.recovery_status === binFilter),
-    [binCollection, binFilter],
+    () => effectiveBinCollection.filter((person) => person.recovery_status === binFilter),
+    [effectiveBinCollection, binFilter],
   );
   const collectionStats = filter === "bin" ? {
     people_count: selectedBinProfiles.length,
@@ -337,6 +376,7 @@ export function PeopleView({
                         groupBy={groupBy}
                         viewMode={viewMode}
                         canDestroy={canDestroy}
+                        now={recoveryNow}
                         onOpen={onOpen}
                         onFavorite={toggleFavorite}
                         onDelete={setDeleteTarget}
@@ -745,7 +785,7 @@ function PeopleStatsStrip({ statistics, collection }) {
   );
 }
 
-function PeopleResults({ people, groupBy, viewMode, canDestroy, onOpen, onFavorite, onDelete, onRestore }) {
+function PeopleResults({ people, groupBy, viewMode, canDestroy, now, onOpen, onFavorite, onDelete, onRestore }) {
   const groups = useMemo(() => groupPeople(people, groupBy), [groupBy, people]);
   const groupSignature = groups.map((group) => group.label).join("\u0000");
   const [closedGroups, setClosedGroups] = useState(new Set());
@@ -766,6 +806,7 @@ function PeopleResults({ people, groupBy, viewMode, canDestroy, onOpen, onFavori
             favorite={Boolean(person.favorite)}
             viewMode={viewMode}
             canDestroy={canDestroy}
+            now={now}
             onOpen={() => onOpen(person.person_id, { archived: isHistorical })}
             onFavorite={() => onFavorite(person)}
             onDelete={() => onDelete(person)}
@@ -812,7 +853,7 @@ function PeopleResults({ people, groupBy, viewMode, canDestroy, onOpen, onFavori
   );
 }
 
-function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite, onDelete, onRestore }) {
+function PersonCard({ person, favorite, viewMode, canDestroy, now, onOpen, onFavorite, onDelete, onRestore }) {
   const expired = person.recovery_status === "EXPIRED";
   const cardClass = `people-person-card${viewMode === "list" ? " people-person-card--list" : ""}${expired ? " people-person-card--expired" : ""}`;
   const lifecycleStatus = requirePersonContract(person).lifecycle_status;
@@ -820,7 +861,7 @@ function PersonCard({ person, favorite, viewMode, canDestroy, onOpen, onFavorite
   const canOpen = lifecycleStatus === "ACTIVE" || (lifecycleStatus === "ARCHIVED" && personAllows(person, "VIEW_HISTORY"));
   const recoverable = person.recovery_status === "RECOVERABLE";
   const restoreFromBin = recoverable && personAllows(person, "RESTORE");
-  const remainingHours = recoverable ? Math.ceil((Date.parse(person.restore_until) - Date.now()) / 3_600_000) : 0;
+  const remainingHours = recoverable ? Math.ceil((Date.parse(person.restore_until) - (now || Date.now())) / 3_600_000) : 0;
   const openPerson = () => {
     if (canOpen) onOpen(person.person_id);
   };

@@ -726,3 +726,48 @@ def test_people_bin_filters_and_refuses_stale_restore(served_app, monkeypatch):
     expect(cards).to_have_count(2)
     expect(count.get_by_text("2", exact=True)).to_be_visible()
     assert not errors
+
+
+def test_people_bin_refreshes_expiry_while_open(served_app):
+    from datetime import datetime, timedelta, timezone
+
+    page, errors, _, server = served_app
+    store = server.engine.store
+    expiring = store.create_person("Expiry While Open")
+    store.soft_delete_person(expiring.person_id, "expiring-open-bin")
+
+    _sign_up(page)
+    deadline = datetime.now(timezone.utc) + timedelta(seconds=4)
+    deadline_monotonic = time.monotonic() + 4
+    with store._connect() as conn:
+        conn.execute(
+            "UPDATE persons SET restore_until = ? WHERE person_id = ?",
+            (deadline.isoformat(), expiring.person_id),
+        )
+    people_response_times = []
+
+    def capture_people_response(response):
+        if response.url.endswith("/api/persons") and response.request.method == "GET":
+            people_response_times.append(time.monotonic())
+
+    page.on("response", capture_people_response)
+    page.get_by_role("tab", name="People", exact=True).click()
+    page.get_by_role("button", name=re.compile(r"^Bin\b")).click()
+    cards = page.locator(".people-person-card")
+    expect(cards).to_have_count(1)
+    expect(cards.get_by_role("button", name="Restore", exact=True)).to_be_visible()
+
+    expect(page.get_by_text("No recoverable profiles.")).to_be_visible(timeout=10000)
+    expect(cards).to_have_count(0)
+    for _ in range(40):
+        if any(response_at >= deadline_monotonic for response_at in people_response_times):
+            break
+        time.sleep(0.05)
+    assert any(response_at >= deadline_monotonic for response_at in people_response_times)
+
+    page.get_by_role("combobox", name="Deleted People collection").click()
+    page.get_by_role("option", name="Permanently Deleted Profiles", exact=True).click()
+    expect(cards).to_have_count(1)
+    expect(cards).to_contain_text("Non-recoverable — this profile cannot be restored.")
+    expect(cards.get_by_role("button")).to_have_count(0)
+    assert not errors
