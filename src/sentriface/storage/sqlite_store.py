@@ -8946,6 +8946,36 @@ def _world_person_read(
         activity.get(canonical_id, 0), degree.get(canonical_id, {}), context,
         selected_by_focus=True,
     ), cluster_memberships=memberships)
+    if str(context.request.view).strip().upper() == "EXPLORE":
+        selected_scope_relationships = relationships
+        if not context.request.include_below_threshold:
+            selected_scope_relationships = _world_relationship_scope(
+                conn, context.filters, set(people_rows), canonical_map=canonical_map,
+                focus_person_id=canonical_id, include_below_threshold=True,
+            )
+        all_focus_relationships = selected_scope_relationships
+        selected_types = set(context.filters.evidence_type)
+        if selected_types != set(RELATIONSHIP_EVIDENCE_TYPES):
+            all_focus_relationships = _world_relationship_scope(
+                conn, replace(context.filters, evidence_type=()), set(people_rows),
+                canonical_map=canonical_map, focus_person_id=canonical_id,
+                include_below_threshold=True,
+            )
+        selected_ids = {item["relationship_id"] for item in selected_scope_relationships}
+        all_ids = {item["relationship_id"] for item in all_focus_relationships}
+        qualifying_count = sum(1 for item in selected_scope_relationships if item["qualifies_for_cluster"])
+        visibility = {
+            "selected_relationship_count": len(selected_scope_relationships),
+            "qualifying_relationship_count": qualifying_count,
+            "below_minimum_count": len(selected_scope_relationships) - qualifying_count,
+            "evidence_type_excluded_count": len(all_ids - selected_ids),
+            "all_evidence_relationship_count": len(all_focus_relationships),
+            "semantics": "ACTIVE_AUTHORITATIVE_RELATIONSHIPS_IN_EFFECTIVE_SCOPE",
+        }
+        root = replace(root, intelligence_summary={
+            **root.intelligence_summary,
+            "relationship_visibility": visibility,
+        })
     relationship_models: tuple[WorldRelationship, ...] = ()
     events: tuple[WorldEvent, ...] = ()
     people = (root,)

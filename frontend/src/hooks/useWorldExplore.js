@@ -83,7 +83,9 @@ export function useWorldExplore({ apiGet, active, mutationRevision }) {
       if (clusterId) {
         const results = await Promise.all(["MEMBERS", "RELATIONSHIPS"].map(async (page) => requireWorldClusterContract(await get(buildWorldClusterQuery({ ...binding, clusterId, collection: page }), options), { clusterId, revision: binding.revision, collection: page })));
         const [members, relationships] = results;
-        const people = [...members.people];
+        const people = members.people.map((member) => (
+          person && member.canonical_person_id === person.canonical_person_id ? person : member
+        ));
         if (person && !people.some((p) => p.canonical_person_id === person.canonical_person_id)) people.push(person);
         next = { people, relationships: relationships.relationships, cluster: members.clusters[0], pages: { MEMBERS: members.pagination.MEMBERS, RELATIONSHIPS: relationships.pagination.RELATIONSHIPS }, binding };
       }

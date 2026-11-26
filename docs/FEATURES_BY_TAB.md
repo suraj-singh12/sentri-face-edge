@@ -144,6 +144,17 @@ backend's `cluster_memberships`, or displays that Person alone. Cluster member a
 relationship pages remain bounded; an edge is rendered only when both canonical
 endpoints are on the displayed member page. Layout never determines membership.
 
+The inspector labels Person and cluster counts as **Qualifying relationships** and
+**Qualifying evidence** because they measure evidence passing the applied criteria,
+not absolute historical totals. For a focused Person, backend-owned relationship
+visibility metadata can add one compact exact reason line: relationships below the
+minimum strength, relationships using unselected evidence types, or **No
+relationships in current scope**. These messages never derive totals from bounded
+relationship pages and do not change clustering, evidence semantics, defaults or
+the weaker-edge rule. The weaker-edge control is labelled **Weaker links in view**;
+it still shows only below-threshold relationships whose endpoints are already in
+the displayed canvas scope.
+
 The inspector opens bounded supporting evidence, source Encounters and existing
 Person/Cluster/Event/Evidence/Media drilldowns in a viewport-contained overlay.
 Desktop has Discover / Canvas / Inspector; compact windows use a panel selector.

@@ -21,6 +21,20 @@ const WORLD_SEMANTIC_VERSIONS = Object.freeze({
   calculation_version: "world-descriptive-v1",
 });
 
+export function relationshipVisibilityMessages(summary) {
+  const visibility = summary?.relationship_visibility;
+  if (!visibility) return [];
+  const count = (name) => Number.isSafeInteger(visibility[name]) ? visibility[name] : 0;
+  const plural = (value, singular, pluralForm = `${singular}s`) => `${value} ${value === 1 ? singular : pluralForm}`;
+  if (count("all_evidence_relationship_count") === 0) return ["No relationships in current scope"];
+  const messages = [];
+  const below = count("below_minimum_count");
+  const excluded = count("evidence_type_excluded_count");
+  if (below > 0) messages.push(`${plural(below, "relationship")} below minimum strength`);
+  if (excluded > 0) messages.push(`${plural(excluded, "relationship")} ${excluded === 1 ? "uses" : "use"} unselected evidence types`);
+  return messages;
+}
+
 export const EMPTY_WORLD_FILTERS = Object.freeze({
   date_from: "",
   date_to: "",
@@ -735,6 +749,16 @@ function requireWorldPerson(person) {
     || !Number.isFinite(Number(person.intelligence_summary.relationship_count))
     || !Number.isFinite(Number(person.intelligence_summary.relationship_evidence_count))
   )) throw new Error("Invalid loaded World person analytics contract");
+  const visibility = person.intelligence_summary.relationship_visibility;
+  if (visibility !== undefined && (
+    !visibility || typeof visibility !== "object" || Array.isArray(visibility)
+    || visibility.semantics !== "ACTIVE_AUTHORITATIVE_RELATIONSHIPS_IN_EFFECTIVE_SCOPE"
+    || ["selected_relationship_count", "qualifying_relationship_count", "below_minimum_count", "evidence_type_excluded_count", "all_evidence_relationship_count"]
+      .some((field) => !isNonNegativeInteger(visibility[field]))
+    || visibility.qualifying_relationship_count + visibility.below_minimum_count !== visibility.selected_relationship_count
+    || visibility.all_evidence_relationship_count < visibility.selected_relationship_count
+    || visibility.evidence_type_excluded_count > visibility.all_evidence_relationship_count
+  )) throw new Error("Invalid World person relationship visibility contract");
 }
 
 function requireWorldRelationship(relationship) {
