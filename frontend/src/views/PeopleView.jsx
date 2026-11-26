@@ -1110,6 +1110,7 @@ function PeopleGalleryView({
   useEffect(() => { if (!notePlaceholderOpen) setNotePlaceholderErrors({}); }, [notePlaceholderOpen]);
   const lifecycleStatus = normalizedPerson.lifecycle_status;
   const archived = lifecycleStatus !== "ACTIVE";
+  const canEditNotes = canEdit && personAllows(payload.person, "EDIT_NOTES");
   const canRestore = lifecycleStatus === "ARCHIVED";
   const mergedInto = normalizedPerson.canonical_person_id || "";
   const favorite = Boolean(payload.person.favorite || payload.person.metadata?.favorite);
@@ -1456,7 +1457,7 @@ function PeopleGalleryView({
         <Card withBorder radius="md" p="sm" className="people-profile-notes">
           <Group justify="space-between" align="center" mb="xs" wrap="nowrap">
             <Text size="sm" fw={800}>Notes</Text>
-            {canEdit && profileNote.content.trim() ? <Button size="compact-xs" variant="default" onClick={openNotesEdit}>Edit note</Button> : null}
+            {canEditNotes && profileNote.content.trim() ? <Button size="compact-xs" variant="default" onClick={openNotesEdit}>Edit note</Button> : null}
           </Group>
           {profileNote.content.trim() ? <ProfileNoteSummary note={profileNote} onOpen={onOpen} /> : canEdit ? (
             <Stack align="center" justify="center" gap={6} className="people-profile-notes-empty">

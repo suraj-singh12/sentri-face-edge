@@ -40,7 +40,8 @@ test("notes preserve backend mention identities and never match names to links",
   assert.match(view, />Edit note</);
   assert.match(view, />Add note</);
   assert.match(view, /people-profile-notes-empty/);
-  assert.match(view, /canEdit && profileNote\.content\.trim\(\)/);
+  assert.match(view, /canEditNotes && profileNote\.content\.trim\(\)/);
+  assert.match(view, /personAllows\(payload\.person, "EDIT_NOTES"\)/);
 });
 
 test("lifecycle and graph interactions consume explicit backend permissions", async () => {
