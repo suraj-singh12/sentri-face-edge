@@ -1008,9 +1008,9 @@
 }
 
 .queue-suggestion-hero {
-  flex: 0 0 158px;
-  width: 158px;
-  height: 158px;
+  flex: 0 0 150px;
+  width: 150px;
+  height: 150px;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -1033,7 +1033,32 @@
 
 .queue-suggestion-copy .mantine-Badge-root {
   flex: 0 0 auto;
-  min-width: 104px;
+}
+
+.queue-suggestion-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.queue-suggestion-review {
+  min-height: 267px;
+}
+
+.queue-suggestion-empty {
+  flex: 1 1 auto;
+  min-height: 128px;
+  text-align: center;
+}
+
+.queue-suggestion-initials {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--mantine-color-teal-7);
+  background: var(--mantine-color-teal-1);
+  font-weight: 800;
 }
 
 .queue-people-picker-grid {
@@ -4599,4 +4624,60 @@ html[data-toast-layers="1"] :is(.mantine-Modal-overlay, .mantine-Drawer-overlay)
   top: calc(50% - 14px);
   right: 0;
   cursor: pointer;
+}
+
+.people-profile-notes-empty {
+  min-height: 72px;
+  border: 1px dashed var(--sentriface-card-border);
+  border-radius: var(--mantine-radius-md);
+  padding: 10px;
+}
+
+.shell-notification-button {
+  position: relative;
+}
+
+.shell-notification-count {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--mantine-color-red-6);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--mantine-color-body);
+}
+
+.shell-notification-row {
+  --shell-notification-color: var(--mantine-color-yellow-6);
+  padding: 9px 10px;
+  border-radius: var(--mantine-radius-md);
+  border-left: 3px solid var(--shell-notification-color);
+  background: color-mix(in srgb, var(--shell-notification-color) 8%, transparent);
+  margin: 4px 6px;
+}
+
+.shell-notification-row[data-color="red"] {
+  --shell-notification-color: var(--mantine-color-red-6);
+}
+
+.shell-notification-row[data-color="orange"] {
+  --shell-notification-color: var(--mantine-color-orange-6);
+}
+
+.shell-notification-row[data-color="blue"] {
+  --shell-notification-color: var(--mantine-color-blue-6);
+}
+
+.shell-notification-icon {
+  color: var(--shell-notification-color);
+  flex: 0 0 auto;
+  margin-top: 1px;
 }

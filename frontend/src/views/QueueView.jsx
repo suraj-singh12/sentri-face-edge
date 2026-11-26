@@ -26,6 +26,7 @@ import {
   Title,
 } from "@mantine/core";
 import {
+  IconAlertTriangle,
   IconArrowLeft,
   IconArrowsHorizontal,
   IconCheck,
@@ -1156,41 +1157,86 @@ function QueueFaceWithBox({ face }) {
 function QueueSuggestedMatch({ best, weakMatch, manual, onBrowse, onCompare }) {
   const display = best ? matchDisplay(best) : null;
   const suggestionImage = best?.representative_image || best?.image_path;
+  const score = Number.isFinite(best?.score) ? Math.round(best.score * 100) : null;
+  const automaticCopy = {
+    duplicate: "Same or duplicate reference photo",
+    strong: "High-confidence automatic match",
+    likely: "Probable match — confirm before accepting",
+    possible: "Low-confidence candidate — verify photos",
+  }[best?.classification] || display?.guidance;
+  const statusBadge = manual
+    ? { label: "Selected", color: "teal" }
+    : best?.classification === "duplicate"
+      ? { label: "Exact match", color: "green" }
+      : best?.classification === "possible"
+        ? { label: "Possible match", color: "yellow" }
+        : { label: display?.badge, color: display?.color };
+
+  if (!best) {
+    const noCandidate = !weakMatch;
+    return (
+      <Card withBorder radius="md" className="queue-review-panel queue-suggestion-panel queue-suggestion-review">
+        <Group justify="space-between" align="center" wrap="nowrap" mb="md">
+          <Text fw={800}>Recognition review</Text>
+          <Badge color={noCandidate ? "gray" : "orange"} size="lg">{noCandidate ? "No match" : "Weak match"}</Badge>
+        </Group>
+        <Stack className="queue-suggestion-empty" align="center" justify="center" gap={6}>
+          <ThemeIcon size={46} radius="xl" variant="light" color={noCandidate ? "gray" : "orange"}><IconAlertTriangle size={25} /></ThemeIcon>
+          <Text size="xl" fw={900} ta="center">{noCandidate ? "No match found" : "No reliable match"}</Text>
+          <Text size="xs" c="dimmed" ta="center">
+            {noCandidate ? "No candidate in People." : "Closest candidate below threshold."}
+          </Text>
+          <Text size="xs" c="dimmed" ta="center">
+            {noCandidate ? "Browse manually or create a new person." : "Choose manually only if you already know this person."}
+          </Text>
+        </Stack>
+        <Button fullWidth color="teal" leftSection={<IconUsers size={16} />} onClick={onBrowse}>Browse People</Button>
+      </Card>
+    );
+  }
+
+  if (manual && !suggestionImage) {
+    const initials = best.name.split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+    return (
+      <Card withBorder radius="md" className="queue-review-panel queue-suggestion-panel queue-suggestion-review">
+        <Group justify="space-between" align="center" wrap="nowrap" mb="md">
+          <Text fw={800}>Selected person</Text>
+          <Badge color="teal" size="lg">Selected</Badge>
+        </Group>
+        <Stack className="queue-suggestion-empty" align="center" justify="center" gap={6}>
+          <Box className="queue-suggestion-initials">{initials}</Box>
+          <Text size="xl" fw={900} ta="center">{best.name}</Text>
+          <Text size="xs" c="dimmed" ta="center">Chosen manually · no recognition score</Text>
+          <Text size="xs" c="dimmed" ta="center">No reference photos</Text>
+        </Stack>
+        <Button fullWidth color="teal" variant="light" leftSection={<IconUsers size={16} />} onClick={onBrowse}>Change selection</Button>
+      </Card>
+    );
+  }
+
   return (
     <Card withBorder radius="md" className="queue-review-panel queue-suggestion-panel">
-      <Group justify="space-between" align="flex-start" wrap="nowrap" mb="md">
-        <Box>
-          <Text fw={800}>{best ? (manual ? "Selected person" : "Suggested match") : "Weak match"}</Text>
-          <Text size="xs" c="dimmed">
-            {best ? (manual ? "Chosen manually for these faces." : "Best matching identity for these faces.") : "No reliable automatic match. Choose the correct person yourself."}
-          </Text>
-        </Box>
-        <Button size="xs" variant="light" leftSection={<IconUsers size={16} />} onClick={onBrowse}>Browse People</Button>
+      <Group justify="space-between" align="center" wrap="nowrap" mb="md">
+        <Text fw={800}>{manual ? "Selected person" : "Suggested match"}</Text>
+        <Button size="xs" variant="light" leftSection={<IconUsers size={16} />} onClick={onBrowse}>{manual ? "Change selection" : "Browse People"}</Button>
       </Group>
       <Group align="stretch" wrap="nowrap" className="queue-suggestion-body">
-        <Box className="queue-suggestion-hero">
-          {suggestionImage ? (
-            <Image src={mediaUrl(suggestionImage)} alt={best.name} fit="contain" radius="md" />
-          ) : (
-            <ThemeIcon size={64} radius="xl" variant="light" color="orange"><IconUsers size={32} /></ThemeIcon>
-          )}
-        </Box>
-        <Stack justify="space-between" gap="sm" className="queue-suggestion-copy">
-          <Box>
-            <Group justify="space-between" align="flex-start" wrap="nowrap">
-              <Text size="xl" fw={900}>{best ? best.name : "Human review needed"}</Text>
-              <Group gap="xs" wrap="nowrap">
-              <Badge color={best ? (manual ? "teal" : display.color) : "orange"} size="lg">
-                {best ? (manual ? "Selected" : display.badge) : "Weak match"}
-              </Badge>
-              {best?.draft_created && <Badge>Drafted</Badge>}
-              </Group>
-            </Group>
-            <Text size="xs" c="dimmed" mt={4}>
-              {best ? (best.draft ? "Pending Person in this Event" : "Existing person in People") : weakMatch ? "The closest result did not meet the matching threshold." : "No candidate was found in People."}
-            </Text>
-          </Box>
-          {best && !best.draft && <Button variant="default" fullWidth leftSection={<IconArrowsHorizontal size={17} />} onClick={onCompare}>View reference photos</Button>}
+        {suggestionImage && <Box className="queue-suggestion-hero"><Image src={mediaUrl(suggestionImage)} alt={best.name} fit="contain" radius="md" /></Box>}
+        <Stack gap={6} className="queue-suggestion-copy">
+          <Group align="center" gap="xs" wrap="nowrap">
+            <Text size="xl" fw={900} className="queue-suggestion-name">{best.name}</Text>
+            <Badge color={statusBadge.color} size="lg">{statusBadge.label}</Badge>
+            {best?.draft_created && <Badge>Drafted</Badge>}
+          </Group>
+          <Text size="xs" c="dimmed">
+            {manual ? "Chosen manually · no recognition score" : automaticCopy}
+          </Text>
+          <Text size="xs" c="dimmed">
+            {best.draft ? "Pending Person in this Event" : "Existing person in People"}{!manual && score !== null ? ` · score ${score}%` : ""}
+          </Text>
+          {!manual && score !== null && <Progress value={score} color={statusBadge.color} size={5} radius="xl" aria-label={`Recognition score ${score}%`} />}
+          <Box style={{ flex: 1 }} />
+          {!best.draft && suggestionImage && <Button variant="default" fullWidth leftSection={<IconArrowsHorizontal size={17} />} onClick={onCompare}>Compare photos</Button>}
         </Stack>
       </Group>
     </Card>
