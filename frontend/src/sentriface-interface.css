@@ -4600,3 +4600,10 @@ html[data-toast-layers="1"] :is(.mantine-Modal-overlay, .mantine-Drawer-overlay)
   right: 0;
   cursor: pointer;
 }
+
+.people-profile-notes-empty {
+  min-height: 72px;
+  border: 1px dashed var(--sentriface-card-border);
+  border-radius: var(--mantine-radius-md);
+  padding: 10px;
+}

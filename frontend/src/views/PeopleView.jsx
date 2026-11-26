@@ -1454,8 +1454,16 @@ function PeopleGalleryView({
           </Group>
         </Box>
         <Card withBorder radius="md" p="sm" className="people-profile-notes">
-          <Text size="sm" fw={800} mb="xs">Notes</Text>
-          <ProfileNoteSummary note={profileNote} onOpen={onOpen} />
+          <Group justify="space-between" align="center" mb="xs" wrap="nowrap">
+            <Text size="sm" fw={800}>Notes</Text>
+            {canEdit && profileNote.content.trim() ? <Button size="compact-xs" variant="default" onClick={openNotesEdit}>Edit note</Button> : null}
+          </Group>
+          {profileNote.content.trim() ? <ProfileNoteSummary note={profileNote} onOpen={onOpen} /> : canEdit ? (
+            <Stack align="center" justify="center" gap={6} className="people-profile-notes-empty">
+              <Text size="xs" c="dimmed">No notes yet</Text>
+              <Button size="compact-xs" onClick={openNotesEdit}>Add note</Button>
+            </Stack>
+          ) : <Text size="sm" c="dimmed">No notes added.</Text>}
         </Card>
       </Group>
 
