@@ -1,0 +1,186 @@
+OK nav People 
+OK screenshot 10-people/add-person-modal-current
+inputs [{'i': 0, 'type': 'text', 'val': '', 'ph': 'Search by name, ID or tag...', 'vis': True, 'role': None, 'label': None}, {'i': 1, 'type': 'text', 'val': '12', 'ph': '', 'vis': True, 'role': 'combobox', 'label': None}, {'i': 3, 'type': 'text', 'val': '', 'ph': '', 'vis': True, 'role': None, 'label': None}, {'i': 4, 'type': 'text', 'val': '', 'ph': '', 'vis': True, 'role': None, 'label': None}, {'i': 5, 'type': 'text', 'val': '', 'ph': 'Browse or search countries', 'vis': True, 'role': 'combobox', 'label': None}, {'i': 7, 'type': 'text', 'val': 'Regular', 'ph': '', 'vis': True, 'role': 'combobox', 'label': None}, {'i': 9, 'type': 'date', 'val': '2026-11-26', 'ph': '', 'vis': True, 'role': None, 'label': None}, {'i': 10, 'type': 'time', 'val': '03:48', 'ph': '', 'vis': True, 'role': None, 'label': None}, {'i': 11, 'type': 'text', 'val': '', 'ph': 'e.g., Office, Gate A, Reception, Building C', 'vis': True, 'role': 'combobox', 'label': None}, {'i': 12, 'type': 'text', 'val': '', 'ph': 'Select count', 'vis': True, 'role': None, 'label': None}, {'i': 13, 'type': 'text', 'val': '', 'ph': 'e.g., Meeting, Visit, Delivery, Staff Interaction, Security Check', 'vis': True, 'role': None, 'label': None}, {'i': 14, 'type': 'textarea', 'val': '', 'ph': '', 'vis': True, 'role': None, 'label': None}, {'i': 15, 'type': 'textarea', 'val': 'x', 'ph': '', 'vis': True, 'role': None, 'label': 'autosize measurement'}]
+buttons [{'i': 0, 't': 'Settings', 'vis': True, 'dis': False}, {'i': 1, 't': 'Back up now', 'vis': True, 'dis': False}, {'i': 2, 't': 'Check a photo', 'vis': True, 'dis': False}, {'i': 3, 't': 'Review photos', 'vis': True, 'dis': False}, {'i': 4, 't': 'People', 'vis': True, 'dis': False}, {'i': 5, 't': 'Events', 'vis': True, 'dis': False}, {'i': 6, 't': 'World', 'vis': True, 'dis': False}, {'i': 7, 't': 'Settings', 'vis': True, 'dis': False}, {'i': 8, 't': 'All People6', 'vis': True, 'dis': False}, {'i': 9, 't': 'Favorites0', 'vis': True, 'dis': False}, {'i': 10, 't': 'With Photos1', 'vis': True, 'dis': False}, {'i': 11, 't': 'No Photos5', 'vis': True, 'dis': False}, {'i': 12, 't': 'Archived0', 'vis': True, 'dis': False}, {'i': 13, 't': 'Bin0', 'vis': True, 'dis': False}, {'i': 14, 't': 'Deleted Faces0', 'vis': True, 'dis': False}, {'i': 15, 't': '', 'vis': True, 'dis': False}, {'i': 16, 't': 'Filter', 'vis': True, 'dis': False}, {'i': 17, 't': 'Group by: Country', 'vis': True, 'dis': False}, {'i': 18, 't': 'Sort: Priority', 'vis': True, 'dis': False}, {'i': 19, 't': '', 'vis': True, 'dis': False}, {'i': 20, 't': '', 'vis': True, 'dis': False}, {'i': 21, 't': 'Add without photo', 'vis': True, 'dis': False}, {'i': 22, 't': 'India6 people', 'vis': True, 'dis': False}, {'i': 23, 't': 'Asha RaoAnalystREGULARNo usable recognition sampleSeen 4 days ago', 'vis': True, 'dis': False}, {'i': 24, 't': '', 'vis': True, 'dis': False}, {'i': 25, 't': 'Open profile', 'vis': True, 'dis': False}, {'i': 26, 't': '', 'vis': True, 'dis': False}, {'i': 27, 't': 'Bilal KhanAnalystREGULARNo usable recognition sampleSeen 4 days ago', 'vis': True, 'dis': False}, {'i': 28, 't': '', 'vis': True, 'dis': False}, {'i': 29, 't': 'Open profile', 'vis': True, 'dis': False}, {'i': 30, 't': '', 'vis': True, 'dis': False}, {'i': 31, 't': 'Carla MendesAnalystREGULARNo usable recognition sampleSeen 4 days ago', 'vis': True, 'dis': False}, {'i': 32, 't': '', 'vis': True, 'dis': False}, {'i': 33, 't': 'Open profile', 'vis': True, 'dis': False}, {'i': 34, 't': '', 'vis': True, 'dis': False}, {'i': 35, 't': 'Devika IyerAnalystREGULARNo usable recognition sampleSeen 3 days ago', 'vis': True, 'dis': False}, {'i': 36, 't': '', 'vis': True, 'dis': False}, {'i': 37, 't': 'Open profile', 'vis': True, 'dis': False}, {'i': 38, 't': '', 'vis': True, 'dis': False}, {'i': 39, 't': 'New Audit PersonAnalystREGULAR2 photos · 1 sightingSeen today', 'vis': True, 'dis': False}, {'i': 40, 't': '', 'vis': True, 'dis': False}, {'i': 41, 't': 'Open profile', 'vis': True, 'dis': False}, {'i': 42, 't': '', 'vis': True, 'dis': False}, {'i': 43, 't': 'Zedekiah ValeObserverREGULARNo usable recognition sampleNever seen', 'vis': True, 'dis': False}, {'i': 44, 't': '', 'vis': True, 'dis': False}, {'i': 45, 't': 'Open profile', 'vis': True, 'dis': False}, {'i': 46, 't': '', 'vis': True, 'dis': False}, {'i': 47, 't': '', 'vis': True, 'dis': True}, {'i': 48, 't': '1', 'vis': True, 'dis': False}, {'i': 49, 't': '', 'vis': True, 'dis': True}, {'i': 50, 't': '', 'vis': True, 'dis': False}, {'i': 51, 't': '', 'vis': True, 'dis': False}, {'i': 52, 't': '', 'vis': True, 'dis': False}, {'i': 53, 't': 'Cancel', 'vis': True, 'dis': False}, {'i': 54, 't': 'Create person', 'vis': True, 'dis': False}]
+imulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+
+COLLECTIONS
+
+All People
+
+6
+
+Favorites
+
+0
+
+With Photos
+
+1
+
+No Photos
+
+5
+
+Archived
+
+0
+
+Bin
+
+0
+
+Deleted Faces
+
+0
+
+Last refreshed
+
+03:48 AM
+
+People
+
+(6)
+
+Manage and browse all known identities
+
+Filter
+Group by: Country
+Sort: Priority
+Add without photo
+
+6
+
+Total People
+
+1
+
+With Photos
+
+5
+
+No Photos
+
+0
+
+Favorites
+
+5
+
+Seen in last 7 days
+
+6
+
+Added Today
+
+INDIA
+
+6 PEOPLE
+
+Asha Rao
+
+Analyst
+
+REGULAR
+
+No usable recognition sample
+
+Seen 4 days ago
+
+Open profile
+
+Bilal Khan
+
+Analyst
+
+REGULAR
+
+No usable recognition sample
+
+Seen 4 days ago
+
+Open profile
+
+Carla Mendes
+
+Analyst
+
+REGULAR
+
+No usable recognition sample
+
+Seen 4 days ago
+
+Open profile
+
+Devika Iyer
+
+Analyst
+
+REGULAR
+
+No usable recognition sample
+
+Seen 3 days ago
+
+Open profile
+
+New Audit Person
+
+Analyst
+
+REGULAR
+
+2 photos · 1 sighting
+
+Seen today
+
+Open profile
+
+Zedekiah Vale
+
+Observer
+
+REGULAR
+
+No usable recognition sample
+
+Never seen
+
+Open profile
+
+Show
+
+Showing 1 to 6 of 6 people
+
+1
+Add person without a photograph
+This creates an identity without a face
+No photograph or biometric data will be stored. Add only observation details you actually know; a face can be enrolled later.
+
+Add New Person Details
+
+Rank *
+Name *
+Country *
+Tag *
+Date *
+Time *
+Place Seen *
+
+Type 3 letters to see saved locations. Pick one to reuse it, or create a new one.
+
+With how many individuals *
+Event/Occasion *
+Person notes
+
+Saved on the new person’s profile. Type @ and at least three characters to mention an existing person.
+
+Cancel
+Create person

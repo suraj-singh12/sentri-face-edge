@@ -1,0 +1,2 @@
+id,source_task,contract,runtime_result,evidence,finding,qualification
+SJ-015-X01,SJ-015,Discard an entire pending Encounter from the queue,PASS: actual operation observed,journeys/J08.md step 25 | journeys/J33.md step 17,F16: immediate discard has no confirmation,Additional observed path outside original 509; no assumption of universal data loss or corruption

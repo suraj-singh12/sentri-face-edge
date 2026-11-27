@@ -1,0 +1,809 @@
+{
+  "graph_revision": "g26",
+  "as_of": "2026-11-26T07:19:10.231516+00:00",
+  "generated_at": "2026-11-26T07:19:10.447925+00:00",
+  "requested_detail_level": "PERSON",
+  "returned_detail_level": "PERSON",
+  "focus": {
+    "type": "PERSON",
+    "id": "9ee8bb56-e0af-4771-963c-7c9c3375bae1"
+  },
+  "requested_filters": {
+    "date_from": null,
+    "date_to": null,
+    "recent_activity": null,
+    "locations": [],
+    "missing_location": "INCLUDE",
+    "lifecycle": [],
+    "identity_state": [],
+    "biometric_state": [],
+    "country": [],
+    "rank": [],
+    "priority": [],
+    "evidence_type": [
+      "CO_OBSERVED"
+    ],
+    "relationship_type": [],
+    "min_relationship_strength": 2,
+    "activity": [],
+    "pattern_type": []
+  },
+  "effective_filters": {
+    "date_from": null,
+    "date_to": null,
+    "recent_activity": null,
+    "locations": [],
+    "missing_location": "INCLUDE",
+    "lifecycle": [],
+    "identity_state": [],
+    "biometric_state": [],
+    "country": [],
+    "rank": [],
+    "priority": [],
+    "evidence_type": [
+      "CO_OBSERVED"
+    ],
+    "relationship_type": [],
+    "min_relationship_strength": 2,
+    "activity": [],
+    "pattern_type": []
+  },
+  "ranking": "SALIENCE",
+  "limits": {
+    "people": 25,
+    "clusters": 10,
+    "events": 25,
+    "evidence": 25,
+    "media": 25,
+    "relationships": 50,
+    "patterns": 10,
+    "provenance": 100,
+    "facets": 100
+  },
+  "scope_totals": {
+    "people": 1,
+    "relationships": 2,
+    "clusters": 0,
+    "finalized_events": 3
+  },
+  "available_facets": {
+    "filter_semantics_version": "world-filters-v1",
+    "ranking_version": "descriptive-salience-v1",
+    "clustering_version": "connected-evidence-components-v1",
+    "calculation_version": "world-descriptive-v1",
+    "intelligence_extension_version": "world-intelligence-v1"
+  },
+  "returned_counts": {
+    "people": 3,
+    "clusters": 0,
+    "events": 0,
+    "evidence": 0,
+    "relationships": 2,
+    "patterns": 0,
+    "media": 0,
+    "discoveries": 0
+  },
+  "pagination": {
+    "RELATIONSHIPS": {
+      "collection": "RELATIONSHIPS",
+      "total_count": 2,
+      "returned_count": 2,
+      "has_more": false,
+      "next_cursor": null,
+      "truncated": false,
+      "truncation_reason": null
+    },
+    "EVENTS": {
+      "collection": "EVENTS",
+      "total_count": 3,
+      "returned_count": 0,
+      "has_more": true,
+      "next_cursor": null,
+      "truncated": true,
+      "truncation_reason": "collection_not_requested"
+    }
+  },
+  "truncated": true,
+  "has_more": false,
+  "next_cursor": null,
+  "people": [
+    {
+      "canonical_person_id": "9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+      "historical_person_ids": [],
+      "display_name": "High Alpha",
+      "lifecycle_state": "ACTIVE",
+      "identity_state": "IDENTIFIED",
+      "biometric_state": "NO_FACE",
+      "display": {
+        "country": "India",
+        "rank": "Analyst"
+      },
+      "intelligence_summary": {
+        "relationship_count": 1,
+        "relationship_evidence_count": 2,
+        "activity_bucket": "MEDIUM"
+      },
+      "importance_indicators": [
+        {
+          "factor": "explicit_priority",
+          "value": "Regular",
+          "kind": "OPERATOR_ASSERTED"
+        },
+        {
+          "factor": "finalized_event_count",
+          "value": 3,
+          "kind": "MEASURED"
+        },
+        {
+          "factor": "relationship_count",
+          "value": 1,
+          "kind": "MEASURED"
+        },
+        {
+          "factor": "evidence_count",
+          "value": 2,
+          "kind": "MEASURED"
+        }
+      ],
+      "activity_summary": {
+        "finalized_event_count": 3,
+        "activity_bucket": "MEDIUM",
+        "state": "LOADED"
+      },
+      "ranking": {
+        "applied": false,
+        "intent": "SALIENCE",
+        "rank_position": null,
+        "ranking_reason": "Requested person focus; global ranking was not used to select this object.",
+        "metrics": {
+          "finalized_events": 3,
+          "relationships": 1,
+          "evidence_records": 2,
+          "operator_priority": "Regular"
+        },
+        "metrics_state": "LOADED",
+        "deterministic_tie_break": [
+          "operator_priority",
+          "finalized_events",
+          "evidence_records",
+          "display_name",
+          "canonical_person_id"
+        ],
+        "value_semantics": "deterministic_ordering_not_confidence"
+      },
+      "allowed_actions": [
+        "OPEN",
+        "EDIT",
+        "EDIT_NOTES",
+        "FAVORITE",
+        "MANAGE_FACES",
+        "ARCHIVE",
+        "DELETE",
+        "MERGE"
+      ],
+      "explanation": {
+        "summary": "Requested person focus; global ranking was not used to select this object.",
+        "basis_type": "PERSON_RANKING",
+        "factual_factors": [
+          {
+            "factor": "explicit_priority",
+            "value": "Regular",
+            "kind": "OPERATOR_ASSERTED"
+          },
+          {
+            "factor": "finalized_event_count",
+            "value": 3,
+            "kind": "MEASURED"
+          },
+          {
+            "factor": "relationship_count",
+            "value": 1,
+            "kind": "MEASURED"
+          },
+          {
+            "factor": "evidence_count",
+            "value": 2,
+            "kind": "MEASURED"
+          }
+        ],
+        "derived_factors": [
+          {
+            "factor": "ranking_intent",
+            "value": "SALIENCE"
+          }
+        ],
+        "calculation_version": "descriptive-salience-v1",
+        "evidence_types": [],
+        "evidence_count": 2,
+        "first_occurrence_at": null,
+        "last_occurrence_at": null,
+        "calculation_scope": {
+          "as_of": "2026-11-26T07:19:10.231516+00:00",
+          "date_from": null,
+          "date_to": null,
+          "recent_activity": null,
+          "locations": [],
+          "missing_location": "INCLUDE",
+          "filter_semantics_version": "world-filters-v1"
+        },
+        "strongest_factors": [
+          {
+            "factor": "explicit_priority",
+            "value": "Regular",
+            "kind": "OPERATOR_ASSERTED"
+          },
+          {
+            "factor": "finalized_event_count",
+            "value": 3,
+            "kind": "MEASURED"
+          },
+          {
+            "factor": "relationship_count",
+            "value": 1,
+            "kind": "MEASURED"
+          }
+        ],
+        "method": "deterministic_lexicographic_ordering",
+        "threshold": null,
+        "sample": null,
+        "limitations": [
+          "No probabilistic importance or identity confidence is calculated."
+        ]
+      },
+      "analytics_state": "LOADED",
+      "cluster_memberships": [
+        {
+          "cluster_id": "cluster:58c600d7252cbf010b62",
+          "graph_revision": "g26",
+          "member_count": 3,
+          "grouping_algorithm": "EVIDENCE_CONNECTED_COMPONENT",
+          "algorithm_version": "connected-evidence-components-v1"
+        }
+      ]
+    },
+    {
+      "canonical_person_id": "0ce84209-6e05-4c2b-afea-8abbcf5fbfe7",
+      "historical_person_ids": [],
+      "display_name": "Mixed Person",
+      "lifecycle_state": "ACTIVE",
+      "identity_state": "IDENTIFIED",
+      "biometric_state": "NO_FACE",
+      "display": {
+        "country": "India",
+        "rank": "Analyst"
+      },
+      "intelligence_summary": {
+        "relationship_count": null,
+        "relationship_evidence_count": null,
+        "activity_bucket": null
+      },
+      "importance_indicators": [
+        {
+          "factor": "explicit_priority",
+          "value": "Regular",
+          "kind": "OPERATOR_ASSERTED"
+        },
+        {
+          "factor": "finalized_event_count",
+          "value": null,
+          "kind": "NOT_LOADED"
+        },
+        {
+          "factor": "relationship_count",
+          "value": null,
+          "kind": "NOT_LOADED"
+        },
+        {
+          "factor": "evidence_count",
+          "value": null,
+          "kind": "NOT_LOADED"
+        }
+      ],
+      "activity_summary": {
+        "finalized_event_count": null,
+        "activity_bucket": null,
+        "state": "NOT_LOADED"
+      },
+      "ranking": {
+        "applied": false,
+        "intent": "SALIENCE",
+        "rank_position": null,
+        "ranking_reason": "Requested person focus; global ranking was not used to select this object.",
+        "metrics": {
+          "finalized_events": null,
+          "relationships": null,
+          "evidence_records": null,
+          "operator_priority": "Regular"
+        },
+        "metrics_state": "NOT_LOADED",
+        "deterministic_tie_break": [
+          "operator_priority",
+          "finalized_events",
+          "evidence_records",
+          "display_name",
+          "canonical_person_id"
+        ],
+        "value_semantics": "deterministic_ordering_not_confidence"
+      },
+      "allowed_actions": [
+        "OPEN",
+        "EDIT",
+        "EDIT_NOTES",
+        "FAVORITE",
+        "MANAGE_FACES",
+        "ARCHIVE",
+        "DELETE",
+        "MERGE"
+      ],
+      "explanation": {
+        "summary": "Requested person focus; global ranking was not used to select this object.",
+        "basis_type": "PERSON_RANKING",
+        "factual_factors": [
+          {
+            "factor": "explicit_priority",
+            "value": "Regular",
+            "kind": "OPERATOR_ASSERTED"
+          },
+          {
+            "factor": "finalized_event_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          },
+          {
+            "factor": "relationship_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          },
+          {
+            "factor": "evidence_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          }
+        ],
+        "derived_factors": [
+          {
+            "factor": "ranking_intent",
+            "value": "SALIENCE"
+          }
+        ],
+        "calculation_version": "descriptive-salience-v1",
+        "evidence_types": [],
+        "evidence_count": null,
+        "first_occurrence_at": null,
+        "last_occurrence_at": null,
+        "calculation_scope": {
+          "as_of": "2026-11-26T07:19:10.231516+00:00",
+          "date_from": null,
+          "date_to": null,
+          "recent_activity": null,
+          "locations": [],
+          "missing_location": "INCLUDE",
+          "filter_semantics_version": "world-filters-v1"
+        },
+        "strongest_factors": [
+          {
+            "factor": "explicit_priority",
+            "value": "Regular",
+            "kind": "OPERATOR_ASSERTED"
+          },
+          {
+            "factor": "finalized_event_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          },
+          {
+            "factor": "relationship_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          }
+        ],
+        "method": "deterministic_lexicographic_ordering",
+        "threshold": null,
+        "sample": null,
+        "limitations": [
+          "No probabilistic importance or identity confidence is calculated."
+        ]
+      },
+      "analytics_state": "NOT_LOADED",
+      "cluster_memberships": []
+    },
+    {
+      "canonical_person_id": "5b23ef42-21fb-4bf9-a399-e863977b3501",
+      "historical_person_ids": [],
+      "display_name": "High Beta",
+      "lifecycle_state": "ACTIVE",
+      "identity_state": "IDENTIFIED",
+      "biometric_state": "NO_FACE",
+      "display": {
+        "country": "India",
+        "rank": "Analyst"
+      },
+      "intelligence_summary": {
+        "relationship_count": null,
+        "relationship_evidence_count": null,
+        "activity_bucket": null
+      },
+      "importance_indicators": [
+        {
+          "factor": "explicit_priority",
+          "value": "Regular",
+          "kind": "OPERATOR_ASSERTED"
+        },
+        {
+          "factor": "finalized_event_count",
+          "value": null,
+          "kind": "NOT_LOADED"
+        },
+        {
+          "factor": "relationship_count",
+          "value": null,
+          "kind": "NOT_LOADED"
+        },
+        {
+          "factor": "evidence_count",
+          "value": null,
+          "kind": "NOT_LOADED"
+        }
+      ],
+      "activity_summary": {
+        "finalized_event_count": null,
+        "activity_bucket": null,
+        "state": "NOT_LOADED"
+      },
+      "ranking": {
+        "applied": false,
+        "intent": "SALIENCE",
+        "rank_position": null,
+        "ranking_reason": "Requested person focus; global ranking was not used to select this object.",
+        "metrics": {
+          "finalized_events": null,
+          "relationships": null,
+          "evidence_records": null,
+          "operator_priority": "Regular"
+        },
+        "metrics_state": "NOT_LOADED",
+        "deterministic_tie_break": [
+          "operator_priority",
+          "finalized_events",
+          "evidence_records",
+          "display_name",
+          "canonical_person_id"
+        ],
+        "value_semantics": "deterministic_ordering_not_confidence"
+      },
+      "allowed_actions": [
+        "OPEN",
+        "EDIT",
+        "EDIT_NOTES",
+        "FAVORITE",
+        "MANAGE_FACES",
+        "ARCHIVE",
+        "DELETE",
+        "MERGE"
+      ],
+      "explanation": {
+        "summary": "Requested person focus; global ranking was not used to select this object.",
+        "basis_type": "PERSON_RANKING",
+        "factual_factors": [
+          {
+            "factor": "explicit_priority",
+            "value": "Regular",
+            "kind": "OPERATOR_ASSERTED"
+          },
+          {
+            "factor": "finalized_event_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          },
+          {
+            "factor": "relationship_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          },
+          {
+            "factor": "evidence_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          }
+        ],
+        "derived_factors": [
+          {
+            "factor": "ranking_intent",
+            "value": "SALIENCE"
+          }
+        ],
+        "calculation_version": "descriptive-salience-v1",
+        "evidence_types": [],
+        "evidence_count": null,
+        "first_occurrence_at": null,
+        "last_occurrence_at": null,
+        "calculation_scope": {
+          "as_of": "2026-11-26T07:19:10.231516+00:00",
+          "date_from": null,
+          "date_to": null,
+          "recent_activity": null,
+          "locations": [],
+          "missing_location": "INCLUDE",
+          "filter_semantics_version": "world-filters-v1"
+        },
+        "strongest_factors": [
+          {
+            "factor": "explicit_priority",
+            "value": "Regular",
+            "kind": "OPERATOR_ASSERTED"
+          },
+          {
+            "factor": "finalized_event_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          },
+          {
+            "factor": "relationship_count",
+            "value": null,
+            "kind": "NOT_LOADED"
+          }
+        ],
+        "method": "deterministic_lexicographic_ordering",
+        "threshold": null,
+        "sample": null,
+        "limitations": [
+          "No probabilistic importance or identity confidence is calculated."
+        ]
+      },
+      "analytics_state": "NOT_LOADED",
+      "cluster_memberships": []
+    }
+  ],
+  "clusters": [],
+  "events": [],
+  "evidence": [],
+  "relationships": [
+    {
+      "relationship_id": "relationship:5b23ef42-21fb-4bf9-a399-e863977b3501:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+      "source_person_id": "5b23ef42-21fb-4bf9-a399-e863977b3501",
+      "target_person_id": "9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+      "directionality": "UNDIRECTED",
+      "relationship_types": [
+        "ASSOCIATED_WITH"
+      ],
+      "evidence_count": 2,
+      "evidence_type_counts": {
+        "CO_OBSERVED": 2
+      },
+      "first_occurrence_at": "2026-11-21T12:00:00+00:00",
+      "last_occurrence_at": "2026-11-22T12:00:00+00:00",
+      "strength_basis": "EVIDENCE_COUNT_IN_SCOPE",
+      "explanation": {
+        "summary": "Supported by 2 active authoritative evidence records in scope.",
+        "basis_type": "EVIDENCE_COUNT_IN_SCOPE",
+        "factual_factors": [
+          {
+            "factor": "canonical_endpoints",
+            "value": [
+              "5b23ef42-21fb-4bf9-a399-e863977b3501",
+              "9ee8bb56-e0af-4771-963c-7c9c3375bae1"
+            ]
+          },
+          {
+            "factor": "evidence_type_counts",
+            "value": {
+              "CO_OBSERVED": 2
+            }
+          },
+          {
+            "factor": "directionality",
+            "value": "UNDIRECTED"
+          }
+        ],
+        "derived_factors": [],
+        "calculation_version": "world-descriptive-v1",
+        "evidence_types": [
+          "CO_OBSERVED"
+        ],
+        "evidence_count": 2,
+        "first_occurrence_at": "2026-11-21T12:00:00+00:00",
+        "last_occurrence_at": "2026-11-22T12:00:00+00:00",
+        "calculation_scope": {
+          "as_of": "2026-11-26T07:19:10.231516+00:00",
+          "date_from": null,
+          "date_to": null,
+          "recent_activity": null,
+          "locations": [],
+          "missing_location": "INCLUDE",
+          "filter_semantics_version": "world-filters-v1"
+        },
+        "strongest_factors": [
+          {
+            "factor": "evidence_type_counts",
+            "value": {
+              "CO_OBSERVED": 2
+            }
+          },
+          {
+            "factor": "occurrence_window",
+            "value": {
+              "first": "2026-11-21T12:00:00+00:00",
+              "last": "2026-11-22T12:00:00+00:00"
+            }
+          }
+        ],
+        "method": "active_authoritative_evidence_count_after_scope",
+        "threshold": {
+          "minimum_evidence_count": 2
+        },
+        "sample": {
+          "evidence_count": 2
+        },
+        "limitations": [
+          "Strength is a descriptive evidence count, not confidence or risk."
+        ]
+      },
+      "selected_evidence_strength": 2,
+      "qualifies_for_cluster": true,
+      "direction_counts": {
+        "UNDIRECTED": 2
+      },
+      "note_reference_direction_counts": {},
+      "encounter_recurrence": {
+        "count": 2,
+        "first_occurrence_at": "2026-11-21T12:00:00+00:00",
+        "latest_occurrence_at": "2026-11-22T12:00:00+00:00",
+        "supporting_encounters": [
+          {
+            "event_id": "98848247-ad72-49de-a5f5-354ea3bc85e5",
+            "occurred_at": "2026-11-22T12:00:00+00:00",
+            "location": "Audit Lab",
+            "event_time": {
+              "date": "2026-11-22",
+              "time_precision": "exact",
+              "start_time": "12:00",
+              "end_time": null
+            }
+          },
+          {
+            "event_id": "892700bb-7641-4054-a20a-6e4b8c432a1e",
+            "occurred_at": "2026-11-21T12:00:00+00:00",
+            "location": "Audit Lab",
+            "event_time": {
+              "date": "2026-11-21",
+              "time_precision": "exact",
+              "start_time": "12:00",
+              "end_time": null
+            }
+          }
+        ],
+        "supporting_encounters_state": {
+          "total_count": 2,
+          "returned_count": 2,
+          "has_more": false,
+          "truncated": false,
+          "retrieval": "RELATIONSHIP_EVIDENCE_COLLECTION"
+        },
+        "measurement": "distinct_finalized_encounter_canonical_unordered_pair"
+      }
+    },
+    {
+      "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+      "source_person_id": "0ce84209-6e05-4c2b-afea-8abbcf5fbfe7",
+      "target_person_id": "9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+      "directionality": "UNDIRECTED",
+      "relationship_types": [
+        "ASSOCIATED_WITH"
+      ],
+      "evidence_count": 1,
+      "evidence_type_counts": {
+        "CO_OBSERVED": 1
+      },
+      "first_occurrence_at": "2026-11-23T12:00:00+00:00",
+      "last_occurrence_at": "2026-11-23T12:00:00+00:00",
+      "strength_basis": "EVIDENCE_COUNT_IN_SCOPE",
+      "explanation": {
+        "summary": "Supported by 1 active authoritative evidence records in scope.",
+        "basis_type": "EVIDENCE_COUNT_IN_SCOPE",
+        "factual_factors": [
+          {
+            "factor": "canonical_endpoints",
+            "value": [
+              "0ce84209-6e05-4c2b-afea-8abbcf5fbfe7",
+              "9ee8bb56-e0af-4771-963c-7c9c3375bae1"
+            ]
+          },
+          {
+            "factor": "evidence_type_counts",
+            "value": {
+              "CO_OBSERVED": 1
+            }
+          },
+          {
+            "factor": "directionality",
+            "value": "UNDIRECTED"
+          }
+        ],
+        "derived_factors": [],
+        "calculation_version": "world-descriptive-v1",
+        "evidence_types": [
+          "CO_OBSERVED"
+        ],
+        "evidence_count": 1,
+        "first_occurrence_at": "2026-11-23T12:00:00+00:00",
+        "last_occurrence_at": "2026-11-23T12:00:00+00:00",
+        "calculation_scope": {
+          "as_of": "2026-11-26T07:19:10.231516+00:00",
+          "date_from": null,
+          "date_to": null,
+          "recent_activity": null,
+          "locations": [],
+          "missing_location": "INCLUDE",
+          "filter_semantics_version": "world-filters-v1"
+        },
+        "strongest_factors": [
+          {
+            "factor": "evidence_type_counts",
+            "value": {
+              "CO_OBSERVED": 1
+            }
+          },
+          {
+            "factor": "occurrence_window",
+            "value": {
+              "first": "2026-11-23T12:00:00+00:00",
+              "last": "2026-11-23T12:00:00+00:00"
+            }
+          }
+        ],
+        "method": "active_authoritative_evidence_count_after_scope",
+        "threshold": {
+          "minimum_evidence_count": 2
+        },
+        "sample": {
+          "evidence_count": 1
+        },
+        "limitations": [
+          "Strength is a descriptive evidence count, not confidence or risk."
+        ]
+      },
+      "selected_evidence_strength": 1,
+      "qualifies_for_cluster": false,
+      "direction_counts": {
+        "UNDIRECTED": 1
+      },
+      "note_reference_direction_counts": {},
+      "encounter_recurrence": {
+        "count": 1,
+        "first_occurrence_at": "2026-11-23T12:00:00+00:00",
+        "latest_occurrence_at": "2026-11-23T12:00:00+00:00",
+        "supporting_encounters": [
+          {
+            "event_id": "c5824f19-0865-49f2-b5da-6d158343f16d",
+            "occurred_at": "2026-11-23T12:00:00+00:00",
+            "location": "Audit Lab",
+            "event_time": {
+              "date": "2026-11-23",
+              "time_precision": "exact",
+              "start_time": "12:00",
+              "end_time": null
+            }
+          }
+        ],
+        "supporting_encounters_state": {
+          "total_count": 1,
+          "returned_count": 1,
+          "has_more": false,
+          "truncated": false,
+          "retrieval": "RELATIONSHIP_EVIDENCE_COLLECTION"
+        },
+        "measurement": "distinct_finalized_encounter_canonical_unordered_pair"
+      }
+    }
+  ],
+  "patterns": [],
+  "media": [],
+  "discoveries": [],
+  "discovery_context": {},
+  "contract": "sentriface.world-graph",
+  "contract_version": 2,
+  "filter_semantics_version": "world-filters-v1",
+  "ranking_version": "descriptive-salience-v1",
+  "clustering_version": "connected-evidence-components-v1",
+  "calculation_version": "world-descriptive-v1"
+}

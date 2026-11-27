@@ -1,0 +1,497 @@
+[
+  {
+    "private_asset_id": "genuine/01-signup-response.png",
+    "sha256": "ea32f9cfed2a995c5bb8a39fa1dfc40a8b23adc50c9f28a8fd045d8cc56844cf",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine/02-acknowledge-response.png",
+    "sha256": "40d046b9d03a0bd55bb1e9c56cc24c31a222b07a9e71858331c3cb0ebae71989",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine/03-person-create-response.png",
+    "sha256": "484499837c8e2814b6332d519022f7ceb36228ac925ca21a5ddbc58628643655",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine/04-reference-prepare-response.png",
+    "sha256": "9f8ad0d032786c005bb94b0301373cf793d5f21cd2de538e0199dd978e456b36",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine/05-reference-confirm-response.png",
+    "sha256": "48e059347b9044564fda71d64eefe023b2d877647f1c1ce5fc863041ea02a49d",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine/06-recognize-response.png",
+    "sha256": "0d9983f8830e6fb797ae54112e74f086c3f5a3179fe5909f3f12e2c1e22a9889",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine/07-photo-review-decision-response.png",
+    "sha256": "62045c7945df693f98c89100fc0e97b70f7d019c44cf561486a10ea8406b2fbe",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine/08-photo-review-complete-response.png",
+    "sha256": "e59abd8aa476b3a73fca515e02ce989337b53dc9639eb20d8ba1137450c0aebb",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine/09-login-response.png",
+    "sha256": "ffa242d0ec1824ed64698d1fd3e9a9e5836c4fef4054d822d3f02a8757c52fad",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine/finalized.png",
+    "sha256": "45157ab9fe7b0b96733ce2959971a21363a741bf199cdedcdedf91aff8d70564",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/01-signup-response.png",
+    "sha256": "ea32f9cfed2a995c5bb8a39fa1dfc40a8b23adc50c9f28a8fd045d8cc56844cf",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/02-acknowledge-response.png",
+    "sha256": "40d046b9d03a0bd55bb1e9c56cc24c31a222b07a9e71858331c3cb0ebae71989",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/03-person-create-response.png",
+    "sha256": "1598df11ce274509dccaa174b258924fe627c41202e12e95d681e1708733f929",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/04-reference-prepare-response.png",
+    "sha256": "36824818a217b2cdafddf2ccda90cc706dc783840d1d43c614a724a14e6336f9",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/05-reference-confirm-response.png",
+    "sha256": "a7f3994e6811bc70221ee70a20f477b8b2b6e564eb4fb7eaa6e1d3bd4b5880e6",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/06-recognize-response.png",
+    "sha256": "430553bc366b1b3c86fc7328eac3bd885b055a993ec95c08239a7b013f1e85e6",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/07-photo-review-decision-response.png",
+    "sha256": "1b75b8081c7f57fa5a00b8f6cfc4b5e23177789b79385102e6831b4e6d289b1d",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/08-photo-review-complete-response.png",
+    "sha256": "6e58f1bca99fc26c5e972440009b48be6c344358998ae0c1fc5cf2a550089ed8",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/failure.png",
+    "sha256": "758bc24db07bbb555a5a3f89b171148a619dbaaae42a7dace5ae640437eb7604",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060659/stable-09-verified-profile.png",
+    "sha256": "758bc24db07bbb555a5a3f89b171148a619dbaaae42a7dace5ae640437eb7604",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "FAIL",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/01-signup-response.png",
+    "sha256": "ea32f9cfed2a995c5bb8a39fa1dfc40a8b23adc50c9f28a8fd045d8cc56844cf",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/02-acknowledge-response.png",
+    "sha256": "40d046b9d03a0bd55bb1e9c56cc24c31a222b07a9e71858331c3cb0ebae71989",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/03-person-create-response.png",
+    "sha256": "76425f00a9339d977f71ef760db4d0dd02c34b67bf079235786049076c9d0daa",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/04-reference-prepare-response.png",
+    "sha256": "541d1c4864d16ffefc211ce6975eb0e7808f5d9a8924631a279e754d0450dd0e",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/05-reference-confirm-response.png",
+    "sha256": "8ae04b10d4eacda9198349b36b8ab3b6b7d835600237b9486ce1557f80fa0283",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/06-recognize-response.png",
+    "sha256": "64344f3f931dbfebc8d98eb7da494410ddbc0b8db744131638b357695904e6ec",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/07-photo-review-decision-response.png",
+    "sha256": "6dcbe4199677438f436f770d2ad6a6cf518a59b4d5c337ba0ae59b3748862d8a",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/08-photo-review-complete-response.png",
+    "sha256": "0e23ec346144e0fb155de5c1f016ae5f96821272287e64d6fdda3e16aab429fa",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/11-login-response.png",
+    "sha256": "0a9a6cc03e68ab324e59cbdc348af824d1a647ced917b826df66c598c4d83680",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/finalized.png",
+    "sha256": "6da05f47a4c33930ecce469c20320cdc0fb6e90bd7792cf33779dd2e2d672d1b",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/stable-09-verified-profile.png",
+    "sha256": "55f1a1ea04629dc77f404b5c3fca73c8ba6df84ad1a9e6026e14741ffdfeef9a",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/stable-10-verified-profile.png",
+    "sha256": "fc755123c689a6d5909473d99729b698c79ea096781867b6eee4195e62313ad6",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  },
+  {
+    "private_asset_id": "genuine-20261110-060856/stable-12-verified-profile.png",
+    "sha256": "ee284a7ece874190767f42a1d78ed3586f8f6741086aaf5a6866af561363482d",
+    "raster_pixels": {
+      "width": 1440,
+      "height": 1000
+    },
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "journey": "J41",
+    "role": "Administrator",
+    "kind": "genuine ONNX; approved existing local photo pair",
+    "publication": "PRIVATE; no image bytes in Git",
+    "attempt_result": "PASS",
+    "qualification": "Endpoint-response/transient unless stable-*; final successful attempt genuine-20261110-060856 includes independently inspected stable completed/refreshed/restarted profiles."
+  }
+]

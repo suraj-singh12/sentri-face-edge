@@ -1,0 +1,108 @@
+OK screenshot auth/owner-login-filled
+OK screenshot auth/owner-signed-in
+OK login owner
+OK screenshot 50-check-photo/initial-owner
+OK nav Check a photo 
+fileinputs 1
+OK check file selected 
+OK screenshot 50-check-photo/result-1
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Prefer quality photos for recognition
+
+Input Image
+
+Uploaded photo
+
+Load Another
+1 FACE DETECTED
+Face 01
+
+Face Quality
+
+1 FACE
+
+Face 01
+
+Fair
+
+90
+
+Missing landmarks
+
+Quality
+
+Detection
+
+Recognition Results
+
+Best matches from your people database
+
+1 DETECTED
+
+Face 01
+
+No match found
+
+HUMAN REVIEW
+
+No person met the recognition threshold.
+
+Browse People
+Create new person
+
+Showing 1 of 1 face
+
+Accept
+Select a confident match
+New Person
+Create a person from Face 01
+Skip for now
+Come back to this face later
+Clear
+Reset and try another photo
+Discard Face
+Complete Review
+
+1 face still needs Accept or Discard. Skipped faces stay undecided.
+
+Uploading audit-face-2.png
+Recognized 1 face(s)
+Event details
+
+Confirm these details once for this Event. Person decisions follow on the page.
+
+Event / occasion *
+Date *
+Time
+Location *
+
+Type 3 letters to see saved locations. Pick one to reuse it, or create a new one.
+
+Context
+Event Notes
+
+Type @ and three characters, then select a Person to record an explicit mention.
+
+Cancel
+Confirm Event
+buttons ['Settings', 'Back up now', 'Check a photo', 'Review photos', 'People', 'Events', 'World', 'Settings', 'Load Another', 'Face 01\n\nFair\n\n90\n\nMissing landmarks\n\nQuality\n\nDetection', 'Face 01\n\nNo match found\n\nHUMAN REVIEW', 'Browse People', 'Create new person', 'Accept\nSelect a confident match', 'New Person\nCreate a person from Face 01', 'Skip for now\nCome back to this face later', 'Clear\nReset and try another photo', 'Discard Face', 'Complete Review']

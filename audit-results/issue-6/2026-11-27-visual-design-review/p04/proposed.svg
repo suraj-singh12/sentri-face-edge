@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+<image href="current.png" x="0" y="0" width="1440" height="900"/>
+<rect x="1073" y="211" width="70" height="25" rx="0" fill="#ffffff" stroke="none" stroke-width="1" opacity="1"/>
+<text x="1077" y="229" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#20242a" text-anchor="start" >Labels</text>
+<rect x="1074" y="235" width="335" height="38" rx="0" fill="#ffffff" stroke="none" stroke-width="1" opacity="1"/>
+<text x="1077" y="247" font-family="Liberation Sans, Arial, sans-serif" font-size="9" font-weight="400" fill="#687180" text-anchor="start" >Use labels for roles, teams, access groups, or other</text>
+<text x="1077" y="260" font-family="Liberation Sans, Arial, sans-serif" font-size="9" font-weight="400" fill="#687180" text-anchor="start" >searchable keywords.</text>
+<rect x="1200" y="278" width="220" height="25" rx="0" fill="#ffffff" stroke="none" stroke-width="1" opacity="1"/>
+<text x="1205" y="294" font-family="Liberation Sans, Arial, sans-serif" font-size="10" font-weight="400" fill="#8a94a0" text-anchor="start" >Type a label and press Enter</text>
+</svg>

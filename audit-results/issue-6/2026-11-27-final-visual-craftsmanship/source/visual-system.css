@@ -1,0 +1,389 @@
+/* SentriFace Edge — proposed cohesive visual refinement prototype.
+   Injected only in a disposable browser session for design evidence; not product code. */
+
+:root[data-mantine-color-scheme="light"] {
+  --mantine-color-body: #f3f6f7;
+  --sentriface-app-bg:
+    radial-gradient(circle at 18% 4%, rgba(15, 157, 136, 0.055), transparent 30rem),
+    linear-gradient(135deg, #f7f9fa 0%, #eef3f5 52%, #f7f9fa 100%);
+  --sentriface-header-bg: rgba(255, 255, 255, 0.78);
+  --sentriface-card-bg: rgba(255, 255, 255, 0.93);
+  --sentriface-solid-card-bg: #ffffff;
+  --sentriface-card-border: rgba(15, 23, 42, 0.095);
+  --sentriface-card-shadow: 0 1px 2px rgba(15, 23, 42, 0.035), 0 12px 30px rgba(15, 23, 42, 0.055);
+  --sentriface-tab-color: #52606d;
+  --sentriface-muted-surface: #f3f5f6;
+  --sentriface-border: #dde4e8;
+  --sentriface-accent-border: rgba(15, 157, 136, 0.24);
+  --sentriface-accent-text: #087866;
+}
+
+:root[data-mantine-color-scheme="dark"] {
+  --mantine-color-body: #071017;
+  --sentriface-app-bg:
+    radial-gradient(circle at 18% 4%, rgba(45, 212, 191, 0.07), transparent 30rem),
+    linear-gradient(135deg, #071017 0%, #0b151d 52%, #101b24 100%);
+  --sentriface-header-bg: rgba(7, 16, 23, 0.82);
+  --sentriface-card-bg: rgba(15, 25, 34, 0.88);
+  --sentriface-solid-card-bg: #101a23;
+  --sentriface-card-border: rgba(203, 213, 225, 0.14);
+  --sentriface-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.24), 0 14px 34px rgba(0, 0, 0, 0.22);
+  --sentriface-tab-color: #a7b3bd;
+  --sentriface-muted-surface: rgba(148, 163, 184, 0.09);
+  --sentriface-border: rgba(203, 213, 225, 0.16);
+  --sentriface-accent-border: rgba(45, 212, 191, 0.34);
+  --sentriface-accent-text: #5eead4;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Header: quieter glass surface, tighter hierarchy, refined control capsules. */
+.sentriface-header {
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.035);
+}
+
+.brand-icon {
+  width: 38px;
+  height: 38px;
+}
+
+.brand-title {
+  font-size: 19px;
+  letter-spacing: -0.025em;
+}
+
+.header-utility-group,
+.header-account-trigger {
+  height: 40px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sentriface-solid-card-bg) 74%, transparent);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+}
+
+.header-utility-group {
+  padding: 2px;
+  gap: 1px;
+}
+
+.header-actions .mantine-ActionIcon-root {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--sentriface-tab-color);
+}
+
+.header-actions .mantine-ActionIcon-root:hover {
+  background: color-mix(in srgb, var(--sentriface-accent-border) 28%, transparent);
+  color: var(--sentriface-accent-text);
+}
+
+.header-account-trigger {
+  min-width: 168px;
+  padding: 3px 9px 3px 4px;
+}
+
+.header-account-trigger .mantine-Avatar-root {
+  width: 32px;
+  height: 32px;
+}
+
+/* Primary navigation: segmented control rather than a sparse underline row. */
+.sentriface-tabs .mantine-Tabs-list {
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  gap: 2px;
+  padding: 4px;
+  margin-bottom: 14px !important;
+  overflow-x: auto;
+  border: 1px solid var(--sentriface-card-border);
+  border-bottom-color: var(--sentriface-card-border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--sentriface-muted-surface) 84%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  scrollbar-width: none;
+}
+
+.sentriface-tabs .mantine-Tabs-list::-webkit-scrollbar {
+  display: none;
+}
+
+.sentriface-tabs .mantine-Tabs-tab {
+  height: 32px;
+  min-width: auto;
+  padding: 0 15px;
+  border: 0 !important;
+  border-radius: 9px;
+  color: var(--sentriface-tab-color);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.008em;
+  white-space: nowrap;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.sentriface-tabs .mantine-Tabs-tab::before,
+.sentriface-tabs .mantine-Tabs-tab::after {
+  display: none !important;
+}
+
+.sentriface-tabs .mantine-Tabs-tab:hover {
+  color: var(--mantine-color-text);
+  background: color-mix(in srgb, var(--sentriface-solid-card-bg) 62%, transparent);
+}
+
+.sentriface-tabs .mantine-Tabs-tab[data-active] {
+  color: var(--sentriface-accent-text);
+  background: var(--sentriface-solid-card-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 0 0 1px color-mix(in srgb, var(--sentriface-accent-border) 70%, transparent);
+}
+
+/* Card and panel anatomy: cleaner borders, softer elevation, consistent radius. */
+.surface-card,
+.mantine-Card-root,
+.mantine-Paper-root[data-with-border="true"],
+.world-section,
+.world-scope-controls,
+.world-inspector {
+  border-color: var(--sentriface-card-border) !important;
+  box-shadow: var(--sentriface-card-shadow);
+}
+
+.mantine-Card-root,
+.surface-card,
+.mantine-Paper-root[data-with-border="true"] {
+  border-radius: 12px;
+}
+
+.mantine-Modal-content {
+  border-radius: 14px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32);
+}
+
+.mantine-Modal-header {
+  padding-bottom: 8px;
+}
+
+.mantine-Modal-title {
+  letter-spacing: -0.015em;
+}
+
+/* Buttons: consistent height, radius, weight, and restrained filled color. */
+.mantine-Button-root {
+  border-radius: 8px;
+  font-weight: 650;
+  letter-spacing: -0.008em;
+  transition: transform 90ms ease, filter 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.mantine-Button-root:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.mantine-Button-root[data-variant="filled"] {
+  filter: saturate(0.88);
+}
+
+.mantine-Button-root[data-variant="light"] {
+  border: 1px solid transparent;
+}
+
+.mantine-Button-root[data-variant="default"] {
+  background: color-mix(in srgb, var(--sentriface-solid-card-bg) 86%, transparent);
+  border-color: var(--sentriface-border);
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.025);
+}
+
+/* Inputs and validation: quieter border, consistent radius, clearer focus. */
+.mantine-Input-input,
+.mantine-Textarea-input,
+.mantine-Select-input,
+.mantine-PasswordInput-input {
+  border-radius: 8px;
+  border-color: var(--sentriface-border);
+  background: color-mix(in srgb, var(--sentriface-solid-card-bg) 92%, transparent);
+}
+
+.mantine-Input-input:focus,
+.mantine-Textarea-input:focus,
+.mantine-Select-input:focus,
+.mantine-PasswordInput-input:focus {
+  border-color: color-mix(in srgb, var(--sentriface-accent-text) 62%, var(--sentriface-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sentriface-accent-border) 42%, transparent);
+}
+
+.mantine-InputWrapper-label,
+.mantine-InputWrapper-required {
+  font-weight: 650;
+  letter-spacing: -0.006em;
+}
+
+/* Chips and badges: compact but legible, neutral unless semantic attention is needed. */
+.mantine-Badge-root {
+  border-radius: 999px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.mantine-Badge-root[data-variant="light"] {
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
+
+/* Menus/popovers: softer shadow and more predictable row rhythm. */
+.mantine-Menu-dropdown,
+.mantine-Popover-dropdown {
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.mantine-Menu-item {
+  border-radius: 7px;
+  margin: 1px 4px;
+  font-weight: 550;
+}
+
+.mantine-Menu-label {
+  font-size: 10px;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+/* Table/list rhythm: subtle separators instead of heavy boxes wherever the app already uses rows. */
+.world-row {
+  min-height: 54px;
+  padding: 9px 11px;
+}
+
+.world-section-header {
+  min-height: 46px;
+}
+
+/* Notification popover: more structured alert rows. */
+.shell-notification-popover {
+  padding: 10px;
+}
+
+.shell-notification-row {
+  border-radius: 9px;
+  padding: 8px;
+}
+
+/* Keep narrow navigation usable as a segmented control. */
+@media (max-width: 48em) {
+  .sentriface-tabs .mantine-Tabs-list {
+    width: 100%;
+  }
+
+  .sentriface-tabs .mantine-Tabs-tab {
+    padding: 0 12px;
+  }
+}
+
+/* Person profile action hierarchy: direct high-frequency/destructive actions remain visible;
+   long low-frequency reference management is represented in the overflow menu by prototype JS. */
+@media (max-width: 48em) {
+  .prototype-overflow-action {
+    display: none !important;
+  }
+}
+
+.people-profile-topbar > .mantine-Group-root:last-child {
+  row-gap: 8px;
+}
+
+.people-profile-topbar .mantine-Button-root {
+  white-space: nowrap;
+}
+
+@media (max-width: 48em) {
+  .people-profile-topbar {
+    gap: 10px;
+  }
+
+  .people-profile-topbar > .mantine-Group-root:first-child {
+    width: 100%;
+  }
+
+  .people-profile-topbar > .mantine-Group-root:last-child {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .people-profile-topbar > .mantine-Group-root:last-child .mantine-Button-root,
+  .people-profile-topbar > .mantine-Group-root:last-child .mantine-Menu-root {
+    width: 100%;
+  }
+
+  .people-profile-topbar > .mantine-Group-root:last-child .mantine-Button-root {
+    justify-content: center;
+  }
+}
+
+/* Owner setup validation: feedback is attached to the password field rather than a detached banner. */
+.prototype-field-feedback {
+  margin-top: 7px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--mantine-color-red-5) 24%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mantine-color-red-0) 72%, transparent);
+}
+
+.prototype-field-feedback .prototype-field-error {
+  color: var(--mantine-color-red-7);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.prototype-field-feedback .prototype-password-rules {
+  margin-top: 4px;
+  color: var(--mantine-color-gray-7);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.prototype-detached-validation {
+  display: none !important;
+}
+
+/* World mode and other compact segmented controls share the same quiet segmented language. */
+.mantine-SegmentedControl-root {
+  border: 1px solid var(--sentriface-card-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sentriface-muted-surface) 86%, transparent);
+  padding: 2px;
+}
+
+.mantine-SegmentedControl-indicator {
+  border-radius: 8px;
+  background: var(--sentriface-solid-card-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 0 0 1px color-mix(in srgb, var(--sentriface-accent-border) 70%, transparent);
+}
+
+.mantine-SegmentedControl-label {
+  font-weight: 650;
+  color: var(--sentriface-tab-color);
+}
+
+.mantine-SegmentedControl-label[data-active] {
+  color: var(--sentriface-accent-text);
+}
+
+/* Transient sign-in toast is not part of the steady-state design evidence. */
+.mantine-Notifications-root {
+  display: none !important;
+}
+
+.people-profile-topbar .mantine-Button-root[data-variant="subtle"] {
+  border: 1px solid var(--sentriface-border);
+  background: color-mix(in srgb, var(--sentriface-solid-card-bg) 86%, transparent);
+  color: var(--mantine-color-text);
+}

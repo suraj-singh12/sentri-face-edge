@@ -1,0 +1,256 @@
+OK nav People 
+OK screenshot 11-lifecycle/manual-person-profile
+OK open manual profile 
+OK screenshot 11-lifecycle/archive-confirmation
+VERIFIED archive confirmation nts | World | Settings |  | All People |  | / |  | Analyst |  | Open Person Graph | Add Face | Manage faces | Edit | Archive | Manage Recognition References | More | Analyst |  | Manual Audit Person |  | • |  | India |  | REGULAR | 0 PHOTOS | NO SIGHTINGS | NO ORDINARY RECOGNITION SAMPLE |  | Notes |  | Manual add without photo audit note. |  | Overview | Photos (0) | Sightings (0) | Events | Associations (0) | Activity (2) |  | Identity Information |  | Rank |  | Manual Audit Person |  | Country |  | India |  | Tag |  | Regular |  | Created |  | Nov 26, 2026, 03:49 AM |  | Added by |  | Audit Owner |  | Latest Sighting |  | No sightings recorded. |  | Recent Sightings |  | No recent sightings. |  | View All Sightings |  | Archive Analyst? |  | Analyst is hidden from recognition. Everything is kept; restore anytime. |  | Cancel | Archive person
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+
+All People
+
+/
+
+Analyst
+
+Open Person Graph
+Add Face
+Manage faces
+Edit
+Archive
+Manage Recognition References
+More
+Analyst
+
+Manual Audit Person
+
+•
+
+India
+
+REGULAR
+0 PHOTOS
+NO SIGHTINGS
+NO ORDINARY RECOGNITION SAMPLE
+
+Notes
+
+Manual add without photo audit note.
+
+Overview
+Photos (0)
+Sightings (0)
+Events
+Associations (0)
+Activity (2)
+
+Identity Information
+
+Rank
+
+Manual Audit Person
+
+Country
+
+India
+
+Tag
+
+Regular
+
+Created
+
+Nov 26, 2026, 03:49 AM
+
+Added by
+
+Audit Owner
+
+Latest Sighting
+
+No sightings recorded.
+
+Recent Sightings
+
+No recent sightings.
+
+View All Sightings
+
+Archive Analyst?
+
+Analyst is hidden from recognition. Everything is kept; restore anytime.
+
+Cancel
+Archive person
+buttons [{'t': 'Edit', 'vis': True, 'dis': False}, {'t': 'Archive', 'vis': True, 'dis': False}, {'t': 'Manage Recognition References', 'vis': True, 'dis': False}, {'t': 'More', 'vis': True, 'dis': False}, {'t': '', 'vis': True, 'dis': False}, {'t': 'Overview', 'vis': True, 'dis': False}, {'t': 'Photos (0)', 'vis': True, 'dis': False}, {'t': 'Sightings (0)', 'vis': True, 'dis': False}, {'t': 'Events', 'vis': True, 'dis': False}, {'t': 'Associations (0)', 'vis': True, 'dis': False}, {'t': 'Activity (2)', 'vis': True, 'dis': False}, {'t': 'View All Sightings', 'vis': True, 'dis': False}, {'t': '', 'vis': True, 'dis': False}, {'t': 'Cancel', 'vis': True, 'dis': False}, {'t': 'Archive person', 'vis': True, 'dis': False}]
+OK screenshot 11-lifecycle/after-archive
+VERIFIED archive action ndes |  | Analyst |  | REGULAR |  | No usable recognition sample |  | Seen 4 days ago |  | Open profile |  | Devika Iyer |  | Analyst |  | REGULAR |  | No usable recognition sample |  | Seen 3 days ago |  | Open profile |  | New Audit Person |  | Analyst |  | REGULAR |  | 2 photos · 1 sighting |  | Seen today |  | Open profile |  | Zedekiah Vale |  | Observer |  | REGULAR |  | No usable recognition sample |  | Never seen |  | Open profile |  | Show |  | Showing 1 to 6 of 6 people |  | 1 | Person moved to Archived. A database backup was created first.
+CTIONS
+
+All People
+
+6
+
+Favorites
+
+0
+
+With Photos
+
+1
+
+No Photos
+
+5
+
+Archived
+
+1
+
+Bin
+
+0
+
+Deleted Faces
+
+0
+
+Last refreshed
+
+03:49 AM
+
+People
+
+(6)
+
+Manage and browse all known identities
+
+Filter
+Group by: Country
+Sort: Priority
+Add without photo
+
+6
+
+Total People
+
+1
+
+With Photos
+
+5
+
+No Photos
+
+0
+
+Favorites
+
+5
+
+Seen in last 7 days
+
+6
+
+Added Today
+
+INDIA
+
+6 PEOPLE
+
+Asha Rao
+
+Analyst
+
+REGULAR
+
+No usable recognition sample
+
+Seen 4 days ago
+
+Open profile
+
+Bilal Khan
+
+Analyst
+
+REGULAR
+
+No usable recognition sample
+
+Seen 4 days ago
+
+Open profile
+
+Carla Mendes
+
+Analyst
+
+REGULAR
+
+No usable recognition sample
+
+Seen 4 days ago
+
+Open profile
+
+Devika Iyer
+
+Analyst
+
+REGULAR
+
+No usable recognition sample
+
+Seen 3 days ago
+
+Open profile
+
+New Audit Person
+
+Analyst
+
+REGULAR
+
+2 photos · 1 sighting
+
+Seen today
+
+Open profile
+
+Zedekiah Vale
+
+Observer
+
+REGULAR
+
+No usable recognition sample
+
+Never seen
+
+Open profile
+
+Show
+
+Showing 1 to 6 of 6 people
+
+1
+Person moved to Archived. A database backup was created first.

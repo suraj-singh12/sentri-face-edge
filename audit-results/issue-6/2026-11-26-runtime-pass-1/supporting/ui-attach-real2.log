@@ -1,0 +1,81 @@
+OK screenshot auth/owner-signed-in
+OK login owner
+OK screenshot 33-attach-real/event-detail-before
+ERROR attach real file input Locator.set_input_files: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator("input[type=file]").first
+
+OK screenshot 33-attach-real/scan-review-target-context
+UNCLEAR F07/PR88 attach target context missing
+ERROR attach real open review Locator.click: Timeout 2500ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"^Review$")).last
+
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Events
+
+Newest first. Mentions are shown separately from attendance.
+
+Event or location
+From date
+To date
+Location
+Context
+Participant
+Mentioned Person
+Search Events
+Clear
+
+Check Photo Audit Event
+
+Unknown
+
+2026-11-26 · Time unknown · Audit Lab
+
+Participants: New Audit Person
+
+1 participant · 1 media · 0 mentions
+
+Afternoon Audit
+
+Unknown
+
+2026-11-22 · About 14:00 · Audit Lab
+
+Participants: Devika Iyer
+
+1 participant · 0 media · 0 mentions
+
+Morning Audit Briefing
+
+Unknown
+
+2026-11-21 · 09:30–10:00 · Audit Lab
+
+Participants: Carla Mendes, Bilal Khan, Asha Rao
+
+3 participants · 0 media · 0 mentions
+
+Previous
+Next
+buttons ['Settings', 'Back up now', 'Check a photo', 'Review photos', 'People', 'Events', 'World', 'Settings', 'Search Events', 'Clear', 'Check Photo Audit Event\n\nUnknown\n\n2026-11-26 · Time unknown · Audit Lab\n\nParticipants: New Audit Person\n\n1 participant · 1 media · 0 mentions', 'Afternoon Audit\n\nUnknown\n\n2026-11-22 · About 14:00 · Audit Lab\n\nParticipants: Devika Iyer\n\n1 participant · 0 media · 0 mentions', 'Morning Audit Briefing\n\nUnknown\n\n2026-11-21 · 09:30–10:00 · Audit Lab\n\nParticipants: Carla Mendes, Bilal Khan, Asha Rao\n\n3 participants · 0 media · 0 mentions', 'Previous', 'Next']

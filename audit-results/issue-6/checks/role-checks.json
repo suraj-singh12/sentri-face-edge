@@ -1,0 +1,49 @@
+[
+  {
+    "role": "viewer",
+    "capabilities": [
+      "recognize",
+      "view"
+    ],
+    "negative_endpoint": "/api/person-update",
+    "http_status": 403,
+    "result": "PASS"
+  },
+  {
+    "role": "operator",
+    "capabilities": [
+      "add",
+      "recognize",
+      "view"
+    ],
+    "negative_endpoint": "/api/integrity/check",
+    "http_status": 403,
+    "result": "PASS"
+  },
+  {
+    "role": "custodian",
+    "capabilities": [
+      "add",
+      "backup_delete",
+      "backups",
+      "destroy",
+      "recognize",
+      "view"
+    ],
+    "negative_endpoint": "/api/users",
+    "http_status": 403,
+    "result": "PASS"
+  },
+  {
+    "role": "technician",
+    "capabilities": [
+      "backups",
+      "recognize",
+      "technical",
+      "view"
+    ],
+    "negative_endpoint": "/api/person-update",
+    "http_status": 403,
+    "result": "PASS"
+  }
+]

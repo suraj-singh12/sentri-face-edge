@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SentriFace Edge visual review — current versus proposed</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172026;background:#f3f7f8}body{margin:0;padding:32px}main{max-width:1180px;margin:auto}h1{font-size:28px;margin:0 0 8px}h2{font-size:18px;margin:32px 0 12px}.meta,.small{color:#687782}.meta{margin-bottom:24px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px}.card{background:#fff;border:1px solid #dce5e9;border-radius:10px;padding:14px;box-shadow:0 1px 2px rgba(15,35,45,.04)}.card img{display:block;width:100%;height:auto;border:1px solid #e4eaee;border-radius:6px;background:white}.card h3{font-size:15px;margin:0 0 10px}.links{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:13px}a{color:#087f5b;text-decoration:none}a:hover{text-decoration:underline}.notice{border-left:3px solid #12a37f;background:#e9faf3;padding:10px 12px;border-radius:6px;margin:16px 0}.docs li{margin:6px 0}code{background:#edf3f5;border-radius:4px;padding:1px 4px}</style>
+</head>
+<body><main>
+<h1>SentriFace Edge visual review</h1>
+<p class="meta">Baseline: <code>v2-hardening-followups</code> at <code>e9b7eba</code>. Synthetic/dev data only. Design proposal package; no product-code changes.</p>
+<div class="notice"><strong>Approval gate:</strong> review each numbered current-versus-proposed comparison. No implementation is approved or included.</div>
+<h2>Numbered comparison gallery</h2>
+<div class="grid">
+<section class="card"><h3>P01 — Event details — explicit optional context and consistent date</h3><a href="p01/comparison.png"><img src="p01/comparison.png" alt="P01 current versus proposed comparison"></a><div class="links"><a href="p01/current.png">Current PNG</a><a href="p01/proposed.png">Proposed PNG</a><a href="p01/comparison.png">Full comparison PNG</a><a href="p01/proposed.svg">Editable SVG</a></div></section>
+<section class="card"><h3>P02 — Photo details — separate event time from import time</h3><a href="p02/comparison.png"><img src="p02/comparison.png" alt="P02 current versus proposed comparison"></a><div class="links"><a href="p02/current.png">Current PNG</a><a href="p02/proposed.png">Proposed PNG</a><a href="p02/comparison.png">Full comparison PNG</a><a href="p02/proposed.svg">Editable SVG</a></div></section>
+<section class="card"><h3>P03 — Review detail — replace jargon with plain language</h3><a href="p03/comparison.png"><img src="p03/comparison.png" alt="P03 current versus proposed comparison"></a><div class="links"><a href="p03/current.png">Current PNG</a><a href="p03/proposed.png">Proposed PNG</a><a href="p03/comparison.png">Full comparison PNG</a><a href="p03/proposed.svg">Editable SVG</a></div></section>
+<section class="card"><h3>P04 — Person form — distinguish controlled tag from freeform labels</h3><a href="p04/comparison.png"><img src="p04/comparison.png" alt="P04 current versus proposed comparison"></a><div class="links"><a href="p04/current.png">Current PNG</a><a href="p04/proposed.png">Proposed PNG</a><a href="p04/comparison.png">Full comparison PNG</a><a href="p04/proposed.svg">Editable SVG</a></div></section>
+<section class="card"><h3>P05 — Person profile — consolidate actions and clarify Event history</h3><a href="p05/comparison.png"><img src="p05/comparison.png" alt="P05 current versus proposed comparison"></a><div class="links"><a href="p05/current.png">Current PNG</a><a href="p05/proposed.png">Proposed PNG</a><a href="p05/comparison.png">Full comparison PNG</a><a href="p05/proposed.svg">Editable SVG</a></div></section>
+<section class="card"><h3>P06 — Events list — neutral unknown state and consistent date format</h3><a href="p06/comparison.png"><img src="p06/comparison.png" alt="P06 current versus proposed comparison"></a><div class="links"><a href="p06/current.png">Current PNG</a><a href="p06/proposed.png">Proposed PNG</a><a href="p06/comparison.png">Full comparison PNG</a><a href="p06/proposed.svg">Editable SVG</a></div></section>
+<section class="card"><h3>P07 — Machine accounts — remove duplicated account identity</h3><a href="p07/comparison.png"><img src="p07/comparison.png" alt="P07 current versus proposed comparison"></a><div class="links"><a href="p07/current.png">Current PNG</a><a href="p07/proposed.png">Proposed PNG</a><a href="p07/comparison.png">Full comparison PNG</a><a href="p07/proposed.svg">Editable SVG</a></div></section>
+<section class="card"><h3>P08 — World Explore — actionable empty-state guidance</h3><a href="p08/comparison.png"><img src="p08/comparison.png" alt="P08 current versus proposed comparison"></a><div class="links"><a href="p08/current.png">Current PNG</a><a href="p08/proposed.png">Proposed PNG</a><a href="p08/comparison.png">Full comparison PNG</a><a href="p08/proposed.svg">Editable SVG</a></div></section>
+<section class="card"><h3>P09 — Owner setup — visible password constraints and attached error</h3><a href="p09/comparison.png"><img src="p09/comparison.png" alt="P09 current versus proposed comparison"></a><div class="links"><a href="p09/current.png">Current PNG</a><a href="p09/proposed.png">Proposed PNG</a><a href="p09/comparison.png">Full comparison PNG</a><a href="p09/proposed.svg">Editable SVG</a></div></section>
+</div>
+<h2>Documents and editable sources</h2>
+<ul class="docs">
+<li><a href="docs/DESIGN_SPECIFICATION.md">Unified visual design specification</a></li>
+<li><a href="docs/DECISION_REGISTER.md">Concise decision register</a></li>
+<li><a href="docs/COVERAGE_MATRIX.md">Coverage matrix</a></li>
+<li><a href="sources/">Editable SVG source directory</a></li>
+</ul>
+<p class="small">Comparison rule followed within each pair: identical screenshot dimensions, synthetic content, theme, navigation/application state and scale. P09 uses the existing onboarding evidence because owner setup is a one-time state; both sides still use the same source state and dimensions.</p>
+</main></body></html>

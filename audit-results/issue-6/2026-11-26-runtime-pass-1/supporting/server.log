@@ -1,0 +1,51 @@
+SentriFace source mode: dev
+Source-development data: /home/ubuntu/issue6-runtime-audit/data
+Installed-product data remains separate: /home/ubuntu/.local/share/sentriface
+03:15:59 | INFO     | api_server.py:753 | log_event | {"event":"startup","port":8765,"runtime":"dev","timestamp":"2026-11-26T03:15:59.623409+00:00"}
+03:17:47 | INFO     | api_server.py:753 | log_event | {"event":"initial-admin-created","timestamp":"2026-11-26T03:17:47.435717+00:00","username":"owner"}
+03:18:34 | INFO     | api_server.py:753 | log_event | {"actor":"owner","event":"disaster-recovery-risk-acknowledged","timestamp":"2026-11-26T03:18:34.161103+00:00"}
+03:24:17 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:24:17.033731+00:00","username":"owner"}
+03:25:22 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:25:22.715260+00:00","username":"owner"}
+03:25:22 | INFO     | api_server.py:753 | log_event | {"event":"person-created","person_id":"b3bc0822-542b-481d-a2f0-ef0d807e2336","timestamp":"2026-11-26T03:25:22.746429+00:00"}
+03:25:22 | INFO     | api_server.py:753 | log_event | {"event":"person-created","person_id":"2e69dd90-61cc-4c2a-b40b-a52246bba0b8","timestamp":"2026-11-26T03:25:22.778793+00:00"}
+03:25:22 | INFO     | api_server.py:753 | log_event | {"event":"person-created","person_id":"0ca3d5e1-1edb-486c-99a3-e8c116762143","timestamp":"2026-11-26T03:25:22.819720+00:00"}
+03:25:22 | INFO     | api_server.py:753 | log_event | {"event":"person-created","person_id":"7b6f68e3-0485-47b4-b6bd-aa43e2b551b3","timestamp":"2026-11-26T03:25:22.876737+00:00"}
+03:25:22 | INFO     | api_server.py:753 | log_event | {"event":"person-created","person_id":"b30d6053-c32e-4c73-8039-0de802bfa541","timestamp":"2026-11-26T03:25:22.921719+00:00"}
+03:25:22 | INFO     | api_server.py:753 | log_event | {"changed":true,"event":"person-notes-update","person_id":"2e69dd90-61cc-4c2a-b40b-a52246bba0b8","timestamp":"2026-11-26T03:25:22.941258+00:00"}
+03:25:22 | INFO     | api_server.py:753 | log_event | {"changed":true,"event":"person-notes-update","person_id":"b3bc0822-542b-481d-a2f0-ef0d807e2336","timestamp":"2026-11-26T03:25:22.968002+00:00"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"actor":"owner","event":"account-created","timestamp":"2026-11-26T03:25:23.062663+00:00","username":"viewer1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"actor":"owner","event":"account-created","timestamp":"2026-11-26T03:25:23.131327+00:00","username":"operator1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"actor":"owner","event":"account-created","timestamp":"2026-11-26T03:25:23.202448+00:00","username":"custodian1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"actor":"owner","event":"account-created","timestamp":"2026-11-26T03:25:23.259693+00:00","username":"technician1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:25:23.313508+00:00","username":"viewer1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"event":"required-password-set","timestamp":"2026-11-26T03:25:23.433268+00:00","username":"viewer1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:25:23.490850+00:00","username":"operator1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"event":"required-password-set","timestamp":"2026-11-26T03:25:23.595099+00:00","username":"operator1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:25:23.658529+00:00","username":"custodian1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"event":"required-password-set","timestamp":"2026-11-26T03:25:23.779919+00:00","username":"custodian1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:25:23.836210+00:00","username":"technician1"}
+03:25:23 | INFO     | api_server.py:753 | log_event | {"event":"required-password-set","timestamp":"2026-11-26T03:25:23.948586+00:00","username":"technician1"}
+03:28:10 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:28:10.810794+00:00","username":"owner"}
+03:33:27 | INFO     | api_server.py:753 | log_event | {"event":"queue-scan","groups":1,"job_id":"27531b38-0c66-45f2-bdec-53557c1b5cf0","path":"[REDACTED]","rejected_files":0,"session_id":"[REDACTED]","timestamp":"2026-11-26T03:33:27.402773+00:00"}
+03:36:38 | INFO     | api_server.py:753 | log_event | {"accepted_count":0,"client_side":false,"endpoint":"[REDACTED_PATH],"event":"input-rejected","message":"Event has no completed review","reasons":{"invalid_request":1},"rejected_count":1,"timestamp":"2026-11-26T03:36:38.675163+00:00"}
+03:37:22 | INFO     | api_server.py:753 | log_event | {"event":"logout","timestamp":"2026-11-26T03:37:22.391301+00:00","username":"owner"}
+03:37:24 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:37:24.926465+00:00","username":"viewer1"}
+03:37:35 | INFO     | api_server.py:753 | log_event | {"event":"logout","timestamp":"2026-11-26T03:37:35.471993+00:00","username":"viewer1"}
+03:37:38 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:37:38.019182+00:00","username":"operator1"}
+03:37:48 | INFO     | api_server.py:753 | log_event | {"event":"logout","timestamp":"2026-11-26T03:37:48.291033+00:00","username":"operator1"}
+03:37:50 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:37:50.958789+00:00","username":"custodian1"}
+03:38:02 | INFO     | api_server.py:753 | log_event | {"event":"logout","timestamp":"2026-11-26T03:38:02.903551+00:00","username":"custodian1"}
+03:38:05 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:38:05.509998+00:00","username":"technician1"}
+03:38:17 | INFO     | api_server.py:753 | log_event | {"event":"logout","timestamp":"2026-11-26T03:38:17.461940+00:00","username":"technician1"}
+03:38:20 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:38:20.025615+00:00","username":"owner"}
+03:38:31 | INFO     | api_server.py:753 | log_event | {"event":"logout","timestamp":"2026-11-26T03:38:31.728639+00:00","username":"owner"}
+03:39:28 | INFO     | api_server.py:753 | log_event | {"event":"login","timestamp":"2026-11-26T03:39:28.587972+00:00","username":"owner"}
+03:39:32 | INFO     | api_server.py:753 | log_event | {"event":"recognize","faces":1,"path":"[REDACTED]","timestamp":"2026-11-26T03:39:32.472477+00:00"}
+03:40:23 | INFO     | api_server.py:753 | log_event | {"accepted_existing_person_ids":"<sequence omitted; 0 items>","created_people":"<sequence omitted; 1 items>","created_person_ids":"<sequence omitted; 1 items>","embedding_assignments":"[REDACTED]","embedding_ids":"[REDACTED]","event":"photo-review-completed","excluded_count":0,"face_assignments":{"face-1":"a1cfcdc7-96e2-4796-bafe-227e5aa8dca4"},"face_media":{"face-1":"[REDACTED_PATH]"},"graph_evidence_count":0,"graph_evidence_ids":"<sequence omitted; 0 items>","media_id":"9b1fae88e1f27e9d54dbd2ec2aa72d27e7342b70c0059358ed9e47eab5f6b49a.png","media_ids":"<sequence omitted; 1 items>","note_ids":"[REDACTED]","observation_id":"fd751f03-b15f-5924-b25d-7d509c7b557c","participant_ids":"<sequence omitted; 1 items>","recognition_detail_ids":"<sequence omitted; 1 items>","review_id":"15e926ff-5e0f-453e-8a22-cb797089188a","timestamp":"2026-11-26T03:40:23.817557+00:00"}
+03:41:23 | INFO     | api_server.py:753 | log_event | {"changed":true,"event":"person-notes-update","person_id":"2e69dd90-61cc-4c2a-b40b-a52246bba0b8","timestamp":"2026-11-26T03:41:23.433067+00:00"}
+03:42:50 | INFO     | api_server.py:753 | log_event | {"accepted_count":0,"client_side":false,"endpoint":"[REDACTED_PATH],"event":"input-rejected","message":"Event has no completed review","reasons":{"invalid_request":1},"rejected_count":1,"timestamp":"2026-11-26T03:42:50.861164+00:00"}
+03:43:25 | INFO     | api_server.py:753 | log_event | {"accepted_count":0,"client_side":false,"endpoint":"[REDACTED_PATH],"event":"input-rejected","message":"Event changed; reload it before correcting or attaching media","reasons":{"invalid_request":1},"rejected_count":1,"timestamp":"2026-11-26T03:43:25.682306+00:00"}
+03:44:44 | INFO     | api_server.py:753 | log_event | {"event":"queue-scan","groups":1,"job_id":"6153f440-4989-40a2-a65c-1c4001073317","path":"[REDACTED]","rejected_files":0,"session_id":"[REDACTED]","timestamp":"2026-11-26T03:44:44.398151+00:00"}
+03:46:28 | INFO     | api_server.py:753 | log_event | {"accepted_existing_person_ids":"<sequence omitted; 1 items>","created_people":"<sequence omitted; 0 items>","created_person_ids":"<sequence omitted; 0 items>","embedding_assignments":"[REDACTED]","embedding_ids":"[REDACTED]","event":"queue-encounter-completed","excluded_count":0,"face_assignments":{"bd1e3890-46ec-41bc-be32-9dd2fc2b6901":"a1cfcdc7-96e2-4796-bafe-227e5aa8dca4"},"face_media":{"bd1e3890-46ec-41bc-be32-9dd2fc2b6901":"[REDACTED_PATH]"},"graph_evidence_count":0,"graph_evidence_ids":"<sequence omitted; 0 items>","media_id":"860659d2c92e111c29eb3b120b0f6eeeeb20b1a8527d19c0d219c3802f385384","media_ids":"<sequence omitted; 2 items>","note_ids":"[REDACTED]","observation_id":"fd751f03-b15f-5924-b25d-7d509c7b557c","participant_ids":"<sequence omitted; 1 items>","recognition_detail_ids":"<sequence omitted; 1 items>","review_id":"eb09cb25-8e54-5446-81de-e1d9f5392212","timestamp":"2026-11-26T03:46:28.198316+00:00"}
+03:47:02 | INFO     | api_server.py:753 | log_event | {"event":"shutdown-requested","signal":"SIGTERM","timestamp":"2026-11-26T03:47:02.193280+00:00"}
+SentriFace UI running at http://127.0.0.1:8765

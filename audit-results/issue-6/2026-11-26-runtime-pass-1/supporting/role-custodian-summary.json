@@ -1,0 +1,22 @@
+{
+  "row": {
+    "role": "Custodian",
+    "nav": [
+      "Check a photo",
+      "Review photos",
+      "People",
+      "Events",
+      "World",
+      "Settings"
+    ],
+    "initial_contains_readonly": false,
+    "profile_readonly_explanation": false,
+    "profile_has_edit": true,
+    "profile_has_add_face": true,
+    "long_note_expand": true,
+    "event_readonly_explanation": false,
+    "event_has_correct": true,
+    "event_has_attach": true
+  },
+  "body_excerpt": "SentriFace Edge\n\nDemo mode \u00b7 Test results only\n\nCU\n\nCustodian User\n\nCustodian\n\nYour safety copy needs attention \u2014 Your latest external backup is not available. The owner can check it under Settings.\nSettings\nYou have changes since your last backup \u2014 Back up now so a recent copy of your people, photos and events is safe.\nBack up now\nDemo mode is active \u2014 Results are simulated for testing and are not real face matches.\nCheck a photo\nReview photos\nPeople\nEvents\nWorld\nSettings\nExplore\nConnections\nMin. evidence strength\nEvidence \u00b7 1/3\nApply\nReset\nWeaker links\nON\n\nDiscover\n\nPeriod-based\n\n7d\n30d\n90d\nFrequent\nMultiple locations\n\nIndependent of Period\n\nRecently seen\nClusters\nCarla Mendes\n1\nBilal Khan\n1\nDevika Iyer\n1\nAsha Rao\n1\n\n4 of 4\n\nNext\n\nCanvas\n\nReset canvas\n\nSelect a discovery or cluster to explore its relationships.\n\nInspector\n\nSelect a Person, cluster or direct relationship."
+}

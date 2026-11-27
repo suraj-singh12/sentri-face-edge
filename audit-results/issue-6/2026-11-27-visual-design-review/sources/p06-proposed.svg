@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+<image href="current.png" x="0" y="0" width="1440" height="900"/>
+<rect x="377" y="236" width="128" height="27" rx="0" fill="#ffffff" stroke="none" stroke-width="1" opacity="1"/>
+<text x="383" y="254" font-family="Liberation Sans, Arial, sans-serif" font-size="11" font-weight="400" fill="#8a94a0" text-anchor="start" >yyyy-mm-dd</text>
+<rect x="735" y="236" width="128" height="27" rx="0" fill="#ffffff" stroke="none" stroke-width="1" opacity="1"/>
+<text x="741" y="254" font-family="Liberation Sans, Arial, sans-serif" font-size="11" font-weight="400" fill="#8a94a0" text-anchor="start" >yyyy-mm-dd</text>
+<rect x="1338" y="421" width="84" height="29" rx="14" fill="#f1f3f5" stroke="#d5dde3" stroke-width="1" opacity="1"/>
+<text x="1380" y="440" font-family="Liberation Sans, Arial, sans-serif" font-size="10" font-weight="600" fill="#5f6b76" text-anchor="middle" >Unknown</text>
+<rect x="1338" y="524" width="84" height="29" rx="14" fill="#f1f3f5" stroke="#d5dde3" stroke-width="1" opacity="1"/>
+<text x="1380" y="543" font-family="Liberation Sans, Arial, sans-serif" font-size="10" font-weight="600" fill="#5f6b76" text-anchor="middle" >Unknown</text>
+<rect x="1338" y="627" width="84" height="29" rx="14" fill="#f1f3f5" stroke="#d5dde3" stroke-width="1" opacity="1"/>
+<text x="1380" y="646" font-family="Liberation Sans, Arial, sans-serif" font-size="10" font-weight="600" fill="#5f6b76" text-anchor="middle" >Unknown</text>
+</svg>

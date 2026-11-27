@@ -1,0 +1,80 @@
+OK screenshot 31-queue-review/pending-group-precondition
+OK screenshot 31-queue-review/event-discard-confirmation
+VERIFIED PR86 Discard Event confirmation dialog/cancel visible
+OK screenshot 31-queue-review/event-discard-cancelled
+OK screenshot 31-queue-review/session-discard-confirmation
+VERIFIED PR86 Discard session confirmation dialog/cancel visible
+OK screenshot 31-queue-review/session-discard-cancelled
+OK screenshot 31-queue-review/group-discard-confirmation
+VERIFIED PR86 Discard confirmation dialog/cancel visible
+OK screenshot 31-queue-review/group-discard-cancelled
+OK screenshot 31-queue-review/group-review-open
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Prefer quality photos for recognition
+
+Low-quality face samples may reduce recognition accuracy and may produce poorer or less reliable matches.
+
+Attaching media to Morning Audit Briefing · 2026-11-21 · Audit Lab
+
+Review this group
+1 PHOTO
+
+Decide which photos belong to the suggested person.
+
+Discard group
+
+Group 1 of 1
+
+Summary
+Compare
+
+Incoming photos
+
+Only selected photos are included in your decision.
+
+Select all
+Clear
+
+Included
+
+WARN
+Peek In
+
+Weak match
+
+No reliable automatic match. Choose the correct person yourself.
+
+Browse People
+
+Human review needed
+
+WEAK MATCH
+
+No candidate was found in People.
+
+Choose a person to accept
+Create new person
+Discard 1 selected face
+Reject suggested match
+Skip for now
+OK group review open 

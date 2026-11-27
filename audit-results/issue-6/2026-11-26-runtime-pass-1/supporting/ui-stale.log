@@ -1,0 +1,94 @@
+OK screenshot 70-stale/modal-before-external-change
+OK stale modal edit 
+ERROR stale external mutation nter_relation_revisions(conn, observation_id, desired, operation_id)
+  File "/home/ubuntu/repos/sentri-face-edge/src/sentriface/storage/sqlite_store.py", line 9251, in _write_encounter_relation_revisions
+    raise ValueError("Event has no completed review")
+ValueError: Event has no completed review
+
+OK screenshot 70-stale/stale-error-with-reload
+UNCLEAR F08/PR87 stale correction recovery t Event details. Historical values and selected mentions remain in correction history. |  | Event / occasion | Date | Time | Approximate time | Location |  | Type 3 letters to see saved locations. Pick one to reuse it, or create a new one. |  | SAVED LOCATION | Context | Event Notes |  | Type @ and three characters, then select a Person to record an explicit mention. |  | Selected Event Note mentions |  | Selected Persons are mentioned, not automatically present or associated. |  | Event has no completed review |  | Cancel | Save correction
+ERROR stale reload control Locator.click: Timeout 1800ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name="Reload current Event")
+
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Afternoon Audit
+Back to Events
+
+2026-11-22 · About 14:00 · Audit Lab
+
+Unknown
+Attach Media
+Correct Event
+Correct Participants
+Correct Relations
+
+Participants (1)
+
+Devika Iyer
+
+Event Note
+
+Single participant fixture.
+
+Selected mentions: None
+
+Sighting Notes
+
+None recorded
+
+Relations
+
+No explicit pair decisions recorded.
+
+All Event media (0)
+
+Correction and provenance history
+Event details not corrected
+Event has no completed review
+Correct Event
+
+Correct the current Event details. Historical values and selected mentions remain in correction history.
+
+Event / occasion
+Date
+Time
+Approximate time
+Location
+
+Type 3 letters to see saved locations. Pick one to reuse it, or create a new one.
+
+SAVED LOCATION
+Context
+Event Notes
+
+Type @ and three characters, then select a Person to record an explicit mention.
+
+Selected Event Note mentions
+
+Selected Persons are mentioned, not automatically present or associated.
+
+Event has no completed review
+
+Cancel
+Save correction

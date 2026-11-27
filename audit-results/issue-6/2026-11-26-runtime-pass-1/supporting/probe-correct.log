@@ -1,0 +1,84 @@
+OK screenshot auth/owner-signed-in
+OK login owner
+OK nav Events 
+OK screenshot 70-stale/afternoon-detail
+OK screenshot 70-stale/correct-event-open
+inputs [{'i': 1, 'type': 'text', 'ph': '', 'val': 'Afternoon Audit', 'vis': True, 'role': None}, {'i': 2, 'type': 'date', 'ph': '', 'val': '2026-11-22', 'vis': True, 'role': None}, {'i': 3, 'type': 'text', 'ph': '', 'val': 'Approximate', 'vis': True, 'role': 'combobox'}, {'i': 5, 'type': 'time', 'ph': '', 'val': '14:00', 'vis': True, 'role': None}, {'i': 6, 'type': 'text', 'ph': '', 'val': 'Audit Lab', 'vis': True, 'role': 'combobox'}, {'i': 7, 'type': 'text', 'ph': '', 'val': 'Unknown', 'vis': True, 'role': 'combobox'}, {'i': 9, 'type': 'textarea', 'ph': '', 'val': 'Single participant fixture.', 'vis': True, 'role': None}, {'i': 10, 'type': 'text', 'ph': '', 'val': '', 'vis': True, 'role': 'combobox'}]
+buttons [{'i': 0, 't': '', 'vis': True, 'disabled': False}, {'i': 1, 't': '', 'vis': True, 'disabled': False}, {'i': 2, 't': '', 'vis': True, 'disabled': False}, {'i': 3, 't': 'AOAudit Owneradministrator', 'vis': True, 'disabled': False}, {'i': 4, 't': 'Settings', 'vis': True, 'disabled': False}, {'i': 5, 't': 'Back up now', 'vis': True, 'disabled': False}, {'i': 6, 't': 'Check a photo', 'vis': True, 'disabled': False}, {'i': 7, 't': 'Review photos', 'vis': True, 'disabled': False}, {'i': 8, 't': 'People', 'vis': True, 'disabled': False}, {'i': 9, 't': 'Events', 'vis': True, 'disabled': False}, {'i': 10, 't': 'World', 'vis': True, 'disabled': False}, {'i': 11, 't': 'Settings', 'vis': True, 'disabled': False}, {'i': 12, 't': 'Back to Events', 'vis': True, 'disabled': False}, {'i': 13, 't': 'Attach Media', 'vis': True, 'disabled': False}, {'i': 14, 't': 'Correct Event', 'vis': True, 'disabled': False}, {'i': 15, 't': 'Correct Participants', 'vis': True, 'disabled': False}, {'i': 16, 't': 'Correct Relations', 'vis': True, 'disabled': False}, {'i': 17, 't': '', 'vis': True, 'disabled': False}, {'i': 18, 't': 'Cancel', 'vis': True, 'disabled': False}, {'i': 19, 't': 'Save correction', 'vis': True, 'disabled': False}]
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+Afternoon Audit
+Back to Events
+
+2026-11-22 · About 14:00 · Audit Lab
+
+Unknown
+Attach Media
+Correct Event
+Correct Participants
+Correct Relations
+
+Participants (1)
+
+Devika Iyer
+
+Event Note
+
+Single participant fixture.
+
+Selected mentions: None
+
+Sighting Notes
+
+None recorded
+
+Relations
+
+No explicit pair decisions recorded.
+
+All Event media (0)
+
+Correction and provenance history
+Correct Event
+
+Correct the current Event details. Historical values and selected mentions remain in correction history.
+
+Event / occasion
+Date
+Time
+Approximate time
+Location
+
+Type 3 letters to see saved locations. Pick one to reuse it, or create a new one.
+
+SAVED LOCATION
+Context
+Event Notes
+
+Type @ and three characters, then select a Person to record an explicit mention.
+
+Selected Event Note mentions
+
+Selected Persons are mentioned, not automatically present or associated.
+
+Cancel
+Save correction

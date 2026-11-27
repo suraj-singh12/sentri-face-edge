@@ -1,0 +1,87 @@
+OK nav Settings 
+OK screenshot 50-settings/settings-home
+VERIFIED settings home runtime settings visible
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+
+SETTINGS
+
+License & activation
+Backups & restore
+User accounts
+Integrity & recovery
+System details
+Activity log
+About & support
+License & activation
+
+Verification happens locally. SentriFace does not contact an activation service.
+
+NOT ENFORCED IN THIS RUNTIME
+Licensing is not enforced in this source runtime
+buttons ['Settings', 'Back up now', 'Check a photo', 'Review photos', 'People', 'Events', 'World', 'Settings', 'License & activation', 'Backups & restore', 'User accounts', 'Integrity & recovery', 'System details', 'Activity log', 'About & support']
+OK screenshot 50-settings/backup-now-flow
+VERIFIED backup now visible flow gs | You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe. | Back up now | Demo mode is active — Results are simulated for testing and are not real face matches. | Check a photo | Review photos | People | Events | World | Settings |  | SETTINGS |  | License & activation | Backups & restore | User accounts | Integrity & recovery | System details | Activity log | About & support | License & activation |  | Verification happens locally. SentriFace does not contact an activation service. |  | NOT ENFORCED IN THIS RUNTIME | Licensing is not enforced in this source runtime |  | Create a backup? |  | Saves all people, photos and face data, then checks the backup is complete. |  | Cancel | Create backup
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+
+SETTINGS
+
+License & activation
+Backups & restore
+User accounts
+Integrity & recovery
+System details
+Activity log
+About & support
+License & activation
+
+Verification happens locally. SentriFace does not contact an activation service.
+
+NOT ENFORCED IN THIS RUNTIME
+Licensing is not enforced in this source runtime
+
+Create a backup?
+
+Saves all people, photos and face data, then checks the backup is complete.
+
+Cancel
+Create backup

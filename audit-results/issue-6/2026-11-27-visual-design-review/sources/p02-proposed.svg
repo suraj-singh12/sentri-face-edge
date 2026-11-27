@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+<image href="current.png" x="0" y="0" width="1440" height="900"/>
+<rect x="962" y="303" width="448" height="585" rx="10" fill="#ffffff" stroke="#e2e8ee" stroke-width="1" opacity="1"/>
+<text x="989" y="344" font-family="Liberation Sans, Arial, sans-serif" font-size="20" font-weight="700" fill="#111820" text-anchor="start" >Photo Details</text>
+<text x="989" y="393" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#737d89" text-anchor="start" >Event captured</text>
+<text x="1390" y="393" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#171c22" text-anchor="end" >2026-11-23 · 15:45</text>
+<text x="989" y="426" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#737d89" text-anchor="start" >Added to system</text>
+<text x="1390" y="426" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#171c22" text-anchor="end" >2026-11-26 · 16:52</text>
+<text x="989" y="459" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#737d89" text-anchor="start" >Source</text>
+<text x="1390" y="459" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#171c22" text-anchor="end" >Photo Fixture Event</text>
+<text x="989" y="492" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#737d89" text-anchor="start" >Location</text>
+<text x="1390" y="492" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#171c22" text-anchor="end" >Audit Lab</text>
+<text x="989" y="525" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#737d89" text-anchor="start" >Quality</text>
+<text x="1390" y="525" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#171c22" text-anchor="end" >90%</text>
+<text x="989" y="558" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#737d89" text-anchor="start" >Embedding</text>
+<text x="1390" y="558" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#171c22" text-anchor="end" >Indexed</text>
+<text x="989" y="591" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#737d89" text-anchor="start" >Face origin</text>
+<text x="1390" y="591" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#171c22" text-anchor="end" >Legacy origin unknown</text>
+<text x="989" y="624" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#737d89" text-anchor="start" >Face samples</text>
+<text x="1390" y="624" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#171c22" text-anchor="end" >1</text>
+<text x="989" y="657" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#737d89" text-anchor="start" >Rank</text>
+<text x="1390" y="657" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#171c22" text-anchor="end" >Analyst</text>
+<text x="989" y="713" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#20242a" text-anchor="start" >Notes: Synthetic media fixture for UI polish</text>
+<text x="989" y="733" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#20242a" text-anchor="start" >walkthrough.</text>
+<rect x="976" y="765" width="404" height="38" rx="6" fill="#c8f3df" stroke="none" stroke-width="1" opacity="1"/>
+<text x="1180" y="790" font-family="Liberation Sans, Arial, sans-serif" font-size="13" font-weight="700" fill="#087f5b" text-anchor="middle" >Set as profile photo</text>
+<rect x="976" y="814" width="404" height="34" rx="6" fill="#ffffff" stroke="#d8e0e6" stroke-width="1" opacity="1"/>
+<text x="1180" y="836" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#20242a" text-anchor="middle" >Move to another person</text>
+</svg>

@@ -1,0 +1,1720 @@
+{
+  "scope": {
+    "1": {
+      "scope_totals": {
+        "people": 8,
+        "relationships": 4,
+        "clusters": 2,
+        "finalized_events": 8
+      },
+      "returned_counts": {
+        "people": 0,
+        "clusters": 2,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "people": []
+    },
+    "2": {
+      "scope_totals": {
+        "people": 8,
+        "relationships": 4,
+        "clusters": 1,
+        "finalized_events": 8
+      },
+      "returned_counts": {
+        "people": 0,
+        "clusters": 1,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "people": []
+    },
+    "3": {
+      "scope_totals": {
+        "people": 8,
+        "relationships": 4,
+        "clusters": 0,
+        "finalized_events": 8
+      },
+      "returned_counts": {
+        "people": 0,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "people": []
+    }
+  },
+  "people": {
+    "Zero Person@1": {
+      "focus": {
+        "type": "PERSON",
+        "id": "ae245428-bd7f-4949-9344-cecbae415719"
+      },
+      "summary": null,
+      "counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Low Alpha@1": {
+      "focus": {
+        "type": "PERSON",
+        "id": "06499547-facf-4a46-8ebb-81657c5ea193"
+      },
+      "summary": null,
+      "counts": {
+        "people": 2,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 1,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:06499547-facf-4a46-8ebb-81657c5ea193:c512d755-5ab4-4d87-b314-f6b40279acab",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Low Beta@1": {
+      "focus": {
+        "type": "PERSON",
+        "id": "c512d755-5ab4-4d87-b314-f6b40279acab"
+      },
+      "summary": null,
+      "counts": {
+        "people": 2,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 1,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:06499547-facf-4a46-8ebb-81657c5ea193:c512d755-5ab4-4d87-b314-f6b40279acab",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "High Alpha@1": {
+      "focus": {
+        "type": "PERSON",
+        "id": "9ee8bb56-e0af-4771-963c-7c9c3375bae1"
+      },
+      "summary": null,
+      "counts": {
+        "people": 3,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 2,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:5b23ef42-21fb-4bf9-a399-e863977b3501:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        },
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "High Beta@1": {
+      "focus": {
+        "type": "PERSON",
+        "id": "5b23ef42-21fb-4bf9-a399-e863977b3501"
+      },
+      "summary": null,
+      "counts": {
+        "people": 3,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 2,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:5b23ef42-21fb-4bf9-a399-e863977b3501",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        },
+        {
+          "relationship_id": "relationship:5b23ef42-21fb-4bf9-a399-e863977b3501:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Mixed Person@1": {
+      "focus": {
+        "type": "PERSON",
+        "id": "0ce84209-6e05-4c2b-afea-8abbcf5fbfe7"
+      },
+      "summary": null,
+      "counts": {
+        "people": 3,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 2,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:5b23ef42-21fb-4bf9-a399-e863977b3501",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        },
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Type Alpha@1": {
+      "focus": {
+        "type": "PERSON",
+        "id": "ba9ccf01-3af1-4bd1-92e0-87dab448344a"
+      },
+      "summary": null,
+      "counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Type Beta@1": {
+      "focus": {
+        "type": "PERSON",
+        "id": "b92ff4c4-50d2-4006-ac2b-b546c0cd2077"
+      },
+      "summary": null,
+      "counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Zero Person@2": {
+      "focus": {
+        "type": "PERSON",
+        "id": "ae245428-bd7f-4949-9344-cecbae415719"
+      },
+      "summary": null,
+      "counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Low Alpha@2": {
+      "focus": {
+        "type": "PERSON",
+        "id": "06499547-facf-4a46-8ebb-81657c5ea193"
+      },
+      "summary": null,
+      "counts": {
+        "people": 2,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 1,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:06499547-facf-4a46-8ebb-81657c5ea193:c512d755-5ab4-4d87-b314-f6b40279acab",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Low Beta@2": {
+      "focus": {
+        "type": "PERSON",
+        "id": "c512d755-5ab4-4d87-b314-f6b40279acab"
+      },
+      "summary": null,
+      "counts": {
+        "people": 2,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 1,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:06499547-facf-4a46-8ebb-81657c5ea193:c512d755-5ab4-4d87-b314-f6b40279acab",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "High Alpha@2": {
+      "focus": {
+        "type": "PERSON",
+        "id": "9ee8bb56-e0af-4771-963c-7c9c3375bae1"
+      },
+      "summary": null,
+      "counts": {
+        "people": 3,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 2,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:5b23ef42-21fb-4bf9-a399-e863977b3501:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        },
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "High Beta@2": {
+      "focus": {
+        "type": "PERSON",
+        "id": "5b23ef42-21fb-4bf9-a399-e863977b3501"
+      },
+      "summary": null,
+      "counts": {
+        "people": 3,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 2,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:5b23ef42-21fb-4bf9-a399-e863977b3501",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        },
+        {
+          "relationship_id": "relationship:5b23ef42-21fb-4bf9-a399-e863977b3501:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Mixed Person@2": {
+      "focus": {
+        "type": "PERSON",
+        "id": "0ce84209-6e05-4c2b-afea-8abbcf5fbfe7"
+      },
+      "summary": null,
+      "counts": {
+        "people": 3,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 2,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:5b23ef42-21fb-4bf9-a399-e863977b3501",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": true,
+          "evidence_types": null
+        },
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Type Alpha@2": {
+      "focus": {
+        "type": "PERSON",
+        "id": "ba9ccf01-3af1-4bd1-92e0-87dab448344a"
+      },
+      "summary": null,
+      "counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Type Beta@2": {
+      "focus": {
+        "type": "PERSON",
+        "id": "b92ff4c4-50d2-4006-ac2b-b546c0cd2077"
+      },
+      "summary": null,
+      "counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Zero Person@3": {
+      "focus": {
+        "type": "PERSON",
+        "id": "ae245428-bd7f-4949-9344-cecbae415719"
+      },
+      "summary": null,
+      "counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Low Alpha@3": {
+      "focus": {
+        "type": "PERSON",
+        "id": "06499547-facf-4a46-8ebb-81657c5ea193"
+      },
+      "summary": null,
+      "counts": {
+        "people": 2,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 1,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:06499547-facf-4a46-8ebb-81657c5ea193:c512d755-5ab4-4d87-b314-f6b40279acab",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Low Beta@3": {
+      "focus": {
+        "type": "PERSON",
+        "id": "c512d755-5ab4-4d87-b314-f6b40279acab"
+      },
+      "summary": null,
+      "counts": {
+        "people": 2,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 1,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:06499547-facf-4a46-8ebb-81657c5ea193:c512d755-5ab4-4d87-b314-f6b40279acab",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "High Alpha@3": {
+      "focus": {
+        "type": "PERSON",
+        "id": "9ee8bb56-e0af-4771-963c-7c9c3375bae1"
+      },
+      "summary": null,
+      "counts": {
+        "people": 3,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 2,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:5b23ef42-21fb-4bf9-a399-e863977b3501:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        },
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "High Beta@3": {
+      "focus": {
+        "type": "PERSON",
+        "id": "5b23ef42-21fb-4bf9-a399-e863977b3501"
+      },
+      "summary": null,
+      "counts": {
+        "people": 3,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 2,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:5b23ef42-21fb-4bf9-a399-e863977b3501",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        },
+        {
+          "relationship_id": "relationship:5b23ef42-21fb-4bf9-a399-e863977b3501:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Mixed Person@3": {
+      "focus": {
+        "type": "PERSON",
+        "id": "0ce84209-6e05-4c2b-afea-8abbcf5fbfe7"
+      },
+      "summary": null,
+      "counts": {
+        "people": 3,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 2,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:5b23ef42-21fb-4bf9-a399-e863977b3501",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 2,
+          "evidence_count": 2,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        },
+        {
+          "relationship_id": "relationship:0ce84209-6e05-4c2b-afea-8abbcf5fbfe7:9ee8bb56-e0af-4771-963c-7c9c3375bae1",
+          "other_person_display_name": null,
+          "source_display_name": null,
+          "target_display_name": null,
+          "relationship_strength": null,
+          "selected_evidence_strength": 1,
+          "evidence_count": 1,
+          "qualifies_for_cluster": false,
+          "evidence_types": null
+        }
+      ],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Type Alpha@3": {
+      "focus": {
+        "type": "PERSON",
+        "id": "ba9ccf01-3af1-4bd1-92e0-87dab448344a"
+      },
+      "summary": null,
+      "counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Type Beta@3": {
+      "focus": {
+        "type": "PERSON",
+        "id": "b92ff4c4-50d2-4006-ac2b-b546c0cd2077"
+      },
+      "summary": null,
+      "counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      },
+      "relationships": [],
+      "keys": [
+        "graph_revision",
+        "as_of",
+        "generated_at",
+        "requested_detail_level",
+        "returned_detail_level",
+        "focus",
+        "requested_filters",
+        "effective_filters",
+        "ranking",
+        "limits",
+        "scope_totals",
+        "available_facets",
+        "returned_counts",
+        "pagination",
+        "truncated",
+        "has_more",
+        "next_cursor",
+        "people",
+        "clusters",
+        "events",
+        "evidence",
+        "relationships",
+        "patterns",
+        "media",
+        "discoveries",
+        "discovery_context",
+        "contract",
+        "contract_version",
+        "filter_semantics_version",
+        "ranking_version",
+        "clustering_version",
+        "calculation_version"
+      ]
+    },
+    "Type Alpha default-co": {
+      "relationship_count": 0,
+      "relationships": [],
+      "returned_counts": {
+        "people": 1,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 0,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      }
+    },
+    "Type Alpha with-manual": {
+      "relationship_count": 1,
+      "relationships": [
+        {
+          "relationship_id": "relationship:b92ff4c4-50d2-4006-ac2b-b546c0cd2077:ba9ccf01-3af1-4bd1-92e0-87dab448344a",
+          "source_person_id": "b92ff4c4-50d2-4006-ac2b-b546c0cd2077",
+          "target_person_id": "ba9ccf01-3af1-4bd1-92e0-87dab448344a",
+          "directionality": "UNDIRECTED",
+          "relationship_types": [
+            "ASSOCIATED_WITH"
+          ],
+          "evidence_count": 1,
+          "evidence_type_counts": {
+            "MANUAL_ASSOCIATION": 1
+          },
+          "first_occurrence_at": "2026-11-26T07:05:50.879447+00:00",
+          "last_occurrence_at": "2026-11-26T07:05:50.879447+00:00",
+          "strength_basis": "EVIDENCE_COUNT_IN_SCOPE",
+          "explanation": {
+            "summary": "Supported by 1 active authoritative evidence records in scope.",
+            "basis_type": "EVIDENCE_COUNT_IN_SCOPE",
+            "factual_factors": [
+              {
+                "factor": "canonical_endpoints",
+                "value": [
+                  "b92ff4c4-50d2-4006-ac2b-b546c0cd2077",
+                  "ba9ccf01-3af1-4bd1-92e0-87dab448344a"
+                ]
+              },
+              {
+                "factor": "evidence_type_counts",
+                "value": {
+                  "MANUAL_ASSOCIATION": 1
+                }
+              },
+              {
+                "factor": "directionality",
+                "value": "UNDIRECTED"
+              }
+            ],
+            "derived_factors": [],
+            "calculation_version": "world-descriptive-v1",
+            "evidence_types": [
+              "MANUAL_ASSOCIATION"
+            ],
+            "evidence_count": 1,
+            "first_occurrence_at": "2026-11-26T07:05:50.879447+00:00",
+            "last_occurrence_at": "2026-11-26T07:05:50.879447+00:00",
+            "calculation_scope": {
+              "as_of": "2026-11-26T07:19:10.231516+00:00",
+              "date_from": null,
+              "date_to": null,
+              "recent_activity": null,
+              "locations": [],
+              "missing_location": "INCLUDE",
+              "filter_semantics_version": "world-filters-v1"
+            },
+            "strongest_factors": [
+              {
+                "factor": "evidence_type_counts",
+                "value": {
+                  "MANUAL_ASSOCIATION": 1
+                }
+              },
+              {
+                "factor": "occurrence_window",
+                "value": {
+                  "first": "2026-11-26T07:05:50.879447+00:00",
+                  "last": "2026-11-26T07:05:50.879447+00:00"
+                }
+              }
+            ],
+            "method": "active_authoritative_evidence_count_after_scope",
+            "threshold": {
+              "minimum_evidence_count": 1
+            },
+            "sample": {
+              "evidence_count": 1
+            },
+            "limitations": [
+              "Strength is a descriptive evidence count, not confidence or risk."
+            ]
+          },
+          "selected_evidence_strength": 1,
+          "qualifies_for_cluster": true,
+          "direction_counts": {
+            "UNDIRECTED": 1
+          },
+          "note_reference_direction_counts": {},
+          "encounter_recurrence": {
+            "count": 0,
+            "first_occurrence_at": null,
+            "latest_occurrence_at": null,
+            "supporting_encounters": [],
+            "supporting_encounters_state": {
+              "total_count": 0,
+              "returned_count": 0,
+              "has_more": false,
+              "truncated": false,
+              "retrieval": "RELATIONSHIP_EVIDENCE_COLLECTION"
+            },
+            "measurement": "distinct_finalized_encounter_canonical_unordered_pair"
+          }
+        }
+      ],
+      "returned_counts": {
+        "people": 2,
+        "clusters": 0,
+        "events": 0,
+        "evidence": 0,
+        "relationships": 1,
+        "patterns": 0,
+        "media": 0,
+        "discoveries": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,112 @@
+OK screenshot auth/owner-login-filled
+OK screenshot auth/owner-signed-in
+OK login owner
+ERROR nav People Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"^People$", re.IGNORECASE)).first
+
+ERROR nav Events Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"^Events$", re.IGNORECASE)).first
+
+ERROR nav World Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"^World$", re.IGNORECASE)).first
+
+ERROR nav Review photos Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"^Review\ photos$", re.IGNORECASE)).first
+
+ERROR nav Check a photo Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"^Check\ a\ photo$", re.IGNORECASE)).first
+
+OK screenshot 15-owner-settings/home
+OK nav Settings 
+ERROR nav People Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"^People$", re.IGNORECASE)).first
+
+ERROR click Filter Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Filter", re.IGNORECASE)).first
+
+ERROR click Group by: Country Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Group\ by:\ Country", re.IGNORECASE)).first
+
+ERROR click Sort: Priority Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Sort:\ Priority", re.IGNORECASE)).first
+
+ERROR click Open Bilal Khan Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Open\ Bilal\ Khan", re.IGNORECASE)).first
+
+OK screenshot 10-owner-people/bilal-tab-photos
+OK bilal tab Photos 
+ERROR bilal tab Sightings Locator.click: Timeout 1600ms exceeded.
+Call log:
+  - waiting for get_by_role("tab", name=re.compile(r"Sightings", re.IGNORECASE))
+
+OK screenshot 10-owner-people/bilal-tab-events
+OK bilal tab Events 
+ERROR bilal tab Associations Locator.click: Timeout 1600ms exceeded.
+Call log:
+  - waiting for get_by_role("tab", name=re.compile(r"Associations", re.IGNORECASE))
+
+ERROR bilal tab Activity Locator.click: Timeout 1600ms exceeded.
+Call log:
+  - waiting for get_by_role("tab", name=re.compile(r"Activity", re.IGNORECASE))
+
+ERROR click Read full note Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Read\ full\ note", re.IGNORECASE)).first
+
+ERROR click Open Person Graph Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Open\ Person\ Graph", re.IGNORECASE)).first
+
+ERROR F02 graph keyboard edge Locator.click: Timeout 1500ms exceeded.
+Call log:
+  - waiting for get_by_label("Refresh Person Graph")
+
+ERROR click Back to person profile Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Back\ to\ person\ profile", re.IGNORECASE)).first
+
+ERROR notes editor Locator.click: Timeout 1800ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Edit", re.IGNORECASE)).first
+
+ERROR nav Events Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"^Events$", re.IGNORECASE)).first
+
+OK screenshot 11-owner-events/morning-detail
+OK event detail open 
+OK screenshot 11-owner-events/correct-participants-dialog
+OK click Correct Participants 
+ERROR click Correct Event details Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Correct\ Event\ details", re.IGNORECASE)).first
+
+OK screenshot 11-owner-events/attach-media-dialog
+OK click Attach Media 
+ERROR nav World Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"^World$", re.IGNORECASE)).first
+
+ERROR click Connections Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Connections", re.IGNORECASE)).first
+
+ERROR theme toggle Locator.click: Timeout 1200ms exceeded.
+Call log:
+  - waiting for get_by_label("Switch to dark mode")
+
+OK screenshot auth/account-menu-before-signout
+ERROR logout Locator.click: Timeout 1500ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name="Sign out")
+

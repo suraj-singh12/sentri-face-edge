@@ -1,0 +1,4272 @@
+{
+  "schema_version": 1,
+  "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+  "evidence_branch": "audit/issue-6-current-experience",
+  "sealed_at": "2026-11-22T19:12:16.265919+00:00",
+  "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
+  "environment": {
+    "os": "macOS 26.0 arm64 VM",
+    "timezone": "America/Los_Angeles",
+    "source_runtime": "dev whole-image/hash synthetic; separate approved source ONNX supplement",
+    "native_display_css": "1280x802",
+    "native_window_css": "1280x695",
+    "native_content_css": "1280x608",
+    "native_dpr": 2,
+    "css_viewports": [
+      "1440x900 Day",
+      "1366x768 Day",
+      "1280x800 Night",
+      "900x700 Night",
+      "1440x900 Night"
+    ],
+    "themes": [
+      "Day",
+      "Night"
+    ]
+  },
+  "counts": {
+    "source_sha": "b457f0a723e845dd1a92a07a577072c85146c89a",
+    "status": "PARTIAL \u2014 completeness/design Gate 1 remains open",
+    "registered_capture_attempts": 849,
+    "accepted_capture_records": 724,
+    "rejected_attempts": 3,
+    "distinct_sampled_visual_state_keys": 721,
+    "public_images": 732,
+    "public_originals": 607,
+    "public_sanitized_derivatives": 12,
+    "private_only_accepted": 105,
+    "private_genuine_images": 33,
+    "runtime_journey_records": 47,
+    "semantic_surface_families": 37,
+    "observed_titled_overlays": 57,
+    "observed_dialog_title_count": 40,
+    "source_task_contracts": 60,
+    "source_task_status": {
+      "PASS": 5,
+      "PARTIAL": 48,
+      "FAIL": 7
+    },
+    "source_branch_contracts": 509,
+    "source_branch_status": {
+      "PASS": 364,
+      "PARTIAL": 78,
+      "NOT RUN": 51,
+      "BLOCKED": 9,
+      "FAIL": 7
+    },
+    "roles_sampled": 5,
+    "source_definition_sites": 832,
+    "control_overlay_transition_definition_sites": 598,
+    "candidate_presence": {
+      "NOT RUN": 281,
+      "PARTIAL": 317
+    },
+    "counting_definitions": "Surfaces: explicit semantic families in surface-register.csv, not all state variants. Journeys: ordered J records, not source contracts. Branches:509 source contracts. Visual key:UX/state/role/kind/theme/viewport, excludes rejected attempts. Titled overlay count excludes unnamed popovers and tooltip definitions; see source oracle. Native and CSS captures are distinct evidence classes."
+  },
+  "capture_metadata": "audit-results/issue-6/capture-register.json",
+  "private_genuine_metadata": "audit-results/issue-6/private-evidence-register.json",
+  "files": [
+    {
+      "path": "audit-results/issue-6/INDEX.md",
+      "bytes": 23875,
+      "sha256": "4cfa67e69734abe532c7828aeacdb3fe73ec9ba8535743cfce7f54017c3bf164"
+    },
+    {
+      "path": "audit-results/issue-6/assessment.md",
+      "bytes": 11703,
+      "sha256": "631ee701bf88250ac183813851560aae9baac797a2001fabff445df04432875c"
+    },
+    {
+      "path": "audit-results/issue-6/branch-coverage.csv",
+      "bytes": 295735,
+      "sha256": "bb7915b48769bce061b34efc153cbf04c0bb44ded1b5b6f782ed1c426c943557"
+    },
+    {
+      "path": "audit-results/issue-6/capture-register.json",
+      "bytes": 966127,
+      "sha256": "e839f64b7ef0cefd4af8a42fa2d04df77468a4120bc29df551d7d1e827a318eb"
+    },
+    {
+      "path": "audit-results/issue-6/captured-overlays.csv",
+      "bytes": 22182,
+      "sha256": "568df11850f63a77686a48ccce57a2b3d28ef017cb3d43284217983e52d24faf"
+    },
+    {
+      "path": "audit-results/issue-6/checks/dense-fixture-summary.json",
+      "bytes": 225,
+      "sha256": "fade0dc156c8aa2c8e92b3020bf565b13525b95f3c98082f33929821eb4b12d9"
+    },
+    {
+      "path": "audit-results/issue-6/checks/library-validation.json",
+      "bytes": 522,
+      "sha256": "f95ab733521e186a9eab55bc4949f2eae6da39fbe9ea7df4ab38d4087b2bfec0"
+    },
+    {
+      "path": "audit-results/issue-6/checks/role-checks.json",
+      "bytes": 861,
+      "sha256": "e9a5cd53a09ac2edd729d57d77d4340e439e762b11043d5db966f5850d224bf0"
+    },
+    {
+      "path": "audit-results/issue-6/checks/runtime-checks.json",
+      "bytes": 662,
+      "sha256": "5b1b957e97ffc87dc0f4efdcdb3d9f7fd20bd2d4a87d9413457ec5465e4bc654"
+    },
+    {
+      "path": "audit-results/issue-6/checks/validation.json",
+      "bytes": 1123,
+      "sha256": "5fb93cb7b93a4d30e4f469cd064f43c0c96ab2e50148b6428e48e1f530a3164c"
+    },
+    {
+      "path": "audit-results/issue-6/coverage-summary.json",
+      "bytes": 1147,
+      "sha256": "a2a8e54c0b4346120bfe0719bee5a68966e4064fea751b27d0ba6ce47081f77a"
+    },
+    {
+      "path": "audit-results/issue-6/coverage.csv",
+      "bytes": 345130,
+      "sha256": "4eadba32dbf783a702f0eccaf31f685b6aac3adbeee15861d965c11f82191aeb"
+    },
+    {
+      "path": "audit-results/issue-6/coverage.md",
+      "bytes": 15607,
+      "sha256": "110d2210c6f0a393800699533567d01647dc59b564ae72a499f791555eeb909e"
+    },
+    {
+      "path": "audit-results/issue-6/discovered-branches.csv",
+      "bytes": 362,
+      "sha256": "0d75e039ddd0c4e726dc5c5183b3e34659a8625858277701274e00d29ae828f6"
+    },
+    {
+      "path": "audit-results/issue-6/evidence-candidates.csv",
+      "bytes": 2570476,
+      "sha256": "39a28dc1566a3e7dec38abd9be313185cf0cbd27f11a46fd56f0a2d09d13cda6"
+    },
+    {
+      "path": "audit-results/issue-6/execution-summary.json",
+      "bytes": 1430,
+      "sha256": "57677ea22f83061079781745e882f35e36509b761df01dcbf15e51b5c1897739"
+    },
+    {
+      "path": "audit-results/issue-6/findings.md",
+      "bytes": 45208,
+      "sha256": "f48def6254b49ca39c1d13cd4922cc1f972960621b4e3c60bd5661a22705b78d"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/invalid-image.png",
+      "bytes": 65,
+      "sha256": "bb966ad76b5393edfb57425bb1740230a0f7ecde9358fdc343bb4b276cbb53a1"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/poor-query-synthetic.png",
+      "bytes": 128,
+      "sha256": "677b4f7eafa8bdfd38c4dd52b9205bbd0a713e7b7a6ff736db781fc9b79fff99"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/poor-synthetic.png",
+      "bytes": 128,
+      "sha256": "9ef04dadd822ac0478a0177df338d35df3161bcf8345d234a6386916203cb3e6"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/proof-duplicate-synthetic.png",
+      "bytes": 76,
+      "sha256": "1bb91daec53d2172e3098c2341ca0e6dd616795c3739793fbeed6452965c9844"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/queue-poor-synthetic.png",
+      "bytes": 76,
+      "sha256": "5a16360331e2e433f76732c9ac6dfac7c66636de02c230c6dd0fbb0743f9b48c"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/synthetic-1.png",
+      "bytes": 195641,
+      "sha256": "8fb3d8ed6d3c685acb4825ae57b64ffad5b5efb8a81c857297eaecb59f51ce20"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/synthetic-2.png",
+      "bytes": 195500,
+      "sha256": "c7c7ff28b6540eb607af488f5c89833f6f641d717b0f6b8144384252a7e6bc08"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/synthetic-3.png",
+      "bytes": 195502,
+      "sha256": "1f86597b3016a5df6d12f26d9eb73397a3404fd8178c4ebe1ab66c4e363ba710"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/synthetic-4.png",
+      "bytes": 195529,
+      "sha256": "a0dfe997233f2f8373cff98d64322f720a81e60cc9442a3ae030e2fb05e859c3"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/synthetic-5.png",
+      "bytes": 195476,
+      "sha256": "8e387e859e3f07276e58e84f2587950b09a57cef3ea6cd4eb7c263c953c02ebf"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/synthetic-6.png",
+      "bytes": 195463,
+      "sha256": "cafe44d0f94909e8fd2add184232eeae83a78e74ab23fc51b651206eed98477e"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/synthetic-7.png",
+      "bytes": 195573,
+      "sha256": "31ec042338ae75f550b383eb2351321a7eeeffae222189ecebaced5b999fe979"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/synthetic-8.png",
+      "bytes": 195433,
+      "sha256": "38512b15a3a3425352c16e0f30212d8d7cc5fabbfff45bcbc0cc2a457d74f1e0"
+    },
+    {
+      "path": "audit-results/issue-6/fixtures/synthetic-9.png",
+      "bytes": 195460,
+      "sha256": "fa6e2540f7b18d56e10473bbdec138faa5b75048e3f826e3d7c5d35ca9f3dbe8"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J01.md",
+      "bytes": 10062,
+      "sha256": "e2e0de581fff2695973ceeda8b41e8cc5ea267f77bd9b94af4a93647910a0db6"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J02.md",
+      "bytes": 8455,
+      "sha256": "be0c2c8bcdc4fe8cd8a8f3191cb9f6b720a777b84feba10a584f560044661fc9"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J03.md",
+      "bytes": 8885,
+      "sha256": "0a4f17acbed608663fe1032728db5ae302d8a7994c47ab8b18c1189b21659067"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J04.md",
+      "bytes": 7692,
+      "sha256": "0261efc52649eed0988d2403d45ab11d92bac064c4feb3581e03db32ad22d30c"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J05.md",
+      "bytes": 11512,
+      "sha256": "4a23c03ce50f242867ce7a6ea6feaaaba3e78c0f34aee113d206c6b2b3cc4edc"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J06.md",
+      "bytes": 17578,
+      "sha256": "252abce2b7324a43c9b795a1a207ba515268df9087126c3778e1e2328d913b73"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J07.md",
+      "bytes": 14889,
+      "sha256": "b1db5482b286886abaae7b67727d897349feb7230694d5b53bb34250aa6b8bd2"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J08.md",
+      "bytes": 32058,
+      "sha256": "24fb609189d236651709fbdbc3c0ecebc151597f9f906b30df422c74af864dc6"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J09.md",
+      "bytes": 7720,
+      "sha256": "42235401c64340dbbc0c83f8f78abd4e8f1e0cdddd1c96c02f15fece451ed76e"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J10.md",
+      "bytes": 10506,
+      "sha256": "faca014cec8cd04f96f8eeaff33eae8a61e18018cffa804aeeb6dbb1bffed06e"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J11.md",
+      "bytes": 14492,
+      "sha256": "b43bf6db0ae763f26b855cc9a671bb0423ac2473789943a43be35cd18e9772fd"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J12.md",
+      "bytes": 12683,
+      "sha256": "cae6fa4cd695032a2325fe8e7cc36d15c324c525f568deedef7c3e5551a606dd"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J13.md",
+      "bytes": 10084,
+      "sha256": "4f9da865229579d87c2f0481f1d5642dcfa4c2b5f6e635f40e3aa48decd0e6dc"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J14.md",
+      "bytes": 5869,
+      "sha256": "03cf705d939984f5df0afe744d9d406a685c9023484108c5e144ad1c646c1513"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J15.md",
+      "bytes": 14497,
+      "sha256": "1bbf9cf999051fe21df525ad19b5a7ab1ad8ef834139122bc25f3483ce65ee42"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J16.md",
+      "bytes": 3758,
+      "sha256": "94679e2fea2727c028acccd0fdccf3ddd71e920495c11f7c541ff88db0d16bcc"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J17.md",
+      "bytes": 17686,
+      "sha256": "05c057c53b808a58c682629f735a10a550d3b554db179e935c5ddd97b36036db"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J18.md",
+      "bytes": 19303,
+      "sha256": "cf5857e4f1d7f6721c8a3c886dc3444bc94f79ae3bf2fc1d91f0a71ee404f997"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J19.md",
+      "bytes": 18352,
+      "sha256": "ef102090274cab66fb39c96e1be211f8d9fbb6599b6934d8c0476bc5d29accda"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J20.md",
+      "bytes": 13440,
+      "sha256": "78966692f7e09c15885c9fad50435896cbb5d8a953446da358040390481aae9e"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J21.md",
+      "bytes": 5321,
+      "sha256": "cf57597a10b3e23a4f1d041808e6402756f63e0398d06a6c46e67c37816cbec2"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J22.md",
+      "bytes": 15320,
+      "sha256": "5031eb840f84a1db48b90434b71c24db0a869a7cb1cb5db58b5b60edb452de43"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J23.md",
+      "bytes": 9717,
+      "sha256": "74ccd44d6c11b7096c5fafc58565e9c0f67aac2419f0c38bf92aa2dcd966eecb"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J24.md",
+      "bytes": 17060,
+      "sha256": "676f958ef5a01a7579fe9b8fe46620a553ff839373e1b378d6c02d8c28e1181c"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J25.md",
+      "bytes": 4659,
+      "sha256": "0b47eba3f3aed406e7b221bb298a99d603478ea23aeb3ff369b78b4c9a0a846b"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J26.md",
+      "bytes": 11296,
+      "sha256": "e7ecce094605d6e70086597900553a92db43b50bc02490affc527b0ceac3db06"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J27.md",
+      "bytes": 22963,
+      "sha256": "e800df11aeb338cd3e159b3d590b08d12be4a7e47324a4d883b115b391e53ffb"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J28.md",
+      "bytes": 4192,
+      "sha256": "a9c18f6185d31f7353c70e5ef715b5fc45e21f7a279d524268b6191e47084ae2"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J29.md",
+      "bytes": 12519,
+      "sha256": "8233e1acccd44537bb774ca34ce2e66ba0d8c7c05b19f3cb27dce4c7df1f817b"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J30.md",
+      "bytes": 3848,
+      "sha256": "a84abb0b25819511b683f5d6f6c7dbdc57bbd2a721b535d10303be365469be64"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J31.md",
+      "bytes": 5328,
+      "sha256": "d3eef744475201473a9634836022a1b42277c799af72b203f0989a843f9259d6"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J32.md",
+      "bytes": 11594,
+      "sha256": "27f4a245643223a9ef7e2c2665e6fb2c2c2a907c0636650b21bbacd08d8f9eef"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J33.md",
+      "bytes": 10761,
+      "sha256": "ee024a0ca7a6bab399ff40bc7a5cd253f2fe2eb12c13a302f2d3d64f330b41a1"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J34.md",
+      "bytes": 13784,
+      "sha256": "62016bb6d59e8a8f958e74dc95b857962e7528c0e551ad0f6bc897db5c1a5e3f"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J40.md",
+      "bytes": 4364,
+      "sha256": "3f4fb93d044413af6e2850bfad0f09cd28aab10afddce1b4629a87938aa4fa20"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J41.md",
+      "bytes": 3782,
+      "sha256": "dc89a81f7d0df72ecfa7eb9f65025d82ce931cc6c36e4077439cf04584f44fd5"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J42.md",
+      "bytes": 4200,
+      "sha256": "51106f871ce424242ef90cfb3f438612447341435193ebfd4eae12c63c6e9c45"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J43.md",
+      "bytes": 3539,
+      "sha256": "62a63d5ab8acdd4073020401cd256ba3d6f39acd1d3072421a367a929e6df20b"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J44.md",
+      "bytes": 3046,
+      "sha256": "b1b771e337ea8f49f0be68b043e38cf62366eb96706e80c0b4c5c1838c21c81a"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J45.md",
+      "bytes": 6773,
+      "sha256": "0747a2d3a67c31c2925998f3f0d647848a2f5b6e4e788a9b18d93b3f2d783682"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J46.md",
+      "bytes": 1090,
+      "sha256": "6915aa619bb80ba4e71e227459ce13c0eedd2564e2f7ea480d5c08f556812a02"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J47.md",
+      "bytes": 8581,
+      "sha256": "666fe9e01715cbd5c1936c4ff9ac6d5afa91c78e38b317b549cc4ecaf418de80"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J48.md",
+      "bytes": 3395,
+      "sha256": "f6ff06a43494af4a5517ee60917c2016321cde317658e73021e7a2a81a7023e5"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J49.md",
+      "bytes": 7654,
+      "sha256": "7f8ae105c21c462581bf51c9e4337bc1acad3d7a642dc163c3c81fd949e8040d"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J50.md",
+      "bytes": 6490,
+      "sha256": "45abc38a0158cb1e692034b0861223df52039b9062905e45c4d372e90ecde7f8"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J51.md",
+      "bytes": 5855,
+      "sha256": "e22c0cbb9e9f6e6994afd166251c486471ef0fb70da732905bf6e5c0e7313584"
+    },
+    {
+      "path": "audit-results/issue-6/journeys/J52.md",
+      "bytes": 2351,
+      "sha256": "ce204656052a945112e2ff613c5af5dd97f3025b0419cfe4ce6a826cb1ca9693"
+    },
+    {
+      "path": "audit-results/issue-6/pass2-execution-plan.csv",
+      "bytes": 99337,
+      "sha256": "6b49e0bc7fb1c0055de0d63d4c28d3d80f3cbae02a431d3c62d9ed54512309f5"
+    },
+    {
+      "path": "audit-results/issue-6/private-evidence-register.json",
+      "bytes": 22946,
+      "sha256": "39acbd81ab8d05b88c3f09b328898eb04f6242a805ec1be1cfa4132433dc5ad6"
+    },
+    {
+      "path": "audit-results/issue-6/reproduce.md",
+      "bytes": 11269,
+      "sha256": "8f459a15d7f28077ae99cdff9760ffb4ac1b36993d4d5641639cb6144a088071"
+    },
+    {
+      "path": "audit-results/issue-6/reuse-map.md",
+      "bytes": 16731,
+      "sha256": "5a54a468f864a14999a42d17d80f2e4e0a70f1a325f87040f5644c90832e1ded"
+    },
+    {
+      "path": "audit-results/issue-6/review.md",
+      "bytes": 60485,
+      "sha256": "50ed46a612027ff66d418d13009f24d2765262e9114fa68c314ecd2cabda4cd0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-01_First-launch.png",
+      "bytes": 371365,
+      "sha256": "844fe47a07a45d02a666864f31b4e55a83e7727d0244ca0d5a1c1e226ca0fc93"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-02_Password-mismatch.png",
+      "bytes": 371021,
+      "sha256": "f5357eb882cac2bf34d0f72e29a31bc72ab4f1ced0e0926e3cae9343e08ea09f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-03_Safety-copy-gate.png",
+      "bytes": 321197,
+      "sha256": "c199020cd082ee25fdf069320a6603d5694679bec3ce9218a677b40a041342dd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-04_Skip-acknowledged.png",
+      "bytes": 321788,
+      "sha256": "556520eb6d0de44ed102fcadaa9d51bd96376ea1c4411b30018d318d63f8812a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-06_Pass2-Recovery-gate-start.png",
+      "bytes": 321818,
+      "sha256": "a05c2705da0eb354d9c469c0437f2c09844892e4504091fd060d5827544cb02b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-08_Pass2-Recovery-setup-error.png",
+      "bytes": 386965,
+      "sha256": "26688d3182d39e76d1fdd501f6babfd552b736ec22e91c4839a3645409c64ec7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-09_Pass2-Recovery-after-page-reload.png",
+      "bytes": 321189,
+      "sha256": "8284115835fec1e844341157d96f76033a4aa6988a17c18361f7dce434d29a08"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-10_Pass2-Recovery-non-admin-gate.png",
+      "bytes": 347126,
+      "sha256": "c1834dde5da8bcb9075e1dcb3bcef62252b17fc01834c8cc8e698c75573c743d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-11_Pass2-Recovery-non-admin-sign-out.png",
+      "bytes": 376020,
+      "sha256": "f0d36d19cd71aee073dc8880d5e22bf312f91aad7c8987f334155ece2140374d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-13_Pass2-Fresh-owner-blank-form.png",
+      "bytes": 371365,
+      "sha256": "844fe47a07a45d02a666864f31b4e55a83e7727d0244ca0d5a1c1e226ca0fc93"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J01_Step-14_Pass2-Fresh-owner-empty-submit.png",
+      "bytes": 375849,
+      "sha256": "38121350ef7442cfcab41dd3d40ef6c86bab0a7213899b1190254bc836ab8502"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J02_Step-05_Pass2-Password-changed-signed-out.png",
+      "bytes": 377134,
+      "sha256": "ef3068f7caa7098d323d166050b87aeb8c6618fdc0d4cacda933243f27533eae"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J24_Step-21_Pass2-Sign-in-start.png",
+      "bytes": 372585,
+      "sha256": "89d6ff89322f368aae44bac4dba7cad5f22779ca4c10dcca0d3ce92cbc729a48"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J24_Step-22_Pass2-Invalid-sign-in.png",
+      "bytes": 372913,
+      "sha256": "dfcebf5826c2b45680fe8c86ecd45f5c75623c6ea7e72c5367691bfb59f691af"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J24_Step-23_Pass2-Signed-in.png",
+      "bytes": 337951,
+      "sha256": "17652a288abc50177e4310abb86e9a130751354faf26f683fdff43cbebf30170"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J24_Step-24_Pass2-Account-menu-before-sign-out.png",
+      "bytes": 342673,
+      "sha256": "06b90c75aae878415baec5c0b58580e07b889b14251541b061a63cf25c92cfcd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J24_Step-25_Pass2-Signed-out.png",
+      "bytes": 377414,
+      "sha256": "5097280430ee6e71cb9ab6bf2570367d2cfdf3136e9aae4f5a3dc01d80deae20"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J24_Step-27_Pass2-Stale-session-refresh-response.png",
+      "bytes": 376858,
+      "sha256": "8e3d385b00cd5af5442210442fc3bc235a83030c0b1afae0b60f5edf998bc755"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J24_Step-31_Pass2-Backend-restart-after-page-reload.png",
+      "bytes": 372585,
+      "sha256": "89d6ff89322f368aae44bac4dba7cad5f22779ca4c10dcca0d3ce92cbc729a48"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J29_Step-17_Pass2-No-photo-note-error-reload-signin.png",
+      "bytes": 372585,
+      "sha256": "89d6ff89322f368aae44bac4dba7cad5f22779ca4c10dcca0d3ce92cbc729a48"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J32_Step-01_Models-needed.png",
+      "bytes": 68070,
+      "sha256": "d8ea23900f27548047b5dfbd6014eced5053ad520a705fa23dc9c44b2c5b4be2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J32_Step-02_Business-model-options.png",
+      "bytes": 116814,
+      "sha256": "415e83be5f250e39764700213353fe5eb83b71cfb7529732093cb24653b2ea0f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J32_Step-03_Research-model-file-controls.png",
+      "bytes": 89034,
+      "sha256": "347c8c23bfa2228d4d06a3f8c45dc92f6f8706e4e6f168146f0f9b86000499fa"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J32_Step-08_Models-ready-recovery-next.png",
+      "bytes": 322188,
+      "sha256": "c2ef532ce2868df426dc85cafe429fa2b497ec839d2f8cac950920f1853a6182"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J32_Step-09_ONNX-source-ready-empty-shell.png",
+      "bytes": 340698,
+      "sha256": "7ee02498222c78847076c95f7e0bde8eb302770f0608510a89506f91e4bfe40a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J32_Step-19_Pass2-Expired-plan-reprepared-and-activated.png",
+      "bytes": 322188,
+      "sha256": "c2ef532ce2868df426dc85cafe429fa2b497ec839d2f8cac950920f1853a6182"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J32_Step-22_Pass2-Viewer-missing-model-gate.png",
+      "bytes": 56097,
+      "sha256": "adbb0b446c954275add7a15f63a539424edcd7cd19505b30ffeb12311d8e7106"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-00/UX-00_J40_Step-01_Native-IAB-signin.jpg",
+      "bytes": 15124,
+      "sha256": "937dd7e713bb5d5369c5c28eae8347b86b7887d8139e1e857f9ec55cad730cac"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J01_Step-05_Shell-ready.png",
+      "bytes": 345405,
+      "sha256": "827e598b485fdc3a726ca6670d3787bd4a5080070ea608e2998ae5af28d56caf"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J02_Step-01_Account-menu.png",
+      "bytes": 349741,
+      "sha256": "02687381e683ef76079904d02cb4862bc97cfc6c33e5070ce419b0eb8b1bdb6b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J02_Step-02_Change-password-dialog.png",
+      "bytes": 136879,
+      "sha256": "4cd34d75f0f0aa9220e4bccb667563e4c74fbcbd3971972ba1128647aaa1c5f8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J02_Step-07_Pass2-Reauthenticated-with-new-password.png",
+      "bytes": 410375,
+      "sha256": "f6ef1e2f4da96d0a0ee314dcf9e16bb2e01f4ce6548ec8f2b4e856b0b4ce584c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J02_Step-09_Pass2-Connection-before-service-stop.png",
+      "bytes": 384283,
+      "sha256": "39294a91ea6d6d42031ac1b67a75159857c3dd379f83259c7c619bae8e9ee2a5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J02_Step-10_Pass2-Connection-refresh-service-stopped.png",
+      "bytes": 408675,
+      "sha256": "2a81feb4a1754c8d8a2207d7ce5099c5f3cb4885e281379551dccc23160d99db"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J02_Step-11_Pass2-Connection-service-restarted-refresh.png",
+      "bytes": 411077,
+      "sha256": "85849e8431ad97314c0827e8a6ff2a6bfcf876119a17156ace7df162a7874bbc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J02_Step-12_Pass2-Connection-refresh-after-startup-ready.png",
+      "bytes": 411113,
+      "sha256": "6f8984fecbfe3512c377ffeead92919d2697a471f95fa549a45bafcf06f08700"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J02_Step-14_Pass2-Connection-resigned-after-restart.png",
+      "bytes": 385931,
+      "sha256": "ea850fde17578247c829be97704dc42c16ad42a2fa7df57fa6042b289cd2702b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J02_Step-15_Pass2-Connection-refresh-immediate.png",
+      "bytes": 388447,
+      "sha256": "8e527336b7bb1626766fe27e0f65d70cbbffc9871c1f54e5a3f2f60703ecd262"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J20_Step-21_Pass2-Viewer-settings-not-visible.png",
+      "bytes": 340265,
+      "sha256": "2870cd6e4e3c9d4e75a4eb8519d718ca9cd159854d6e71f2d3a8cbc97946331d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-01_viewer-shell.png",
+      "bytes": 300179,
+      "sha256": "c6b9b3de85a8c9dc4aed16f7810c000d2dd97df86ac196cd4191b7c8bfa0d654"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-04_viewer-shell.png",
+      "bytes": 300179,
+      "sha256": "c6b9b3de85a8c9dc4aed16f7810c000d2dd97df86ac196cd4191b7c8bfa0d654"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-08_operator-shell.png",
+      "bytes": 303163,
+      "sha256": "d33a8dcf6963c44bd176205f3d81fbe3dff0db712f995790a8573a5f6dbd083d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-11_custodian-shell.png",
+      "bytes": 306222,
+      "sha256": "94843da41a3cba32546151b67449154b160c8b35e1ed4910d4fb0fff4af24c9f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-16_technician-shell.png",
+      "bytes": 303613,
+      "sha256": "ace18258a538697f7289d0050adf8a4ac2065893028bfa9a5c84df2d7da7c6b8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-26_Pass2-Stale-second-tab-before-refresh.png",
+      "bytes": 345405,
+      "sha256": "827e598b485fdc3a726ca6670d3787bd4a5080070ea608e2998ae5af28d56caf"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-28_Pass2-Reauthenticated-after-session-revocation.png",
+      "bytes": 337394,
+      "sha256": "162550e356381f87461b717218f9602066c880bda63ff6610c839e5edeecc2b7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-29_Pass2-Backend-outage-refresh-response.png",
+      "bytes": 420288,
+      "sha256": "9e4fbd0f1c7fafb5c2d021779298af21fdcdc4872c1a9831bf31be99cc50da3c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-30_Pass2-Backend-restart-refresh-response.png",
+      "bytes": 422727,
+      "sha256": "c401d7ca438c4325ded25e736eb9e7a10ec8606f7ab8030da8fe0a04c2190be4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-32_Pass2-Backend-restart-reauthenticated.png",
+      "bytes": 442184,
+      "sha256": "38604ca14c78b5f12d98002a467eb1673956dad96bdfeb7916ab449c39cbbdb8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J24_Step-33_Pass2-Safety-warning-before-navigation.png",
+      "bytes": 436215,
+      "sha256": "d810789ca379cae3aeffe0126398595d2c5e85aa42658ebec7145a0e68b9eff7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-05_Signed-out.png",
+      "bytes": 373310,
+      "sha256": "d7eb42a7a7e2ee6191983d8d3c66a3537eeace3e7bf29e8dd9410d56028c65da"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-06_Viewer-first-sign-in.png",
+      "bytes": 332550,
+      "sha256": "73811f6206cfd6501ac419fd578d39a6ef46bd283656d86b5c5c30748ab14a94"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-07_Viewer-account-menu.png",
+      "bytes": 343005,
+      "sha256": "812e31a47d237119431f6735cf388d745acd769be7eb3837ee452b6eb5bf2ff9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-13_Operator-landing.png",
+      "bytes": 383494,
+      "sha256": "b5438df40cf173c48d6468ee3a0a04522a7d4c8d1b5515654d5c02774cfac129"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-17_Custodian-landing.png",
+      "bytes": 421257,
+      "sha256": "e72da3ffc0214e09d765e533de9963d2e9484241a3c1a316863dfda440c860df"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J47_Step-18_Technician-home.png",
+      "bytes": 399342,
+      "sha256": "ed09812eca0bb658b4d451df1349720a05215bca3d55f87e6abfff0853bbcd43"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J48_Step-01_Change-password-open.png",
+      "bytes": 165246,
+      "sha256": "fe09dcbab1886218901afe740615b590f6a9c5fb7af0807529679834508211b4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J48_Step-06_Password-changed.png",
+      "bytes": 376862,
+      "sha256": "228729ff6dd33d92364c0f506b06ab896a8003d150e63f3a30f621ab237b535a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J48_Step-08_New-password-accepted.png",
+      "bytes": 378378,
+      "sha256": "04e8b01df4a47bc701182a1aadfd3d502a5edfab9f0d25bc4255a200f7ec0d5a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-09_Disabled-viewer-stale-session.png",
+      "bytes": 365408,
+      "sha256": "e4be61f0ff1d868a194c298791c4debb796e47a2a1d258c7b2b0a9daaee6e1b8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-10_Disabled-viewer-signin.png",
+      "bytes": 371389,
+      "sha256": "c7a294b85c0e1f44a54d363ae49e4f1fe86fcb2107f7d565cee6e9e824697af0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-11_Operator-session-after-role-change.png",
+      "bytes": 381224,
+      "sha256": "c57814d4c631d7de5d5cd9c1108afbeee3b4bd48f62c4a8b38653b34241f9fe2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-12_Operator-session-after-refresh.png",
+      "bytes": 378155,
+      "sha256": "bc902a0dd0ed1d7fbc4b9e1443561d33fd394439f5ed52d6d5ecfc288c16b6ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-13_Demoted-operator-signin.png",
+      "bytes": 378418,
+      "sha256": "d2b3b6aa9d669949856073e7f857d0ec8523f13f07e919738dab7275ea646174"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J51_Step-14_Operator-after-admin-reset.png",
+      "bytes": 378155,
+      "sha256": "bc902a0dd0ed1d7fbc4b9e1443561d33fd394439f5ed52d6d5ecfc288c16b6ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J52_Step-01_Server-stopped-open-session.png",
+      "bytes": 454035,
+      "sha256": "3b03b5c162aa8708f3403759c8e86a383c112dfc8251d40e40c090498fac9ca0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J52_Step-02_After-restart-refresh.png",
+      "bytes": 456340,
+      "sha256": "0e7ee2eee72ef7fab781a12c22e4b24291d1aa03330187bef7e79779947ca2f0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J52_Step-03_After-restart-reload.png",
+      "bytes": 372383,
+      "sha256": "009e0478cdc31ced8e3f57bac74a4e17aecea43efedd61f032f0bfa1476af01b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-01/UX-01_J52_Step-04_Admin-after-restart-refresh.png",
+      "bytes": 254983,
+      "sha256": "cf181280ae750bcf283932157a121ad1b8ee46b3c3e9afc3acfc658a827dbb5f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-03_Approximate-time-fields_SANITIZED.png",
+      "bytes": 166318,
+      "sha256": "9a5794a8c60904d7b158c417459c47e50498210b03265a7c15a273f98e9d29bd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-04_Unknown-face-result_SANITIZED.png",
+      "bytes": 505480,
+      "sha256": "88824feb1aeef2184e49730e8650f5d110aa870287eb253fcc1e0a25a717e570"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-05_Browse-biometric-profiles_SANITIZED.png",
+      "bytes": 197377,
+      "sha256": "b461a75ebed3a493cb20c78ebe4e70bd5cc2f37c7cc26f9166161ada1e37f148"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-06_Browse-no-biometric-empty_SANITIZED.png",
+      "bytes": 145023,
+      "sha256": "99c55f1f037ad087924f6ef2c33098745e72c4133fd270d25dbba60834ae3add"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-07_Existing-person-selected_SANITIZED.png",
+      "bytes": 519143,
+      "sha256": "d6506ae178911479a54f80bc780e3f56cfb222822dc6c1a93c099fb84b09fb0c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-08_Existing-person-followup_SANITIZED.png",
+      "bytes": 170373,
+      "sha256": "89e40abe600b2d74dd9a982fa6635b0df140bf3d6cfe7ff791c1ed79f804e2da"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-09_Accepted-awaiting-completion_SANITIZED.png",
+      "bytes": 466616,
+      "sha256": "dd9e089f29934bb65c3d46b483e87a946952923dc38854d25bf5ce81307131ad"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-10_Completed-review.png",
+      "bytes": 337769,
+      "sha256": "535d44625f11df041d4a4c6fe89019075cfd5a124c5145b2e5007fcf1c957d3d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-14_Pass2-Discarded-face-cleared.png",
+      "bytes": 344460,
+      "sha256": "72d7ae73e3a8737d27e53383bd8595d2bcbca7e2367121ea68fd6b488a064ab0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-18_Pass2-Deferred-face-cleared-after-reload.png",
+      "bytes": 346803,
+      "sha256": "3fbf8b1ce290edadd978be21c750b920fd978ffad9ee7c8eb8d23e36e0cf9981"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-20_Pass2-Empty-new-person-form-private.png",
+      "bytes": 148152,
+      "sha256": "eb34abed21a207fd8a83913a9af448271ef5908868cf49cfd16e9c207282f8d9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-21_Pass2-Empty-new-person-validation-private.png",
+      "bytes": 152329,
+      "sha256": "bdb92dbd6072b17a16b70ababe8a16efc57532cc73556138942b586bf02772ee"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-22_Pass2-Invalid-form-discarded-private.png",
+      "bytes": 230679,
+      "sha256": "dafd9528ef7206d66c2411d3b092f3859dec56d7009f2966ee9a2b624042af55"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J06_Step-23_Pass2-Invalid-form-returned-empty.png",
+      "bytes": 344460,
+      "sha256": "72d7ae73e3a8737d27e53383bd8595d2bcbca7e2367121ea68fd6b488a064ab0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J26_Step-01_1366x768-light-Check-a-photo.png",
+      "bytes": 275487,
+      "sha256": "045c1754b1b580aa30f2e78f042846c4b654d88eae1c462efa1837490cfa46ac"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J26_Step-07_1280x800-dark-Check-a-photo.png",
+      "bytes": 366086,
+      "sha256": "d627cd3a2a5ff6ca3c96843d1e97bcfe7828174f95910161a9154888f5ecab89"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J26_Step-13_900x700-dark-Check-a-photo.png",
+      "bytes": 259968,
+      "sha256": "1cf0d4528ae21776dada22b93bbe073d960dd763892876d70c9e8abf9d94082d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J26_Step-21_1440x900-dark-Check-a-photo.png",
+      "bytes": 417036,
+      "sha256": "42c1e015db07435fcff3f803c0cf329a14661cda65b91890f7e5bfa5bef09b0b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J34_Step-01_Invalid-image-response.png",
+      "bytes": 341361,
+      "sha256": "803f70b0b09626a75581549291a863f52a6d624a39d567678708444abc961667"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J34_Step-02_Poor-quality-selected-face_SANITIZED.png",
+      "bytes": 251730,
+      "sha256": "629311ee3a90a232a2eaef64a2df63e5faeeb6294a5eefa27008ef74b54cc64f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J34_Step-03_Quality-warning-open_SANITIZED.png",
+      "bytes": 156108,
+      "sha256": "86b744c3533adac72052f196e0d0750787612ecbee8fb662ee71a18bc3988994"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J34_Step-04_Proof-only-followup_SANITIZED.png",
+      "bytes": 150383,
+      "sha256": "decccaf5f99f2b1a5adead83e192a496b3b75730484b86445a8a17c31a9d70cb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J34_Step-05_Proof-only-person-decision_SANITIZED.png",
+      "bytes": 143213,
+      "sha256": "64fc0ae97202470827a0641081729eea504c575338d9c64e870f31ef946e8f9a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J34_Step-06_Proof-decision-after-valid-country_SANITIZED.png",
+      "bytes": 213435,
+      "sha256": "f6f974462b8790baadad867c05168cfdb93466d5403ca0a9f21a944be3290e84"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J34_Step-07_Proof-only-review-completed.png",
+      "bytes": 337769,
+      "sha256": "535d44625f11df041d4a4c6fe89019075cfd5a124c5145b2e5007fcf1c957d3d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J34_Step-12_Pass2-Strong-match-new-person-completed.png",
+      "bytes": 337769,
+      "sha256": "535d44625f11df041d4a4c6fe89019075cfd5a124c5145b2e5007fcf1c957d3d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J40_Step-03_Native-full-window-Recognition.png",
+      "bytes": 321468,
+      "sha256": "cd0d78165b175b1c9bd8e644214a5da607f691e7dd4a2fa944b3daf22db2bb01"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-01_Three-face-photo-loaded.png",
+      "bytes": 765251,
+      "sha256": "252fcefdcd63de90e5bb078d6c3c2bea3826a1e3a646f23c15ef52a18968e800"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-02_New-person-form-face-01.png",
+      "bytes": 159287,
+      "sha256": "102d08b922cdafc77fa6ffea6d3d30d5a58242af06b4be9749c50e3b685923fb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-03_Confirm-new-person-attempt.png",
+      "bytes": 156228,
+      "sha256": "a553b26874e1147547b9b1581dc693000d31388df25a7d0a3001928b75acdd15"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-04_Face-01-drafted-new-person.png",
+      "bytes": 672445,
+      "sha256": "aef326eff9e8879421f15e0073084d3f5293145b21632de4e610c4c96218876c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-05_Face-02-discarded-face-03-skipped.png",
+      "bytes": 686074,
+      "sha256": "30ba7ba73da28d1a5a62dc6938d3777b5843a9d70d95d8e0d1d10be0e22340cd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-06_After-browser-refresh-mid-review.png",
+      "bytes": 770618,
+      "sha256": "9735418281f6694656e0b20686c87334add659233afc003963b27a6ef4e1b0b6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-07_All-faces-decided-ready.png",
+      "bytes": 695320,
+      "sha256": "776d0a01e5c74758047c4cbd23693a42376875619062bf0e40add16bb0c222a7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J42_Step-08_Review-completed.png",
+      "bytes": 335304,
+      "sha256": "c0b7a991e9e9eeef9d7800382254dcdd76c8527d40f2a6605bd5a8244fca2a87"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-01_Repeat-photo-proposals.png",
+      "bytes": 717368,
+      "sha256": "018227492218ee93029580615d8719fd89fb2b1263edcc7fe2d857461f98d1e1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-02_Browse-people-for-face-02.png",
+      "bytes": 248009,
+      "sha256": "a2316a7f98aaab862fa884ecb473d4365060ea16311058075fbe1ba46f2a7f08"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-03_Face-02-selected-same-person.png",
+      "bytes": 730406,
+      "sha256": "06b8feb48903ad8a7b22308cb5061a7abe3541c6d3d92febb6e2a83efd3119f0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-04_Same-person-accepted-twice-attempt.png",
+      "bytes": 178845,
+      "sha256": "a96d004b5883dd3e8ea6ec091d73f50e0aad0b50910a2386e6d00eef7782e1ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-05_Face-02-confirmed-same-person.png",
+      "bytes": 678675,
+      "sha256": "e9a627bde40d460933364ff4613dbaa3d7deabd5a34b5cd1e231c0c467f8a1e7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-06_Same-person-on-two-faces-ready.png",
+      "bytes": 707372,
+      "sha256": "b8be974c82e6d2272aa14fad1d2d441292ca59b76a625f8541b711db160c2a9c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J43_Step-07_Same-person-two-faces-completed.png",
+      "bytes": 332716,
+      "sha256": "37533590e64634aba21b34ca0e23dfa0e0fe232929b86d3fef9b1bca21e4976d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-01_Zero-face-upload.png",
+      "bytes": 448042,
+      "sha256": "b489a6680a75444d5375823229b35e93472f8434c4e8c289cd7693921ab11f9e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-02_One-face-upload-event-details.png",
+      "bytes": 166918,
+      "sha256": "011da196c28f22c9e9c7085c45f598643a24888cd6bee80854c17d64cf5cc771"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-03_One-face-event-details-cancelled.png",
+      "bytes": 339484,
+      "sha256": "f9373c6ae50919e2af0ab4dcb9df631b5de6c193a3c87e9b626a123d7974d878"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-04_Two-face-proposals.png",
+      "bytes": 678252,
+      "sha256": "8b8466f877d744af6d60faccc2c2ee18eb489e93b7bbdd348749b675f43938cb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-05_Clear-mid-review.png",
+      "bytes": 339484,
+      "sha256": "f9373c6ae50919e2af0ab4dcb9df631b5de6c193a3c87e9b626a123d7974d878"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J44_Step-06_After-clear-reload.png",
+      "bytes": 357760,
+      "sha256": "821db3e43010875ce4ba8432b84ba89559c2a42f1be09f3cf6fe1f5b39ca11ee"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-02/UX-02_J46_Step-01_New-person-confirm-blocked.png",
+      "bytes": 156903,
+      "sha256": "799bc73a9bc9d1abe56f8b861a90d396a18966338ea84d69553684c11b92849e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-01_Queue-empty.png",
+      "bytes": 408718,
+      "sha256": "1e69639292d387cb8c2ecb6a1d60fdf3c1504333c2db175558934160ec39ab0b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-02_One-Encounter-grouping.png",
+      "bytes": 552976,
+      "sha256": "951e4ae43667eea1e6a50eeed77fd5098675a75d3e414abba371a7306e9f4efc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-03_Multiple-Encounter-grouping.png",
+      "bytes": 557345,
+      "sha256": "43dd67e7d78081ada4e0229fc70bb1d5fd4cf92b095beb97c1ce022c8dabf143"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-04_Grouping-suggestion-unavailable.png",
+      "bytes": 557345,
+      "sha256": "43dd67e7d78081ada4e0229fc70bb1d5fd4cf92b095beb97c1ce022c8dabf143"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-05_Photo-excluded.png",
+      "bytes": 560379,
+      "sha256": "f40cf863af1e5d71e0aebf2db8e3ef725dfd5e5b04e4204051cd042db53adc83"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-06_Grouping-confirmed.png",
+      "bytes": 481211,
+      "sha256": "3cc929a0f95f5649353fdea5f8ecc3c4b053f3509ac82241933c869ac553cb04"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-22_Pass2-Exclude-all-start.png",
+      "bytes": 548439,
+      "sha256": "02c229b2a36f4df840dd4c402c3468c9367a9d468f46914da71d1e0cf22cd162"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-23_Pass2-All-photos-excluded.png",
+      "bytes": 560654,
+      "sha256": "0b7e704d8ed1c13f43ace1678f8742b6395325553ddb1aaebfefa04d1e6d362b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-24_Pass2-Restored-one-photo.png",
+      "bytes": 553176,
+      "sha256": "f33dbd5717a6f93d497ac9a8620ebd767edb6018a9ff07665dcedbde199f7dd4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-25_Pass2-Single-photo-plan-confirmed.png",
+      "bytes": 450150,
+      "sha256": "d870ca74247128eb618ac0b9edaf445c2e63f8a99f542fe0df8351ce27aebc0d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-26_Pass2-Folder-import-before.png",
+      "bytes": 408718,
+      "sha256": "1e69639292d387cb8c2ecb6a1d60fdf3c1504333c2db175558934160ec39ab0b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-27_Pass2-Folder-invalid-skipped-reference-refused.png",
+      "bytes": 399814,
+      "sha256": "d2db2f01c1a549f4bad8460717edf84670dbf5e24704099954de5bb2ecb87736"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-28_Pass2-Folder-invalid-skip-feedback.png",
+      "bytes": 421501,
+      "sha256": "f8511a6db19b219934bf6f4aabe6cf0a4a565c890f511841c4f148aeed518edd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-29_Pass2-Fresh-folder-scan.png",
+      "bytes": 563354,
+      "sha256": "8a6baf6657d9f9a1550f904324f43358d2d9ea04e865c9d3f61f81de6490a61f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-30_Pass2-Copy-folder-session-id.png",
+      "bytes": 554323,
+      "sha256": "a44448f4dc90dd73f596119c0483773da604331f29ca0b9759067fa00305f425"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-31_Pass2-Folder-session-refreshed.png",
+      "bytes": 554198,
+      "sha256": "e98079606781551dec12400b6e84fe76060b9d36e812cae3f23af915c81f062f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-32_Pass2-Folder-session-discard-confirmation.png",
+      "bytes": 165225,
+      "sha256": "76421bbae7ff0321437c1ac155abb0a3a39656242d32317bc0b74fe0bc959796"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-33_Pass2-Folder-session-discarded.png",
+      "bytes": 413625,
+      "sha256": "d80bd5add2f7e4af942708b7038a35be4261ee6942c7bac149f24a4c4cf56c18"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-34_Pass2-Nested-folder-ready.png",
+      "bytes": 557066,
+      "sha256": "134d0b1c31f07d4f8e6a32108a5b8c199972d214e754db05d8cc62aa6082ce2b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-35_Pass2-Nested-folder-suggestions-disabled.png",
+      "bytes": 553346,
+      "sha256": "c9ee0410b131f24d128525bbabf974ab0b73332c70ed1d53664016a916f272c1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-36_Pass2-Nested-folder-repeat-disabled.png",
+      "bytes": 553661,
+      "sha256": "3ff8ee3134c862d3663a940dac0aad71e906d1058b6373a93bbf53da7c21ca18"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-37_Pass2-Nested-folder-manual-grouping.png",
+      "bytes": 559693,
+      "sha256": "5ff606aae1f593a583ebe148499376625a20549be1851fce51f27e082098f586"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-38_Pass2-Nested-folder-manual-plan.png",
+      "bytes": 451330,
+      "sha256": "7ad0b4b8a7b6ecc39bee5863ad1f1ea7623deb6b1b00a7aa1ad80b6b4118109e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-45_Pass2-Folder-first-person-decision-saved.png",
+      "bytes": 370859,
+      "sha256": "f6f37af936528a79f2c1f2d96441ebe88afb151b25396eb1d5639bd8f43e7be9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-49_Pass2-Second-encounter-return.png",
+      "bytes": 449962,
+      "sha256": "6cac4f9286b0af3fc4384425ed311508f499538bc2c300f88bae5dc8c3221b8b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-50_Pass2-Second-encounter-discarded.png",
+      "bytes": 410013,
+      "sha256": "9f16181fdf0a16b7ee190dce60e04ae732d191cdfc7bc6c1337cec9c6a16db80"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-52_Pass2-Processing-cancel-start.png",
+      "bytes": 408718,
+      "sha256": "1e69639292d387cb8c2ecb6a1d60fdf3c1504333c2db175558934160ec39ab0b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-53_Pass2-Processing-cancel-available.png",
+      "bytes": 409219,
+      "sha256": "7060670fb3a6010f7a6cc97c38d01f30290cbd922b2d3e0a3efa0b53250c5c4c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-54_Pass2-Processing-cancel-outcome.png",
+      "bytes": 410013,
+      "sha256": "9f16181fdf0a16b7ee190dce60e04ae732d191cdfc7bc6c1337cec9c6a16db80"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-55_Pass2-Processing-cancel-after-reload.png",
+      "bytes": 410013,
+      "sha256": "9f16181fdf0a16b7ee190dce60e04ae732d191cdfc7bc6c1337cec9c6a16db80"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J08_Step-56_Pass2-Single-image-final-journey-start.png",
+      "bytes": 497199,
+      "sha256": "b68db5e044e555d75cf0e15f9112d45c83b82234238926ca0503462fa34e79cb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J17_Step-18_Pass2-Reference-retry-no-targeted-controls.png",
+      "bytes": 401235,
+      "sha256": "50d824b435ae63726675e3d847b476273607a59f1edff86ce059e1bece537d9d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J17_Step-19_Pass2-Reference-retry-after-reload.png",
+      "bytes": 410013,
+      "sha256": "9f16181fdf0a16b7ee190dce60e04ae732d191cdfc7bc6c1337cec9c6a16db80"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J17_Step-22_Pass2-Reference-second-retry-result.png",
+      "bytes": 407314,
+      "sha256": "9fbd4e30b68d090dcc44189aaef17e5154481aa6f035189de959e1186d117026"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J17_Step-23_Pass2-Reference-second-retry-after-reload.png",
+      "bytes": 410013,
+      "sha256": "9f16181fdf0a16b7ee190dce60e04ae732d191cdfc7bc6c1337cec9c6a16db80"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J17_Step-29_Pass2-Active-attachment-discarded.png",
+      "bytes": 413625,
+      "sha256": "d80bd5add2f7e4af942708b7038a35be4261ee6942c7bac149f24a4c4cf56c18"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J26_Step-02_1366x768-light-Review-photos.png",
+      "bytes": 321485,
+      "sha256": "28f1dc8f12d8f22f71ca3c19db4d679a0bdd9cac8c73f5a7dbb5a6784ef8a221"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J26_Step-08_1280x800-dark-Review-photos.png",
+      "bytes": 366696,
+      "sha256": "0352d47a9badcfb282763abffa76299a6231cc63818c78bf7249b69bed322ab9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J26_Step-14_900x700-dark-Review-photos.png",
+      "bytes": 280776,
+      "sha256": "cd48e9f23b3e854a984d818f8b9ac3c96664ad36eb8b2a2628e7ae29e4c77f38"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J26_Step-22_1440x900-dark-Review-photos.png",
+      "bytes": 430790,
+      "sha256": "604af114c8b8a11c9a7ed3097f4008252654e69148035aab08ac5dda38d96fd7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-01_Discard-group-confirmation.png",
+      "bytes": 188288,
+      "sha256": "2b43a279ac945b27611a38bcea52ecac52ecf2364f90a21d3c4a6ef7aff0658d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-02_Group-discarded.png",
+      "bytes": 449666,
+      "sha256": "74fecc3d439f3f79e93b454107bfc21227e8d89944383fe18220f62539ec7b7a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-03_Discard-session-confirmation.png",
+      "bytes": 181428,
+      "sha256": "09c7fc7b731d14f0d0903130567ee3f679827e2c08b1406600a9b8460f6b8f82"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-04_Session-discarded.png",
+      "bytes": 372796,
+      "sha256": "c7b10a8232ad42036b5fb4b13d0e795f56efe5ce0a7d16dd27772dc01262f379"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-05_Pass2-Initial-empty-queue.png",
+      "bytes": 408718,
+      "sha256": "1e69639292d387cb8c2ecb6a1d60fdf3c1504333c2db175558934160ec39ab0b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-06_Pass2-Grouping-before-confirm.png",
+      "bytes": 552040,
+      "sha256": "898fd80a2fbfd1a5e8c887cf68ac6ffe4d427e5c56fc02655538e2fe7e8c186e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-07_Pass2-Pending-groups-before-discard.png",
+      "bytes": 484248,
+      "sha256": "52897f90c1584747a1c5384238ca3cfa1647518c07314531c0690587b3f117c4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-08_Pass2-Discard-group-confirmation.png",
+      "bytes": 188498,
+      "sha256": "4c26662f11711fb93e4f59b87aa704d0b69e1521a4768e2a20e1510a9c7612c7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-09_Pass2-Discard-response.png",
+      "bytes": 491217,
+      "sha256": "1b75e4765c61bd107f959929d66365eef81333a15e99a556e438d1a6216e019f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-13_Pass2-Discard-after-metadata-result.png",
+      "bytes": 450225,
+      "sha256": "9395114733867326ab3ae056ac3646273c5c111429cd864a81ea8ff116be84e5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-14_Pass2-Session-discard-cancel-confirmation.png",
+      "bytes": 160477,
+      "sha256": "d6aad149c55703138ffb765042c222b22278b3518b40fa6cd669b3bd87eb810f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-15_Pass2-Session-retained-after-cancel.png",
+      "bytes": 450225,
+      "sha256": "9395114733867326ab3ae056ac3646273c5c111429cd864a81ea8ff116be84e5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-16_Pass2-Session-discarded-after-recovery.png",
+      "bytes": 413625,
+      "sha256": "d80bd5add2f7e4af942708b7038a35be4261ee6942c7bac149f24a4c4cf56c18"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J33_Step-17_Pass2-Encounter-discard-response-without-confirmation.png",
+      "bytes": 410013,
+      "sha256": "9f16181fdf0a16b7ee190dce60e04ae732d191cdfc7bc6c1337cec9c6a16db80"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-03/UX-03_J40_Step-04_Native-full-window-Review.png",
+      "bytes": 337276,
+      "sha256": "96172384dce99bab9757185d36e21b61f014f4ffbe059b70cd766a53c8b71492"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-07_Queue-event-details.png",
+      "bytes": 174761,
+      "sha256": "f81cf9b1d6cc742a60a7a5617fa4613e8e8dd1b52f0695a8ab8b22dbc1d68b34"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-08_Group-review.png",
+      "bytes": 430105,
+      "sha256": "b077004af00859b2a6d76bc7d28ed13219ad1f2cae726bb475d40d511d655db8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-09_Peek-in-open.png",
+      "bytes": 283351,
+      "sha256": "beebe6a2aaee337e9d215c000e69387aa0c137672917ed9415799e649e67eb7e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-10_New-person-followup.png",
+      "bytes": 137772,
+      "sha256": "cca0b26a3a36b31ada36dab0b51ce3f8eb2cb41d5b4d2be607ebc0d643bf2aab"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-11_New-person-valid.png",
+      "bytes": 139451,
+      "sha256": "c26e2e2f03a6a89d30ac11beb618de18b169f2e0b108e55e767c914643d4c45b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-12_Draft-person-decision.png",
+      "bytes": 413034,
+      "sha256": "5a5f328222d64bc68504c9973d43f9322e43b521d9e72f8f812ad6d1b8d49694"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-13_Deferred-group.png",
+      "bytes": 412256,
+      "sha256": "3df794750cf5a3531042dea953965f8b622624f46d215cba1de07eee0d9c781d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-14_Queue-browse-committed-and-draft.png",
+      "bytes": 250742,
+      "sha256": "93d003853bdc7f6f466e8736db932248a35bee4a233e6cb2b0ba2ed7be329b9f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-15_Compare-mode.png",
+      "bytes": 553753,
+      "sha256": "5f3c97a3b882f1cbd48dfba84005bd7bd703b94153a93163a91360e38d058753"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-16_Focused-compare-zoom-unsynced.png",
+      "bytes": 509290,
+      "sha256": "48ca81b348ee3116a05a26dcc4fc358034860522f1c06b37f050547df6051923"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-17_Identities-ready.png",
+      "bytes": 374567,
+      "sha256": "eaeaa687382b77895ef622dde9f8bfcf324416326011a9ce9274b5a16512c7b2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-18_Relations-undecided.png",
+      "bytes": 378475,
+      "sha256": "06e8f8e6dc9e6eb09326da2d6a20be085b25a9b5113ec004fb2b80326066e666"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-19_Relations-excluded.png",
+      "bytes": 378877,
+      "sha256": "b797a9da9817a167c6488ac8b34b05c9af69ba5f653c0dbe63662e6c056baf56"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-20_Relations-included.png",
+      "bytes": 378858,
+      "sha256": "06f8bbdb19bcf565bea7ace1eeb81cb6a7a861756f904d78216bfcebcafcef31"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-21_Queue-completed.png",
+      "bytes": 373010,
+      "sha256": "1674f21e2e5951d50fb329257ab0c110e0b26b3bd6145772dc2d8864ab802e2e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-39_Pass2-Folder-group-event-form.png",
+      "bytes": 174238,
+      "sha256": "3c55e8136e5fe31401360eca210f4ab9aabe53d34cb0323a662595e83412da24"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-40_Pass2-Saved-location-suggestions.png",
+      "bytes": 178455,
+      "sha256": "a46631cb60e7e8e9fd7a08aebcd8050c608626dace0d33a790e872a0712cecd1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-41_Pass2-Selected-event-note-mention.png",
+      "bytes": 186860,
+      "sha256": "75739764a02730cd8aac7eb74f88db9969d56642981b7a39180c222340812694"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-42_Pass2-Event-metadata-confirmed.png",
+      "bytes": 422828,
+      "sha256": "042ac63ab333d307fa498e9ee2ee5eeb87aee7e598294d5fc3f63bb31d9b9086"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-43_Pass2-Face-selection-cleared.png",
+      "bytes": 411837,
+      "sha256": "f0d2f40655a084f2769e3572686e947480e62a892c0f1c8d9f120f292ba549bb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-44_Pass2-Sighting-note-selected-mention.png",
+      "bytes": 240765,
+      "sha256": "ab394db39e0dc03a7eb480d560d5919a1e235355c311c0fdfad946043fe55e23"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-46_Pass2-Folder-first-relations.png",
+      "bytes": 375875,
+      "sha256": "acf7a2d083b4ff80c888ebb7669854213b95619f090f7b63f67b9e7b4adb3fbd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-47_Pass2-Folder-first-completion.png",
+      "bytes": 411076,
+      "sha256": "5b17aba2fbc58ebb14835a9a90a83184e684843a645957ea27a00177944360f8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-57_Pass2-Single-review-person-selected.png",
+      "bytes": 475698,
+      "sha256": "b010aae235a4ec407ccb8a2cf579c2cff0cbe97e01a15583d31a80fdea8f94b1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-58_Pass2-Single-review-compare.png",
+      "bytes": 506677,
+      "sha256": "695fbf92a32f80d7f428df02d6ea15b8cec6f985d917f59ddfca1d39e047bc1d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-59_Pass2-Sighting-required-count-validation.png",
+      "bytes": 307977,
+      "sha256": "a629b57a6ec79bb629aa3162418d14a813c87449faf55fa468d720bea5864267"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-60_Pass2-Single-review-relations.png",
+      "bytes": 378672,
+      "sha256": "2a3dbbdb91311dcd1186fc2c6f6fccbd02b26423543512b1f06f2399da81b710"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J08_Step-61_Pass2-Single-review-complete.png",
+      "bytes": 373010,
+      "sha256": "1674f21e2e5951d50fb329257ab0c110e0b26b3bd6145772dc2d8864ab802e2e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J17_Step-03_Attachment-restored-authenticated.png",
+      "bytes": 452496,
+      "sha256": "248eb9ac7c424e0d7cd7bebffad9d6a684b93e5e94037af48c206d7eecd33102"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J17_Step-04_Attachment-inherited-event.png",
+      "bytes": 421077,
+      "sha256": "d67fcbec94c9b5bd7e0962af46193a30f6931458971504d57c535e81e2402270"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J17_Step-05_Attachment-no-new-pairs.png",
+      "bytes": 380636,
+      "sha256": "b25ed6d268a315a6053f6958bd1f226150182e739a02c366b8b278530127c590"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J17_Step-06_Attachment-completed.png",
+      "bytes": 374719,
+      "sha256": "66eabdf67a5212835ef2ffa68f70c06b37a6fb77df32c29c11042e3382e67057"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J33_Step-10_Pass2-Recovery-Event-details.png",
+      "bytes": 174782,
+      "sha256": "8e910466cad822ec8a66ee37140bd4ffc3defb7d15644eab2f3a95cff0fb6dcf"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J33_Step-11_Pass2-Event-details-confirmed.png",
+      "bytes": 429749,
+      "sha256": "f3b4b21cb76c5537d59678ab3859db55b9e38dd83a8f06e928a3c97158492698"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-04/UX-04_J33_Step-12_Pass2-Discard-after-metadata-confirmation.png",
+      "bytes": 169828,
+      "sha256": "c121861851090e9eac52167426616e2412e5728e93a82d2df0d9c9c25c49d931"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J03_Step-01_Empty-library.png",
+      "bytes": 382811,
+      "sha256": "cb26fc03a1a7c41f1ab3dc172a0a55e0fe396b05b96e0b91303c4d87376e09ae"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J03_Step-04_Person-create-submitting.png",
+      "bytes": 160116,
+      "sha256": "e0aa268369537eea8f8f676a5923f865992f9e5ad8b780fbc9aedb4382017475"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J03_Step-06_Pass2-No-photo-create-open-before-cancel.png",
+      "bytes": 192854,
+      "sha256": "9e42d41d0252f43ed1237584f705fae67cd96dec1bcaeea366c859df06637aff"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J03_Step-07_Pass2-No-photo-create-entered-before-cancel.png",
+      "bytes": 196305,
+      "sha256": "2a54f887a54fa95e1df9a8f03299ffbbfd8fa31df6af6f593c06323a96d95181"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J03_Step-08_Pass2-No-photo-create-cancel-search.png",
+      "bytes": 344326,
+      "sha256": "2a5f0ea0696720c1aa6b772ceaa23c5416c821da79e4ed4b912eb4d83735997d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J03_Step-09_Pass2-No-photo-create-mention-suggestion.png",
+      "bytes": 208207,
+      "sha256": "d49c1d011a5de7d0626fd54a663fc6b84f14daa39e86bc56c8a42f18630d9120"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J03_Step-10_Pass2-No-photo-create-mention-selected.png",
+      "bytes": 200473,
+      "sha256": "54826ecaf110905cff435480c2869cdd01d8d6fa46683498d9218a2dad01c98e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J03_Step-11_Pass2-No-photo-create-mention-person-created.png",
+      "bytes": 465191,
+      "sha256": "3b336d19837dbcf910ed22616bc833ec9e50bceda48950b2ab3899816ec98d0a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J05_Step-07_Pass2-ONNX-no-face-person-created.png",
+      "bytes": 388833,
+      "sha256": "fd9df720c46ba422deecb3c42ae541671c0ac9f7703014d6490e2efc1da02933"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-01_Populated-library.png",
+      "bytes": 382523,
+      "sha256": "a1a396d69f6a26e9a12e535c991d614ca272325d0d0c297c04c61bebc50b2510"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-02_People-filter-popover.png",
+      "bytes": 384659,
+      "sha256": "f016110d2ac80e474dea6c1afd3882f9c6aee873984f2f1d7acb06ef572d3fdc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-03_No-photos-empty.png",
+      "bytes": 344675,
+      "sha256": "dd97f86b7fb86cce1f8b4ef4a4b40eb91293aadc6435e982974f36883fda7bdb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-04_Group-menu.png",
+      "bytes": 383380,
+      "sha256": "41f845e3ea62880bae8005e789239697a5bcd0dbc509aa05c26c849b659f0332"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-05_Sort-menu.png",
+      "bytes": 412930,
+      "sha256": "b4a0ad6a05b817024f0a1fd04aee007b6c3c0236f7d22febf68a31407a76002a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-06_List-and-favorite.png",
+      "bytes": 380093,
+      "sha256": "ba8c6b2fb110a6152afc68802e67f7669f7576f009b92f4e7daa43fe62666621"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-07_Search-no-results.png",
+      "bytes": 342575,
+      "sha256": "a1547768a1f43b3758dc16afc6cb9a48a7fa2965d7dd66641cdf55d878713553"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-08_Pass2-Favorites-collection.png",
+      "bytes": 361655,
+      "sha256": "f5cefd840498dbb1cc1009a4b460e5fc0e12bc9fc95acbb0e17d03eab04e74e3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-09_Pass2-With-photos-collection.png",
+      "bytes": 404619,
+      "sha256": "80f43650afae3cf1afede131410b8a2cb3fa2677ef3d3cc8181c9c5a23e291d6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-10_Pass2-People-page-size-menu.png",
+      "bytes": 406357,
+      "sha256": "84c2a5cc2ce3c4976a231d1a87185d9c21a6308a39fc78100f23cc9598a17b9b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J09_Step-11_Pass2-People-page-size-eight.png",
+      "bytes": 404313,
+      "sha256": "e56778e8f2b856fd8905ae061527dff6ceea22afe7e4552b561ea067571c60e9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J11_Step-04_Deleted-faces-collection.png",
+      "bytes": 376773,
+      "sha256": "77d8164e6cc9d811e4244a309873a78cc183fd9a9ee696b7904294bbbb8a99c5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J11_Step-17_Pass2-Disposable-deleted-face-collection.png",
+      "bytes": 377438,
+      "sha256": "fb29df80bcb7de5ffaee072d65ae714d64749b65faefbc11c67155e81901d7cd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J11_Step-23_Pass2-Erase-failure-retained-deleted-face.png",
+      "bytes": 377206,
+      "sha256": "9ab7258c478b5177ccfa4059218babfec07b74b33149561173058f4e6e929912"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J11_Step-24_Pass2-Face-restored-after-erase-failure.png",
+      "bytes": 332247,
+      "sha256": "27872ae197fb785e9db6daecbb527c2c8489805cd92f42e68845e381dc2f0aa5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J13_Step-03_Archived-collection.png",
+      "bytes": 357666,
+      "sha256": "a04965e2378c46f8c7aed1e5d1f4af4fc80d03f479ca980a9f9398518abf21fd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J13_Step-16_Pass2-Restore-linked-person-outcome.png",
+      "bytes": 428101,
+      "sha256": "3aaf1f5e0bf1d9c40726c7cf4aa98d68e28455c0b5f5fc9d7e4897b48739c8a7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J14_Step-04_Pass2-Library-more-actions-open.png",
+      "bytes": 446503,
+      "sha256": "18734c1d9bf6bad0cd267ca60f24e08f8c05e279d1cbb7df34bb292523a81145"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J14_Step-07_Pass2-Library-delete-cancelled.png",
+      "bytes": 443856,
+      "sha256": "9f3efc36c3482044006056aa0968338b501165b96bf9635e46f35b7a3065d33b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J26_Step-03_1366x768-light-People.png",
+      "bytes": 339936,
+      "sha256": "65be749a8cabdd0fad3dd95ae4583194713524616ed3a13e68d20799420110e0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J26_Step-09_1280x800-dark-People.png",
+      "bytes": 380395,
+      "sha256": "1dfbd7da85e58a78de55f4bdd051d88ad424a2c58e598213cb9dd108deed799d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J26_Step-15_900x700-dark-People.png",
+      "bytes": 271159,
+      "sha256": "28eaf8e46ac419e1e87248cb4c69efa02d0e12158e9e365bfaae1e2f2df3c4e7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J26_Step-23_1440x900-dark-People.png",
+      "bytes": 421756,
+      "sha256": "0e798b0ceca57637559987a419ea6c02ac5100a949d6ce8bd1bdeb48eb29bd85"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-07_Pass2-Revert-source-created.png",
+      "bytes": 445356,
+      "sha256": "bef03461a941a61d77466c21852e28c61145ec276a8044b30607e437e4d62ed2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-08_Pass2-Revert-survivor-created.png",
+      "bytes": 446894,
+      "sha256": "edb3863e7a12edc881481586f8970b91cd8132252bc94472c562cab8d76ea6c8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-10_Pass2-Revert-merge-completed.png",
+      "bytes": 445402,
+      "sha256": "e87cb2d37a1d0cd84cfc7d65d5b308d547a07d3d97adfe690ba263846c92e057"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-15_Pass2-Identical-person-submission-no-second-card.png",
+      "bytes": 453754,
+      "sha256": "5d58338cb6fa5a1d11630b2f99657a55931ac20e626536447e4c1ec8e0cc2823"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-24_Pass2-Reference-cap-survivor-preserved.png",
+      "bytes": 399547,
+      "sha256": "a96f1fb060a95c7267bb65512a0b62d43dbd6d5932b232fbfc85de3b5dedba4d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-25_Pass2-Safe-revert-first-person-before-create.png",
+      "bytes": 196807,
+      "sha256": "38a96fd1b836483b26ff6e9c45c04715129744683ca3493780068e1096f74d5a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-27_Pass2-Safe-revert-second-same-name-before-create.png",
+      "bytes": 196747,
+      "sha256": "fcc92c0ee8e49561f20fed6d2a3c0daf6b4e4c98cf4bc6dca30bf3d109345efa"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-28_Pass2-Safe-revert-two-same-name-profiles.png",
+      "bytes": 467180,
+      "sha256": "25845a4068b2a9e2183093706989e00ed367aed481b41a3defe6472e9b5ba0a5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-30_Pass2-Safe-revert-merge-result.png",
+      "bytes": 153919,
+      "sha256": "4624491a60075f746f6c9b9d3c13086b1cbb0c32120c009e6613b0e73951fc48"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-36_Pass2-Safe-revert-matched-observation-before-create.png",
+      "bytes": 189007,
+      "sha256": "5adb69a14a357713d6b2c88df2f573b6ec810f79e6b3dd7163329a18e4ef7354"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-38_Pass2-Safe-revert-matched-observation-merge-result.png",
+      "bytes": 140844,
+      "sha256": "8bcc0fde87f1af00dbcff16665d4d720406d626443b696806b7edb68a3e78594"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-46_Pass2-Safe-revert-both-profiles-restored.png",
+      "bytes": 361333,
+      "sha256": "6dfb235f620df6660e3136dd557964eeb8433b015559834657e979cb5a0120ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J27_Step-48_Pass2-Safe-revert-both-profiles-after-refresh.png",
+      "bytes": 407084,
+      "sha256": "f985b31ddff63b27f0d5d4e30b4f8e3116a82f10c1e193a6df47b61b605c963b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J29_Step-18_Pass2-After-error-people-library.png",
+      "bytes": 455045,
+      "sha256": "e77f876c4c3883dbb84cd416f7a685c76f4de1ee45fac2114cd3435d7bcc3229"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J29_Step-19_Pass2-After-error-search-created-person.png",
+      "bytes": 381744,
+      "sha256": "68483599ab7f5e5a86086034cdf632dc60b5ca6e45f6dfab36f66c1d54e2e468"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J31_Step-01_Thirty-person-library.png",
+      "bytes": 385560,
+      "sha256": "feedd393213ee9e42670a050b2465eba35a131d0950743b5ca505774426eb6b6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J31_Step-02_People-page-two.png",
+      "bytes": 378465,
+      "sha256": "01cf1dc95ff85893d23dfa361a16e053204ecb406d4c70f5140d06ce0bf70593"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J40_Step-01_Headed-native-People.png",
+      "bytes": 682782,
+      "sha256": "059519eb0f057c0ca195bcf4ec5ecda924be6d3044e5f191b5e1bc0a456d3294"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J40_Step-02_Native-full-window-People.png",
+      "bytes": 395608,
+      "sha256": "54ecacbb9617029e22205531cb7cbf2c4185ac834e4ee57146e381f5f52285bd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J47_Step-08_Viewer-people.png",
+      "bytes": 376843,
+      "sha256": "f39a46256034af0bdcce1febb5c866e08fdf945417a92b1b618d15da8d37ee12"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J49_Step-07_Add-without-photo-form.png",
+      "bytes": 175125,
+      "sha256": "951392e346f8d92473fba65166a879d1c788f2d5af72045de4a4f00c87c94c72"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J49_Step-08_Placeholder-created.png",
+      "bytes": 395175,
+      "sha256": "0c73f9ffbc0750755ae9e94a34b895bb47f05eb31dd7ed406e3953cc58a9cd9a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J49_Step-17_People-two-groups.png",
+      "bytes": 393404,
+      "sha256": "80bcae55d5d25bb714e895b93c573a8b28cb885584045b05e62cdb670370f60f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J49_Step-18_People-search-multi.png",
+      "bytes": 403151,
+      "sha256": "88ca831157a07ed8e5a68cdaddf640539bb0957c81c0f747c7efa828fa42aa4c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J50_Step-04_Archived-collection.png",
+      "bytes": 385776,
+      "sha256": "6a869dc5a2a46e8f1d04650c18d3db6d2af0f33dd6fcb4404347bf4849f5d418"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-05/UX-05_J50_Step-14_Archived-collection-after-delete.png",
+      "bytes": 386907,
+      "sha256": "11da06bb716dd9a58b06a0779e257bc28f211b6374f2f2b4fbdb7f078d79cc02"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J03_Step-12_Pass2-No-photo-create-mention-profile.png",
+      "bytes": 386967,
+      "sha256": "65f54babc42708ae36f44d1daf8464aaaa9b3bb5a49042bac00bf67fe8c28c7d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J04_Step-01_Profile-overview.png",
+      "bytes": 384493,
+      "sha256": "d7c7244badea0837b08edaa2abfbdebcca0f0d466164dc00d3fe54520aa59519"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J04_Step-05_Notes-saved.png",
+      "bytes": 391483,
+      "sha256": "8ceea06b4d7f6382afb5d7128e6997ccb894214431726decb0bd6503cb157089"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J04_Step-10_Pass2-Edit-person-saved.png",
+      "bytes": 440259,
+      "sha256": "ce1790d21cfa6730336754f9e4fc7128e8a9e755996c5b945c548ca134544e4a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J05_Step-06_Photos-reference-origin.png",
+      "bytes": 715622,
+      "sha256": "80f04a5a1465fa35d294c063426045812e739989c72df356ca9c6e4ac0f92aa6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-01_Sightings-tab.png",
+      "bytes": 371385,
+      "sha256": "863267ac2acebbff4ddaed06319592cc056983e1345aa5c5199d820fc48ad10d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-02_Sighting-photo-detail.png",
+      "bytes": 716712,
+      "sha256": "538ce5a089f21dd5064ae03c9ee7f99260853934f126551b8c5a474bc9847cd7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-03_Person-events-tab.png",
+      "bytes": 385004,
+      "sha256": "de0e9cdb40d245956043ef118d5a1f2d824f612653a69ac49bc52d567ed388cf"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-04_Person-activity.png",
+      "bytes": 320900,
+      "sha256": "53d8aa4807cfbc746e29384397b99e39cd74829326b8f7538c55fd1afc818856"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-05_Pass2-Person-events-present-versus-mentioned.png",
+      "bytes": 379639,
+      "sha256": "450f5b7f44e28483073bbca25ad17c8e014c87ce908dc9b9029e259689438be4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-06_Pass2-Person-events-mentioned-only.png",
+      "bytes": 389443,
+      "sha256": "51e8425de0d3fb496e66f5751574c136ca460f09ea88753770f2ae5c4c304d43"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-08_Pass2-Return-to-person-overview-context-reset.png",
+      "bytes": 436215,
+      "sha256": "d810789ca379cae3aeffe0126398595d2c5e85aa42658ebec7145a0e68b9eff7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-09_Pass2-No-photo-profile-gallery-empty.png",
+      "bytes": 293351,
+      "sha256": "9404bcb061d86a8a083fd1dce9dc11edd8b12e7afaaf9a9df257569b740c3344"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-10_Pass2-Gallery-before-profile-photo-change.png",
+      "bytes": 820754,
+      "sha256": "244eabc2e4143b323b297c616a8cc5d25a2523f885c7cecd47007a6836bd6f7c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-11_Pass2-Gallery-second-photo-selected.png",
+      "bytes": 833333,
+      "sha256": "c4aa64394122791ef4803b05eef69983e898e29592d081e7f083da6300aed99d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-12_Pass2-Gallery-set-profile-photo.png",
+      "bytes": 822167,
+      "sha256": "0c8857718d50c91a624c846ea294a941dd62514fde2dd232a7601289ef73e63c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-13_Pass2-Profile-photo-after-new-session.png",
+      "bytes": 442119,
+      "sha256": "35fa81cea2954946258789083786e0445ad018e797e95c20b383926980c442d5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-14_Pass2-Preferred-photo-persisted-badge.png",
+      "bytes": 834051,
+      "sha256": "849e7e1d517f20b75d2024f7fca11f56b29d584544f985eb5420564b042ec260"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J10_Step-15_Pass2-Overview-after-preferred-selection.png",
+      "bytes": 403280,
+      "sha256": "77bb887e53470d77b8cc9018c16cfc58abe0f2b42bfed32b0d7d986e6dd588bb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J11_Step-07_Pass2-Disposable-photo-before-delete.png",
+      "bytes": 714953,
+      "sha256": "b2fe5250582c2f5da428f612aa39a71aeebb4cb4d5280788fc6941992334eae5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J11_Step-11_Pass2-Move-target-beta-photos.png",
+      "bytes": 742881,
+      "sha256": "f6b582da02f99cbf988b7b2a3efde820bbdf17a1e1894b874936d9b72dc30a28"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J11_Step-12_Pass2-Moved-photo-selected-on-target.png",
+      "bytes": 743686,
+      "sha256": "b1a471d67b34e3c3b1037cb5673f53fbdf62c0e7b5a44484998def42753b4dfd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J11_Step-13_Pass2-Moved-photo-restored-to-fixture.png",
+      "bytes": 719500,
+      "sha256": "515739a09fef0f17c9a718d81793697358fc854973cca7b42aeb9380f22663ed"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J11_Step-14_Pass2-Restored-disposable-face-profile.png",
+      "bytes": 714871,
+      "sha256": "4172e55fb55c03e2b8dbe81f5104728e3979675928115893c2543e0d0bb4d794"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J11_Step-25_Pass2-Restored-profile-after-erase-failure.png",
+      "bytes": 398200,
+      "sha256": "012a7c7cd4c40e1c04a0e5eee077fa75266c62e9108c843001e1b453fe7b7fb9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J12_Step-01_Associations-evidence.png",
+      "bytes": 400095,
+      "sha256": "175c58904937fe596bc10325ba0e81007b07e47909241e907603f8e050065950"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J12_Step-05_Person-graph.png",
+      "bytes": 472423,
+      "sha256": "8359d85b2511a3140e2841bf1d906c5c139c0e22977497bbad2f5d4305c94044"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J12_Step-06_Graph-zoom.png",
+      "bytes": 465510,
+      "sha256": "9d8ce788bf15b7b54275d459eb7da79cb725b058d5876643bbf7583ce59473dc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J13_Step-07_Pass2-Profile-before-cancel-archive.png",
+      "bytes": 440482,
+      "sha256": "b7eda5590976e905497c18317e1883a55fa5089650fb81e104d9c79cd21ea25a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J13_Step-09_Pass2-Profile-after-cancel-archive.png",
+      "bytes": 440230,
+      "sha256": "56390a0a58d19462c223023a45e167c002c1073e1bf3a76c9b1696188e31e672"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J13_Step-11_Pass2-Archive-dialog-escape.png",
+      "bytes": 401855,
+      "sha256": "1f5886ffbb84f9c2aade17c0caf89f92dc741a0a3a8781bc800eda518ec930a6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J13_Step-13_Pass2-Archive-linked-person-outcome.png",
+      "bytes": 387993,
+      "sha256": "9bba068026485ba49ce6d6bc784c93550f1fd1b337bdc5fe97f995855922f8af"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J13_Step-14_Pass2-Archived-linked-person-profile.png",
+      "bytes": 427396,
+      "sha256": "022de74e0ea1bc4c2fbe14b40a869c2f999bda41f53509ab000db74db64b3075"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J24_Step-02_viewer-profile.png",
+      "bytes": 389814,
+      "sha256": "904f6bb3d1784519e95c0b8019dade73f606899452a45e458fb1ebecd2bd1ae7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J24_Step-05_viewer-profile.png",
+      "bytes": 389814,
+      "sha256": "904f6bb3d1784519e95c0b8019dade73f606899452a45e458fb1ebecd2bd1ae7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J24_Step-09_operator-profile.png",
+      "bytes": 393176,
+      "sha256": "ebacb2ec9a4b8492afe21afd35e801225a1d4157e5eeb7f4cd4bf22edf83004c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J24_Step-12_custodian-profile.png",
+      "bytes": 396931,
+      "sha256": "2fbbf2f82e0369f21b6646b61b94f156d61ff70d2cf8dffb97e7936dc2778532"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J24_Step-17_technician-profile.png",
+      "bytes": 393525,
+      "sha256": "01c2edc631b324e86f508abefdd7e883dfdb7060810e4408d733d6d0dc244880"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J25_Step-02_Graph-actual-keyboard-cycle.png",
+      "bytes": 473422,
+      "sha256": "c2d4e9bb608897731a111f1fb24650baaa0cc382b39d5d615e2da8984543cd73"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J25_Step-03_Graph-pointer-evidence.png",
+      "bytes": 500049,
+      "sha256": "8b10125246159772506cde168135f9a5562bc9093e3e5ec351cda6d77edb7915"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J27_Step-18_Pass2-Duplicate-name-edit-cancelled.png",
+      "bytes": 386793,
+      "sha256": "c503b1ad19d434d4d9ba62bad99f21e99342100af1f86888995ff3acddafd868"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J27_Step-23_Pass2-Reference-cap-source-preserved.png",
+      "bytes": 427741,
+      "sha256": "e76a7d94f92556662c8d819814d7472ad30774819af47c21365d3dd3c13e6f78"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J27_Step-35_Pass2-Safe-revert-two-enrolled-merge-result.png",
+      "bytes": 146500,
+      "sha256": "862b9f5c0021b997a3e140447cc2f9493254447d043f9994f6e390d5847d2079"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-04_Note-and-coobserved-independent.png",
+      "bytes": 399496,
+      "sha256": "9403f285bdda1b99023a4c739af168eaec89310c208fff96f63f2d4b2a429c4e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-06_Pass2-Long-note-on-profile.png",
+      "bytes": 445186,
+      "sha256": "c92079a7fbafb26da62befd86c16b43cf6392022940a11d2f4531d6db4a3bd57"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-08_Pass2-Selected-alpha-note-saved.png",
+      "bytes": 439740,
+      "sha256": "cc8282500b3943634870077d67f7843979f4e2b40394c7c3625351d4289d7697"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-10_Pass2-Empty-note-retains-mention.png",
+      "bytes": 439096,
+      "sha256": "8d7eaf12818c472e6adee32bbb174d480b0a62445bba27b40226bb20b3b135bd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-11_Pass2-Empty-note-still-mention-linked.png",
+      "bytes": 401651,
+      "sha256": "ea7df1ab8c8e244e4bcc84213a99b05e0570324fbc57fde6707f5d1b9209d029"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-12_Pass2-Mention-link-persists-after-reload.png",
+      "bytes": 401531,
+      "sha256": "7894d3a57febadb34ebc832b1ce8bef134ac399a5b3a947f9d1981d00ff347a5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-20_Pass2-After-error-original-note-state.png",
+      "bytes": 439179,
+      "sha256": "46aff7199834615b62d6300098b41845715ba2dbbc8fa9a98c5a2eef28057569"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-24_Pass2-No-photo-note-mention-saved.png",
+      "bytes": 442682,
+      "sha256": "95490e5dfd1f75bba4a9e6fcb8c38a13ea3d41d71aadb3cb2ce3a99bd354072f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J29_Step-25_Pass2-Created-note-person-profile.png",
+      "bytes": 384165,
+      "sha256": "548b0ea3f5e17e003e1a9900721f148a30c2d1b511bff8cd6b8017e977798ae6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J34_Step-08_Proof-only-profile-no-usable-sample.png",
+      "bytes": 388579,
+      "sha256": "d83405f85206cfbdb6157b04e00261a27a1d35659809237a0acfb0989edb329e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-09_Viewer-profile.png",
+      "bytes": 396868,
+      "sha256": "7cbf0eeb16aee84822e32f33d7c19b3c225e58ebb8649e1cb199786b82d857d2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-10_Viewer-add-favorite-attempt.png",
+      "bytes": 401016,
+      "sha256": "e818b8f9200be9875559b44166b676b95290c8a2a5e93bf85901bedfe53b70d4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-11_Viewer-more-menu.png",
+      "bytes": 404680,
+      "sha256": "81e2840e65a0992e8db26c7b80ccaa83a79f4ba38be1d48ac8573d7b3fe3dc8c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-12_Viewer-manage-references.png",
+      "bytes": 189815,
+      "sha256": "92a51fe109328868404d3accba71af45a0242d1e5c667458ecc9d946d8afcd28"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J47_Step-14_Operator-profile.png",
+      "bytes": 399573,
+      "sha256": "2c226fe78702f50d4e41545bcffb5cb51892f6c724d232c1d15226b8cf69abc3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J49_Step-19_Graph-after-add-participant.png",
+      "bytes": 507333,
+      "sha256": "400a2c4315e076e8787805c604dd2f382b70538ac2f1679322a1f1638dcfc18f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J50_Step-01_Where-am-i.png",
+      "bytes": 506135,
+      "sha256": "699ac99a1e01c313a8b9c90e36874db4acc32ea9cfdf05bf017b6215cc63b4e3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J50_Step-15_Graph-with-deleted-node.png",
+      "bytes": 511867,
+      "sha256": "2be5b089f7221ad913c748b3f85c66aea994c9a3cd82d5f31a2abcdaf3b10a6c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-06/UX-06_J50_Step-16_Deleted-node-click.png",
+      "bytes": 545695,
+      "sha256": "b1737576feaca0af6ff59e4b81c96159fb4370827573724c54ffd35fb408d47e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J03_Step-02_Create-person-dialog.png",
+      "bytes": 162346,
+      "sha256": "e3725aeeaf4c565d2af195b2e2016490b50d8c620a104dcc699c927ca8eff52c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J03_Step-03_Create-person-valid.png",
+      "bytes": 161477,
+      "sha256": "cf62d8757200556c293f0d43615b80fdfdfd6553a91b9bb4599e317b045ab9b9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J03_Step-05_Pass2-ONNX-person-invalid-form.png",
+      "bytes": 171126,
+      "sha256": "5041835e6cfeabb94b785dd34361b06abf83b6efbac0041e2be8e22332b63ea6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J04_Step-02_Edit-drawer.png",
+      "bytes": 386502,
+      "sha256": "0f830fe07e2e9d128a51b82a2b398a5507449eb36f6a3d72033f60898081b644"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J04_Step-03_Edit-profile-drawer.png",
+      "bytes": 249342,
+      "sha256": "0c9a1f9fdd2a8aff419bfce4466029c5181ad55684611545877dfdd615f3dba6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J04_Step-04_Notes-drawer.png",
+      "bytes": 241950,
+      "sha256": "4f3777a5110ad2b6b68f7f3382c3e57054cd45fa6773a91a04f466d4933197aa"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J04_Step-07_Pass2-Edit-person-before-validation.png",
+      "bytes": 291529,
+      "sha256": "e6b4a99e03f6b54779cfbf7bd96e43cb46e4a1473a7eee0e971625d68eb908a1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J04_Step-08_Pass2-Edit-person-empty-name-validation.png",
+      "bytes": 290343,
+      "sha256": "a4ca0a70b6ec85440dd1c19e2a9ab623c3f3f4751d4fdbd57f2b6b95ce0eaece"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J04_Step-09_Pass2-Edit-person-valid-changes.png",
+      "bytes": 293716,
+      "sha256": "02f7d46458988a7786692b606d4d456b421d4c095e088ecefb9b5d6837277bc0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-01_Reference-ack-required.png",
+      "bytes": 172944,
+      "sha256": "b1cbd1943723803398d5c905c7b2373daa067fe694738341d7f9db3eef61fa61"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-02_Reference-prepared.png",
+      "bytes": 255860,
+      "sha256": "5005010d33bc3d070411e0b2da37efd4965d834365c0325212a64356a41a7864"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-03_Reference-active.png",
+      "bytes": 184661,
+      "sha256": "e8820a3d63112eb6b823524437bf4f9bdf8138e0ff59df771f8e315f896e8d27"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-04_Reference-retired.png",
+      "bytes": 177465,
+      "sha256": "5363c3d704554e5f8b0cc8cf9004ec0838bbbdb42a5553e388c1d9daa9ff59f5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-05_Reference-restored.png",
+      "bytes": 184704,
+      "sha256": "e27e5af8fca52a5dd54fa43e72f8ab4521ca650cf63a3a3c66f55b95870b8b94"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-08_Pass2-ONNX-no-face-reference-refused.png",
+      "bytes": 180622,
+      "sha256": "c0d61289f92c486d06bebfce1560a85e02ccf8d9afc65b7936a670ca7b06286f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-09_Pass2-Reference-cap-active-four.png",
+      "bytes": 248457,
+      "sha256": "843cd5fde2c0a08944d635659409a967ae35b266c7ad6e72be27a67fc1441208"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-10_Pass2-New-reference-acknowledged.png",
+      "bytes": 168028,
+      "sha256": "5b3d8503dc390a261ea63c312f14660701df1220785d1d1d0ccd1808d4bb5e16"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-11_Pass2-New-reference-staged-before-cancel.png",
+      "bytes": 250118,
+      "sha256": "6c5f5f91ff85d52598ca78dde10dc7729d6ca65b637c7cf8047747b811c1c0de"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-12_Pass2-New-reference-cancelled.png",
+      "bytes": 153384,
+      "sha256": "6d105ca7fba86c4cb3b7747f571e1c44ab18a99366ef71aa5eb95cbf6ce25752"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-13_Pass2-Reference-staged-before-reload.png",
+      "bytes": 250033,
+      "sha256": "a3f5748733e2d29fdaee4f51e0f639fc20fa59fed8cc8968015f60a9cea98cdb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-14_Pass2-Reference-after-reload.png",
+      "bytes": 245846,
+      "sha256": "3602b96f7af35a3b341f119db3098e44c74f9d05012738c9851523ebbd2bf8ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-15_Pass2-Resumed-reference-cancelled.png",
+      "bytes": 153384,
+      "sha256": "6d105ca7fba86c4cb3b7747f571e1c44ab18a99366ef71aa5eb95cbf6ce25752"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-16_Pass2-New-reference-confirmed.png",
+      "bytes": 190400,
+      "sha256": "48d32b26de55a07df91cfa0fe42ac86743d3171865ceca52f092cf54a71b69c8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-17_Pass2-Duplicate-reference-staged.png",
+      "bytes": 282779,
+      "sha256": "43e2b2bedc4cc1786316638c374c1a39de270ce9f862fba33bf7fb960cf3675f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J05_Step-18_Pass2-Duplicate-reference-result.png",
+      "bytes": 187815,
+      "sha256": "b7e2098d641e8e806046400069e4af3ad1b5642448a574ed76d7163968ece473"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-01_Move-face-dialog.png",
+      "bytes": 226408,
+      "sha256": "ab0048763fd787119c620b893a39143a5235c83e25061a651762377f2f4af652"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-02_Delete-face-confirm.png",
+      "bytes": 226328,
+      "sha256": "2012abf40d64b7ece14d4ec611bdd33ae50e41d9e681c9d34f83a25035560ab2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-03_Face-soft-deleted.png",
+      "bytes": 722010,
+      "sha256": "333336f7bc52ed035ed675355b80e6821bb6e046e84d20a87f2a8af5dd6da147"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-05_Erase-face-confirm.png",
+      "bytes": 146646,
+      "sha256": "4ae41668aea3c741165e53a9f61c6be795ed1f016cdebabece842aafe7401390"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-06_Deleted-face-restored.png",
+      "bytes": 332047,
+      "sha256": "49669cce22489476bb8b7b1490f238e38c1f498a24a6b8e7c7052cc55ad0d8ea"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-08_Pass2-Move-disposable-face-open.png",
+      "bytes": 224666,
+      "sha256": "2904cc50425acb1a7c906fec345b69e01f85de6a2683d1d1ef9ac7c367e163c5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-09_Pass2-Move-disposable-face-ready.png",
+      "bytes": 225044,
+      "sha256": "5074bbfc74ac37c7d1a2c8dde84b66e0525f1dc06233a3b6461f0519dca443d9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-10_Pass2-Move-disposable-face-response.png",
+      "bytes": 144690,
+      "sha256": "77309dc0610e919f6fe8013dbee1556692fddddcc10b69e5f29e5715c7f313d9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-15_Pass2-Disposable-face-delete-confirmation.png",
+      "bytes": 224234,
+      "sha256": "8ca725b284f004bf6f62c5d0d1b723aa4fb833e82bd851519aaa894735410b00"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-16_Pass2-Disposable-face-soft-deleted.png",
+      "bytes": 720142,
+      "sha256": "b11be05ac0805dd5a48aac71c333bf40da3c2b4a70d4b525e6b7ebaa56abfe2f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-18_Pass2-Disposable-face-erase-confirmation.png",
+      "bytes": 146350,
+      "sha256": "b8acb60ad9321975cdaff4b4cfc8517bac5d69c1850e9a96ef59c70b4bf87b7f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-19_Pass2-Erase-wrong-phrase-disabled.png",
+      "bytes": 147183,
+      "sha256": "6bca7d6c7dee6044ac8cf9afd08f142b4151d6205b274a582df2363e8b2a7bb1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-20_Pass2-Erase-phrase-ready.png",
+      "bytes": 147066,
+      "sha256": "d9b6221fd291e0b0da45c9adc6af27b534b6963b567ea542de3af01340e11f64"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-21_Pass2-Erase-attempt-response.png",
+      "bytes": 147191,
+      "sha256": "0401a4aa41c53b799dbd479bf82dd0fe934b460e66046d42c112b05a9142b61e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J11_Step-22_Pass2-Erase-refused-foreign-key.png",
+      "bytes": 153958,
+      "sha256": "3eb1671a3febda0fc6ce234390c2c259f0465d6dfa158827e7b84e0cf5ada201"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J24_Step-03_viewer-favorite-server-denial.png",
+      "bytes": 389830,
+      "sha256": "0bc0c3aac99edc2d250e5a26e0ab7ae246390e79b3638077958ac7589e908f44"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J24_Step-06_viewer-favorite-server-denial.png",
+      "bytes": 389830,
+      "sha256": "0bc0c3aac99edc2d250e5a26e0ab7ae246390e79b3638077958ac7589e908f44"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-01_Disposable-merge-source-created.png",
+      "bytes": 386920,
+      "sha256": "6d58b8a22f80e3460e7b1065e5c430e51c66b76a85761f668c848649a2dc66e0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-06_Pass2-Revert-source-form.png",
+      "bytes": 178679,
+      "sha256": "e73462f9a4d34df2e8e216d749f1aa80cf3fe9a7528396ed7f240cc954a6b14a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-13_Pass2-Identical-revert-person-one-form.png",
+      "bytes": 182408,
+      "sha256": "9a56abc9a98fa458cf80396a055be78c159855985dc728e9235f5be96381b73b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-14_Pass2-Identical-revert-person-two-form.png",
+      "bytes": 180788,
+      "sha256": "053a9878c9d3ca0bfcac2addc1d6a200ce2b27018a85b7b3f2a84786adc538b2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-16_Pass2-Edit-candidate-to-matching-name.png",
+      "bytes": 251772,
+      "sha256": "99e60156417c191565b23d4394a8bb821ca26190424871371f78db7bed074824"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-17_Pass2-Duplicate-name-edit-refused.png",
+      "bytes": 251692,
+      "sha256": "ef09e66b8901c7b8c1237a56e5bf559346099e92b0762031022be4627c3bc5a7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-19_Pass2-Duplicate-name-error-toast.png",
+      "bytes": 260785,
+      "sha256": "22f3dc6f2a6af21f49bbc9feb4c246a0c646681f2594852c7b3cdd24fc945bdd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-26_Pass2-Safe-revert-first-person-enrolled-reference.png",
+      "bytes": 185799,
+      "sha256": "f5901acc2f3addb448317400ddf1277297527c9ede96fc035dee699c06993f5e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J27_Step-33_Pass2-Safe-revert-second-person-enrolled.png",
+      "bytes": 244455,
+      "sha256": "5c1d3e425d32e1150d1ba2f0f57d47b3c9d88b430a901d4f6b1be1606bc7e065"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J28_Step-01_Context-only-person.png",
+      "bytes": 387726,
+      "sha256": "5e5262ad6857827c204d929e9aea32c0f187bcf7389d4ed17a87aabf6093d5c8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-01_Note-mention-suggestions.png",
+      "bytes": 316768,
+      "sha256": "0fb38f0511ec294a25e7fa35a5743ea42a1b7f772b5241a13c4c26281e6e289e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-02_Selected-mention.png",
+      "bytes": 286455,
+      "sha256": "72fc315a74c63fe90ecc734bb438db19725357444a8edf9cb51dadf037de65b4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-03_Mention-note-saved.png",
+      "bytes": 442114,
+      "sha256": "38d8883e603e7f65ba225c3421097c85e56a4c5249a537a615f7917bff605ec3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-05_Pass2-Long-note-in-drawer.png",
+      "bytes": 332529,
+      "sha256": "33c4fa69da603934c9869eb12df02a861eaae0de91d5b2b5d984c3652851c49e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-07_Pass2-Selected-alpha-note.png",
+      "bytes": 282334,
+      "sha256": "55500dfdf086fd229c30b365ba8c6a52f2e53cfd65328b78755efbd3c3cf6948"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-09_Pass2-Clear-note-text-before-save.png",
+      "bytes": 278430,
+      "sha256": "a2cf3980da6e5d7d963826beddbe4db21de23fd01e4660675797453d3176d2dc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-13_Pass2-No-photo-note-mention-offer.png",
+      "bytes": 287801,
+      "sha256": "787d201269e4cf1d089727a0cec57345b5198c7b7cc442f79984d292c1f87f56"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-14_Pass2-No-photo-note-create-dialog.png",
+      "bytes": 146052,
+      "sha256": "ab9f689323ebe0191d8d339d7ed66cd0abbd844b45e9ae1f259805d4172e1791"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-15_Pass2-No-photo-note-create-filled.png",
+      "bytes": 141462,
+      "sha256": "214d7fbc8bbddfc4530f70b85976f827101941d9dab05940c1c7b49e3147ab4d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-21_Pass2-Note-create-retry-before-submit.png",
+      "bytes": 142398,
+      "sha256": "bc5c491a20792392a8194cea04beb095c6ce2c2d8c77d88b4d8d8bf86d58a8a9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J29_Step-23_Pass2-No-photo-note-created-mention-pending.png",
+      "bytes": 276824,
+      "sha256": "eb0e71630e70837542b8394fbb39bb0dabfeb0b165c694e866857dab1bfd33ec"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J30_Step-01_Poor-reference-decision.png",
+      "bytes": 210355,
+      "sha256": "aa419ef11cd92cd38a7b542fbff4ff46e28860f5bf575fa5fc49498f2d716027"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J30_Step-02_Poor-accepted-choice.png",
+      "bytes": 210894,
+      "sha256": "f6c2b86c1f028ed3dc52f7bedbaad15a73dde7ee62a952ce20e7e1017998490c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J30_Step-03_Proof-only-active.png",
+      "bytes": 192481,
+      "sha256": "62ff43e52cff42dfc8cb6f8f9b07d69979f798fbe80f62adb342218c933cddce"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-07/UX-07_J30_Step-04_Reference-cap-four.png",
+      "bytes": 241747,
+      "sha256": "733d2de3559852b65cb9e226d3be06a7a815662b3d55994195cf11640c5f17da"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J03_Step-13_Pass2-No-photo-create-mention-association.png",
+      "bytes": 363245,
+      "sha256": "8b215f668b8b16aff937762fc7f6d7ec36ebadf846ebf0edcb9bea0dc215b4e3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J04_Step-06_Lifecycle-menu.png",
+      "bytes": 395398,
+      "sha256": "f54d67e391c9c30f4e58932e5a2caf06808846edc0a2285bd5bddbe54fa65aa9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-02_Add-association-dialog.png",
+      "bytes": 136776,
+      "sha256": "5ddba8eda871951d3b01de70b2d28f2f854dfc8ee2513bad76e06728e05bc69e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-03_Manual-and-coobserved-evidence.png",
+      "bytes": 402939,
+      "sha256": "cae883ca9c211ed6e7e3d04c807cd0627f90ede307faab3f9344277fd733f347"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-04_Manual-retired-coobserved-remains.png",
+      "bytes": 400574,
+      "sha256": "c36ca39047bf33d9102723f337a364cce80374a980ab9f848d1e75d7493ceb48"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-07_Pass2-Add-manual-association-open.png",
+      "bytes": 138471,
+      "sha256": "e7c679089c1b7268bf802cce738dba3520832bd5bd72a1bdc6cca4cd83ebf12d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-08_Pass2-Add-manual-selected.png",
+      "bytes": 140878,
+      "sha256": "f404502d3262352a8f9dbf6d5745632b39df4998afa14735f215c6069390e4b9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-09_Pass2-Add-manual-cancelled.png",
+      "bytes": 401445,
+      "sha256": "a8bf8ddbe886cc6dfd0c2b69c4831d8611449b769cdf35ebc2a7dd963161e410"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-10_Pass2-Manual-beta-added.png",
+      "bytes": 444162,
+      "sha256": "439fa644f36b9c81ca8ad00fd48ec232b0145a1da8619519fdb342289c515489"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-11_Pass2-Duplicate-manual-selection.png",
+      "bytes": 170148,
+      "sha256": "e8f6c1af321b3bbacfb9c31e28ba64482c5b7acae4a8d6d12f00a21c2cfe799c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-12_Pass2-Duplicate-manual-result.png",
+      "bytes": 444176,
+      "sha256": "030c05b05c2dde02a9965bce73c76e76b7c03ab61a83788d867ae61fb83b027e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-13_Pass2-Repeated-manual-still-one-evidence.png",
+      "bytes": 444090,
+      "sha256": "3c535188a50faf2c8876483517a615fce526ea753fbecf6b1a5378695612ebb6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-14_Pass2-No-photo-person-graph.png",
+      "bytes": 502206,
+      "sha256": "753cc39c3fd54897628209249177958842a4937a6d1926f3e553ab9eabd1d800"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-15_Pass2-Person-graph-panned.png",
+      "bytes": 503702,
+      "sha256": "2e3db60f9e4d15c390dd267346684ea94a7ac434fa396565a7c0d084b071ab9a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-16_Pass2-Person-graph-refreshed.png",
+      "bytes": 506191,
+      "sha256": "f68750dc4f17a83476353e9d8ed28697ebe6cf100ab9e3d7b73991ef73806fdc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-17_Pass2-Graph-archived-linked-person.png",
+      "bytes": 512227,
+      "sha256": "6be23d8e5e335b4eadbaa8024c9e39e8d3ff2f4b3ee2286e4440fa26aa50eaea"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-18_Pass2-Graph-archived-node-restricted.png",
+      "bytes": 512227,
+      "sha256": "6be23d8e5e335b4eadbaa8024c9e39e8d3ff2f4b3ee2286e4440fa26aa50eaea"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-19_Pass2-Archived-node-click-stays-on-root.png",
+      "bytes": 549476,
+      "sha256": "f92bd281dbefe2628d8701461bd80113c203eeb43c5b7b0029ae4e11408ee69a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-20_Pass2-Person-activity-before-filter.png",
+      "bytes": 322862,
+      "sha256": "dcafbbd05649e3afd01c545e72d0cc54502f1cd62c556f00fb7a125499dced37"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-21_Pass2-Person-activity-filter-menu.png",
+      "bytes": 334212,
+      "sha256": "2255f706d33e76ede8f1e6fe1f140b5c361e7223d103c0acae8fbd55c9ae08c8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-22_Pass2-Person-activity-photo-filter.png",
+      "bytes": 331142,
+      "sha256": "42109b3961620e975925b5b7b3821121831d8c51f788f80cd29a93ded67fb83d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J12_Step-23_Pass2-Person-activity-filter-cleared.png",
+      "bytes": 328271,
+      "sha256": "265413a1a71ccb1a8892d976545837dd810c96ff5f667232d84b07d2b3b079fe"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J13_Step-01_Archive-confirm.png",
+      "bytes": 146591,
+      "sha256": "11bf389a9802b43c79c2c0cd70b5b42565c1faf97e4d247eb0febab74335f896"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J13_Step-02_Archived-result.png",
+      "bytes": 367810,
+      "sha256": "2c70b2eeb586a602e42d86a517dd19040fc0b6f7dd490a06a721f10cdcd63bdb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J13_Step-04_Historical-profile.png",
+      "bytes": 398011,
+      "sha256": "47adaabf68409b12f650677e842038fb754c0fc50ed9a990dcddd1f73e270604"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J13_Step-05_Restore-confirm.png",
+      "bytes": 139677,
+      "sha256": "baa9e4a75cc4d98108de66aae3a90ad73a099f039d10e72a975ac8fe3b0e6c43"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J13_Step-06_Restored-result.png",
+      "bytes": 398654,
+      "sha256": "596f26b36033bfba5a22c2513e50d221a37442822865943ab927e02f96b2a711"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J13_Step-08_Pass2-Archive-cancel-confirmation.png",
+      "bytes": 170274,
+      "sha256": "159a9d2d2878ea2d54b1ca32c045262a91d73c8d41e01dbd1b8b087d95d2cfee"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J13_Step-10_Pass2-Archive-dialog-keyboard-open.png",
+      "bytes": 148338,
+      "sha256": "0b284dce9037cda864f91fcc104ff97677d326bfd6aa606f8c339332c9259113"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J13_Step-12_Pass2-Archive-linked-person-confirmation.png",
+      "bytes": 163304,
+      "sha256": "02b0fdc09b0a0d7a89b726cd78d6d79c0c460c0f66b8aad65eda8de66b724882"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J13_Step-15_Pass2-Restore-linked-person-confirmation.png",
+      "bytes": 153733,
+      "sha256": "0de31daf5c932cde1787fab1754473f46936d4df0bda86a48441add13a2674c8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J14_Step-01_Merge-dialog.png",
+      "bytes": 146181,
+      "sha256": "08515cfe4f81ad16412505632329bd2e86c0a8250936c89b00bb7b3f6dee91b8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J14_Step-02_Delete-profile-confirm-disabled.png",
+      "bytes": 153496,
+      "sha256": "6f6b32eb80bda22a17ce639153665d85fc80b1d8c67bcd9bba6858b793a0f63e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J14_Step-03_Delete-profile-confirm-enabled.png",
+      "bytes": 153817,
+      "sha256": "553648f73ca68251619b5257facfd7351a5d6c192b00f0f3c61ce59f988a1189"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J14_Step-05_Pass2-Library-delete-confirmation.png",
+      "bytes": 185333,
+      "sha256": "42bd1adac0cec9097b0adcd156528c88b3bd740f917d0260b7ef8634b67d785b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J14_Step-06_Pass2-Library-delete-invalid-phrase.png",
+      "bytes": 186300,
+      "sha256": "560ba20a325c016ca2d24d628642f03825b183f935fd6321c891ab8f3261b3c3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-02_Merge-target-chosen.png",
+      "bytes": 155459,
+      "sha256": "72507f8d00df381dce6d609466d6b5089c3b69a6f37ec6fe74459a2f5172d6d4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-03_Merge-completed.png",
+      "bytes": 421406,
+      "sha256": "3118f903a6c5769ec3d9a1af2d862fdf3c745015085caf866d6a521412848f5f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-09_Pass2-Revert-merge-confirmation.png",
+      "bytes": 155462,
+      "sha256": "99f4fad8fb121076cf702b365347132f157216fdc0ed4e27e905821346a34fa8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-21_Pass2-Reference-cap-merge-attempt.png",
+      "bytes": 162798,
+      "sha256": "b8e9eb23df860243ed8936842922421ee15abfd5adb9f58fa314eab1910e5371"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-22_Pass2-Reference-cap-merge-refusal.png",
+      "bytes": 178210,
+      "sha256": "41f840a36f804e0ff13af91d3aa9f618bffb10b60d4c67c7ffff4dd725671b5b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-29_Pass2-Safe-revert-same-profile-merge-confirm.png",
+      "bytes": 154604,
+      "sha256": "51460b2dd03ea056f0036200fd2df7a6949aa45ca03233e85be6ed018819f22b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-34_Pass2-Safe-revert-two-enrolled-before-merge.png",
+      "bytes": 147158,
+      "sha256": "e15da9476e7b1fc8b2c734060d57ba6a181a6b144a2281f345440f77913ff221"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J27_Step-37_Pass2-Safe-revert-matched-observation-merge-confirm.png",
+      "bytes": 141530,
+      "sha256": "affca398497c48df2c56ec3e893c31ae987fef360376cb90aa3cf069455e24f2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J28_Step-02_Tombstone-result.png",
+      "bytes": 421450,
+      "sha256": "7b2fef88370bb3da5800edb7cbe9a901ef3aa6ac9c65aa2ce342b79535e2018e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-02_Archive-confirmation.png",
+      "bytes": 185642,
+      "sha256": "dc0a2cfce43f69402abdaeb2a33bfaf3efdf76864c690f3c4f333e4d8846f5c4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-03_Archived-profile.png",
+      "bytes": 394161,
+      "sha256": "6768305c5c2849c976f0219d02fb61a1c1397770f93cdc66eb2ae6321fcf5881"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-05_Archived-person-profile.png",
+      "bytes": 395199,
+      "sha256": "3f2973d9011b4a4acce23559f4550d5f7d807ed2d312f84e1bea0e2c3dc26834"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-06_Archived-activity.png",
+      "bytes": 267382,
+      "sha256": "f6a5ab647ed90ed4f618b26b251b6202663664b6dbe4f4322b1416850df762d9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-07_Archived-sightings.png",
+      "bytes": 317682,
+      "sha256": "5840052bea0bf7a9b2ef4393e9c38774cf4b0c236b5c4ce30d690b86846f99a5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-08_Restore-confirmation.png",
+      "bytes": 121967,
+      "sha256": "c2bcaa97468b97a268562ab5eb8642928001d6a6180b4e82c4a5a02ee5dca220"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-09_Restored-profile.png",
+      "bytes": 318685,
+      "sha256": "1ef91d8559c7819e48472a274617ca9c74721691a31ccd00f59f06037bf2d28c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-10_Delete-confirmation.png",
+      "bytes": 137840,
+      "sha256": "2b3408e5a526cf37caaf6c4a80a6b6411c3324c515951957a3c42386e5f1ee01"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-11_Delete-armed.png",
+      "bytes": 138185,
+      "sha256": "7ea462e7628c7fdabcae4229fb7db94bce66d1a755a339814f16a8f957d8041d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-08/UX-08_J50_Step-12_After-delete.png",
+      "bytes": 342817,
+      "sha256": "cb62317798fd858aedaa14a0083a3f0d4a7ec46a696ebf1d5e7434db053f888a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-01_Events-list.png",
+      "bytes": 436987,
+      "sha256": "5da0f475bfbe4b5b7c94b53a6b8adef18a38429f6162d682d805d07ebda1f46d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-02_Event-detail.png",
+      "bytes": 625784,
+      "sha256": "7afc35b5bd6c062de5637736572034ec227acea975b69a929ed021379991bdfe"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-09_Pass2-Event-collection-before-filter.png",
+      "bytes": 449973,
+      "sha256": "1460eafec001e2323d9828713cbcd919c134e8c3159ec43c697b453e238ef866"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-10_Pass2-Search-no-matches.png",
+      "bytes": 423174,
+      "sha256": "41c88e936bdac1f2266f82a6d20afbbdae5093bcbd7bb847a286def2c39ba187"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-11_Pass2-Clear-search-restores-events.png",
+      "bytes": 451905,
+      "sha256": "2a51f033f9a013c48062fbc566123e2b17a3c83f41fb13de00176e407143895f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-12_Pass2-Date-and-location-filter.png",
+      "bytes": 452826,
+      "sha256": "3ab5004f7bea15cf749a52f2e4934b3099014a0e0ebef3669c1e3e6c9e11f75c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-13_Pass2-Context-filter-public.png",
+      "bytes": 441558,
+      "sha256": "20916873f79a2411ede98a539a478b908e0856c5fb62c89f7c034542f294022d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-14_Pass2-Participant-filter-beta.png",
+      "bytes": 442000,
+      "sha256": "ea661e3f68b18246629cdc64ab87dade70c999b6eed3aa3f8da2e8b2fbc1c875"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-15_Pass2-Mention-filter-no-events.png",
+      "bytes": 423311,
+      "sha256": "d7b03299d24e7c485ee3ec65065b1eef054485cbeb7dc431eba7ca6533ddde3d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-17_Pass2-Events-before-contrasting-date.png",
+      "bytes": 470603,
+      "sha256": "46b9ef9cb346f42cf47df6926051f89c381a88459db008f307dab84586dc5a97"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-18_Pass2-Events-date-filter-excludes-older.png",
+      "bytes": 439299,
+      "sha256": "18a33f432f4289e6ea2e1af17708e484feb01a08cfb3dd965038e430b97ff5f1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-19_Pass2-Events-location-filter-excludes-others.png",
+      "bytes": 438916,
+      "sha256": "9a75dc43ff82385d7625c2d7c05f07cfa56bdb4fc3245904db7c876881bebabc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-20_Pass2-Events-to-date-excludes-newer.png",
+      "bytes": 459913,
+      "sha256": "3275ad766c3a9963423b366f67367791ece732753f782aebf3547a2a48e146cf"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-21_Pass2-Dense-events-first-page.png",
+      "bytes": 605348,
+      "sha256": "3f396ffc30a63c5ffe3432840b768b6a05855b12d3228c8c237ee0ff53a87250"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-22_Pass2-Dense-events-first-page-ready.png",
+      "bytes": 465492,
+      "sha256": "a23bee2a03aa94b3e333aebbd186d3fff13561e1fc375a3e17da9ac1d51a3a52"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-23_Pass2-Dense-events-second-page.png",
+      "bytes": 400918,
+      "sha256": "bf186514402d41b1531cd92e90e5c39150bdcb9975d89bfdc2d265e6000d2d1e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J07_Step-24_Pass2-Dense-events-previous-page.png",
+      "bytes": 393610,
+      "sha256": "1775ae262a3b8fce121c038a363e5a4b0bd37354b0b42ed013b568e1fd58ffff"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J15_Step-09_Pass2-Single-participant-event.png",
+      "bytes": 421449,
+      "sha256": "967ed5219b3343bdf6ee26676dcd7fe34d12a29bb0feb3e6643ecd863cd3f47a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J15_Step-13_Pass2-Reassign-participant-saved.png",
+      "bytes": 420621,
+      "sha256": "b27cb4d4d7e1fc2ee8ba4288e64b171b0f930e9c12674b0b6837f42a52ec26ba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J15_Step-14_Pass2-Original-participant-restored.png",
+      "bytes": 421449,
+      "sha256": "967ed5219b3343bdf6ee26676dcd7fe34d12a29bb0feb3e6643ecd863cd3f47a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J15_Step-17_Pass2-Return-to-event-collection.png",
+      "bytes": 451888,
+      "sha256": "e9bb6bdfe981fa23bfc10e4eb324fb050081ad92a571e7bf0fdf9d5d771b504d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J24_Step-07_viewer-event-actions.png",
+      "bytes": 507760,
+      "sha256": "17869f2cb082cbe6879c9cf1448d77a62097da7fe3e042aa52246f001dc76c42"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J24_Step-10_operator-event-actions.png",
+      "bytes": 482203,
+      "sha256": "5776a77605aa92ccfe0005e9d9459987045e91f99c81309589c12f12fa4d6266"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J24_Step-13_custodian-event-actions.png",
+      "bytes": 484581,
+      "sha256": "e7ece3cbf181dee6352e28b2357a14784c1ff57a5b1cfe715bba66b46a6c040f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J24_Step-18_technician-event-actions.png",
+      "bytes": 507401,
+      "sha256": "4f85671e51c67bebdeb62f5a3ffd5ea4865cac1e816b81a8fed9a4cd3aac53f0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J26_Step-04_1366x768-light-Events.png",
+      "bytes": 389007,
+      "sha256": "a71dd9c2cc97c9054dc85656546632360aafcff092c732e9d01abca6654d5260"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J26_Step-10_1280x800-dark-Events.png",
+      "bytes": 391437,
+      "sha256": "4755c833b468809b0a95513d2d0bedb7e7976fc0ab16953a08449fc08e6bcf2a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J26_Step-16_900x700-dark-Events.png",
+      "bytes": 249678,
+      "sha256": "5fde54275077aab792755b71962f15969d26e916ef9a9bc863d1b5c68fb78298"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J26_Step-24_1440x900-dark-Events.png",
+      "bytes": 465513,
+      "sha256": "d26f5b1ccfe64cb3f9ece87259f1c6c6df55197f0b9eb9577a8a8b2cf6f6908e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J31_Step-03_Thirty-event-collection.png",
+      "bytes": 462754,
+      "sha256": "d775c6e87b7e297a3273e0c78114661c0977cc63b17e38f072403e65fc693682"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J31_Step-04_Events-next-page.png",
+      "bytes": 414213,
+      "sha256": "20cb00a885f12fae7b3cd20842d1edfec2982a4fbd178fd01dcf2233d9fa29ea"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J40_Step-05_Native-full-window-Events.png",
+      "bytes": 339132,
+      "sha256": "6a8f8640e49e2b680285fd36f7c969b00f03fe43a6720cf4dc1f272954ce9e6f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J47_Step-15_Operator-events.png",
+      "bytes": 435633,
+      "sha256": "9425c5326fc617275ed34396098ed4e755c9c72a5601fdee3c15824490ad7d7b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J47_Step-16_Operator-event-detail.png",
+      "bytes": 578005,
+      "sha256": "70e0d60381c0089a65ce94235b2f8261d56be105980908db8d2b8ee20a8e16c6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J49_Step-01_Custodian-event-detail.png",
+      "bytes": 582934,
+      "sha256": "577ec42ac06c6710f3e716abbded7d490ec6a9285423597b3cc125d974de27ac"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J49_Step-09_Events-after-placeholder.png",
+      "bytes": 584223,
+      "sha256": "321030fd88cece9074d241e7be8858515e73f349020ffb5c35603d59d884b64c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J49_Step-16_Events-list-after-stale.png",
+      "bytes": 455391,
+      "sha256": "984bd9b81aaa359c3e477d40e6c954b8993f0bef378ee5bacb99db13555f421c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-09/UX-09_J50_Step-13_Encounter-after-delete.png",
+      "bytes": 582240,
+      "sha256": "b714f387b646c5a0f44f0141e7aacd38a52f9ea5f3ade84bb0c0fcbdba94f6af"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J07_Step-03_Metadata-correction.png",
+      "bytes": 205093,
+      "sha256": "0277b8392eb766e8ad5f1ffad7c06000a1f3e800a17edd2cac8c4a243cd8233d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J07_Step-04_Correction-history-expanded.png",
+      "bytes": 627233,
+      "sha256": "88f6814844026d5473106b49ebe86ffb6497c63a903e1971a2b9cc38e1221676"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J07_Step-05_Reassign-participant-form.png",
+      "bytes": 190248,
+      "sha256": "8feaba030479e939d210fe8ed77a33569c5d41ea7e7a74186d2d55d40297e67b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J07_Step-06_Remove-participant-form.png",
+      "bytes": 187784,
+      "sha256": "61ec3da04a47659b7255ac694f43263aec2a0a7e6a252699449991b5fcfb8b79"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J07_Step-07_Add-participant-form-empty.png",
+      "bytes": 187491,
+      "sha256": "d278d7ba4ea9d1c1b3d0ab5149c6a7543e651b3a3a1a04a3a342b2ff732b643d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J07_Step-08_No-pair-relations.png",
+      "bytes": 180157,
+      "sha256": "ff0403df297c7f3ee96cf00cc1353481e7d8909e64b7f189648eac5f4134b325"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J07_Step-16_Pass2-Positive-mentioned-person-filter.png",
+      "bytes": 446551,
+      "sha256": "31192778b32142c4f935cfd37ea0f5edb09228896a534c57d366f66ec50aaebd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J08_Step-48_Pass2-Folder-first-event-mentions-and-sighting.png",
+      "bytes": 642883,
+      "sha256": "60014918c847d4aae1d26b3f043892352f572398ef0f49f7a7337f637eb3fade"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J08_Step-51_Pass2-First-finalized-event-remains.png",
+      "bytes": 641458,
+      "sha256": "df27fdc4a35eaad2840e54d8ce07e18c0dacaf9233808b43f4450bf38df97f0a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J10_Step-07_Pass2-Mention-to-event-detail.png",
+      "bytes": 877203,
+      "sha256": "69ba4bef65b685172d9e4110be1daca1e660cc7c56cb06d1c2d4d352a3383e4f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-02_Participant-remove-ready.png",
+      "bytes": 237422,
+      "sha256": "7fd5def87088a5ee9c608fad7d2c52b67469bcc4302bc94d4ad30c84c22a3a50"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-03_Participant-removed.png",
+      "bytes": 872789,
+      "sha256": "34103162b8f9c4afbbd6b9dba3699de615fa2344334ba6fe05e4c98562f663b7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-04_Added-participant-needs-pair-choice.png",
+      "bytes": 231375,
+      "sha256": "25f6dc60b6254052b74ff261df7fb461a8039888a7814b2fd1a96de95a5f0de4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-05_Participant-restored.png",
+      "bytes": 816009,
+      "sha256": "aa79a71fabd6b28544feabdafa3a6d6707f4be1177c7917b9b2be1957cfebb1c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-06_Relation-exclude-ready.png",
+      "bytes": 228094,
+      "sha256": "1f403c9d080d1a1be99ac87f98b20c8aab7edb42ab095a7545750644471ad126"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-07_Relation-excluded.png",
+      "bytes": 816021,
+      "sha256": "1e43db608f47628db6b7f69da08a90781f56783d10f2ded3d8c1b3df30db097a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-08_History-scrolled.png",
+      "bytes": 796515,
+      "sha256": "8f6a6f22cb7726f66d652770daafb96729fe85857e44cf2ef4f07bcdaa87959a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-10_Pass2-Remove-last-participant-ready.png",
+      "bytes": 140549,
+      "sha256": "b2f1faca95cb3eda16bce19f09f84b9eec746ab697bdbff10df4839265167a51"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-11_Pass2-Remove-last-participant-response.png",
+      "bytes": 152265,
+      "sha256": "17d8042383eae626f8d883d82d6ec3cc905edc30230d650a5d229138d653787a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-12_Pass2-Reassign-participant-ready.png",
+      "bytes": 149320,
+      "sha256": "662a7baef9efac7b69cbaf6bf8a45a04b37192b8a8e3463cf27a7e4394ffb4d9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-15_Pass2-Reassignment-history-expanded.png",
+      "bytes": 361203,
+      "sha256": "cf0314f98f2f3e93d38711c2d2c08430f1ded7efb77ce9added73de8aaf96f35"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-16_Pass2-Reassignment-history-visible.png",
+      "bytes": 323815,
+      "sha256": "c41bf92665a929a73475dc9aadf627aacdca141eaa6b28c458f106d8a64d797a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-18_Pass2-Event-correction-before-mention.png",
+      "bytes": 244006,
+      "sha256": "5c22088d53ecf7185251abe215cbf9078aaca1dc7501208c141c3687736ef19b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-19_Pass2-Event-mention-candidate.png",
+      "bytes": 241506,
+      "sha256": "5a011a093b7395ff6e5d04758d399310488c9f61ad584c806ee08fcaa035b2f6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-20_Pass2-Event-mention-selected.png",
+      "bytes": 252671,
+      "sha256": "aca5ae494abdc3f3e756a2ff7fe7c7d5efd6ed42b530fe126596b0cfcdb69391"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-21_Pass2-Event-mention-saved-not-participant.png",
+      "bytes": 877203,
+      "sha256": "69ba4bef65b685172d9e4110be1daca1e660cc7c56cb06d1c2d4d352a3383e4f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-22_Pass2-Dense-event-location-cleared-before-correction.png",
+      "bytes": 217719,
+      "sha256": "1665f21e2c2311563c53cc9183b229ed68346cb57fa783f764d01b8c6d08c4ff"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J15_Step-23_Pass2-Dense-event-location-correction-result.png",
+      "bytes": 606889,
+      "sha256": "981dc27be969963bdae24a9274be079983ddfda6532b27d8b770eb67d4e42cc3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J16_Step-01_Stale-correction-refused.png",
+      "bytes": 220391,
+      "sha256": "5dd81c1a932f14ab8f4892e01f1e6e42da63d6f6caa3c53f998b5e91bbbc1cac"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J16_Step-02_Stale-reloaded-current.png",
+      "bytes": 730140,
+      "sha256": "20ad66e4b7c47f4ff124beb691168882df5a13aab4d2e308b09a167452c9d413"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-07_Pass2-Attach-duplicate-target-event.png",
+      "bytes": 868547,
+      "sha256": "776eb2169fd0fb49ad27e2bcf7f2c56475a8b0da04e5903f545eb66286c66765"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-08_Pass2-Duplicate-media-refused.png",
+      "bytes": 784414,
+      "sha256": "797a0c46ebc3fbf76064d737c27b554770ba75b1ac3fc79945af072ffdf1b7ab"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-13_Pass2-Event-media-unchanged-after-cancel.png",
+      "bytes": 868547,
+      "sha256": "776eb2169fd0fb49ad27e2bcf7f2c56475a8b0da04e5903f545eb66286c66765"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-14_Pass2-Attach-reference-target.png",
+      "bytes": 641458,
+      "sha256": "df27fdc4a35eaad2840e54d8ce07e18c0dacaf9233808b43f4450bf38df97f0a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-15_Pass2-Attach-reference-refused.png",
+      "bytes": 625149,
+      "sha256": "1a71ccc2e07ec4120dcbe3adc1be94e05ccf5654e62e31a4f2f7133ed61aadc9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-24_Pass2-Stale-attachment-target-start.png",
+      "bytes": 642883,
+      "sha256": "60014918c847d4aae1d26b3f043892352f572398ef0f49f7a7337f637eb3fade"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-26_Pass2-Concurrent-correction-before-save.png",
+      "bytes": 220768,
+      "sha256": "b8f8e3d831fd88460754f103e8955602570399a197fdbaeef1aa9a68c3f045ff"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-27_Pass2-Concurrent-correction-response.png",
+      "bytes": 236443,
+      "sha256": "ce8a707a612ed5db01c5da1449b33f3823261b75d7094e94fe9c36b1e77d4451"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J17_Step-30_Pass2-Correction-after-attachment-discard.png",
+      "bytes": 644189,
+      "sha256": "27a0066b510ec6ba883e42a39c579c311061dc285178ed2ed2a8faefde3819ed"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-02_Correct-encounter-open.png",
+      "bytes": 199791,
+      "sha256": "5c10831f4508ac278799c16c30c7473b121c645d6e7b743f574f0491a486050d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-03_No-change-save.png",
+      "bytes": 582934,
+      "sha256": "577ec42ac06c6710f3e716abbded7d490ec6a9285423597b3cc125d974de27ac"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-04_Correction-saved-history.png",
+      "bytes": 585862,
+      "sha256": "d50c4c9c1e6f3c9c8e198081f36ae931befb72bdbca581178bec857311f74a11"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-05_After-reload.png",
+      "bytes": 454458,
+      "sha256": "e35446ac5a195bb236c9c7f0bddb2fa41746755811381632742dedd617fcecf4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-06_Correct-participants-open.png",
+      "bytes": 199450,
+      "sha256": "cd6e5390d8248d5a952223f435c64cfbb358d978aaa5e59bc9a9a81d4906c4a3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-10_Add-participant-relation-pending.png",
+      "bytes": 203777,
+      "sha256": "ba52cc998d3389b9824c2b73d51d2020992b0e9a890f2978d498994dd9fd5259"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-11_Add-participant-ready.png",
+      "bytes": 203944,
+      "sha256": "fb23ccff677a5e675d9b6954232054e060cd338e44895ea35228ddec283b2dbe"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-12_Add-participant-saved.png",
+      "bytes": 582347,
+      "sha256": "a3b1e36f714838fe8c753798b2b3f90c426a69c0dd6f355eacbbde3e41336e2d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-13_Stale-revision-conflict.png",
+      "bytes": 214275,
+      "sha256": "fb78a74fc9cbf81fffeffc68e51d8f2b56e32bcf5bf3bab7ff930485f94eb5c2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-14_Stale-after-cancel.png",
+      "bytes": 535471,
+      "sha256": "da9ec602919db490d5f59eed95aa26bb798aa59da3157b179c2399804d1faa44"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-10/UX-10_J49_Step-15_After-header-refresh.png",
+      "bytes": 583503,
+      "sha256": "effaee60d4e33b91c73ac1e6a764aaf132913807f01edf10cc2d7bed0e97ee2f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-01_Explore-default-sparse.png",
+      "bytes": 260837,
+      "sha256": "92f2e2c1e01a05e478f00c17617735f0331db8b2d7115f20cf4b766f07fcff85"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-02_Evidence-popover.png",
+      "bytes": 267476,
+      "sha256": "45353d693b36640a8094f84f97399c7fe5cbaae4b6de49b659432fc8ec35595c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-03_Empty-evidence-refused.png",
+      "bytes": 264136,
+      "sha256": "99bfa7e6344c8208dbd6923120e713cdf0037dc812bcf3ca6f975e73e934a596"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-04_Person-inspector.png",
+      "bytes": 313088,
+      "sha256": "85f3db5833b31edda9cf77371dacf3462b5fdf19387bdaf62cfcc47107510543"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-05_Focused-cluster.png",
+      "bytes": 313116,
+      "sha256": "7173fa7f6071c057ff6ee3477ba128cc411c9ad6e75234cb395a0438e60db6d9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-06_Relationship-inspector.png",
+      "bytes": 313849,
+      "sha256": "e18f915506632af0365154010f2a0c0476331e4f248adffc32a4adb63793285d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-07_Relationship-proof-overlay.png",
+      "bytes": 96605,
+      "sha256": "d8fb65634cc2340bea16735fc1ae59a2162d01b30ab99e7ba7d10fc7144bfb2b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-08_Proof-evidence-expanded.png",
+      "bytes": 232464,
+      "sha256": "86dcbdbf46fd22a327a853cc3d773cb9f0a3ed4108d999264cffac413ddcc3cc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-09_Supporting-media-collection.png",
+      "bytes": 258376,
+      "sha256": "83403b42e1e32edd4edd3362bd4ec584dfcba574273554ba4f8f4823a58ee76e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-15_Weaker-links-off.png",
+      "bytes": 312947,
+      "sha256": "f31a0ac7a67902608578c25cb58f5ddebcda26d8965b73d7022eb7d62c7d5e9d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J18_Step-16_Explore-cluster-discovery.png",
+      "bytes": 310013,
+      "sha256": "d58c20364a3b209137c830be797434a6b7f96e84713b34d7b6ebb66741d8e0ee"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J19_Step-15_Pass2-Explore-initial.png",
+      "bytes": 264669,
+      "sha256": "c3cede5794d443d2fb8b58a53487d830744cb83adb7bc1b6962b56fa085569ee"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J19_Step-16_Pass2-Explore-isolated-person.png",
+      "bytes": 303805,
+      "sha256": "b82b6b2ba35bb8a5ebde109be2d447ef17eb39ab303796d9f99cc1dd454d19e3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J19_Step-17_Pass2-Explore-zoom-in.png",
+      "bytes": 308121,
+      "sha256": "be031cf02765b15abbd6d963cab8959ff632597527e231be6934166afc9cbb44"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J19_Step-18_Pass2-Explore-fit.png",
+      "bytes": 303707,
+      "sha256": "a53b4de1a3bd6fee2a562b964cf38c390840b09039668f9b01020a72aeef7193"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J19_Step-19_Pass2-Explore-canvas-pan.png",
+      "bytes": 302842,
+      "sha256": "f05e87422a19702de4a7c481f84be31078e0fee604c6b0b0ef268231ba53a605"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J19_Step-20_Pass2-Explore-background-click.png",
+      "bytes": 302842,
+      "sha256": "f05e87422a19702de4a7c481f84be31078e0fee604c6b0b0ef268231ba53a605"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J19_Step-21_Pass2-Explore-reset-clears-canvas.png",
+      "bytes": 266476,
+      "sha256": "7fb7d27c943e7683b8abb22601eddedb00e904ab0b4d8c54fc641e6abb771dc4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J26_Step-05_1366x768-light-World.png",
+      "bytes": 244519,
+      "sha256": "78ae5f8062da61f258abf14d06c507f33d4fcc471e0ffdefb3ee4413818371d5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J26_Step-11_1280x800-dark-World.png",
+      "bytes": 305846,
+      "sha256": "7050321c815e1823987101454855a0b295a281ae1e7d7656ee20085eb0460445"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J26_Step-17_900x700-dark-World.png",
+      "bytes": 199966,
+      "sha256": "396469f7f90c0edd4f02f18149862bf8fe0f9516fb12e426de2bdd95f3a3ad17"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J26_Step-18_900x700-dark-Explore-Canvas.png",
+      "bytes": 199478,
+      "sha256": "8cb2ce2df04c8c7318157ce165b2c8d4d97aeebee3fb689c102de2cfc279d572"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J26_Step-19_900x700-dark-Explore-Details.png",
+      "bytes": 209634,
+      "sha256": "ef4f318e9c44a1a63aa3825172245c8b986204be8d68c7e34933172959610767"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J26_Step-25_1440x900-dark-World.png",
+      "bytes": 365212,
+      "sha256": "4687551b882887c850f3f8f021a2feb698c8b10a94376b8819a056797cef618b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J31_Step-05_Dense-cluster-selected.png",
+      "bytes": 372886,
+      "sha256": "69e48d0353c0308fd4ce25cde79e77d8c32ab2059211b4bd383da8b9a3f084f5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J31_Step-06_Multiple-location-discovery.png",
+      "bytes": 406180,
+      "sha256": "29f792a015dae71b249fb288ec8dc305f58e5f59f9e9e4d0ae643c63ed3ad57f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J31_Step-07_Recent-discovery.png",
+      "bytes": 373099,
+      "sha256": "a389e824f04684f17c7184048b17b3c7b6c34503601bc6e0e9553569417525dc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-11/UX-11_J40_Step-06_Native-full-window-World.png",
+      "bytes": 323781,
+      "sha256": "0eb05dd7045200db47a29ef0d9356e5242da592212f5e8bf0d8b94c0d1f10073"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-12_World-event-provenance.png",
+      "bytes": 191762,
+      "sha256": "ba1c1908b739a4b5215dde68c51b8c4a699db5863ae9fee783d9854f68c4c852"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-13_World-event-evidence.png",
+      "bytes": 168702,
+      "sha256": "508cfe6c9e7782833c07c1b2fcd06329d7dca696d513a2f7083a80f96687a7c2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-14_World-event-media.png",
+      "bytes": 268949,
+      "sha256": "db5a090c48213f3e7555da4fcd6cf42a16320c3f65cf4236eb451aaeecd8802f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-17_Pass2-Connections-before-reset-test.png",
+      "bytes": 433187,
+      "sha256": "f9878dc625f8cff9ad6a34b13b930d3c778da7ae061754f402398c42ac9e0599"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-18_Pass2-Connections-seven-day-scope.png",
+      "bytes": 407824,
+      "sha256": "42c03bc6ab570887543acf5c226e815533438788b9e08bfe445b1026f017059c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-19_Pass2-Connections-reset-default-scope.png",
+      "bytes": 433460,
+      "sha256": "a4841678ed09bcd19c1aa96cebee50deef3f1e9c7656841d7031252664b1d702"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-20_Pass2-Connections-relationship-collection.png",
+      "bytes": 428684,
+      "sha256": "be15a3217ccfc1562a75e692d09ce652a361bce72f8aedf8320dc4766c5b6759"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-21_Pass2-Connections-relationship-selected.png",
+      "bytes": 446053,
+      "sha256": "d66d189f9bb782d234732c66d769cd2383be6188187ef903318fb055077b730b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-22_Pass2-Connections-cluster-selected.png",
+      "bytes": 430975,
+      "sha256": "c224618e321f64e615f0d963fe1c7ee9f68d38e088afd8088163564333940a26"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-23_Pass2-Cluster-relationships.png",
+      "bytes": 431502,
+      "sha256": "587abe755b3ceef6c0bb05ad5a7a2ea92940fad2930451e1f022db1b58eba3f0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-24_Pass2-Cluster-relationship-selected.png",
+      "bytes": 412242,
+      "sha256": "75f9e4dfb5e94516ce8852702712c2a2f462b8477d039424f93d331afa95ead3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-25_Pass2-Connections-before-world-refresh.png",
+      "bytes": 407076,
+      "sha256": "129344f3785f7b644bb824a360b9e9d506dfa14a64c8477ed96abd72ffd28e5a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-26_Pass2-Connections-after-world-refresh.png",
+      "bytes": 408729,
+      "sha256": "a0a26c73d9d6004cca90e95711490634fe2536708c080fe48cbe08a0eee28258"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-27_Pass2-Dense-connections-first-page.png",
+      "bytes": 457640,
+      "sha256": "2c4922974c5c7133a13d928f19b14e93325a10be16987dacfbf6f657028da7df"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-28_Pass2-Dense-connections-next-page.png",
+      "bytes": 422922,
+      "sha256": "36d612a600cc7646dc9564c57b17c0e12553714bcbbe5b6b25ff187ae155273c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-29_Pass2-Dense-connections-pagination-reset.png",
+      "bytes": 457626,
+      "sha256": "b9b4344e920fda337536467ad620908322c8c562e476d42c952333785877fe7a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-30_Pass2-Dense-cluster-relationships-28.png",
+      "bytes": 433416,
+      "sha256": "c1c5f00beb32288ba629d416caad4ca4112bc3ccc6807760cb45fe8fc05c34a0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-31_Pass2-Dense-connections-measured-pattern.png",
+      "bytes": 430332,
+      "sha256": "0e3bf36763fc5f7c02a8001f72d9c81c5310f2e8a26aeb133fb21fa795154269"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J18_Step-32_Pass2-Dense-connections-pattern-selected.png",
+      "bytes": 430717,
+      "sha256": "4f36a9c7ed3557d268325f5a9184bb94827d27194ea089f257adb94d6e97d437"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-01_Connections-overview.png",
+      "bytes": 374756,
+      "sha256": "0d0ee9a59c37acb633de302e66ffe24c9faf55e6ed8e6801c11b7a63515c0f4f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-02_Advanced-filters-popover.png",
+      "bytes": 347067,
+      "sha256": "bfe5fb198f024d9b44a64131a59e6ebacbc81b539435ed40eadb6ee0c3771f86"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-03_Facet-dropdown.png",
+      "bytes": 348512,
+      "sha256": "49a7014c327ced7580d24e9f685089b33eff59bda5c9115a9eb48d2b8236af80"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-04_Recent-disables-date-range.png",
+      "bytes": 376492,
+      "sha256": "ed0822a4ea80f0f775ae40328662f2e3d884c99a37b6f448a1aca406f27e69cb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-05_Relationships-collection.png",
+      "bytes": 410288,
+      "sha256": "343486f5d1fe9817922d618d63db2220b9187a73167c11e8b3a115ad48f47dba"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-06_Patterns-empty.png",
+      "bytes": 410479,
+      "sha256": "16024dbec0bc8b819eea2699272b2af621e4c8d5bb73aaaf12be6fd04598c32f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-07_Clusters-collection.png",
+      "bytes": 409976,
+      "sha256": "3053386e398558fefb73624109fe05b423dd92043da35d8fcaa414e45801c283"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-08_Cluster-selected.png",
+      "bytes": 415671,
+      "sha256": "39f2631fcff9d4adc6af5507764e161bedd56d765f82c5647131f739439562b0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-09_Cluster-person-selected.png",
+      "bytes": 397159,
+      "sha256": "826a478f37d7b14ee68b07f8ea31b3fd227349f6c55db95ee4ef5c9c5963e3d7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-10_Scoped-person-detail.png",
+      "bytes": 393959,
+      "sha256": "cefeedde100c3988aa995337d9bc6b82bf1667bbae949abc4b6e25a395b8ce1c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-11_World-person-events.png",
+      "bytes": 393254,
+      "sha256": "d786b679c218dbe25cc4b77312d69fe5ab0fc442a5993ac74851348efb770721"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-12_World-event-selected.png",
+      "bytes": 382766,
+      "sha256": "47bc0e7541ca07bfaf3782daa2711a67dc5bc0d9d20d25ba3b78974698382669"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-13_Connections-event-detail.png",
+      "bytes": 408833,
+      "sha256": "bb62e532c560a1713e3745939d6856cf184d09d6b783e0f15942bd3ed1bb42e0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-22_Pass2-Explore-multiple-locations-empty-seven-days.png",
+      "bytes": 259633,
+      "sha256": "14bc40a430a3b28d0f798709716967639231493edbb774fcd7be4c901eb9377a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-23_Pass2-Explore-multiple-locations-return.png",
+      "bytes": 261054,
+      "sha256": "cb29f5810f6e62ec99a4f1b0d4101ea4ef4b59782992b0e26fbaa8d0a1822ccb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-24_Pass2-Explore-person-before-proof.png",
+      "bytes": 297583,
+      "sha256": "512879849f6a3a5676633eb9c30ebfaf7eec6de86c84834828c5253c9e5b7005"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-25_Pass2-Explore-person-supporting-proof.png",
+      "bytes": 148663,
+      "sha256": "99d2c762cc8267f829835423f3a87d112f292143bdd4f60373137acf7abecad8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-26_Pass2-Explore-person-proof-events.png",
+      "bytes": 158498,
+      "sha256": "4ffdb6beac24a9f7832aae68bc38445a889fb376664098ba5a0e4a462cbeb12d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-27_Pass2-Explore-person-proof-event-selected.png",
+      "bytes": 183368,
+      "sha256": "14f77a3b39194e6713de9be811a7fd859c6e6e4e9d77df14775e237426807c85"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-28_Pass2-Explore-person-proof-final-event.png",
+      "bytes": 154648,
+      "sha256": "627828ff3d096e655fc640acefefbfc6e8f878287324a597810b09ea7fb28d41"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-29_Pass2-Explore-person-proof-return.png",
+      "bytes": 158784,
+      "sha256": "0e0bdbe2430152e49545e1101683b93373d723940bde86627420c337421bd53c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-30_Pass2-Explore-cluster-before-proof.png",
+      "bytes": 312245,
+      "sha256": "31650c9af568d17e7873a1d94056f291fa9c9a40593cdbb3bea3aebcb8985a81"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-31_Pass2-Explore-cluster-supporting-proof.png",
+      "bytes": 171803,
+      "sha256": "f44c01e32860139bc78ba06e7a538829bb80f8131b4544971f922f5c8d728c47"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-32_Pass2-Dense-explore-first-page.png",
+      "bytes": 298630,
+      "sha256": "d1be73580f75f08dd58e06ca08c469fc840a17b63e843d09b50dc4db13b245a2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-12/UX-12_J19_Step-33_Pass2-Dense-explore-second-page.png",
+      "bytes": 279561,
+      "sha256": "013a69ef314301f604725dd42e9fa56a27ec5195c0d85630dccfdea9c07c0fc4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-01_License-runtime-status.png",
+      "bytes": 337135,
+      "sha256": "8f6314f1648936d9cd241819ca085a450b0338b95f917560bf7a808ba5a2e6af"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-02_Machine-accounts.png",
+      "bytes": 348017,
+      "sha256": "0153455852585768076fa747657de95a190c7286fb5c2844debc026572cd3ce3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-03_Create-account-empty.png",
+      "bytes": 129460,
+      "sha256": "bd43ac4a095fb89fdedf8b001ca767cb19d194c54186fada2acd9e253126bfca"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-04_Role-catalog.png",
+      "bytes": 130877,
+      "sha256": "cbd71ad3230a4d32d757ce87cfedfacdb7923ae1543bb3665810e475d10cb241"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-05_Viewer-account-created.png",
+      "bytes": 336677,
+      "sha256": "e445854dec811ceda98e8f587617763cfd34cd83f5f98320191f53116a75a990"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-07_All-five-roles-created.png",
+      "bytes": 272188,
+      "sha256": "05f2a7be8e2169f56d2d44ee0be424e86a556bf2fc73764c195a54369308deaa"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-08_Manage-account-dialog.png",
+      "bytes": 162291,
+      "sha256": "0c607a12691bf07146b8c0abe149bddbd9fa55955e3a3f069aecc18564376a63"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-09_Pass2-Pass2-add-account-empty.png",
+      "bytes": 152133,
+      "sha256": "0c949ce89aa7066c66f8aef8c0531badd9fbcf7aabb2d4b15fb8c317f0262746"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-11_Pass2-Pass2-account-created.png",
+      "bytes": 317158,
+      "sha256": "5fd3511e4a3cd3d4e5b8dd3e827335476cdec57aa87ac27d8f5deed7d2552da4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-12_Pass2-Manage-new-account.png",
+      "bytes": 166783,
+      "sha256": "b73db6c348f87b08cc19a7601f2f7b7aa40cb37a7de596c51e0f779721eb9c82"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-13_Pass2-Account-display-name-saved.png",
+      "bytes": 316854,
+      "sha256": "8a4a5152fa5f0c1101c1754157027318e0b6bebe03746f86596fc51bfe64a77b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-15_Pass2-Disposable-account-disabled.png",
+      "bytes": 316984,
+      "sha256": "2e02f0225bb229f48265e0fad173fa56b746545fa2d5eeb6e5f2ba50bb7fe03a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-17_Pass2-Current-admin-manage-self.png",
+      "bytes": 153217,
+      "sha256": "b911f00c46bf732f022855b86663d45aa9de75776abd097bd06c70440e447235"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-18_Pass2-Self-disable-proposal.png",
+      "bytes": 153309,
+      "sha256": "7282d500d4285a0ae7d0c44a65bd64f3fa755ba367e0e2a441e9f811b537d6a6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-19_Pass2-Self-disable-response.png",
+      "bytes": 160096,
+      "sha256": "3d6d86547e01da71d5b97215cc748fd54d8533b25999f41a3c70c66b8be9b07e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J20_Step-20_Pass2-Admin-remains-enabled-after-refusal.png",
+      "bytes": 270025,
+      "sha256": "1b6ecdd778c8c32d7302292e731ed1eb3604bb7a8bdac735b3fa264346e98989"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J21_Step-01_Integrity-unrequested.png",
+      "bytes": 312759,
+      "sha256": "752be6c595f4360d7237df6d96a6868ab48d4f5ebde36476abd707caae762b28"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J21_Step-02_Integrity-passed.png",
+      "bytes": 314945,
+      "sha256": "e7d461c51b8460020d3aad49f0bfb4952f5fed1a89f9a9d0139a11d7e4f92ba9"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J21_Step-03_Merge-history-empty.png",
+      "bytes": 315349,
+      "sha256": "ff94bbb56a27e7df925a9300934020dab33289652491445bc3ec05545a4d86d2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J21_Step-04_Pass2-Integrity-start-post-corrections.png",
+      "bytes": 347301,
+      "sha256": "42b3c4b4a121005c0487bf6ae836d2211c14385935e8be17ddc6c2c19affdfcd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J21_Step-05_Pass2-Integrity-passes-after-corrections.png",
+      "bytes": 351177,
+      "sha256": "210f566d6b25963529de4a4d9ec1c056926946aa3baee4a57abdd5c8910428b2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-01_Quick-backup-confirm.png",
+      "bytes": 143450,
+      "sha256": "64ee22576fe5b9c2af7d301af01b67313ec4dbb30a355a9ed4652e98c98b8165"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-02_Backups-populated.png",
+      "bytes": 304569,
+      "sha256": "a3770491403d4ac6a74ced3464c05b2c1abb63e89d8724e7c308c1bbb1df7baa"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-03_New-backup-created.png",
+      "bytes": 320867,
+      "sha256": "eaee65dd3a74384eaff299aa4950da9bb7a35f84fc2aa6c6b62f60690fcb81bc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-04_Export-passphrase-dialog.png",
+      "bytes": 171796,
+      "sha256": "659390caefa5146070827a83c98ad646ae1fc626d71680e6ab95ec710336a46c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-06_Encrypted-export-completed.png",
+      "bytes": 319177,
+      "sha256": "fe679ac59f6236317ba967f0186b44366b416edadc3500e999683c727d4f38b0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-07_Import-unlock-dialog.png",
+      "bytes": 164507,
+      "sha256": "6de28f769838b268ad8734e5e01dda20f2ae82953ef1ab480ce5fc0320f201b4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-09_Import-retry-result.png",
+      "bytes": 370386,
+      "sha256": "59376cbdb9c637cfcf068b567f3bf0f11d4fec5e8ad8c4e8ca64a11aa982fd7f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-10_Restore-confirmation.png",
+      "bytes": 211742,
+      "sha256": "a141a58313d93d8b79fd4fb84b00d9710d237959887df6d16386f0a3d5fe0f1b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-11_Restore-result.png",
+      "bytes": 347589,
+      "sha256": "7b0bbb79ea93410b4797dc8e8b57e0f5b3144dd3078a740a4fc9a47534b881d5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-12_Pass2-New-disposable-backup-created.png",
+      "bytes": 382175,
+      "sha256": "dd219b48ccfbd8b11d2103fb49c92fea27afab7e2145f67dc249427c463758f5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-13_Pass2-Backup-delete-mismatch-refused.png",
+      "bytes": 387762,
+      "sha256": "e55f6eaadaa2806e9b2555fbc1c0964c565034497930be027c290a802a82a2aa"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-14_Pass2-Disposable-backup-deleted.png",
+      "bytes": 383634,
+      "sha256": "50bcf66d308f1a853435bc71075824c7ae15c1bea32635f2f495c774a3861597"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-15_Pass2-Backup-invalid-extension.png",
+      "bytes": 386857,
+      "sha256": "8b7f3746909ae4c52340d9429f324324d2857dd47e81e0d4d2e3bd26ee809922"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-16_Pass2-Malformed-backup-unlock-open.png",
+      "bytes": 198120,
+      "sha256": "6fb2c511f0e7ba2812c4c62baf84b96c98edd41eccd8094702286a38e82c76f7"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-17_Pass2-Backup-import-cancelled.png",
+      "bytes": 382548,
+      "sha256": "2d155854ddef37900d5e8519b10bab6be6e8c5e1ce09c379d9f25f57cb91479d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-18_Pass2-Malformed-backup-refused.png",
+      "bytes": 389598,
+      "sha256": "ea78d9abbc7d034aea5feca744622ff74a0ffcf6a349f4c161e9e5e58b3db0a6"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-20_Pass2-Recovery-authority-no-backups.png",
+      "bytes": 289586,
+      "sha256": "7c092baf773354ef50d9a5b4ea90a6356e44673bc10651ba48b1522d72babfad"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-21_Pass2-Recovery-authority-first-backup-ready.png",
+      "bytes": 303980,
+      "sha256": "3f942e2a1f4743982af8697b098ebaab1815f15352b960e3c531027d9f522905"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-24_Pass2-Recovery-authority-create-immediate-private.png",
+      "bytes": 302945,
+      "sha256": "549f87aaf1b1999d1d11c1adc6a23a56e7046a00adc2f7afbde7fe5050cc28c2"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J22_Step-25_Pass2-Recovery-authority-second-backup-ready.png",
+      "bytes": 316612,
+      "sha256": "80cfc26c9e80fcd1d53a0fb8696d7cbc2f371a6b22244a7887a5e001d8cf1f86"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J23_Step-04_Log-search-empty.png",
+      "bytes": 297335,
+      "sha256": "9d41645eca7a2b6b05c9196fb0b604eccacd7844f21d2ed9defe795727220e1e"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J23_Step-05_Log-cleared-view.png",
+      "bytes": 297415,
+      "sha256": "0075428dbcd4a9dfe1fc3bc398da5ceaf998fe4671976a4628a329b15fe6562f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J23_Step-06_About-support.png",
+      "bytes": 337828,
+      "sha256": "a5a8163e8cbea949cd7baf8d28b10da546246b8f1a6924656f87edce825d0f95"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J23_Step-07_Support-export-feedback.png",
+      "bytes": 340643,
+      "sha256": "7245bf6e95e2af10929f9c5fa229f996b0ee9d931a1e840bcc2c1eca2c585225"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J24_Step-14_custodian-settings.png",
+      "bytes": 283754,
+      "sha256": "49b76f7586ea62c5d83cb2d3c55011b33d5d1ad5aa0a5cdd9d0edf4aae6192b3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J24_Step-15_custodian-backup-actions.png",
+      "bytes": 322163,
+      "sha256": "6926215e17c627a461205e12e73f9493a06b90d5214051ef2035840da9936d9d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J24_Step-19_technician-settings.png",
+      "bytes": 283717,
+      "sha256": "0cdd44b67eaad9b0628b54fcc5a8223e8bcba970bad20092045c3fa8b13c607a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J24_Step-20_technician-backup-actions.png",
+      "bytes": 321140,
+      "sha256": "c4298298a506167910215fe0e075a9348b072c853956a4132116392a023a5c91"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J24_Step-34_Pass2-Safety-warning-opens-license-settings.png",
+      "bytes": 338194,
+      "sha256": "2dc062ae27506519f9159cc45ccac16bba4d6f8612664daa688964d3b4c95864"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J24_Step-35_Pass2-Manual-navigation-to-backups.png",
+      "bytes": 389980,
+      "sha256": "f9a69dd371c442a14ef5dd46ce1406ac45b873c7e5d74e4e998763ce30fbf633"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J26_Step-06_1366x768-light-Settings.png",
+      "bytes": 294652,
+      "sha256": "a67897de962b0148b3111ad0f900b9f637b4a90383b8971002cc3d970eae7bfc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J26_Step-12_1280x800-dark-Settings.png",
+      "bytes": 261607,
+      "sha256": "5479d3872a1229364b7076bc281275409bd50bca1cd10cfc3afaecc0a46b871b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J26_Step-20_900x700-dark-Settings.png",
+      "bytes": 207440,
+      "sha256": "fd1414a589829bd6f48450ed131f1e2592c41bcbbd389c2307ea8827765e753b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J26_Step-26_1440x900-dark-Settings.png",
+      "bytes": 293879,
+      "sha256": "70434cb769f4824c3045b3e2dfc357b6903194e71797e8e19e166ae9930ba429"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-04_Merge-revert-history.png",
+      "bytes": 349701,
+      "sha256": "bb96e212e9fcde132e493ae0ca253d5355578b0826a8a1632b76fb4460b5b8c0"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-05_Revert-eligibility-result.png",
+      "bytes": 349093,
+      "sha256": "a336c8846bc3670662fde9c8ddb725c7cd02ec83a99f3c6f71aedd331d957bab"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-11_Pass2-Fresh-merge-history.png",
+      "bytes": 342272,
+      "sha256": "96c8076135365a6b472f6d1f0f100e0bb1f91c406630741a2e22c5218d268910"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-12_Pass2-Fresh-merge-revert-refused.png",
+      "bytes": 341920,
+      "sha256": "5a8dad5bec42421993f873b59922deb54c85a795b54f256053266a6ed10219b5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-20_Pass2-Fresh-merge-refusal-visible.png",
+      "bytes": 343398,
+      "sha256": "987d0af09ba7e02caed8dbc9549f7fe5934dd7d33967753ddaa0bcdf2e0d770b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-31_Pass2-Safe-revert-history-committed.png",
+      "bytes": 330482,
+      "sha256": "23b823d18664fd5aeb178c5ce85cb54c169781afec678375af5d7dea1a6d918d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-32_Pass2-Safe-revert-eligibility-result.png",
+      "bytes": 338205,
+      "sha256": "062ea7b20293f212abc6d71d972191c34bbb3f0795e4eaf0991807ec65a85706"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-39_Pass2-Safe-revert-matched-merge-history.png",
+      "bytes": 294450,
+      "sha256": "b4cb314cc953934f620a186e5e8b8e71fac90b27e70e8caf4c4a0f1bb8835bae"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-40_Pass2-Safe-revert-matched-eligibility.png",
+      "bytes": 194005,
+      "sha256": "b9338a2d042beab158eac030edadadca04e6db3f75808319b258c14eed2e84c8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-41_Pass2-Safe-revert-invalid-confirmation.png",
+      "bytes": 197691,
+      "sha256": "9e75c94ba4fc5576cdf295fcf99717e68ceb96c6a0ff261fd30ef3ec1cd43dfc"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-42_Pass2-Safe-revert-plan-canceled.png",
+      "bytes": 294149,
+      "sha256": "a5520e29634f8f2042908b9f6c4822bd7b2229123b98b606fe3e4f0ce0c9fe37"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-43_Pass2-Safe-revert-ready-to-execute.png",
+      "bytes": 197438,
+      "sha256": "6a8b1b6d6d45ea553c8e6a56c17eabcd4de2106f7b3ba359109b106c75cd8520"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-44_Pass2-Safe-revert-execution-result.png",
+      "bytes": 309343,
+      "sha256": "8df3fb179001f306596c660e0cc091c1a5a52ea76904f099e5536bbc29a53cf4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-45_Pass2-Safe-revert-refreshed-history.png",
+      "bytes": 302967,
+      "sha256": "e9364ed37ca93102759ac55d0c516fbb12d2e80ef0a2d70c391015b4fd03757d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J27_Step-47_Pass2-Safe-revert-repeat-refusal.png",
+      "bytes": 307723,
+      "sha256": "d7b33a295ad9fe773c48870279bbfd77f73f483af99e306f375c75008dae6d63"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J28_Step-03_Pass2-Guarded-merge-history-loaded.png",
+      "bytes": 347696,
+      "sha256": "887056d26206408b47d878804b7ab275e9fab3b79f2ed33238492049002b5a1b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J28_Step-04_Pass2-Existing-merge-revert-refused.png",
+      "bytes": 340090,
+      "sha256": "1719cfe916fc38f14ace4c187616ef1e1379969b224acada29dfdc8780967fdb"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J40_Step-07_Native-full-window-Settings.png",
+      "bytes": 315425,
+      "sha256": "41866c466bfd8b0ed4de08608b7232b86cbcb2ebd1de4e4a2991f6ffd0935c9b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-01_Settings-landing.png",
+      "bytes": 345715,
+      "sha256": "5944eebe68174c4e99eb50aab1adb01bd7ce4159c9921145bb47315b8de46a99"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-02_Backups-before-create.png",
+      "bytes": 301049,
+      "sha256": "a89f626e11e8a473be142f340272e156f25d1f799c6e7cf44f0effbf5a77fc64"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-03_Backup-creating.png",
+      "bytes": 297201,
+      "sha256": "20bf8c4a98a6b66723a00185d095aa194e97e8664763fcb9688c67013d34b29c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-04_Backup-created.png",
+      "bytes": 297201,
+      "sha256": "20bf8c4a98a6b66723a00185d095aa194e97e8664763fcb9688c67013d34b29c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-05_Import-corrupt-plain.png",
+      "bytes": 297670,
+      "sha256": "4e411b74a116f4d078437efc3a1450f87a2862da891c46107cf9ba664741e302"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-06_Import-encrypted-passphrase-dialog.png",
+      "bytes": 144765,
+      "sha256": "cb2a9b018c7cfab2e6dc3d128afb74d747430347acd41a580d9538513d09c8b1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-07_Import-corrupt-encrypted-result.png",
+      "bytes": 303056,
+      "sha256": "7cdef99c203556eb146b2cec54a333e37a9f247616b0cad2a2d5e444a5162c8d"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-08_Restore-confirmation.png",
+      "bytes": 167644,
+      "sha256": "793c06f2b54026393df2151f0280ee432e54d095a8d932b2ff9f1f83088aef36"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-09_Restore-in-progress.png",
+      "bytes": 367635,
+      "sha256": "521d370d629328b2982c96c1633c2039a6ea829207dd5ea6cb24203da0563694"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-10_Restore-completed.png",
+      "bytes": 357760,
+      "sha256": "821db3e43010875ce4ba8432b84ba89559c2a42f1be09f3cf6fe1f5b39ca11ee"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-11_Backups-after-restore.png",
+      "bytes": 332038,
+      "sha256": "c8803f225554e37a2f5d297e6f3dbf81c85f4189e96648295aea3264e76dde5b"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-12_Export-passphrase-dialog.png",
+      "bytes": 176850,
+      "sha256": "194388ca5885d8fed8b231b7d0a4f8bc6a00bf0e2f3a1b2f2cb084e291346b46"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-14_Import-valid-wrong-passphrase.png",
+      "bytes": 348778,
+      "sha256": "f4b450a0f49334de5c902a81609126edaa99130c44a0f90358143f66df5c3d8f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-15_Import-valid-right-passphrase.png",
+      "bytes": 350811,
+      "sha256": "4f84c23efe28dbf53e882b6ac8d35cf25e9cbcab725a9ff6a1ccd6796ac7870a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J45_Step-16_Import-same-file-again.png",
+      "bytes": 364569,
+      "sha256": "3edfed8f9f1b75369b24724ba03d69685dac4b0bbcb94fedd8891ea944ef12f5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-01_User-accounts.png",
+      "bytes": 355661,
+      "sha256": "6b49514519a868913a245d071f7ddac66b764fef4d96b0ac871bf7ad34c75782"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-02_Role-options.png",
+      "bytes": 147093,
+      "sha256": "dec2cf413ad86eb0024ed35aa71f21f64d1edb3df011c6334660a4fee2552b37"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-04_Accounts-created.png",
+      "bytes": 324832,
+      "sha256": "fbc4913bf62a6d823a3fc93534624d4d1c349ff9fe318b969a698e8d68f372cd"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-19_Technician-settings.png",
+      "bytes": 337890,
+      "sha256": "589bcbe26e9c070fcacd604c709d35d4d14cbaafda7a85f61d1750b2dc2b7c90"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-20_Technician-back-up-now.png",
+      "bytes": 131378,
+      "sha256": "1967cda021d94a590ecffa178c53dcc4141eda27a5f5997ae0a4746eb14f974c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-21_Technician-backups.png",
+      "bytes": 358937,
+      "sha256": "e237d912f934becb15fa1fa1a31acda088b3a03e8cdcbcb9a450be1111713f22"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-22_Technician-activity-log.png",
+      "bytes": 379523,
+      "sha256": "472448b83a8f9e8d4dd5da3a3d4b56201866d1b4262c4dfec93117db989d861a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J47_Step-23_Technician-restore-disabled-hover.png",
+      "bytes": 357744,
+      "sha256": "09cab5364d7559402f3866b628c4afbed5cbb4c47803f098c63c055bdc4b5265"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-02_Accounts-list.png",
+      "bytes": 301791,
+      "sha256": "8fd2f1c6b5e573fc59835e5627aa49a62426c169922c30acaef6e36b204b9181"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-03_Manage-viewer.png",
+      "bytes": 159074,
+      "sha256": "6a95ebd3446bc02c5d3deb7604c6abc61ea5505045c69862b23f65ff36d69180"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-04_Disable-toggled.png",
+      "bytes": 159178,
+      "sha256": "338dde472dabdc009d46ff314fe3ce87c04531878fd80853552e8a544e5167a1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-05_Viewer-disabled.png",
+      "bytes": 261467,
+      "sha256": "1834487d279fd0aea27b198624ef979b10e49c87d342ad35bdbf7cc84cace50a"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-06_Operator-role-change-pending.png",
+      "bytes": 159658,
+      "sha256": "2ba540946c5adf883e3e3354f31431f0acfc952e5e9dcb573ab07bc786cbb5d8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-13/UX-13_J51_Step-08_Admin-password-reset-done.png",
+      "bytes": 163205,
+      "sha256": "ce88ee715807c8dc2e4dcbd0f643b3aff9520a4777fd7779c72a12194c82508c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-14/UX-14_J18_Step-10_Nested-media-preview.png",
+      "bytes": 546195,
+      "sha256": "b602398df7975ac14e7da72247f9ab672f1ced865d49c16371417c91b0ab6c67"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-14/UX-14_J25_Step-04_Drawer-keyboard-focus.png",
+      "bytes": 261990,
+      "sha256": "cb76e0e1c55386b4329c28df4998972c9f3eb663c134e723b8c3df0ba7e55ae4"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-14/UX-14_J25_Step-05_Drawer-escape-return.png",
+      "bytes": 407384,
+      "sha256": "6431bf890641353c53f53a468fcc9e9a583edc8a5adf29f6e0356c70e4cdd6f8"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-14/UX-14_J25_Step-06_Refresh-tooltip.png",
+      "bytes": 409154,
+      "sha256": "d3a76485e26fbda36ea4de95fb8de160db2e60c1a8574f6e5b088fbba2c0dd2f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-14/UX-14_J29_Step-16_Pass2-No-photo-note-create-error-boundary.png",
+      "bytes": 519644,
+      "sha256": "47656e677c117f0e7f2f90efd06e22fcfaeebf4bf318eed6d28aeb5c252bb9df"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-14/UX-14_J29_Step-22_Pass2-No-photo-note-create-error-repeated.png",
+      "bytes": 279330,
+      "sha256": "8420f15d60713393714cf3fe66a322ab58fc74810a0d40b81a67671f328da926"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J15_Step-01_Person-to-global-event.png",
+      "bytes": 817744,
+      "sha256": "c133e8f422e6b6af08d4f3c76b42405513ef502ae3ea46b886f197b2b2a87600"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-01_Attach-to-review-target.png",
+      "bytes": 453976,
+      "sha256": "c6f9787bcafc309dbd4b3e7ca62708a3d810f0cd58270b7caf1ec9df954dce52"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-09_Pass2-Failed-attachment-targeted-draft.png",
+      "bytes": 379090,
+      "sha256": "f97ca77fd254747a08c7423bab8e1ce723cbf8dc07a0546f3ba5717a6fbec3b3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-10_Pass2-Retry-duplicate-still-refused.png",
+      "bytes": 380650,
+      "sha256": "264431e05561a11993fae342a39a342c558e72a6199bccbe124f6a791b4ac9ca"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-11_Pass2-Failed-attachment-survives-reload.png",
+      "bytes": 380611,
+      "sha256": "ebf47c98a13e8dd1075d7d9a12596135d3eec8dd7f4f824569ff9cbb99e264c5"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-12_Pass2-Cancel-failed-attachment-empty-queue.png",
+      "bytes": 413625,
+      "sha256": "d80bd5add2f7e4af942708b7038a35be4261ee6942c7bac149f24a4c4cf56c18"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-16_Pass2-Reference-refusal-retains-targeted-draft.png",
+      "bytes": 379230,
+      "sha256": "17d4bf02d32f0cf0e5c3f0ccedce9d53482a8fac10a5fd3c9b69a8714cf1424f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-17_Pass2-Reference-retry-refused.png",
+      "bytes": 409552,
+      "sha256": "298f0abe31b76b3527d269de5dca3d465fed84b88576a016a196837153dceab1"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-20_Pass2-Reference-second-attempt-targeted.png",
+      "bytes": 390759,
+      "sha256": "c5a497d49bd1c4a218cdfb28ea0a30ae22a077ca971af2364ef195fcda02940c"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-21_Pass2-Reference-target-survives-before-retry.png",
+      "bytes": 381160,
+      "sha256": "29fc1da0fee239331cbb4b3b4fa237e15fe03996a9dd6d1c80cd0e1b98cf5a58"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-25_Pass2-Stale-attachment-active-draft.png",
+      "bytes": 454417,
+      "sha256": "8879ddb46eae17d00a325e75231407732a5f719c904ca133fccc2435d1d6fb5f"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J17_Step-28_Pass2-Active-attachment-discard-confirm.png",
+      "bytes": 163871,
+      "sha256": "1d59381d31ef1b6b216b912a18490a9793b27c4b529cbc4c65479b2521674ac3"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J18_Step-11_Proof-source-Encounter.png",
+      "bytes": 169770,
+      "sha256": "4677977e0a780a41b6a6506d38fc697529ce1a1696b6a1b1415ab3b0a3ea1396"
+    },
+    {
+      "path": "audit-results/issue-6/screenshots/UX-15/UX-15_J19_Step-14_World-hierarchy-return.png",
+      "bytes": 409976,
+      "sha256": "3053386e398558fefb73624109fe05b423dd92043da35d8fcaa414e45801c283"
+    },
+    {
+      "path": "audit-results/issue-6/semantic-summary.json",
+      "bytes": 2742,
+      "sha256": "5d251628bd8b8976a2e29060ff22d10a3c4bf7b1dd480ab0ad1cfddf5eb637ca"
+    },
+    {
+      "path": "audit-results/issue-6/source-branches.csv",
+      "bytes": 211989,
+      "sha256": "799719e033b0dbe3c5402c43655a3a91ffb04c768288b963269179b951119f85"
+    },
+    {
+      "path": "audit-results/issue-6/source-inventory.csv",
+      "bytes": 486918,
+      "sha256": "840c4d13b7314b7620d595d50a07dd9edb42d46efac6ceded916c13f96d2d16d"
+    },
+    {
+      "path": "audit-results/issue-6/source-journeys.csv",
+      "bytes": 73226,
+      "sha256": "17c295bada9c16c5ef6337035d1188245376d02a0b58f51b16fdafeadca38ae2"
+    },
+    {
+      "path": "audit-results/issue-6/source-map.md",
+      "bytes": 18594,
+      "sha256": "fde39421a6cdef6fdbea06aef9e223cdeaae3ce06f0e2f275a18c7913cf091b4"
+    },
+    {
+      "path": "audit-results/issue-6/source-risk-review.md",
+      "bytes": 15135,
+      "sha256": "7adf4daed9d185b1fe2b2720a2030aebafe425e863c38fb572d2875ba24afa47"
+    },
+    {
+      "path": "audit-results/issue-6/surface-register.csv",
+      "bytes": 6529,
+      "sha256": "2a54eb335c660006a99657f30e071f076a330a483ea9412272fe3d4f09704688"
+    },
+    {
+      "path": "audit-results/issue-6/task-coverage.csv",
+      "bytes": 74028,
+      "sha256": "1c2c0baa02b8dd243cbdecbc83c8cea76031c41dc3314a85cec848ce1a529560"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/capture_host.py",
+      "bytes": 3742,
+      "sha256": "2e7e3c98237d4b60950daecad15a02f85860549632dd13908c61a30654e226b3"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/dense_fixture.py",
+      "bytes": 2180,
+      "sha256": "155786a720166fe8b7f589d800b0d1b00b57c1d5bd1fddb80770955c46e35e34"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/finalize_library.py",
+      "bytes": 6996,
+      "sha256": "b050f53d09fe8186288d9fc8f36170ef159ae6d2784ab0d6221ebbc6ade14f44"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/genuine_supplement.py",
+      "bytes": 3368,
+      "sha256": "b7692477c8fb7184749cc5e088b5afac11b271f3d6366dbaa14f296d264be270"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/multiface_server.py",
+      "bytes": 1750,
+      "sha256": "11a2c88a3ad9d3e30c76429618604429d119d5e39d7e58d1252592097915d988"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/pass3_promote.py",
+      "bytes": 4475,
+      "sha256": "d66e6452d70883c5281f5d5819d4f110a44743ba2e5980eefcd011dcea0f8ba3"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/pass3_seal.py",
+      "bytes": 2913,
+      "sha256": "3db70d58e41fef3287f28bc50e23a8e77ee96cb50c810f59e735333eaff45a45"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/reconcile.py",
+      "bytes": 13696,
+      "sha256": "ce0259bf3a340ea38e39b3bc742d5af74e6f60f7002680510eed906633db232d"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/role_sweep.py",
+      "bytes": 2698,
+      "sha256": "7d482276c92c88d9c37975620d2120e2e6938718d00fdc7a402145decf1932c3"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/seal_library.py",
+      "bytes": 9143,
+      "sha256": "c6fe6a64450d0f7717ac88d64e2df70511afd768c9da12500c3860b2354027f3"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/test_reconcile.py",
+      "bytes": 6356,
+      "sha256": "409a7f964fef82982e1bcaa9b2a8dca184f6c669a855314664fe9a43fb552702"
+    },
+    {
+      "path": "audit-results/issue-6/tooling/viewport_sweep.py",
+      "bytes": 1425,
+      "sha256": "76580d2a9c866ed01e43c274bb6c4a5f01895704b0419e7aa4c1940bc04b769e"
+    },
+    {
+      "path": "docs/UI_UX_DESIGN.md",
+      "bytes": 24618,
+      "sha256": "0a7601acebd1f7b8cbeb2d00377d34d2888893d29aa574c9bdd7a730e2c9f30e"
+    }
+  ],
+  "hash_scope": "SHA-256 over unchanged file bytes; excludes manifest itself, its checksum and Python cache. Evidence commit and archive verification are external receipts to avoid circular identifiers.",
+  "privacy": "Public synthetic originals and explicitly marked sanitized derivatives only. Private untouched originals stay outside Git. No credentials, snapshots, databases, exports, models or raw logs included.",
+  "pass3": {
+    "source_sha": "677bb61e8e9d659db95123871bb2e011cf663a79",
+    "branch": "v2-hardening-followups",
+    "environment": "Linux (Ubuntu VM), headless Chromium via Playwright, 1440x900 CSS, DPR 1, light theme, dev synthetic source authority; audit-only multi-face seam for J42-J44",
+    "journeys": [
+      "J42",
+      "J43",
+      "J44",
+      "J45",
+      "J46",
+      "J47",
+      "J48",
+      "J49",
+      "J50",
+      "J51",
+      "J52"
+    ],
+    "public_images": 113,
+    "private_only": 9
+  }
+}

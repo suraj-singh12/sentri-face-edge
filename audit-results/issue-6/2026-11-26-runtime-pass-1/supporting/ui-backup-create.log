@@ -1,0 +1,51 @@
+ERROR create backup action Locator.click: Error: strict mode violation: get_by_role("button", name="Create backup") resolved to 2 elements:
+    1) <button type="button" data-variant="subtle" aria-label="Crea
+ERROR backups restore section Locator.click: Timeout 1500ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name="Backups & restore")
+    - locator resolved to <button type="button" justify="flex-star
+SentriFace Edge
+
+Demo mode · Test results only
+
+AO
+
+Audit Owner
+
+Administrator
+
+Your safety copy needs attention — Your latest external backup is not available. The owner can check it under Settings.
+Settings
+You have changes since your last backup — Back up now so a recent copy of your people, photos and events is safe.
+Back up now
+Demo mode is active — Results are simulated for testing and are not real face matches.
+Check a photo
+Review photos
+People
+Events
+World
+Settings
+
+SETTINGS
+
+License & activation
+Backups & restore
+User accounts
+Integrity & recovery
+System details
+Activity log
+About & support
+License & activation
+
+Verification happens locally. SentriFace does not contact an activation service.
+
+NOT ENFORCED IN THIS RUNTIME
+Licensing is not enforced in this source runtime
+
+Create a backup?
+
+Saves all people, photos and face data, then checks the backup is complete.
+
+Cancel
+Create backup
+buttons ['Settings', 'Back up now', 'Check a photo', 'Review photos', 'People', 'Events', 'World', 'Settings', 'License & activation', 'Backups & restore', 'User accounts', 'Integrity & recovery', 'System details', 'Activity log', 'About & support']

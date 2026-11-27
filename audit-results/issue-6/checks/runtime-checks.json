@@ -1,0 +1,30 @@
+[
+  {
+    "check": "Two UI-finalized Encounters",
+    "actual": 2,
+    "expected": 2,
+    "result": "PASS",
+    "at": "2026-11-10T08:27:04.133229+00:00"
+  },
+  {
+    "check": "Draft Beta committed only after review complete",
+    "actual": 2,
+    "expected": 2,
+    "result": "PASS",
+    "at": "2026-11-10T08:27:04.172697+00:00"
+  },
+  {
+    "check": "Attach preserves Encounter count",
+    "actual": 2,
+    "expected": 2,
+    "result": "PASS",
+    "at": "2026-11-10T08:34:27.661542+00:00"
+  },
+  {
+    "check": "Escape closes media and retains proof",
+    "actual": 1,
+    "expected": 1,
+    "result": "PASS",
+    "at": "2026-11-10T08:35:50.115162+00:00"
+  }
+]

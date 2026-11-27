@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+<image href="current.png" x="0" y="0" width="1440" height="900"/>
+<rect x="950" y="150" width="113" height="45" rx="0" fill="#f5fafc" stroke="none" stroke-width="1" opacity="1"/>
+<rect x="420" y="375" width="118" height="31" rx="0" fill="#ffffff" stroke="none" stroke-width="1" opacity="1"/>
+<text x="438" y="396" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="700" fill="#303945" text-anchor="start" >Event history</text>
+<rect x="1165" y="135" width="265" height="244" rx="8" fill="#ffffff" stroke="#dde4ea" stroke-width="1" opacity="1"/>
+<text x="1190" y="169" font-family="Liberation Sans, Arial, sans-serif" font-size="13" font-weight="400" fill="#20242a" text-anchor="start" >Copy ID</text>
+<text x="1190" y="205" font-family="Liberation Sans, Arial, sans-serif" font-size="13" font-weight="400" fill="#20242a" text-anchor="start" >Merge into another person</text>
+<line x1="1180" y1="226" x2="1405" y2="226" stroke="#e4e9ee" stroke-width="1"/>
+<text x="1190" y="253" font-family="Liberation Sans, Arial, sans-serif" font-size="13" font-weight="400" fill="#d9480f" text-anchor="start" >Archive person</text>
+<line x1="1180" y1="274" x2="1405" y2="274" stroke="#e4e9ee" stroke-width="1"/>
+<text x="1190" y="301" font-family="Liberation Sans, Arial, sans-serif" font-size="13" font-weight="400" fill="#d6336c" text-anchor="start" >Delete Person…</text>
+</svg>

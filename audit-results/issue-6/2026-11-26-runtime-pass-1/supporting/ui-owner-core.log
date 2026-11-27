@@ -1,0 +1,59 @@
+OK screenshot 20-owner-populated/people-list
+OK nav People 
+OK screenshot 20-owner-populated/events-list
+OK nav Events 
+OK screenshot 20-owner-populated/world-explore
+OK nav World 
+OK screenshot 20-owner-populated/review-home
+OK nav Review photos 
+OK screenshot 20-owner-populated/check-home
+OK nav Check a photo 
+OK screenshot 20-owner-populated/settings-home
+OK nav Settings 
+OK nav World 
+ERROR world connections Locator.click: Timeout 2000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name="Connections")
+
+OK nav People 
+OK screenshot 21-owner-bilal/profile-overview
+VERIFIED bilal profile opened SentriFace Edge  Demo mode · Test results only  AO  Audit Owner  Administrator  Your safety copy nee
+OK screenshot 21-owner-bilal/long-note-expanded
+OK click Read full note 
+VERIFIED F05 long note expanded state
+ERROR bilal Photos Locator.click: Error: strict mode violation: get_by_role("tab", name=re.compile(r"Photos", re.IGNORECASE)) resolved to 2 elements:
+    1) <button role
+OK screenshot 21-owner-bilal/tab-sightings
+OK bilal Sightings 
+ERROR bilal Events Locator.click: Error: strict mode violation: get_by_role("tab", name=re.compile(r"Events", re.IGNORECASE)) resolved to 2 elements:
+    1) <button role
+OK screenshot 21-owner-bilal/tab-associations
+OK bilal Associations 
+OK screenshot 21-owner-bilal/tab-activity
+OK bilal Activity 
+OK screenshot 21-owner-bilal/edit-menu
+OK screenshot 21-owner-bilal/notes-editor-mentions
+VERIFIED F20/PR85 mention chips mention visible in editor
+ERROR click Cancel Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=re.compile(r"Cancel", re.IGNORECASE)).first
+
+OK screenshot 22-owner-graph/bilal-graph
+OK click Open Person Graph 
+OK screenshot 22-owner-graph/edge-keyboard-focus
+OK screenshot 22-owner-graph/edge-evidence-inspector
+VERIFIED F02/PR88 graph keyboard edge Enter opened inspector
+OK screenshot 23-owner-events/list
+OK nav Events 
+OK screenshot 23-owner-events/morning-detail
+OK screenshot 23-owner-events/correct-event
+OK click Correct Event 
+VERIFIED dialog Correct Event dialog visible
+OK screenshot 23-owner-events/correct-participants
+OK click Correct Participants 
+VERIFIED dialog Correct Participants dialog visible
+OK screenshot 23-owner-events/correct-relations
+OK click Correct Relations 
+VERIFIED dialog Correct Relations dialog visible
+OK screenshot 23-owner-events/attach-media-after-click
+VERIFIED attach media entry SentriFace Edge  Demo mode · Test results only  AO  Audit Owner  Administrator  Your safety copy needs attention — Your 
