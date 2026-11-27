@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+<image href="current.png" x="0" y="0" width="1440" height="900"/>
+<rect x="395" y="455" width="535" height="170" rx="10" fill="#ffffff" stroke="#dde5ea" stroke-width="1" opacity="1"/>
+<text x="662" y="493" font-family="Liberation Sans, Arial, sans-serif" font-size="17" font-weight="700" fill="#172026" text-anchor="middle" >Start with a discovery</text>
+<text x="662" y="520" font-family="Liberation Sans, Arial, sans-serif" font-size="12" font-weight="400" fill="#687180" text-anchor="middle" >Select a person or cluster to reveal its relationship graph.</text>
+<rect x="445" y="552" width="18" height="18" rx="9" fill="#c8f3df" stroke="none" stroke-width="1" opacity="1"/>
+<text x="454" y="565" font-family="Liberation Sans, Arial, sans-serif" font-size="10" font-weight="700" fill="#087f5b" text-anchor="middle" >1</text>
+<text x="471" y="566" font-family="Liberation Sans, Arial, sans-serif" font-size="11" font-weight="600" fill="#303945" text-anchor="start" >Choose a discovery</text>
+<rect x="605" y="552" width="18" height="18" rx="9" fill="#c8f3df" stroke="none" stroke-width="1" opacity="1"/>
+<text x="614" y="565" font-family="Liberation Sans, Arial, sans-serif" font-size="10" font-weight="700" fill="#087f5b" text-anchor="middle" >2</text>
+<text x="631" y="566" font-family="Liberation Sans, Arial, sans-serif" font-size="11" font-weight="600" fill="#303945" text-anchor="start" >Inspect relationships</text>
+<rect x="765" y="552" width="18" height="18" rx="9" fill="#c8f3df" stroke="none" stroke-width="1" opacity="1"/>
+<text x="774" y="565" font-family="Liberation Sans, Arial, sans-serif" font-size="10" font-weight="700" fill="#087f5b" text-anchor="middle" >3</text>
+<text x="791" y="566" font-family="Liberation Sans, Arial, sans-serif" font-size="11" font-weight="600" fill="#303945" text-anchor="start" >Open proof</text>
+<text x="662" y="602" font-family="Liberation Sans, Arial, sans-serif" font-size="10" font-weight="400" fill="#7b8490" text-anchor="middle" >Current scope stays unchanged until you select Apply.</text>
+</svg>

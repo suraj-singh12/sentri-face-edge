@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2914" height="982" viewBox="0 0 2914 982">
+<rect width="2914" height="982" fill="#eef3f5"/>
+<text x="24" y="30" font-family="Liberation Sans, Arial, sans-serif" font-size="20" font-weight="700" fill="#172026" text-anchor="start" >P02 — Photo details — separate event time from import time</text>
+<text x="24" y="52" font-family="Liberation Sans, Arial, sans-serif" font-size="11" font-weight="700" fill="#687782" text-anchor="start" >CURRENT</text>
+<text x="1498" y="52" font-family="Liberation Sans, Arial, sans-serif" font-size="11" font-weight="700" fill="#0b8f6c" text-anchor="start" >PROPOSED</text>
+<rect x="0" y="56" width="1440" height="916" fill="#ffffff"/>
+<image href="current.png" x="0" y="64" width="1440" height="900"/>
+<rect x="1474" y="56" width="1440" height="916" fill="#ffffff"/>
+<image href="proposed.png" x="1474" y="64" width="1440" height="900"/>
+</svg>

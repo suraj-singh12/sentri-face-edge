@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2530" height="1682" viewBox="0 0 2530 1682">
+<image href="current.png" x="0" y="0" width="2530" height="1682"/>
+<rect x="865" y="604" width="805" height="128" rx="0" fill="#ffffff" stroke="none" stroke-width="1" opacity="1"/>
+<rect x="866" y="1148" width="520" height="38" rx="0" fill="#ffffff" stroke="none" stroke-width="1" opacity="1"/>
+<text x="872" y="1175" font-family="Liberation Sans, Arial, sans-serif" font-size="19" font-weight="400" fill="#687180" text-anchor="start" >Use 12–256 characters.</text>
+<text x="872" y="1289" font-family="Liberation Sans, Arial, sans-serif" font-size="18" font-weight="400" fill="#d6336c" text-anchor="start" >Password must be 12–256 characters.</text>
+</svg>
