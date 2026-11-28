@@ -1009,10 +1009,13 @@ licensing/packaging are present.
 
 P10 through P13 are complete and frozen. Historical P14 unsigned Windows 11 x64
 installer lifecycle acceptance passed for an earlier artifact. The current 2.0.0
-unsigned pre-tag candidate passed source, build, inspection, and packaged runtime
-checks, but its installer and packaged model lifecycle have not run on a disposable
-Windows host. Production release acceptance also requires verified signatures
-and a clean build from exact `rc-v2.0.0` or `release-v2.0.0` tagged source.
+Commercial engineering candidate passed source, build, inspection, and packaged
+runtime checks, but its installer and packaged model lifecycle have not run on a
+disposable Windows host. Issue #5 explicitly defers executable/installer
+signing for the v2.0.0 candidates; acceptance instead requires exact-source
+unsigned Commercial/Research artifacts, lifecycle/model/data-preservation
+evidence, and separate operator publication approval. Exact release-tag policy
+and signatures remain future publication decisions.
 The detailed live status belongs in [`ARCHITECTURE_STATE.md`](ARCHITECTURE_STATE.md)
 and [`p14/P14_RELEASE_ACCEPTANCE.md`](p14/P14_RELEASE_ACCEPTANCE.md); this section
 should remain a summary rather than a second release ledger.
