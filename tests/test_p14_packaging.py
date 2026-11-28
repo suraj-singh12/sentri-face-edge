@@ -125,6 +125,7 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertIn("RemoveHiddenResearchPayload", installer)
         self.assertNotIn("[InstallDelete]", installer)
         self.assertNotIn("ssPostInstall", installer)
+        self.assertIn("'/D /C ' + Command", installer)
 
     def test_build_excludes_models_and_requires_native_runtime_components(self) -> None:
         build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")

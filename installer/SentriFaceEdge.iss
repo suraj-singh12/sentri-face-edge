@@ -137,7 +137,7 @@ var
 begin
   Result := Exec(
     ExpandConstant('{sys}\cmd.exe'),
-    '/C ' + Command,
+    '/D /C ' + Command,
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode
   ) and (ResultCode = 0);
 end;
@@ -152,10 +152,18 @@ var
   Source, Target: String;
 begin
   Result := True;
-  HiddenResearchPayload := False;
   if not IsCommercialVariant() then exit;
   Source := ExpandConstant('{app}\bundled-models');
   Target := ExpandConstant('{app}\bundled-models.previous-setup');
+  if HiddenResearchPayload then begin
+    Result := DirExists(Target) and not DirExists(Source);
+    exit;
+  end;
+  if DirExists(Target) and not DirExists(Source) then begin
+    Result := RunCommandLine('rd /s /q ' + Quoted(Target));
+    exit;
+  end;
+  HiddenResearchPayload := False;
   if not DirExists(Source) then exit;
   if DirExists(Target) and not RunCommandLine('rd /s /q ' + Quoted(Target)) then begin
     Result := False;
