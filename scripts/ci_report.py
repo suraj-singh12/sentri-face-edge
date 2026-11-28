@@ -31,6 +31,7 @@ STAGES = {
     'build': ('Frontend production build', 'unknown'),
     'assets': ('Generated frontend consistency', 'unknown'),
     'package': ('Unsigned Windows installer build', 'unknown'),
+    'installed-artifact': ('Inspect installed artifact variant', 'unknown'),
     'installer-evidence': ('Verify installer publication inputs', 'unknown'),
     'installer-upload': ('Upload validated Windows installer', 'unknown'),
 }
