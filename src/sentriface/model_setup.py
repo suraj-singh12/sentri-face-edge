@@ -301,6 +301,7 @@ def install_local_model_bundle(
         licensor=licensor,
         license_reference=license_reference,
         license_name=license_name,
+        operator_declaration=operator_declaration,
         force=force,
     )
     calibration_target = models_dir / CALIBRATION_FILENAME

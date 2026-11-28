@@ -287,3 +287,28 @@ class ModelSetupTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_model_bundle_install_retains_custom_declaration(tmp_path):
+    import hashlib
+    from sentriface.model_setup import install_local_model_bundle
+
+    detector = tmp_path / "detector-source.onnx"
+    recognizer = tmp_path / "recognizer-source.onnx"
+    detector.write_bytes(b"detector")
+    recognizer.write_bytes(b"recognizer")
+    target = tmp_path / "bundle"
+    declaration = install_local_model_bundle(
+        target,
+        detector_source=detector,
+        detector_sha256=hashlib.sha256(b"detector").hexdigest(),
+        recognizer_source=recognizer,
+        recognizer_sha256=hashlib.sha256(b"recognizer").hexdigest(),
+        calibration_profile="scrfd500m-r50-research",
+        usage_basis="noncommercial-research",
+        authorized_by="installer",
+        operator_declaration="installer-supplied research declaration",
+    )
+    assert declaration["operator_declaration"] == "installer-supplied research declaration"
+    import json
+    assert json.loads((target / "model-usage.json").read_text())["operator_declaration"] == "installer-supplied research declaration"
