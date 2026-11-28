@@ -119,4 +119,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\rehearse_windows_ins
   -ResearchInstaller .\SentriFaceEdge-2.0.0-Research-x64.exe
 ```
 
-Use `-CreateSyntheticFixture` on an empty disposable data root to generate synthetic people, embeddings, event/evidence, notes, relationships, archived/deleted records, an owner account and a backup. Alternatively populate the library separately and rerun with `-SkipInitialInstall`. Never rehearse destructive scenarios against real operator data.
+Use `-CreateSyntheticFixture` on an empty disposable data root to generate synthetic people, embeddings, event/evidence, notes, relationships, archived/deleted records, an owner account and a backup. Alternatively populate the library separately, pass its owner credentials with `-OwnerUsername` and `-OwnerPassword`, and rerun with `-SkipInitialInstall`. Never rehearse destructive scenarios against real operator data.

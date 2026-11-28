@@ -7,6 +7,8 @@ param(
     [string]$DataDir = (Join-Path $env:LOCALAPPDATA "SentriFace"),
     [string]$InstallDir = (Join-Path $env:ProgramFiles "SentriFace Edge"),
     [string]$Workspace = (Join-Path $env:TEMP "sentriface-installer-rehearsal"),
+    [string]$OwnerUsername = "fixture-owner",
+    [string]$OwnerPassword = "fixture-owner-passphrase-1",
     [switch]$SkipInitialInstall,
     [switch]$CreateSyntheticFixture
 )
@@ -72,7 +74,7 @@ function Assert-LicenseEnforcement() {
     if (-not $match.Success) { throw "Could not establish a local UI session for licensing verification" }
     $headers = @{ "X-SentriFace-Session" = $match.Groups[1].Value }
     $webSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-    $loginBody = @{ username = "fixture-owner"; password = "fixture-owner-passphrase-1" } | ConvertTo-Json
+    $loginBody = @{ username = $OwnerUsername; password = $OwnerPassword } | ConvertTo-Json
     Invoke-RestMethod -Uri "$base/api/auth/login" -Method Post -Headers $headers -WebSession $webSession -ContentType "application/json" -Body $loginBody -TimeoutSec 10 | Out-Null
     $license = Invoke-RestMethod -Uri "$base/api/license/status" -Headers $headers -WebSession $webSession -TimeoutSec 10
     if (-not $license.enforced -or $license.licensed) { throw "Packaged licensing is not enforced for an unlicensed installation" }
