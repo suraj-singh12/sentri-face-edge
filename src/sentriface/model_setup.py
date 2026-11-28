@@ -208,6 +208,7 @@ def install_local_models(
     licensor: str = "",
     license_reference: str = "",
     license_name: str = "",
+    operator_declaration: str | None = None,
     force: bool = False,
 ) -> dict[str, object]:
     declaration = _validated_declaration_fields(
@@ -217,6 +218,7 @@ def install_local_models(
         licensor=licensor,
         license_reference=license_reference,
         license_name=license_name,
+        operator_declaration=operator_declaration,
     )
 
     sources = {
@@ -248,6 +250,7 @@ def install_local_model_bundle(
     licensor: str = "",
     license_reference: str = "",
     license_name: str = "",
+    operator_declaration: str | None = None,
     force: bool = False,
 ) -> dict[str, object]:
     """Install a local model pair with custom or built-in similarity thresholds."""
@@ -434,6 +437,7 @@ def _validated_declaration_fields(
     licensor: str = "",
     license_reference: str = "",
     license_name: str = "",
+    operator_declaration: str | None = None,
 ) -> dict[str, object]:
     basis = usage_basis.strip().casefold()
     operator = authorized_by.strip()
@@ -461,7 +465,7 @@ def _validated_declaration_fields(
         "license_reference": license_reference,
         "license_name": license_name,
         "accepted_at": datetime.now(timezone.utc).isoformat(),
-        "operator_declaration": (
+        "operator_declaration": operator_declaration or (
             "The operator supplied these third-party model files and accepts sole "
             "responsibility for model licensing, biometric-data permissions, and use. "
             "SentriFace supplies no model rights and does not verify this assertion."

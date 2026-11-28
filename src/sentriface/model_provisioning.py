@@ -128,6 +128,12 @@ def provision_bundled_research_models(server) -> bool:
                 licensor="InsightFace",
                 license_reference="Operator-confirmed public Research installer redistribution; non-commercial research use only",
                 license_name="",
+                operator_declaration=(
+                    "The approved Research installer supplied these exact pinned model files for "
+                    "non-commercial research use under operator-confirmed redistribution permission. "
+                    "The operator retains responsibility for lawful biometric use; SentriFace does "
+                    "not grant broader model rights."
+                ),
             )
         except ModelSetupError as exc:
             if "identical model bundle already exists" not in str(exc):
