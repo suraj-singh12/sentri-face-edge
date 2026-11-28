@@ -74,7 +74,7 @@ function Assert-LicenseEnforcement() {
     if (-not $match.Success) { throw "Could not establish a local UI session for licensing verification" }
     $headers = @{ "X-SentriFace-Session" = $match.Groups[1].Value }
     $webSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-    $loginBody = @{ username = $OwnerUsername; password = $OwnerPassword } | ConvertTo-Json
+    $loginBody = [Text.Encoding]::UTF8.GetBytes((@{ username = $OwnerUsername; password = $OwnerPassword } | ConvertTo-Json))
     Invoke-RestMethod -Uri "$base/api/auth/login" -Method Post -Headers $headers -WebSession $webSession -ContentType "application/json" -Body $loginBody -TimeoutSec 10 | Out-Null
     $license = Invoke-RestMethod -Uri "$base/api/license/status" -Headers $headers -WebSession $webSession -TimeoutSec 10
     if (-not $license.enforced -or $license.licensed) { throw "Packaged licensing is not enforced for an unlicensed installation" }
