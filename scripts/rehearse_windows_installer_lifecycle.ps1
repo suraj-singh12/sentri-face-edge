@@ -62,9 +62,12 @@ function Invoke-AppBriefly([int]$Seconds = 25) {
     try {
         $process = Start-Process -FilePath $exe -WorkingDirectory $InstallDir -PassThru
         Start-Sleep -Seconds $Seconds
+        if (-not $process -or $process.HasExited) { throw "Installed application exited before the rehearsal could verify operation" }
         & $exe --request-shutdown | Out-Null
-        Start-Sleep -Seconds 5
-        if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+        $deadline = (Get-Date).AddSeconds(15)
+        while (-not $process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+        $process.Refresh()
+        if (-not $process.HasExited) { throw "Installed application did not shut down gracefully after --request-shutdown" }
     } finally {
         if ($null -eq $previousDataDir) { Remove-Item Env:SENTRIFACE_DATA_DIR -ErrorAction SilentlyContinue } else { $env:SENTRIFACE_DATA_DIR = $previousDataDir }
     }
