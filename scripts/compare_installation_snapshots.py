@@ -8,6 +8,14 @@ from pathlib import Path
 from typing import Any
 
 
+# Successful sign-ins legitimately update authentication bookkeeping while the
+# rehearsal verifies licensing. Account identity, credentials, role and lockout
+# authority remain strictly compared.
+VOLATILE_SHARED_COLUMNS = {
+    "app_users": {"last_login_at", "updated_at"},
+}
+
+
 def _key(row: dict[str, Any], primary_key: list[str]) -> str:
     if primary_key:
         return json.dumps([row["values"].get(column) for column in primary_key], sort_keys=True)
@@ -42,9 +50,10 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
             added_rows[name] = added_row_count
         for row_key, old_values in old_rows.items():
             new_values = new_rows[row_key]
+            volatile = VOLATILE_SHARED_COLUMNS.get(name, set())
             changed = [
                 column for column in shared
-                if old_values.get(column) != new_values.get(column)
+                if column not in volatile and old_values.get(column) != new_values.get(column)
             ]
             if changed:
                 errors.append(f"row values changed for {name} key {row_key}: {', '.join(changed)}")
