@@ -2,7 +2,7 @@
 
 ## Status and boundary
 
-P14 implementation is complete in source. The 2026-09-20 unsigned 2.0.0 hardening candidate passes the locked source gates, packaged runtime checks, external ONNX session checks, and strict AMD64 inspection for the Inno Setup 7 installer plus all runtime-native files. Final release acceptance remains pending a clean exact-tag signed/timestamped build and disposable clean-VM installer/model lifecycle run. Schema remains v28 and P10/P11/P12/P13 authority is unchanged.
+P14 implementation is complete in source. The 2026-09-20 unsigned 2.0.0 hardening candidate passes the locked source gates, packaged runtime checks, external ONNX session checks, and strict AMD64 inspection for the Inno Setup 7 installer plus all runtime-native files. For v2.0.0 Issue #5, executable/installer Authenticode signing is explicitly deferred; final acceptance instead requires the exact approved candidate commit, both unsigned variant installers, and disposable-host lifecycle/model/licensing evidence. Schema authority has since advanced beyond v28 and P10/P11/P12/P13 authority boundaries remain unchanged.
 
 P14 owns operational licensing, the packaged Windows executable, installer lifecycle, exact-executable outbound firewall policy, version propagation, signing hooks, and release evidence. It does not own identity/domain state, database migrations, backup authority, model authority, recovery authority, or activation issuance secrets.
 
@@ -22,11 +22,11 @@ Verified tokens persist as bounded `REG_SZ` state under per-user `HKCU\Software\
 
 Packaged Windows releases start normally without a license. A centralized pre-dispatch policy blocks ordinary product reads/mutations while explicitly retaining authentication/bootstrap, licensing, model prerequisites, backup/export/import/restore, disaster recovery, P11 integrity/recovery, bounded system profile/events, and support export. The React application restricts navigation to Debug/System in this state and renders server status only; it is not the security boundary. Source/development runtimes do not enforce production licensing.
 
-## Windows x64 layout and model exclusion
+## Windows x64 layout and variant model policy
 
 Immutable application files install under `%ProgramFiles%\SentriFace Edge`. The existing per-user `%LOCALAPPDATA%\SentriFace` data, media, model-bundle, backup, log, receipt, keyring, and instance-lock layout is unchanged. The installer creates no ProgramData authority, edits no database, runs no migration, imports no storage key, and rewrites no P12 media path.
 
-Nuitka builds one standalone distribution containing the UI and required SQLCipher, ONNX Runtime, OpenCV, Windows keyring, and SentriFace services. The artifact inspector rejects ONNX/DAT weights, private-key markers, PFX files, and signing-key names. Detector and recognizer weights are never bundled; P13 local model onboarding remains authoritative.
+Nuitka builds one standalone distribution containing the UI and required SQLCipher, ONNX Runtime, OpenCV, Windows keyring, and SentriFace services. The common application distribution still excludes detector/recognizer weights. Commercial installers must contain no model payload. Research installers carry only the approved pinned payload in a separate installer-owned `bundled-models` closure; the artifact inspector verifies exact names, sizes and SHA-256 identities. P13/P14 local model onboarding and immutable bundle authority remain authoritative in both variants.
 
 ## Installer lifecycle and offline policy
 
@@ -95,3 +95,13 @@ dependency/license inventory, and provenance metadata. No PFX or private key is
 written to source or artifacts. Self-signing does not imply public SmartScreen
 trust. Timestamp network access, when configured, exists only in release
 infrastructure; the installed runtime stays offline.
+
+## v2.0.0 one-binary two-variant release update (Issue #5)
+
+The approved v2.0.0 release architecture builds one Nuitka standalone application once and packages that same binary into two Windows x64 Inno installers: `SentriFaceEdge-2.0.0-Commercial-x64.exe` and `SentriFaceEdge-2.0.0-Research-x64.exe`. The stable Inno AppId, executable identity, firewall rule, licensing, permissions, encryption, data roots, migrations and product UI are intentionally identical. There is no research-mode codebase or license bypass.
+
+The Research installer carries only the approved `det_500m.onnx` and `w600k_r50.onnx` files, their pinned SHA-256 provenance and third-party notice under `bundled-models`. Acquisition is release-build infrastructure only: archives are resumably cached outside source control, exact members are extracted, and size/SHA-256 verification is mandatory. The Commercial installer contains no bundled model payload. `scripts/inspect_release_artifacts.py` is now variant-aware and refuses a missing, altered, extra or wrongly placed payload.
+
+Fresh Research first-start provisioning uses the same immutable model bundle authority and activation/receipt path as operator-supplied models. It runs only when no active model state exists, never replaces an active model during repair, upgrade or variant transition, uses calibration profile `scrfd500m-r50-research`, validates runtime compatibility and fails closed into ordinary Model Setup if payload validation or activation fails. Existing model onboarding and rollback remain unchanged.
+
+Executable/installer Authenticode signing remains deferred for the v2.0.0 engineering candidates. Exact artifact names intentionally omit an unsigned suffix; unsigned status is carried unambiguously in provenance, manifests, checksums and release notes. Signing infrastructure is retained but publication remains a separate explicit manual decision.

@@ -37,6 +37,7 @@ def main() -> int:
     parser.add_argument("--lockfile", type=Path, required=True)
     parser.add_argument("--development", action="store_true")
     parser.add_argument("--signed", action="store_true")
+    parser.add_argument("--variant", default="Commercial")
     args = parser.parse_args()
 
     installer = args.installer.resolve(strict=True)
@@ -58,6 +59,7 @@ def main() -> int:
         "contract": "sentriface.release-provenance",
         "contract_version": 2,
         "version": args.version,
+        "variant": args.variant,
         "commit": _git("rev-parse", "HEAD"),
         "branch": _git("branch", "--show-current"),
         "tags_at_commit": sorted(filter(None, _git("tag", "--points-at", "HEAD").splitlines())),
@@ -68,7 +70,7 @@ def main() -> int:
         "development_build": bool(args.development),
         "authenticode_signed": bool(args.signed),
         "production_accepted": bool(args.signed and not args.development),
-        "models_bundled": False,
+        "models_bundled": args.variant == "Research",
         "private_license_key_bundled": False,
         "target_architecture": inspection.get("expected_architecture"),
         "observed_architectures": inspection.get("architectures", []),

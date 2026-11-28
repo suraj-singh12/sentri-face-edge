@@ -193,6 +193,7 @@ class ModelBundleAuthority:
         licensor: str = "",
         license_reference: str = "",
         license_name: str = "",
+        operator_declaration: str | None = None,
     ) -> ModelBundle:
         with self._lock:
             self._prepare_roots()
@@ -228,6 +229,7 @@ class ModelBundleAuthority:
                     licensor=licensor,
                     license_reference=license_reference,
                     license_name=license_name,
+                    operator_declaration=operator_declaration,
                 )
                 del declaration
                 components = _component_records(staging)

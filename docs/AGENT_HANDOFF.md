@@ -79,10 +79,12 @@ The records below preserve earlier source and release milestones. Their schema v
   checksum and exact acceptance boundary.
 - A controlled non-exportable signing identity exists, but installing its public
   certificate into CurrentUser Root and TrustedPublisher was not authorized.
-  Production release acceptance therefore still requires explicit trust-store
-  approval, a verified signed candidate, the disposable-machine installer/model
-  lifecycle, and a final clean build from exact tag `rc-v2.0.0` or
-  `release-v2.0.0`.
+  Issue #5 explicitly defers executable/installer Authenticode signing for
+  v2.0.0 engineering candidates. Release acceptance therefore requires unsigned
+  Commercial/Research candidates from the exact approved source, disposable-host
+  installer/model/data-preservation lifecycle evidence, and separate operator
+  publication approval; trust-store changes and exact release-tag policy remain
+  future publication decisions.
 - That checkpoint's artifact had not passed installed model onboarding, activation,
   restart persistence, rollback, or recognition with representative face images.
   Source-mode model lifecycle and packaged external ONNX sessions passed; the

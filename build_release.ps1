@@ -14,12 +14,18 @@ param(
         if ($env:SENTRIFACE_SIGNING_STORE) { $env:SENTRIFACE_SIGNING_STORE } else { "CurrentUser" }
     ),
     [string]$TimestampUrl = $env:SENTRIFACE_TIMESTAMP_URL,
-    [string]$InnoCompiler = $env:SENTRIFACE_ISCC
+    [string]$InnoCompiler = $env:SENTRIFACE_ISCC,
+    [ValidateSet("Commercial", "Research", "Both")]
+    [string]$InstallerVariants = "Commercial",
+    [string]$ModelCacheDir = ".model-cache"
 )
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
+if (-not [IO.Path]::IsPathRooted($ModelCacheDir)) {
+    $ModelCacheDir = Join-Path $Root $ModelCacheDir
+}
 
 if ($DevelopmentBuild -and $ProductionRelease) {
     throw "-DevelopmentBuild and -ProductionRelease cannot be combined."
@@ -342,59 +348,104 @@ try {
         & $ReleasePython scripts\write_dependency_inventory.py --output $DependencyReport --build-dir $NuitkaBuild --distribution $Distribution --lockfile requirements-release.lock
     }
 
-    $ArtifactSuffix = if ($ProductionRelease) {
-        ""
-    } elseif ($SigningAvailable) {
-        "-signed-pretag-rc"
+    $VariantList = @()
+    if ($InstallerVariants -eq "Both") {
+        $VariantList = @("Commercial", "Research")
     } else {
-        "-unsigned-pretag-rc"
+        $VariantList = @($InstallerVariants)
     }
-    $ArtifactBase = "SentriFaceEdge-$Version-x64$ArtifactSuffix"
-    Invoke-Checked "Build Inno Setup installer" {
-        & $InnoCompiler "/DMyAppVersion=$Version" "/DMyAppVersionQuad=$VersionQuad" "/O$OutputRoot" "/F$ArtifactBase" "installer\SentriFaceEdge.iss"
-    }
-    $Installer = Join-Path $OutputRoot "$ArtifactBase.exe"
-    Invoke-Sign $Installer
-
-    Invoke-Checked "Inspect AMD64 installer and release content closure" {
-        & $ReleasePython scripts\inspect_release_artifacts.py --distribution $Distribution --installer $Installer --version $Version --report $InspectionReport --forbidden-path $Root
+    $ResearchPayload = Join-Path $BuildRoot "research-models"
+    if ($VariantList -contains "Research") {
+        Invoke-Checked "Acquire approved research model payload" {
+            & $ReleasePython scripts\acquire_research_models.py --cache-dir $ModelCacheDir --output-dir $ResearchPayload
+        }
     }
 
-    $MetadataArguments = @(
-        "scripts\write_release_metadata.py",
-        "--version", $Version,
-        "--installer", $Installer,
-        "--application", $Application,
-        "--inspection", $InspectionReport,
-        "--runtime-report", $RuntimeReport,
-        "--dependencies", $DependencyReport,
-        "--lockfile", "requirements-release.lock"
-    )
-    if ($CandidateBuild) {
-        $MetadataArguments += "--development"
-    }
-    if ($SigningAvailable) {
-        $MetadataArguments += "--signed"
-    }
-    Invoke-Checked "Write release provenance" {
-        & $ReleasePython @MetadataArguments
+    $Installers = @()
+    foreach ($Variant in $VariantList) {
+        $ArtifactBase = "SentriFaceEdge-$Version-$Variant-x64"
+        $VariantLower = $Variant.ToLowerInvariant()
+        $InspectionReport = Join-Path $OutputRoot "artifact-inspection-$VariantLower.json"
+        $InnoArguments = @(
+            "/DMyAppVersion=$Version",
+            "/DMyAppVersionQuad=$VersionQuad",
+            "/DMyVariant=$Variant",
+            "/O$OutputRoot",
+            "/F$ArtifactBase"
+        )
+        if ($Variant -eq "Research") {
+            $InnoArguments += "/DResearchModels"
+        }
+        $InnoArguments += "installer\SentriFaceEdge.iss"
+        Invoke-Checked "Build Inno Setup $Variant installer" {
+            & $InnoCompiler @InnoArguments
+        }
+        $Installer = Join-Path $OutputRoot "$ArtifactBase.exe"
+        Invoke-Sign $Installer
+        $Installers += $Installer
+
+        $InspectArguments = @(
+            "scripts\inspect_release_artifacts.py",
+            "--distribution", $Distribution,
+            "--installer", $Installer,
+            "--version", $Version,
+            "--report", $InspectionReport,
+            "--forbidden-path", $Root,
+            "--variant", $Variant
+        )
+        if ($Variant -eq "Research") {
+            $InspectArguments += @("--model-payload", $ResearchPayload)
+        }
+        Invoke-Checked "Inspect AMD64 $Variant installer and release content closure" {
+            & $ReleasePython @InspectArguments
+        }
+
+        $MetadataArguments = @(
+            "scripts\write_release_metadata.py",
+            "--version", $Version,
+            "--installer", $Installer,
+            "--application", $Application,
+            "--inspection", $InspectionReport,
+            "--runtime-report", $RuntimeReport,
+            "--dependencies", $DependencyReport,
+            "--lockfile", "requirements-release.lock",
+            "--variant", $Variant
+        )
+        if ($CandidateBuild) {
+            $MetadataArguments += "--development"
+        }
+        if ($SigningAvailable) {
+            $MetadataArguments += "--signed"
+        }
+        Invoke-Checked "Write $Variant release provenance" {
+            & $ReleasePython @MetadataArguments
+        }
+
+        $InstallerDigest = (Get-FileHash -LiteralPath $Installer -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::WriteAllText(
+            "$Installer.sha256",
+            "$InstallerDigest  $(Split-Path -Leaf $Installer)`n",
+            [Text.Encoding]::ASCII
+        )
     }
 
-    $InstallerDigest = (Get-FileHash -LiteralPath $Installer -Algorithm SHA256).Hash.ToLowerInvariant()
-    "$InstallerDigest  $(Split-Path -Leaf $Installer)" |
-        Set-Content -LiteralPath "$Installer.sha256" -Encoding ascii
     $ChecksumPath = Join-Path $OutputRoot "checksums.sha256"
-    Get-ChildItem -LiteralPath $OutputRoot -File |
+    $ChecksumLines = @(Get-ChildItem -LiteralPath $OutputRoot -File |
         Where-Object { $_.FullName -ne $ChecksumPath -and $_.FullName -ne $BuildLog } |
         Sort-Object Name |
         ForEach-Object {
             $digest = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$digest  $($_.Name)"
-        } | Set-Content -LiteralPath $ChecksumPath -Encoding ascii
+        })
+    [IO.File]::WriteAllText(
+        $ChecksumPath,
+        (($ChecksumLines -join "`n") + "`n"),
+        [Text.Encoding]::ASCII
+    )
 
     $Succeeded = $true
     Write-Host ""
-    Write-Host "Validated Windows x64 installer: $Installer"
+    Write-Host "Validated Windows x64 installers: $($Installers -join ', ')"
     if ($CandidateBuild) {
         Write-Host "Acceptance class: pre-tag RC-ready candidate (not the canonical rc-v$Version artifact)"
     } else {

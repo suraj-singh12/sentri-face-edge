@@ -9,6 +9,9 @@
 #define MyPublisher "SentriFace"
 #define MyExeName "SentriFaceEdge.exe"
 #define MyAppId "{9B86BE35-3E8F-47F0-A9C2-A4CF4933B985}"
+#ifndef MyVariant
+  #define MyVariant "Commercial"
+#endif
 
 [Setup]
 AppId={{#MyAppId}
@@ -24,7 +27,7 @@ SetupArchitecture=x64
 ArchitecturesAllowed=x64os
 ArchitecturesInstallIn64BitMode=x64os
 OutputDir=..\installer_output
-OutputBaseFilename=SentriFaceEdge-{#MyAppVersion}-x64
+OutputBaseFilename=SentriFaceEdge-{#MyAppVersion}-{#MyVariant}-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -41,6 +44,9 @@ MinVersion=10.0.17763
 Source: "..\build\ui.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\packaging\windows\Install-OfflinePolicy.ps1"; Flags: dontcopy
 Source: "..\packaging\windows\Remove-OfflinePolicy.ps1"; DestDir: "{app}\support"; Flags: ignoreversion
+#ifdef ResearchModels
+Source: "..\build\research-models\*"; DestDir: "{app}\bundled-models"; Flags: ignoreversion
+#endif
 
 [Icons]
 Name: "{autoprograms}\SentriFace Edge"; Filename: "{app}\{#MyExeName}"; WorkingDir: "{app}"
@@ -57,6 +63,7 @@ var
   PreviousInstallation: Boolean;
   SetupCompleted: Boolean;
   OfflinePolicyLog: String;
+  HiddenResearchPayload: Boolean;
 
 function NextVersionPart(var Version: String): Integer;
 var
@@ -90,13 +97,14 @@ end;
 function InitializeSetup(): Boolean;
 var
   InstalledVersion, UninstallKey: String;
+  Answer: Integer;
 begin
   Result := True;
   UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1';
   PreviousInstallation := RegQueryStringValue(HKLM64, UninstallKey, 'DisplayVersion', InstalledVersion);
   if PreviousInstallation then begin
     if CompareVersions('{#MyAppVersion}', InstalledVersion) < 0 then begin
-      MsgBox('A newer SentriFace Edge version is already installed. Downgrades are not supported.', mbError, MB_OK);
+      Answer := SuppressibleMsgBox('A newer SentriFace Edge version is already installed. Downgrades are not supported.', mbError, MB_OK, IDOK);
       Result := False;
     end;
   end;
@@ -119,6 +127,74 @@ begin
   end;
 end;
 
+function IsCommercialVariant(): Boolean;
+begin
+  Result := '{#MyVariant}' = 'Commercial';
+end;
+
+function RunCommandLine(Command: String): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(
+    ExpandConstant('{sys}\cmd.exe'),
+    '/D /C ' + Command,
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode
+  ) and (ResultCode = 0);
+end;
+
+function Quoted(Path: String): String;
+begin
+  Result := '"' + Path + '"';
+end;
+
+function HideResearchPayloadForCommercialInstall(): Boolean;
+var
+  Source, Target: String;
+begin
+  Result := True;
+  if not IsCommercialVariant() then exit;
+  Source := ExpandConstant('{app}\bundled-models');
+  Target := ExpandConstant('{app}\bundled-models.previous-setup');
+  if HiddenResearchPayload then begin
+    Result := DirExists(Target) and not DirExists(Source);
+    exit;
+  end;
+  if DirExists(Target) and not DirExists(Source) then begin
+    Result := RenameFile(Target, Source);
+    if not Result then exit;
+  end;
+  HiddenResearchPayload := False;
+  if not DirExists(Source) then exit;
+  if DirExists(Target) and not RunCommandLine('rd /s /q ' + Quoted(Target)) then begin
+    Result := False;
+    exit;
+  end;
+  Result := RenameFile(Source, Target);
+  HiddenResearchPayload := Result and DirExists(Target) and not DirExists(Source);
+end;
+
+procedure RemoveHiddenResearchPayload();
+var
+  Target: String;
+begin
+  if not HiddenResearchPayload then exit;
+  Target := ExpandConstant('{app}\bundled-models.previous-setup');
+  if RunCommandLine('if exist ' + Quoted(Target) + ' rd /s /q ' + Quoted(Target)) then
+    HiddenResearchPayload := False;
+end;
+
+procedure RestoreHiddenResearchPayload();
+var
+  Source, Target: String;
+begin
+  if not HiddenResearchPayload then exit;
+  Source := ExpandConstant('{app}\bundled-models');
+  Target := ExpandConstant('{app}\bundled-models.previous-setup');
+  if DirExists(Target) and not DirExists(Source) then
+    RenameFile(Target, Source);
+end;
+
 function InstallOfflinePolicy(): Boolean;
 var
   ResultCode: Integer;
@@ -138,6 +214,10 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   RequestGracefulShutdown();
+  if not HideResearchPayloadForCommercialInstall() then begin
+    Result := 'Commercial installation could not safely quarantine the prior Research model payload.';
+    exit;
+  end;
   if InstallOfflinePolicy() then
     Result := ''
   else
@@ -147,7 +227,10 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssDone then SetupCompleted := True;
+  if CurStep = ssDone then begin
+    RemoveHiddenResearchPayload();
+    SetupCompleted := True;
+  end;
 end;
 
 procedure DeinitializeSetup();
@@ -155,6 +238,7 @@ var
   ResultCode: Integer;
 begin
   if SetupCompleted then exit;
+  RestoreHiddenResearchPayload();
   if PreviousInstallation and FileExists(ExpandConstant('{app}\{#MyExeName}')) then begin
     ExtractTemporaryFile('Install-OfflinePolicy.ps1');
     Exec(

@@ -13,30 +13,29 @@ The Windows 11 x64 release authority requires Python 3.12, Node/npm, MSVC, and t
 .\build_release.ps1
 ```
 
-On a `release-*` preparation branch it creates an isolated Python environment
+On a release-engineering branch it creates an isolated Python environment
 from `requirements-release.lock`, uses `frontend/package-lock.json`, runs the
-backend and frontend gates, builds the standalone application and installer,
-verifies every packaged `.exe`/`.dll`/`.pyd` PE header as AMD64, exercises the
-packaged native/runtime stack, and writes checksums plus inspection,
-dependency/license, runtime, and provenance evidence under
-`dist\windows-x64\<version>\`. Without external signing inputs the installer is
-named `*-unsigned-pretag-rc.exe` and is explicitly not the canonical RC.
+backend and frontend gates, builds one standalone application binary, packages
+the requested installer variant(s), verifies every packaged `.exe`/`.dll`/`.pyd`
+PE header as AMD64, exercises the packaged native/runtime stack, performs an
+installed-artifact variant inspection, and writes LF-delimited checksums plus
+inspection, dependency/license, runtime, and provenance evidence under
+`dist\windows-x64\<version>\`. v2.0.0 Issue #5 candidates are explicitly
+unsigned and are named `SentriFaceEdge-2.0.0-Commercial-x64.exe` or
+`SentriFaceEdge-2.0.0-Research-x64.exe`; unsigned status is recorded in
+manifests and provenance rather than hidden.
 
-A production build is deliberately separate:
+Signing infrastructure is retained for a future publication decision but is not
+required for the approved v2.0.0 engineering candidates. If signing is later
+authorized, `-ProductionRelease` still requires a clean exact
+`rc-v<version>` or `release-v<version>` tag and external SignTool, an exact
+certificate thumbprint, and the expected signer subject. Those inputs sign and
+verify both the application and installer; private signing material never enters
+the repository.
 
-```powershell
-.\build_release.ps1 -ProductionRelease
-```
-
-It requires a clean exact `rc-v<version>` or `release-v<version>` tag and
-external SignTool, an exact certificate thumbprint, and the expected signer
-subject. A timestamp URL is optional for controlled-machine self-signing and
-recommended when a compatible timestamp authority is available. Those inputs
-sign and verify both the application and installer; private signing material
-never enters the repository.
-
-For controlled Windows machines, create one stable, non-exportable RSA identity
-once and explicitly trust its public certificate separately:
+For a future signed release on controlled Windows machines, create one stable,
+non-exportable RSA identity once and explicitly trust its public certificate
+separately:
 
 ```powershell
 .\packaging\windows\New-SentriFaceCodeSigningCertificate.ps1
@@ -70,7 +69,7 @@ For an Inno diagnostic log, launch a release-test installer with an explicit
 local path, for example:
 
 ```powershell
-.\SentriFaceEdge-2.0.0-x64-unsigned-pretag-rc.exe /LOG="$env:TEMP\SentriFaceEdge-install.log"
+.\SentriFaceEdge-2.0.0-Commercial-x64.exe /LOG="$env:TEMP\SentriFaceEdge-install.log"
 ```
 
 The log is a support artifact; review and remove it after the failed or
@@ -105,3 +104,19 @@ Use the platform-specific assets supplied with this packaging contract:
 The editable high-resolution raster master is
 `assets/sentriface-app-icon-1024.png`. Browser favicon and touch-icon variants
 are copied from the same mark during the frontend build.
+
+## v2.0.0 release variants
+
+`build_release.ps1` defaults to the economical Commercial candidate used by routine CI. Use `-InstallerVariants Both` in the manually dispatched release-candidate workflow to build Commercial and Research from one application binary. Research model archives are cached in `.model-cache`; extracted ONNX weights are build artifacts and must never be committed.
+
+## Installer lifecycle rehearsal
+
+On a disposable Windows host with no required product data, use:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\rehearse_windows_installer_lifecycle.ps1 `
+  -CommercialInstaller .\SentriFaceEdge-2.0.0-Commercial-x64.exe `
+  -ResearchInstaller .\SentriFaceEdge-2.0.0-Research-x64.exe
+```
+
+Use `-CreateSyntheticFixture` on an empty disposable data root to generate synthetic people, embeddings, event/evidence, notes, relationships, archived/deleted records, an owner account and a backup. Alternatively populate the library separately, pass its owner credentials with `-OwnerUsername` and `-OwnerPassword`, and rerun with `-SkipInitialInstall`. When no older installer is supplied, the harness temporarily records a newer installed version in the disposable machine's uninstall registry entry to exercise downgrade refusal, then restores the original value. Never rehearse destructive scenarios against real operator data.

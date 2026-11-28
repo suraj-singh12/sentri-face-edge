@@ -102,6 +102,7 @@ from sentriface.runtime_hardening import (
     cleanup_managed_temporaries,
     validate_managed_storage,
 )
+from sentriface.model_provisioning import provision_bundled_research_models
 from sentriface.model_setup import MODEL_COMBINATIONS
 from sentriface.models import (
     EmbeddingRecord,
@@ -3576,7 +3577,16 @@ def create_server(
             server.key_protection = "linux-source-development-file"
         server.log_event("startup", runtime=runtime, port=server.server_port)
         if not model_ready:
-            server.log_event("model-setup-required", error=model_error)
+            try:
+                if provision_bundled_research_models(server):
+                    model_ready = True
+                    model_error = ""
+            except Exception as exc:
+                server.model_ready = False
+                server.model_error = redact_log_text(str(exc).strip("'")) or "Bundled Research model provisioning failed"
+                server.log_event("bundled-research-model-provisioning-failed", error=server.model_error)
+        if not server.model_ready:
+            server.log_event("model-setup-required", error=server.model_error)
         return server
     except Exception:
         if owned_lock:

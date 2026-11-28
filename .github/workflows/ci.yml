@@ -164,6 +164,12 @@ jobs:
         run: |
           python scripts/ci_report.py run package -- powershell -NoProfile -File .\build_release.ps1
           exit $LASTEXITCODE
+      - name: Inspect installed Commercial artifact
+        id: installed-artifact
+        shell: powershell
+        run: |
+          python scripts/ci_report.py run installed-artifact -- powershell -NoProfile -File .\scripts\inspect_installed_variant.ps1 -Variant Commercial -Installer ".\dist\windows-x64\2.0.0\SentriFaceEdge-2.0.0-Commercial-x64.exe" -InstallDir "$env:TEMP\sentriface-commercial-inspect" -ReportPath ".\qa-fixtures\installer-public\installed-inspection-commercial.json"
+          exit $LASTEXITCODE
       - name: Verify installer publication inputs
         id: installer-evidence
         run: python scripts/prepare_ci_installer.py
@@ -172,11 +178,12 @@ jobs:
         if: success() && steps.package.outcome == 'success' && steps.installer-evidence.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: SentriFaceEdge-Windows-x64-unsigned-engineering-candidate
+          name: SentriFaceEdge-Windows-x64-Commercial-unsigned-engineering-candidate
           path: |
             qa-fixtures/installer-public/${{ steps.installer-evidence.outputs.installer }}
             qa-fixtures/installer-public/${{ steps.installer-evidence.outputs.checksum }}
-            qa-fixtures/installer-public/manifest.json
+            qa-fixtures/installer-public/manifest-commercial.json
+            qa-fixtures/installer-public/installed-inspection-commercial.json
           retention-days: 7
           if-no-files-found: error
       - name: Publish concise QA summary

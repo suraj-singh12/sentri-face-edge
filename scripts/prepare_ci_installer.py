@@ -16,13 +16,16 @@ def prepare(root=ROOT):
     if not re.fullmatch(r'\d+\.\d+\.\d+', version):
         raise ValueError('Invalid release version')
     directory = root / 'dist/windows-x64' / version
-    name = f'SentriFaceEdge-{version}-x64-unsigned-pretag-rc.exe'
-    candidates = list(directory.glob('SentriFaceEdge-*-x64-unsigned-pretag-rc.exe'))
+    variant = os.environ.get('SENTRIFACE_CI_VARIANT', 'Commercial')
+    if variant not in {'Commercial', 'Research'}:
+        raise ValueError('Unsupported installer variant')
+    name = f'SentriFaceEdge-{version}-{variant}-x64.exe'
+    candidates = list(directory.glob(f'SentriFaceEdge-*-{variant}-x64.exe'))
     if len(candidates) != 1 or candidates[0].name != name:
-        raise ValueError('Expected exactly one unsigned candidate installer')
+        raise ValueError(f'Expected exactly one {variant} candidate installer')
     installer = directory / name
     checksum = directory / (name + '.sha256')
-    inspection = json.loads((directory / 'artifact-inspection.json').read_text(encoding='utf8'))
+    inspection = json.loads((directory / f'artifact-inspection-{variant.lower()}.json').read_text(encoding='utf8'))
     provenance = json.loads((directory / (name + '.provenance.json')).read_text(encoding='utf8'))
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     digest = hashlib.sha256(installer.read_bytes()).hexdigest()
@@ -47,7 +50,7 @@ def prepare(root=ROOT):
     if any(line[:2] not in (' M', 'M ', 'MM') or
            not line[3:].replace('\\', '/').startswith('src/sentriface/ui_static/') for line in status):
         raise ValueError('Unexpected source tree changes outside generated frontend assets')
-    if provenance.get('development_build') is not True or provenance.get('authenticode_signed') is not False:
+    if provenance.get('development_build') is not True or provenance.get('authenticode_signed') is not False or provenance.get('variant') != variant:
         raise ValueError('Release provenance is not an unsigned engineering candidate')
     if (len(artifacts) != 1 or artifacts[0].get('name') != name
         or artifacts[0].get('sha256') != digest or artifacts[0].get('size') != installer.stat().st_size):
@@ -56,15 +59,16 @@ def prepare(root=ROOT):
     output.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(installer, output / name)
     shutil.copyfile(checksum, output / (name + '.sha256'))
-    (output / 'manifest.json').write_text(json.dumps({'schema_version': 1, 'commit': sha,
-        'installer': name, 'sha256': digest, 'classification': 'unsigned engineering candidate',
+    (output / f'manifest-{variant.lower()}.json').write_text(json.dumps({'schema_version': 1, 'commit': sha,
+        'variant': variant, 'installer': name, 'sha256': digest, 'classification': 'unsigned engineering candidate',
         'working_tree_clean': clean, 'generated_frontend_changed': bool(status)}, indent=2) + '\n', encoding='utf8')
     return name
 
 
 if __name__ == '__main__':
     name = prepare()
-    manifest = json.loads((ROOT / 'qa-fixtures/installer-public/manifest.json').read_text(encoding='utf8'))
+    variant = os.environ.get('SENTRIFACE_CI_VARIANT', 'Commercial')
+    manifest = json.loads((ROOT / f'qa-fixtures/installer-public/manifest-{variant.lower()}.json').read_text(encoding='utf8'))
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf8') as output:
             output.write(f'installer={name}\nchecksum={name}.sha256\n')
