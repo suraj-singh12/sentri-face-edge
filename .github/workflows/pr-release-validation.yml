@@ -75,10 +75,15 @@ jobs:
         run: |
           $dist = "dist\windows-x64\2.0.0"
           $zip = Join-Path $dist "exact-installer-delivery.zip"
+          $installerNames = @("SentriFaceEdge-2.0.0-Commercial-x64.exe", "SentriFaceEdge-2.0.0-Research-x64.exe")
+          $deliveryLines = foreach ($name in $installerNames) {
+            "$((Get-FileHash (Join-Path $dist $name) -Algorithm SHA256).Hash.ToLower())  $name"
+          }
+          [System.IO.File]::WriteAllLines((Join-Path $dist "installer-delivery.sha256"), $deliveryLines)
           $items = @(
             (Join-Path $dist "SentriFaceEdge-2.0.0-Commercial-x64.exe"),
             (Join-Path $dist "SentriFaceEdge-2.0.0-Research-x64.exe"),
-            (Join-Path $dist "checksums.sha256")
+            (Join-Path $dist "installer-delivery.sha256")
           ) + @((Get-Item (Join-Path $dist "*.provenance.json")).FullName)
           Compress-Archive -LiteralPath $items -DestinationPath $zip -Force
           & "C:\Program Files\Git\usr\bin\openssl.exe" smime -encrypt -binary -aes256 -in $zip -out "$zip.enc" ".github\release-delivery-cert.pem"
