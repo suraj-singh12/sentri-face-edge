@@ -63,6 +63,7 @@ var
   PreviousInstallation: Boolean;
   SetupCompleted: Boolean;
   OfflinePolicyLog: String;
+  HiddenResearchPayload: Boolean;
 
 function NextVersionPart(var Version: String): Integer;
 var
@@ -125,6 +126,66 @@ begin
   end;
 end;
 
+function IsCommercialVariant(): Boolean;
+begin
+  Result := '{#MyVariant}' = 'Commercial';
+end;
+
+function RunCommandLine(Command: String): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(
+    ExpandConstant('{sys}\cmd.exe'),
+    '/C ' + Command,
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode
+  ) and (ResultCode = 0);
+end;
+
+function Quoted(Path: String): String;
+begin
+  Result := '"' + Path + '"';
+end;
+
+function HideResearchPayloadForCommercialInstall(): Boolean;
+var
+  Source, Target: String;
+begin
+  Result := True;
+  HiddenResearchPayload := False;
+  if not IsCommercialVariant() then exit;
+  Source := ExpandConstant('{app}\bundled-models');
+  Target := ExpandConstant('{app}\bundled-models.previous-setup');
+  if not DirExists(Source) then exit;
+  if DirExists(Target) and not RunCommandLine('rd /s /q ' + Quoted(Target)) then begin
+    Result := False;
+    exit;
+  end;
+  Result := RenameFile(Source, Target);
+  HiddenResearchPayload := Result and DirExists(Target) and not DirExists(Source);
+end;
+
+procedure RemoveHiddenResearchPayload();
+var
+  Target: String;
+begin
+  if not HiddenResearchPayload then exit;
+  Target := ExpandConstant('{app}\bundled-models.previous-setup');
+  if RunCommandLine('if exist ' + Quoted(Target) + ' rd /s /q ' + Quoted(Target)) then
+    HiddenResearchPayload := False;
+end;
+
+procedure RestoreHiddenResearchPayload();
+var
+  Source, Target: String;
+begin
+  if not HiddenResearchPayload then exit;
+  Source := ExpandConstant('{app}\bundled-models');
+  Target := ExpandConstant('{app}\bundled-models.previous-setup');
+  if DirExists(Target) and not DirExists(Source) then
+    RenameFile(Target, Source);
+end;
+
 function InstallOfflinePolicy(): Boolean;
 var
   ResultCode: Integer;
@@ -144,6 +205,10 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   RequestGracefulShutdown();
+  if not HideResearchPayloadForCommercialInstall() then begin
+    Result := 'Commercial installation could not safely quarantine the prior Research model payload.';
+    exit;
+  end;
   if InstallOfflinePolicy() then
     Result := ''
   else
@@ -151,27 +216,12 @@ begin
       OfflinePolicyLog;
 end;
 
-procedure RemoveCommercialResearchPayload();
-var
-  ResultCode: Integer;
-  PayloadPath: String;
-begin
-  if '{#MyVariant}' <> 'Commercial' then exit;
-  PayloadPath := ExpandConstant('{app}\bundled-models');
-  if not DirExists(PayloadPath) then exit;
-  if not Exec(
-    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath ''' + PayloadPath + ''' -Recurse -Force -ErrorAction Stop"',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode
-  ) or (ResultCode <> 0) then begin
-    RaiseException('Commercial installation could not remove the prior Research model payload.');
-  end;
-end;
-
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssPostInstall then RemoveCommercialResearchPayload();
-  if CurStep = ssDone then SetupCompleted := True;
+  if CurStep = ssDone then begin
+    RemoveHiddenResearchPayload();
+    SetupCompleted := True;
+  end;
 end;
 
 procedure DeinitializeSetup();
@@ -179,6 +229,7 @@ var
   ResultCode: Integer;
 begin
   if SetupCompleted then exit;
+  RestoreHiddenResearchPayload();
   if PreviousInstallation and FileExists(ExpandConstant('{app}\{#MyExeName}')) then begin
     ExtractTemporaryFile('Install-OfflinePolicy.ps1');
     Exec(

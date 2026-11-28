@@ -120,9 +120,11 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertIn("SentriFaceEdge-$Version-$Variant-x64", build)
         self.assertIn("/DResearchModels", build)
         self.assertIn("bundled-models", installer)
-        self.assertIn("RemoveCommercialResearchPayload", installer)
-        self.assertIn("if CurStep = ssPostInstall", installer)
+        self.assertIn("HideResearchPayloadForCommercialInstall", installer)
+        self.assertIn("RestoreHiddenResearchPayload", installer)
+        self.assertIn("RemoveHiddenResearchPayload", installer)
         self.assertNotIn("[InstallDelete]", installer)
+        self.assertNotIn("ssPostInstall", installer)
 
     def test_build_excludes_models_and_requires_native_runtime_components(self) -> None:
         build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
