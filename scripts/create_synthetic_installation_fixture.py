@@ -10,7 +10,7 @@ import base64
 import uuid
 from pathlib import Path
 
-from sentriface.auth import AuthService
+from sentriface.auth import AuthService, RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION
 from sentriface.backup_service import BackupService
 from sentriface.graph_service import GlobalIdentityGraphService
 from sentriface.secure_files import write_protected_bytes
@@ -120,6 +120,7 @@ def create_fixture(data_dir: Path) -> dict[str, object]:
             "Synthetic Fixture Owner",
             "fixture-owner-passphrase-1",
         )
+        auth.acknowledge_recovery_risk(owner, RECOVERY_RISK_ACKNOWLEDGEMENT_VERSION)
         backup = BackupService(
             database,
             data_dir / "backups",
