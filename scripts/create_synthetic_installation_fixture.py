@@ -32,6 +32,8 @@ def create_fixture(data_dir: Path) -> dict[str, object]:
     database = data_dir / "sentriface.db"
     if database.exists():
         raise RuntimeError(f"Refusing to overwrite existing SentriFace database: {database}")
+    if data_dir.exists() and any(data_dir.iterdir()):
+        raise RuntimeError(f"Refusing to create a synthetic fixture in a non-empty data directory: {data_dir}")
     data_dir.mkdir(parents=True, exist_ok=True)
     key = load_or_create_master_key(data_dir)
     store = SQLiteIdentityStore(database, database_key=key)
