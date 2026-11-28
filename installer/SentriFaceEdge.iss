@@ -48,11 +48,6 @@ Source: "..\packaging\windows\Remove-OfflinePolicy.ps1"; DestDir: "{app}\support
 Source: "..\build\research-models\*"; DestDir: "{app}\bundled-models"; Flags: ignoreversion
 #endif
 
-[InstallDelete]
-; The shared product identity may replace either installer variant. Remove stale
-; release-media payloads before each install; per-user model authority is untouched.
-Type: filesandordirs; Name: "{app}\bundled-models"
-
 [Icons]
 Name: "{autoprograms}\SentriFace Edge"; Filename: "{app}\{#MyExeName}"; WorkingDir: "{app}"
 Name: "{commondesktop}\SentriFace Edge"; Filename: "{app}\{#MyExeName}"; WorkingDir: "{app}"
@@ -156,8 +151,26 @@ begin
       OfflinePolicyLog;
 end;
 
+procedure RemoveCommercialResearchPayload();
+var
+  ResultCode: Integer;
+  PayloadPath: String;
+begin
+  if '{#MyVariant}' <> 'Commercial' then exit;
+  PayloadPath := ExpandConstant('{app}\bundled-models');
+  if not DirExists(PayloadPath) then exit;
+  if not Exec(
+    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath ''' + PayloadPath + ''' -Recurse -Force -ErrorAction Stop"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode
+  ) or (ResultCode <> 0) then begin
+    RaiseException('Commercial installation could not remove the prior Research model payload.');
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+  if CurStep = ssPostInstall then RemoveCommercialResearchPayload();
   if CurStep = ssDone then SetupCompleted := True;
 end;
 
