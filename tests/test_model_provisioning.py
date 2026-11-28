@@ -41,9 +41,11 @@ def test_corrupt_payload_fails_closed_before_upload(monkeypatch, tmp_path):
         model_provisioning.provision_bundled_research_models(server)
 
 
-def test_frozen_payload_path_is_sibling_of_executable(monkeypatch):
-    monkeypatch.setattr(model_provisioning.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(model_provisioning.sys, "executable", "/opt/SentriFace/SentriFaceEdge.exe")
-    assert model_provisioning.bundled_research_payload_dir() == Path("/opt/SentriFace/bundled-models")
-    monkeypatch.delattr(model_provisioning.sys, "frozen", raising=False)
+def test_payload_path_is_present_beside_executable(monkeypatch, tmp_path):
+    executable = tmp_path / "install" / "SentriFaceEdge.exe"
+    payload = executable.parent / "bundled-models"
+    payload.mkdir(parents=True)
+    monkeypatch.setattr(model_provisioning.sys, "executable", str(executable))
+    assert model_provisioning.bundled_research_payload_dir() == payload
+    payload.rmdir()
     assert model_provisioning.bundled_research_payload_dir() is None

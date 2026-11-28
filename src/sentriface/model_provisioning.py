@@ -32,10 +32,9 @@ _CHUNK = 1024 * 1024
 
 
 def bundled_research_payload_dir() -> Path | None:
-    """Return the packaged payload directory only for a frozen application."""
-    if not getattr(sys, "frozen", False):
-        return None
-    return Path(sys.executable).resolve().parent / "bundled-models"
+    """Return the packaged payload directory when it is present beside the executable."""
+    candidate = Path(sys.executable).resolve().parent / "bundled-models"
+    return candidate if candidate.is_dir() else None
 
 
 def _copy_with_hash(source: Path, target: Path) -> tuple[int, str]:
