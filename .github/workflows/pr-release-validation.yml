@@ -58,6 +58,18 @@ jobs:
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\rehearse_windows_installer_lifecycle.ps1 -CommercialInstaller ".\dist\windows-x64\2.0.0\SentriFaceEdge-2.0.0-Commercial-x64.exe" -ResearchInstaller ".\dist\windows-x64\2.0.0\SentriFaceEdge-2.0.0-Research-x64.exe" -CreateSyntheticFixture
           exit $LASTEXITCODE
+      - name: Collect rehearsal evidence
+        if: always()
+        shell: pwsh
+        run: |
+          $workspace = Join-Path $env:TEMP "sentriface-installer-rehearsal"
+          $target = "dist/windows-x64/2.0.0"
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          if (Test-Path -LiteralPath $workspace) {
+            Copy-Item -Path (Join-Path $workspace "*-comparison.json") -Destination $target -Force -ErrorAction SilentlyContinue
+            Copy-Item -Path (Join-Path $workspace "installer-lifecycle-rehearsal.json") -Destination $target -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Upload non-sensitive validation evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -72,5 +84,7 @@ jobs:
             dist/windows-x64/2.0.0/packaged-runtime.json
             dist/windows-x64/2.0.0/checksums.sha256
             dist/windows-x64/2.0.0/release-validation-summary.txt
+            dist/windows-x64/2.0.0/*-comparison.json
+            dist/windows-x64/2.0.0/installer-lifecycle-rehearsal.json
           retention-days: 3
           if-no-files-found: warn
