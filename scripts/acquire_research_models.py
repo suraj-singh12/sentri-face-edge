@@ -156,7 +156,7 @@ def acquire(cache_dir: Path, output_dir: Path) -> dict[str, object]:
         archive = _ensure_archive(cache_dir, spec, member)
         try:
             records.append(_extract_verified(archive, member, spec, output_dir))
-        except RuntimeError:
+        except (OSError, zipfile.BadZipFile, RuntimeError):
             archive.unlink(missing_ok=True)
             archive = _ensure_archive(cache_dir, spec, member)
             records.append(_extract_verified(archive, member, spec, output_dir))
