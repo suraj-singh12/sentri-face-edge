@@ -97,13 +97,14 @@ end;
 function InitializeSetup(): Boolean;
 var
   InstalledVersion, UninstallKey: String;
+  Answer: Integer;
 begin
   Result := True;
   UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1';
   PreviousInstallation := RegQueryStringValue(HKLM64, UninstallKey, 'DisplayVersion', InstalledVersion);
   if PreviousInstallation then begin
     if CompareVersions('{#MyAppVersion}', InstalledVersion) < 0 then begin
-      MsgBox('A newer SentriFace Edge version is already installed. Downgrades are not supported.', mbError, MB_OK);
+      Answer := SuppressibleMsgBox('A newer SentriFace Edge version is already installed. Downgrades are not supported.', mbError, MB_OK, IDOK);
       Result := False;
     end;
   end;
