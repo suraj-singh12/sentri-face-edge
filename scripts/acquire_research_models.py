@@ -78,7 +78,7 @@ def _zip_has_member(path: Path, member: str) -> bool:
         return False
 
 
-def _download(url: str, destination: Path, *, retries: int = 4) -> None:
+def _download(url: str, destination: Path, member: str, *, retries: int = 4) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(destination.suffix + ".part")
     for attempt in range(retries):
@@ -93,12 +93,11 @@ def _download(url: str, destination: Path, *, retries: int = 4) -> None:
                 mode = "ab" if offset else "wb"
                 with temporary.open(mode) as output:
                     shutil.copyfileobj(response, output, length=CHUNK)
-            if destination.exists():
-                temporary.unlink(missing_ok=True)
-            else:
-                os.replace(temporary, destination)
+            if not _zip_has_member(temporary, member):
+                raise RuntimeError(f"Downloaded archive is incomplete or not a valid zip: {url}")
+            os.replace(temporary, destination)
             return
-        except (OSError, urllib.error.URLError, TimeoutError):
+        except (OSError, urllib.error.URLError, TimeoutError, RuntimeError):
             if attempt + 1 == retries:
                 raise
             time.sleep(2 * (attempt + 1))
@@ -109,7 +108,7 @@ def _ensure_archive(cache_dir: Path, spec: dict[str, object], member: str) -> Pa
     archive = cache_dir / str(spec["archive"])
     if not _zip_has_member(archive, member):
         archive.unlink(missing_ok=True)
-        _download(str(spec["archive_url"]), archive)
+        _download(str(spec["archive_url"]), archive, member)
     if not _zip_has_member(archive, member):
         raise RuntimeError(f"{archive.name} does not contain required member {member}")
     return archive
