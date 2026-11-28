@@ -154,7 +154,12 @@ def acquire(cache_dir: Path, output_dir: Path) -> dict[str, object]:
     records = []
     for member, spec in MODELS.items():
         archive = _ensure_archive(cache_dir, spec, member)
-        records.append(_extract_verified(archive, member, spec, output_dir))
+        try:
+            records.append(_extract_verified(archive, member, spec, output_dir))
+        except RuntimeError:
+            archive.unlink(missing_ok=True)
+            archive = _ensure_archive(cache_dir, spec, member)
+            records.append(_extract_verified(archive, member, spec, output_dir))
     provenance = {
         "contract": "sentriface.research-model-provenance",
         "contract_version": 1,
