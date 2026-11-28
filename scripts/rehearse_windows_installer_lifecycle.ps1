@@ -19,7 +19,7 @@ New-Item -ItemType Directory -Force -Path $Workspace | Out-Null
 
 function Invoke-Setup([string]$Installer, [string]$Name, [switch]$ExpectFailure) {
     $log = Join-Path $Workspace "$Name-setup.log"
-    $args = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$log`"")
+    $args = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=`"$log`"", "/DIR=`"$InstallDir`"")
     $process = Start-Process -FilePath (Resolve-Path $Installer) -ArgumentList $args -Wait -PassThru
     if ($ExpectFailure) {
         if ($process.ExitCode -eq 0) { throw "$Name unexpectedly succeeded; downgrade refusal failed" }
@@ -134,21 +134,66 @@ if (-not (Test-Path -LiteralPath (Join-Path $DataDir "models\.model-authority\ac
 $research = Save-State "03-after-research"
 Compare-State $repair $research "research-transition"
 
-Invoke-Setup $CommercialInstaller "04-commercial-transition"
-if (Test-Path -LiteralPath (Join-Path $InstallDir "bundled-models")) { throw "Commercial transition retained bundled Research payload" }
-$commercial = Save-State "04-after-commercial"
-Compare-State $research $commercial "commercial-transition"
-
-Invoke-Uninstall "05-uninstall"
-if (-not (Test-Path -LiteralPath (Join-Path $DataDir "sentriface.db"))) { throw "Uninstall removed the encrypted user database" }
-Invoke-Setup $CommercialInstaller "06-reinstall-commercial"
+Invoke-Setup $ResearchInstaller "04-research-repair"
+$researchRepair = Save-State "04-after-research-repair"
+Compare-State $research $researchRepair "research-repair"
 Invoke-AppBriefly
-$reinstalled = Save-State "06-after-reinstall"
+$researchRestart = Save-State "05-after-research-restart"
+Compare-State $researchRepair $researchRestart "research-restart"
+
+Invoke-Setup $CommercialInstaller "06-commercial-transition"
+if (Test-Path -LiteralPath (Join-Path $InstallDir "bundled-models")) { throw "Commercial transition retained bundled Research payload" }
+$commercial = Save-State "06-after-commercial"
+Compare-State $researchRestart $commercial "commercial-transition"
+
+Invoke-Uninstall "07-uninstall"
+if (-not (Test-Path -LiteralPath (Join-Path $DataDir "sentriface.db"))) { throw "Uninstall removed the encrypted user database" }
+Invoke-Setup $CommercialInstaller "08-reinstall-commercial"
+Invoke-AppBriefly
+$reinstalled = Save-State "08-after-reinstall"
 Compare-State $commercial $reinstalled "reinstall-reconnect"
 
 if ($PreviousInstaller) {
-    Invoke-Setup $PreviousInstaller "07-downgrade" -ExpectFailure
+    Invoke-Setup $PreviousInstaller "09-downgrade" -ExpectFailure
+} else {
+    $uninstallKeyPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{9B86BE35-3E8F-47F0-A9C2-A4CF4933B985}_is1"
+    if (-not (Test-Path -LiteralPath $uninstallKeyPath)) { throw "Installed-version registry key is missing for downgrade rehearsal" }
+    $originalVersion = (Get-ItemProperty -LiteralPath $uninstallKeyPath -Name DisplayVersion).DisplayVersion
+    Set-ItemProperty -LiteralPath $uninstallKeyPath -Name DisplayVersion -Value "9999.0.0"
+    try {
+        Invoke-Setup $CommercialInstaller "09-downgrade" -ExpectFailure
+    } finally {
+        Set-ItemProperty -LiteralPath $uninstallKeyPath -Name DisplayVersion -Value $originalVersion
+    }
 }
 
+$summary = [ordered]@{
+    contract = "sentriface.installer-lifecycle-rehearsal"
+    contract_version = 1
+    status = "PASS"
+    scenarios = @(
+        "fresh-commercial-install",
+        "same-version-commercial-repair-before-model-activation",
+        "commercial-to-research-transition",
+        "automatic-research-model-provisioning",
+        "model-activation-and-application-start",
+        "same-version-research-repair-preserving-active-model",
+        "restart-after-research-repair",
+        "research-to-commercial-transition-preserving-active-model",
+        "uninstall-preserving-user-data",
+        "reinstall-reconnection",
+        "licensing-enforcement",
+        "offline-firewall-policy",
+        "incompatible-downgrade-refusal"
+    )
+    not_automated = @(
+        "interrupted-or-failed-installation",
+        "deliberately-failed-database-migration",
+        "upgrade-from-a-supported-earlier-release"
+    )
+}
+$summaryPath = Join-Path $Workspace "installer-lifecycle-rehearsal.json"
+[IO.File]::WriteAllText($summaryPath, ($summary | ConvertTo-Json -Depth 5) + "`n", [Text.Encoding]::ASCII)
+
 Write-Host "Installer lifecycle rehearsal passed. Evidence: $Workspace"
-Write-Host "Not automated here: interrupted installation and deliberately failed migration rehearsal; record those separately before release acceptance."
+Write-Host "Not automated here: interrupted installation, deliberately failed migration, and supported-earlier-release upgrade rehearsal; record those separately before release acceptance."
