@@ -43,15 +43,18 @@ def test_compare_refuses_changed_or_missing_authority():
 def test_compare_allows_only_operational_login_bookkeeping():
     before = snapshot()
     before["tables"]["app_users"] = {
-        "columns": ["user_id", "username", "password_hash", "last_login_at", "updated_at"],
+        "columns": ["user_id", "username", "password_hash", "failed_attempts", "locked_until", "last_login_at", "updated_at"],
         "primary_key": ["user_id"],
         "row_count": 1,
         "rows": [{"rowid": 1, "values": {
             "user_id": "u1", "username": "owner", "password_hash": "hash",
+            "failed_attempts": 2, "locked_until": "expired",
             "last_login_at": None, "updated_at": "before",
         }}],
     }
     after = json.loads(json.dumps(before))
+    after["tables"]["app_users"]["rows"][0]["values"]["failed_attempts"] = 0
+    after["tables"]["app_users"]["rows"][0]["values"]["locked_until"] = None
     after["tables"]["app_users"]["rows"][0]["values"]["last_login_at"] = "after"
     after["tables"]["app_users"]["rows"][0]["values"]["updated_at"] = "after"
     assert compare(before, after)["status"] == "PASS"

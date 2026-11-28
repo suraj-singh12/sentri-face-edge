@@ -9,10 +9,10 @@ from typing import Any
 
 
 # Successful sign-ins legitimately update authentication bookkeeping while the
-# rehearsal verifies licensing. Account identity, credentials, role and lockout
-# authority remain strictly compared.
+# rehearsal verifies licensing and clears prior lockout state. Account identity,
+# credentials, role, disabled state and password-change authority remain strictly compared.
 VOLATILE_SHARED_COLUMNS = {
-    "app_users": {"last_login_at", "updated_at"},
+    "app_users": {"failed_attempts", "last_login_at", "locked_until", "updated_at"},
 }
 
 
