@@ -1,6 +1,8 @@
 # P14 release acceptance
 
-## Current result — Windows source mode and pre-tag RC hardening (2026-09-21)
+> **Currency note:** the first section is the historical 2026-09-21 engineering-candidate report. Its exact filename, signing expectations, schema state and test counts are not current acceptance authority. Issue #5 supersedes them for v2.0.0: current artifacts are the exact Commercial/Research variant names, executable/installer signing is deferred, and final acceptance requires fresh evidence for the exact candidate commit.
+
+## Historical result — Windows source mode and pre-tag RC hardening (2026-09-21)
 
 The `release-v2.0.0-hardening` worktree now has an isolated Windows source
 launcher, a narrowly scoped development reset, a controlled self-signing path,

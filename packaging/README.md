@@ -70,7 +70,7 @@ For an Inno diagnostic log, launch a release-test installer with an explicit
 local path, for example:
 
 ```powershell
-.\SentriFaceEdge-2.0.0-x64-unsigned-pretag-rc.exe /LOG="$env:TEMP\SentriFaceEdge-install.log"
+.\SentriFaceEdge-2.0.0-Commercial-x64.exe /LOG="$env:TEMP\SentriFaceEdge-install.log"
 ```
 
 The log is a support artifact; review and remove it after the failed or
