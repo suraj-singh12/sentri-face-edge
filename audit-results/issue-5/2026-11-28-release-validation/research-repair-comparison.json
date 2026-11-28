@@ -1,0 +1,12 @@
+{
+  "added_columns": {},
+  "added_files": [],
+  "added_rows": {},
+  "added_tables": [],
+  "contract": "sentriface.installation-state-comparison",
+  "contract_version": 1,
+  "errors": [],
+  "schema_version_after": 37,
+  "schema_version_before": 37,
+  "status": "PASS"
+}

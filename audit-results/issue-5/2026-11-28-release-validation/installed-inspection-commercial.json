@@ -1,0 +1,15 @@
+﻿{
+    "contract":  "sentriface.installed-variant-inspection",
+    "contract_version":  1,
+    "status":  "PASS",
+    "variant":  "Commercial",
+    "installer":  "SentriFaceEdge-2.0.0-Commercial-x64.exe",
+    "installer_sha256":  "26405239ac04e54ab05b9fc13dab03bb1ae76aa76043771920eca299e5b24f98",
+    "uninstall_exit_code":  0,
+    "model_payload":  [
+
+                      ],
+    "errors":  [
+
+               ]
+}

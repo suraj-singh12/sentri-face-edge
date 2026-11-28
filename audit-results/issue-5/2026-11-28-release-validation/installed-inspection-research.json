@@ -1,0 +1,24 @@
+﻿{
+    "contract":  "sentriface.installed-variant-inspection",
+    "contract_version":  1,
+    "status":  "PASS",
+    "variant":  "Research",
+    "installer":  "SentriFaceEdge-2.0.0-Research-x64.exe",
+    "installer_sha256":  "fd2e5fc39b4bb324c5c441714cc807938abacf34f9674d06d58be64a2421776b",
+    "uninstall_exit_code":  0,
+    "model_payload":  [
+                          {
+                              "path":  "det_500m.onnx",
+                              "size":  2524817,
+                              "sha256":  "5e4447f50245bbd7966bd6c0fa52938c61474a04ec7def48753668a9d8b4ea3a"
+                          },
+                          {
+                              "path":  "w600k_r50.onnx",
+                              "size":  174383860,
+                              "sha256":  "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43"
+                          }
+                      ],
+    "errors":  [
+
+               ]
+}

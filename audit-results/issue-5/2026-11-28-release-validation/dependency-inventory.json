@@ -1,0 +1,292 @@
+{
+  "build_tools": [
+    {
+      "license": "GNU Affero General Public License v3",
+      "name": "Nuitka",
+      "version": "4.1.3"
+    },
+    {
+      "license": "MIT License",
+      "name": "ordered-set",
+      "version": "4.1.0"
+    },
+    {
+      "license": "MIT",
+      "name": "pip",
+      "version": "26.2.1"
+    },
+    {
+      "license": "MIT",
+      "name": "setuptools",
+      "version": "84.0.0"
+    },
+    {
+      "license": "MIT",
+      "name": "wheel",
+      "version": "0.48.0"
+    },
+    {
+      "license": "BSD-3-Clause",
+      "name": "zstandard",
+      "version": "0.25.0"
+    }
+  ],
+  "bundled_packages": [
+    {
+      "license": "MIT",
+      "name": "argon2-cffi",
+      "version": "25.1.0"
+    },
+    {
+      "license": "MIT",
+      "name": "argon2-cffi-bindings",
+      "version": "25.1.0"
+    },
+    {
+      "license": "MPL-2.0",
+      "name": "certifi",
+      "version": "2026.7.22"
+    },
+    {
+      "license": "MIT-0",
+      "name": "cffi",
+      "version": "2.1.1"
+    },
+    {
+      "license": "MIT",
+      "name": "charset-normalizer",
+      "version": "3.5.0"
+    },
+    {
+      "license": "BSD License",
+      "name": "colorama",
+      "version": "0.4.6"
+    },
+    {
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "name": "cryptography",
+      "version": "50.0.0"
+    },
+    {
+      "license": "Apache 2.0",
+      "name": "flatbuffers",
+      "version": "25.12.19"
+    },
+    {
+      "license": "BSD-3-Clause",
+      "name": "idna",
+      "version": "3.18"
+    },
+    {
+      "license": "MIT License",
+      "name": "jaraco.classes",
+      "version": "3.4.0"
+    },
+    {
+      "license": "MIT",
+      "name": "jaraco.context",
+      "version": "6.1.2"
+    },
+    {
+      "license": "MIT",
+      "name": "jaraco.functools",
+      "version": "4.6.0"
+    },
+    {
+      "license": "MIT",
+      "name": "keyring",
+      "version": "25.7.0"
+    },
+    {
+      "license": "MIT License",
+      "name": "loguru",
+      "version": "0.7.3"
+    },
+    {
+      "license": "MIT",
+      "name": "more-itertools",
+      "version": "11.1.0"
+    },
+    {
+      "license": "Copyright (c) 2005-2023, NumPy Developers.\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are\nmet:\n\n    * Redistributions of source code must retain the above copyright\n       notice, this list of conditions and the following disclaimer.\n\n    * Redistributions in binary form must reproduce the above\n       copyright notice, this list of conditions and the following\n       disclaimer in th",
+      "name": "numpy",
+      "version": "1.26.4"
+    },
+    {
+      "license": "MIT License",
+      "name": "onnxruntime",
+      "version": "1.28.0"
+    },
+    {
+      "license": "Apache 2.0",
+      "name": "opencv-python-headless",
+      "version": "4.11.0.86"
+    },
+    {
+      "license": "3-Clause BSD License",
+      "name": "protobuf",
+      "version": "7.35.1"
+    },
+    {
+      "license": "BSD-3-Clause",
+      "name": "pywin32-ctypes",
+      "version": "0.2.3"
+    },
+    {
+      "license": "Apache-2.0",
+      "name": "requests",
+      "version": "2.34.2"
+    },
+    {
+      "license": "LicenseRef-Proprietary",
+      "name": "sentriface-edge",
+      "version": "2.0.0"
+    },
+    {
+      "license": "MIT",
+      "name": "sqlcipher3",
+      "version": "0.6.2"
+    },
+    {
+      "license": "MIT",
+      "name": "urllib3",
+      "version": "2.7.0"
+    },
+    {
+      "license": "MIT license",
+      "name": "win32_setctime",
+      "version": "1.2.0"
+    }
+  ],
+  "compiled_top_level_modules": [
+    "_argon2_cffi_bindings",
+    "_asyncio",
+    "_bz2",
+    "_cffi_backend",
+    "_ctypes",
+    "_decimal",
+    "_hashlib",
+    "_lzma",
+    "_multiprocessing",
+    "_overlapped",
+    "_queue",
+    "_socket",
+    "_sqlite3",
+    "_ssl",
+    "_uuid",
+    "_wmi",
+    "argon2",
+    "certifi",
+    "cffi",
+    "charset_normalizer",
+    "colorama",
+    "cryptography",
+    "cv2",
+    "flatbuffers",
+    "google",
+    "idna",
+    "jaraco",
+    "keyring",
+    "loguru",
+    "metrics",
+    "models",
+    "more_itertools",
+    "multiprocessing-postLoad",
+    "multiprocessing-preLoad",
+    "numpy",
+    "numpy.libs",
+    "onnxruntime",
+    "pyexpat",
+    "requests",
+    "select",
+    "sentriface",
+    "sqlcipher3",
+    "unicodedata",
+    "urllib3",
+    "win32_setctime",
+    "win32ctypes"
+  ],
+  "contract": "sentriface.release-dependency-inventory",
+  "contract_version": 2,
+  "module_distribution_evidence": {
+    "_argon2_cffi_bindings": [
+      "argon2-cffi-bindings"
+    ],
+    "_cffi_backend": [
+      "cffi"
+    ],
+    "argon2": [
+      "argon2-cffi"
+    ],
+    "certifi": [
+      "certifi"
+    ],
+    "cffi": [
+      "cffi"
+    ],
+    "charset_normalizer": [
+      "charset-normalizer"
+    ],
+    "colorama": [
+      "colorama"
+    ],
+    "cryptography": [
+      "cryptography"
+    ],
+    "cv2": [
+      "opencv-python-headless"
+    ],
+    "flatbuffers": [
+      "flatbuffers"
+    ],
+    "google": [
+      "protobuf"
+    ],
+    "idna": [
+      "idna"
+    ],
+    "jaraco": [
+      "jaraco.classes",
+      "jaraco.context",
+      "jaraco.functools"
+    ],
+    "keyring": [
+      "keyring"
+    ],
+    "loguru": [
+      "loguru"
+    ],
+    "more_itertools": [
+      "more-itertools"
+    ],
+    "numpy": [
+      "numpy"
+    ],
+    "onnxruntime": [
+      "onnxruntime"
+    ],
+    "requests": [
+      "requests"
+    ],
+    "sentriface": [
+      "sentriface-edge"
+    ],
+    "sqlcipher3": [
+      "sqlcipher3"
+    ],
+    "urllib3": [
+      "urllib3"
+    ],
+    "win32_setctime": [
+      "win32_setctime"
+    ],
+    "win32ctypes": [
+      "pywin32-ctypes"
+    ]
+  },
+  "release_lock": {
+    "filename": "requirements-release.lock",
+    "sha256": "997f8ae7cc3eda8f4fe6b474f470593e0febf9495e0e82a54efd013948f39319"
+  },
+  "scope": "Packages mapped from modules compiled by Nuitka or copied into the standalone distribution; build tools are reported separately."
+}

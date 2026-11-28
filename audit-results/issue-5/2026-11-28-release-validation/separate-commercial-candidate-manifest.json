@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "commit": "191c4fa397a1f45f5ddbe0832610010ed229959f",
+  "variant": "Commercial",
+  "installer": "SentriFaceEdge-2.0.0-Commercial-x64.exe",
+  "sha256": "93e5e31b853e67afbaad341a8fcac851cdc08e453f6d3f2fb34526949e15eca4",
+  "classification": "unsigned engineering candidate",
+  "working_tree_clean": false,
+  "generated_frontend_changed": true
+}

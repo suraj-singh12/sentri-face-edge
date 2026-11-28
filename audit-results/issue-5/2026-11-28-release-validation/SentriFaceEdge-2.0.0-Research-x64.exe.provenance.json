@@ -1,0 +1,56 @@
+{
+  "artifacts": [
+    {
+      "kind": "installer",
+      "name": "SentriFaceEdge-2.0.0-Research-x64.exe",
+      "sha256": "fd2e5fc39b4bb324c5c441714cc807938abacf34f9674d06d58be64a2421776b",
+      "size": 224658129
+    },
+    {
+      "kind": "standalone-application",
+      "name": "SentriFaceEdge.exe",
+      "sha256": "9d24338c5c8b6060b9d6d1ad6fe2b1e4f5f0041aaa6d99710197e0e6fa109f74",
+      "size": 57547776
+    }
+  ],
+  "authenticode_signed": false,
+  "branch": "",
+  "builder_platform": "Windows-2025Server-10.0.26100-SP0",
+  "builder_python": "3.12.10",
+  "commit": "efd6a0c06f8ee532dee611889a7a61e2723a75b4",
+  "contract": "sentriface.release-provenance",
+  "contract_version": 2,
+  "created_at": "2026-11-28T10:13:33+00:00",
+  "development_build": true,
+  "evidence": {
+    "artifact_inspection": {
+      "filename": "artifact-inspection-research.json",
+      "sha256": "7bda8decfd52a50a32312f64ae811472803e943deb310c2d200f4ac4ee312ab8"
+    },
+    "dependency_inventory": {
+      "filename": "dependency-inventory.json",
+      "sha256": "59c32b6980e4a385a1e2f1e46bd498e11cc616b7be039f80b9c75403001e4e6b"
+    },
+    "packaged_runtime": {
+      "filename": "packaged-runtime.json",
+      "sha256": "45b37f3ad11e49bc8b052ac68a67f76dba2fb96648f38a746ed7bf1d386ea8af"
+    },
+    "release_lock": {
+      "filename": "requirements-release.lock",
+      "sha256": "997f8ae7cc3eda8f4fe6b474f470593e0febf9495e0e82a54efd013948f39319"
+    }
+  },
+  "external_model_session_acceptance": "PENDING_NO_INPUTS",
+  "model_onboarding_acceptance": "PENDING_NOT_EXERCISED",
+  "models_bundled": true,
+  "observed_architectures": [
+    "AMD64"
+  ],
+  "private_license_key_bundled": false,
+  "production_accepted": false,
+  "tags_at_commit": [],
+  "target_architecture": "AMD64",
+  "variant": "Research",
+  "version": "2.0.0",
+  "working_tree_clean": false
+}

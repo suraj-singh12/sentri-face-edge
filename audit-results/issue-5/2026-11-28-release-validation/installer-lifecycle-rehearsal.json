@@ -1,0 +1,25 @@
+{
+    "contract":  "sentriface.installer-lifecycle-rehearsal",
+    "contract_version":  1,
+    "status":  "PASS",
+    "scenarios":  [
+                      "fresh-commercial-install",
+                      "same-version-commercial-repair-before-model-activation",
+                      "commercial-to-research-transition",
+                      "automatic-research-model-provisioning",
+                      "model-activation-and-application-start",
+                      "same-version-research-repair-preserving-active-model",
+                      "restart-after-research-repair",
+                      "research-to-commercial-transition-preserving-active-model",
+                      "uninstall-preserving-user-data",
+                      "reinstall-reconnection",
+                      "licensing-enforcement",
+                      "offline-firewall-policy",
+                      "incompatible-downgrade-refusal"
+                  ],
+    "not_automated":  [
+                          "interrupted-or-failed-installation",
+                          "deliberately-failed-database-migration",
+                          "upgrade-from-a-supported-earlier-release"
+                      ]
+}

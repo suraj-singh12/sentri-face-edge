@@ -1,0 +1,413 @@
+{
+  "architectures": [
+    "AMD64"
+  ],
+  "contract": "sentriface.release-artifact-inspection",
+  "contract_version": 2,
+  "errors": [],
+  "expected_architecture": "AMD64",
+  "file_count": 67,
+  "installer": {
+    "architecture": "AMD64",
+    "machine": "0x8664",
+    "path": "SentriFaceEdge-2.0.0-Research-x64.exe",
+    "sha256": "fd2e5fc39b4bb324c5c441714cc807938abacf34f9674d06d58be64a2421776b",
+    "size": 224658129
+  },
+  "model_payload": [
+    {
+      "path": "det_500m.onnx",
+      "sha256": "5e4447f50245bbd7966bd6c0fa52938c61474a04ec7def48753668a9d8b4ea3a",
+      "size": 2524817
+    },
+    {
+      "path": "w600k_r50.onnx",
+      "sha256": "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43",
+      "size": 174383860
+    }
+  ],
+  "native_binaries": [
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_argon2_cffi_bindings/_ffi.pyd",
+      "sha256": "9385a442e1ce2f67375a72c07472ee56af5cb03d436e4ef2e7b7e2ade0fe93d3",
+      "size": 60928
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_asyncio.pyd",
+      "sha256": "c77de90cad749087a0c5dc5e19d78d24f6ef44e7e5ac19b8420cfc0cea62395d",
+      "size": 74096
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_bz2.pyd",
+      "sha256": "65f610646d10d5babea080e060d244b546ec52c54012e5e937dc72dcc2e2e7bc",
+      "size": 86896
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_cffi_backend.pyd",
+      "sha256": "9af5e4f68a41f26b726f2e9424f9d58a4f5666189f6a48be95f406b257102aec",
+      "size": 181248
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_ctypes.pyd",
+      "sha256": "0e56107a891100535f2da79d85a5ae65ff1227b4765bd108f8593ac1a1110d81",
+      "size": 127480
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_decimal.pyd",
+      "sha256": "aeacfead2befcc0768063a037bb64bd32109ae09cb144e5f571b04dd7965db9d",
+      "size": 262000
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_hashlib.pyd",
+      "sha256": "03d233dbace599168eaffec823de6ed7beec8c2a4ebfe9b8a3d8e042a59af3ba",
+      "size": 68976
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_lzma.pyd",
+      "sha256": "e3deecc1f59a3b811c608861decd84de1e8df8bafd5e2b39188861318c5a38cf",
+      "size": 161136
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_multiprocessing.pyd",
+      "sha256": "2c636df7059cb0dd7e978dd735c7c5c8ddb09cf94754cf9e232296b96c5c545a",
+      "size": 37368
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_overlapped.pyd",
+      "sha256": "662126ff80c3a1b4cedf74074029c12ae4743e6d3b37376e39ac70aacb7d4d3c",
+      "size": 57336
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_queue.pyd",
+      "sha256": "48e76e0ad63f6932b4a77b5819f41c1e7595636ca8d9e824f0943a14b8bb5035",
+      "size": 33784
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_socket.pyd",
+      "sha256": "3efa4636cf9e350856f6927d67a4c2564bf9bd2758a00bbf17d3aece5b60016d",
+      "size": 85496
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_sqlite3.pyd",
+      "sha256": "64b51df2805c58b023a875e8ae3be7ac7f61ef664f32ca6c90f6315da47ef0bc",
+      "size": 126184
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_ssl.pyd",
+      "sha256": "0bc527d2dbc50009f43b2ed5d5982c4f63f4b647647ffa9eda612dcda80f6040",
+      "size": 179432
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_uuid.pyd",
+      "sha256": "acce4f281d7ffb2dec0997527faf25b1df62ad7bd3032c568ddcf65c90edc867",
+      "size": 27128
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "_wmi.pyd",
+      "sha256": "a980f1e7a29842bd946863fc2693fbeb555a9dc0f9e1630dfed9a2fcdef3ece2",
+      "size": 40304
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "charset_normalizer/cd.pyd",
+      "sha256": "04a7d8d1f4a11383c00f0552484ae40f428486133d5be0af99cfac7063ab8a11",
+      "size": 117248
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "charset_normalizer/md.pyd",
+      "sha256": "fa587a15d503e6d3b891663ecc1c5987a2be775ea096427ff52696ee8ebcfc99",
+      "size": 194560
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "cryptography/hazmat/bindings/_rust.pyd",
+      "sha256": "05fefb14b1cb1c90bcccce87e82d205f5f2396977bf911243972790ba2376849",
+      "size": 9935360
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "cv2/cv2.pyd",
+      "sha256": "cb94fb2b0224b1ea1dffef2e69ed56467df2c57f00b8ce88c89ff76a08b39d00",
+      "size": 74698752
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "cv2/opencv_videoio_ffmpeg4110_64.dll",
+      "sha256": "f0460320ac08c074bdf6d5a19f5c13d204e585e85030fdd40e20a3c0b3adeb67",
+      "size": 27954688
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "google/_upb/_message.pyd",
+      "sha256": "0135f3c7d328e79b5ee468bb04d92c5c9a05f92ff7f076e41621822f24fdec05",
+      "size": 728649
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "libcrypto-3.dll",
+      "sha256": "ccfffddcd3defb8d899026298af9af43bc186130f8483d77e97c93233d5f27d7",
+      "size": 5231472
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "libffi-8.dll",
+      "sha256": "eff52743773eb550fcc6ce3efc37c85724502233b6b002a35496d828bd7b280a",
+      "size": 39696
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "libssl-3.dll",
+      "sha256": "007142039f04d04e0ed607bda53de095e5bc6a8a10d26ecedde94ea7d2d7eefe",
+      "size": 794992
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "msvcp140.dll",
+      "sha256": "59d325227321d52b9a523ea401ce6787a5d59f78229a0ff3a6f124e5d3445685",
+      "size": 652136
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "msvcp140_1.dll",
+      "sha256": "1c6522f4d005539109aa040f063659704bfda94a224142f50942573cfbcf7ec9",
+      "size": 35696
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy.libs/libopenblas64__v0.3.23-293-gc2f4bdbb-gcc_10_3_0-2bde3a66a51006b2b53eb373ff767a3f.dll",
+      "sha256": "57b87772bf676b5c2d718c79dddc9f039d79ec3319fee1398cc305adff7b69e5",
+      "size": 38168576
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/core/_multiarray_tests.pyd",
+      "sha256": "d9017d99e0b6cad2f02462420793551fe9e6b836f3a800228caaeed144a32b75",
+      "size": 66048
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/core/_multiarray_umath.pyd",
+      "sha256": "5d4f44389d1b4e9aa62af63b716a0d4266dbb56fefa9bf27831f85b695994da5",
+      "size": 2842624
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/fft/_pocketfft_internal.pyd",
+      "sha256": "f0a4df58721cb85ca35f5f3b8c47538c53d57bbcca4fc5c07a6c06ac4c5ef421",
+      "size": 110080
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/linalg/_umath_linalg.pyd",
+      "sha256": "7652e82c6c53249b911dde9822b71a7ecbecbc699c79475862e779a51d7f1d0f",
+      "size": 106496
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/random/_bounded_integers.pyd",
+      "sha256": "0c19ec0b3129f12df51982aace8478f8274a5b0d6a2206be1d0e1ee0227c36a4",
+      "size": 231936
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/random/_common.pyd",
+      "sha256": "774bf3e20e2b1ca9797deb1daccb88a776a70c8555a501454d8d900a14585134",
+      "size": 166400
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/random/_generator.pyd",
+      "sha256": "8979528423faffa32d4d6edddc0b3591b8fd465c7549263267c4b249e2f1d03b",
+      "size": 689152
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/random/_mt19937.pyd",
+      "sha256": "592238b7a62fb033724cfd745be6036700f584d6c4ee8baf83cb77788320aa49",
+      "size": 75776
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/random/_pcg64.pyd",
+      "sha256": "d9a1618ba4515eb6c41dcac7b99400d07e22cd56ad4f3ba94cb84dd231cf73a8",
+      "size": 81920
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/random/_philox.pyd",
+      "sha256": "34363add569504b32533fa65b6933feb2ba2bcf0fe10be47c55fbdad2e223df8",
+      "size": 68608
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/random/_sfc64.pyd",
+      "sha256": "a241dfd9d3abaeff3028ba98bd8c573d4f8c7d2990119634b4a280fc3fd33de9",
+      "size": 50688
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/random/bit_generator.pyd",
+      "sha256": "d335d1443e324a7a89582cc3e85bd850198eb3133c3dd38c7f55c6f609b0cfd8",
+      "size": 160768
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "numpy/random/mtrand.pyd",
+      "sha256": "2df309f3cc66116966484fcc466cef200aff8d2a4c8ea482d3530b5cccb89394",
+      "size": 582656
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "onnxruntime/capi/onnxruntime.dll",
+      "sha256": "3d6bd02dc137b9a1dfdac045a52b147ffb920bb06ab812b08fc8e14279859855",
+      "size": 17766752
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "onnxruntime/capi/onnxruntime_providers_shared.dll",
+      "sha256": "7ef797110a893f820db67a3f6cf38650110ccb3373567e3048fa8f3af1790040",
+      "size": 21816
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "onnxruntime/capi/onnxruntime_pybind11_state.pyd",
+      "sha256": "c3a7ad06a04fa91b1936a6d0567b8e5f9b5cf07a377b26b720c0b4a499bbdf2e",
+      "size": 18444600
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "pyexpat.pyd",
+      "sha256": "d615e193d1affcdbfe504e90d3621cbdcff94bf72b79d899126534507fd6d27a",
+      "size": 205304
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "python3.dll",
+      "sha256": "fb975a606e7fbf74f64260e3f60c3490b4f74a183c0926fd6ed1ac4c52ac7b1c",
+      "size": 70376
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "python312.dll",
+      "sha256": "9a0e3435aaa680d868150f87ab3e388ad2eebc22f87e036155c7b4eda8cd2120",
+      "size": 6945272
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "select.pyd",
+      "sha256": "d4d7181b11db0bd22a6cd5cda6f8583d1f5c77615fd0a6ca33350619d6e0438a",
+      "size": 33136
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "SentriFaceEdge.exe",
+      "sha256": "9d24338c5c8b6060b9d6d1ad6fe2b1e4f5f0041aaa6d99710197e0e6fa109f74",
+      "size": 57547776
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "sqlcipher3/_sqlite3.pyd",
+      "sha256": "189cc9723ed012233909992edf89d0a54337f12c40b92f164d96bcc19a6b5ddd",
+      "size": 5920256
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "sqlite3.dll",
+      "sha256": "8daa45684bf6688fca28d956b2e8942f2fa98f656675ce68e6d61dd869848a7a",
+      "size": 1583608
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "unicodedata.pyd",
+      "sha256": "208ee1cd3cbad0828433ca7246b05be2b1ff5569983d27d296c0b38888585488",
+      "size": 1140592
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "vcruntime140.dll",
+      "sha256": "052ad6a20d375957e82aa6a3c441ea548d89be0981516ca7eb306e063d5027f4",
+      "size": 120400
+    },
+    {
+      "architecture": "AMD64",
+      "machine": "0x8664",
+      "path": "vcruntime140_1.dll",
+      "sha256": "6a99bc0128e0c7d6cbbf615fcc26909565e17d4ca3451b97f8987f9c6acbc6c8",
+      "size": 49776
+    }
+  ],
+  "native_binary_count": 54,
+  "status": "PASS",
+  "variant": "Research",
+  "version": "2.0.0"
+}

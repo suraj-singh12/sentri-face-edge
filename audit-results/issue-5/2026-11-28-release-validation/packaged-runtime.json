@@ -1,0 +1,47 @@
+{
+  "checks": [
+    {
+      "name": "windows-keyring-create-retrieve",
+      "status": "PASS"
+    },
+    {
+      "name": "sqlcipher-encrypted-database",
+      "status": "PASS"
+    },
+    {
+      "name": "secure-file-round-trip",
+      "status": "PASS"
+    },
+    {
+      "name": "opencv-native-operation",
+      "status": "PASS",
+      "version": "4.11.0"
+    },
+    {
+      "name": "onnxruntime-cpu-provider",
+      "providers": [
+        "AzureExecutionProvider",
+        "CPUExecutionProvider"
+      ],
+      "status": "PASS",
+      "version": "1.28.0"
+    },
+    {
+      "name": "loopback-http-and-frontend",
+      "status": "PASS"
+    },
+    {
+      "name": "clean-shutdown-and-instance-lock-release",
+      "status": "PASS"
+    },
+    {
+      "name": "windows-keyring-owned-cleanup",
+      "status": "PASS"
+    }
+  ],
+  "contract": "sentriface.packaged-runtime-self-test",
+  "contract_version": 1,
+  "external_model_session_acceptance": "PENDING_NO_INPUTS",
+  "model_onboarding_acceptance": "PENDING_NOT_EXERCISED",
+  "status": "PASS"
+}
