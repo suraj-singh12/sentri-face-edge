@@ -109,3 +109,15 @@ are copied from the same mark during the frontend build.
 ## v2.0.0 release variants
 
 `build_release.ps1` defaults to the economical Commercial candidate used by routine CI. Use `-InstallerVariants Both` in the manually dispatched release-candidate workflow to build Commercial and Research from one application binary. Research model archives are cached in `.model-cache`; extracted ONNX weights are build artifacts and must never be committed.
+
+## Installer lifecycle rehearsal
+
+On a disposable Windows host with no required product data, use:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\rehearse_windows_installer_lifecycle.ps1 `
+  -CommercialInstaller .\SentriFaceEdge-2.0.0-Commercial-x64.exe `
+  -ResearchInstaller .\SentriFaceEdge-2.0.0-Research-x64.exe
+```
+
+Populate a synthetic library before data-preservation comparisons, or rerun with `-SkipInitialInstall` after populating it. Never rehearse destructive scenarios against real operator data.
