@@ -30,6 +30,11 @@ PE_MACHINES = {
     0xAA64: "ARM64",
 }
 EXPECTED_MACHINE = "AMD64"
+RESEARCH_MODELS = {
+    "det_500m.onnx": (2_524_817, "5e4447f50245bbd7966bd6c0fa52938c61474a04ec7def48753668a9d8b4ea3a"),
+    "w600k_r50.onnx": (174_383_860, "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43"),
+}
+VALID_VARIANTS = {"Commercial", "Research"}
 
 
 def _sha256(path: Path) -> str:
@@ -75,6 +80,8 @@ def inspect_distribution(
     *,
     forbidden_path: str = "",
     installer: Path | None = None,
+    variant: str = "Commercial",
+    model_payload: Path | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
@@ -186,6 +193,33 @@ def inspect_distribution(
             except OSError:
                 errors.append(f"release content could not be path-scanned: {name}")
 
+    payload_records: list[dict[str, Any]] = []
+    if variant not in VALID_VARIANTS:
+        errors.append(f"release variant is unsupported: {variant}")
+    if variant == "Commercial" and model_payload is not None and model_payload.exists():
+        errors.append("Commercial release must not include a bundled model payload")
+    if variant == "Research":
+        if model_payload is None or not model_payload.is_dir():
+            errors.append("Research bundled model payload is missing")
+        else:
+            payload_files = sorted(path for path in model_payload.iterdir() if path.is_file())
+            payload_names = {path.name for path in payload_files}
+            required_names = set(RESEARCH_MODELS) | {"research-model-provenance.json", "THIRD-PARTY-MODEL-NOTICE.txt"}
+            if payload_names != required_names:
+                errors.append("Research bundled model payload does not contain exactly the approved files")
+            for name, (expected_size, expected_sha256) in RESEARCH_MODELS.items():
+                path = model_payload / name
+                if not path.is_file():
+                    continue
+                size = path.stat().st_size
+                digest = _sha256(path)
+                if size != expected_size or digest != expected_sha256:
+                    errors.append(f"Research model identity mismatch: {name}")
+                payload_records.append({"path": name, "size": size, "sha256": digest})
+            for path in payload_files:
+                if path.suffix.casefold() == ".onnx" and path.name not in RESEARCH_MODELS:
+                    errors.append(f"unexpected Research model weight: {path.name}")
+
     architectures = {item["architecture"] for item in native_binaries}
     if installer_record is not None:
         architectures.add(installer_record["architecture"])
@@ -196,7 +230,9 @@ def inspect_distribution(
         "version": version,
         "expected_architecture": EXPECTED_MACHINE,
         "architectures": sorted(architectures),
+        "variant": variant,
         "file_count": len(files),
+        "model_payload": payload_records,
         "installer": installer_record,
         "native_binary_count": len(native_binaries),
         "native_binaries": native_binaries,
@@ -215,12 +251,16 @@ def main() -> int:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--forbidden-path", default="")
     parser.add_argument("--installer", type=Path)
+    parser.add_argument("--variant", default="Commercial")
+    parser.add_argument("--model-payload", type=Path)
     args = parser.parse_args()
     report = inspect_distribution(
         args.distribution,
         args.version,
         forbidden_path=args.forbidden_path,
         installer=args.installer,
+        variant=args.variant,
+        model_payload=args.model_payload,
     )
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)

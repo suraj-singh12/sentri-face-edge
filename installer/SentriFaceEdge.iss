@@ -9,6 +9,9 @@
 #define MyPublisher "SentriFace"
 #define MyExeName "SentriFaceEdge.exe"
 #define MyAppId "{9B86BE35-3E8F-47F0-A9C2-A4CF4933B985}"
+#ifndef MyVariant
+  #define MyVariant "Commercial"
+#endif
 
 [Setup]
 AppId={{#MyAppId}
@@ -24,7 +27,7 @@ SetupArchitecture=x64
 ArchitecturesAllowed=x64os
 ArchitecturesInstallIn64BitMode=x64os
 OutputDir=..\installer_output
-OutputBaseFilename=SentriFaceEdge-{#MyAppVersion}-x64
+OutputBaseFilename=SentriFaceEdge-{#MyAppVersion}-{#MyVariant}-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -41,6 +44,9 @@ MinVersion=10.0.17763
 Source: "..\build\ui.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\packaging\windows\Install-OfflinePolicy.ps1"; Flags: dontcopy
 Source: "..\packaging\windows\Remove-OfflinePolicy.ps1"; DestDir: "{app}\support"; Flags: ignoreversion
+#ifdef ResearchModels
+Source: "..\build\research-models\*"; DestDir: "{app}\bundled-models"; Flags: ignoreversion
+#endif
 
 [Icons]
 Name: "{autoprograms}\SentriFace Edge"; Filename: "{app}\{#MyExeName}"; WorkingDir: "{app}"

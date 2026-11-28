@@ -105,3 +105,7 @@ Use the platform-specific assets supplied with this packaging contract:
 The editable high-resolution raster master is
 `assets/sentriface-app-icon-1024.png`. Browser favicon and touch-icon variants
 are copied from the same mark during the frontend build.
+
+## v2.0.0 release variants
+
+`build_release.ps1` defaults to the economical Commercial candidate used by routine CI. Use `-InstallerVariants Both` in the manually dispatched release-candidate workflow to build Commercial and Research from one application binary. Research model archives are cached in `.model-cache`; extracted ONNX weights are build artifacts and must never be committed.

@@ -95,3 +95,13 @@ dependency/license inventory, and provenance metadata. No PFX or private key is
 written to source or artifacts. Self-signing does not imply public SmartScreen
 trust. Timestamp network access, when configured, exists only in release
 infrastructure; the installed runtime stays offline.
+
+## v2.0.0 one-binary two-variant release update (Issue #5)
+
+The approved v2.0.0 release architecture builds one Nuitka standalone application once and packages that same binary into two Windows x64 Inno installers: `SentriFaceEdge-2.0.0-Commercial-x64.exe` and `SentriFaceEdge-2.0.0-Research-x64.exe`. The stable Inno AppId, executable identity, firewall rule, licensing, permissions, encryption, data roots, migrations and product UI are intentionally identical. There is no research-mode codebase or license bypass.
+
+The Research installer carries only the approved `det_500m.onnx` and `w600k_r50.onnx` files, their pinned SHA-256 provenance and third-party notice under `bundled-models`. Acquisition is release-build infrastructure only: archives are resumably cached outside source control, exact members are extracted, and size/SHA-256 verification is mandatory. The Commercial installer contains no bundled model payload. `scripts/inspect_release_artifacts.py` is now variant-aware and refuses a missing, altered, extra or wrongly placed payload.
+
+Fresh Research first-start provisioning uses the same immutable model bundle authority and activation/receipt path as operator-supplied models. It runs only when no active model state exists, never replaces an active model during repair, upgrade or variant transition, uses calibration profile `scrfd500m-r50-research`, validates runtime compatibility and fails closed into ordinary Model Setup if payload validation or activation fails. Existing model onboarding and rollback remain unchanged.
+
+Executable/installer Authenticode signing remains deferred for the v2.0.0 engineering candidates. Exact artifact names intentionally omit an unsigned suffix; unsigned status is carried unambiguously in provenance, manifests, checksums and release notes. Signing infrastructure is retained but publication remains a separate explicit manual decision.

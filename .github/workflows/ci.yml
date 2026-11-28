@@ -172,11 +172,11 @@ jobs:
         if: success() && steps.package.outcome == 'success' && steps.installer-evidence.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: SentriFaceEdge-Windows-x64-unsigned-engineering-candidate
+          name: SentriFaceEdge-Windows-x64-Commercial-unsigned-engineering-candidate
           path: |
             qa-fixtures/installer-public/${{ steps.installer-evidence.outputs.installer }}
             qa-fixtures/installer-public/${{ steps.installer-evidence.outputs.checksum }}
-            qa-fixtures/installer-public/manifest.json
+            qa-fixtures/installer-public/manifest-commercial.json
           retention-days: 7
           if-no-files-found: error
       - name: Publish concise QA summary

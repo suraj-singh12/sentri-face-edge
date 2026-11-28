@@ -102,7 +102,6 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertIn("CertificateSubject", build)
         self.assertIn("CertificateThumbprint", build)
         self.assertIn("Get-AuthenticodeSignature", build)
-        self.assertIn('"-signed-pretag-rc"', build)
         self.assertIn("KeyAlgorithm RSA", create)
         self.assertIn("HashAlgorithm SHA256", create)
         self.assertIn("KeyExportPolicy NonExportable", create)
@@ -112,6 +111,15 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertIn("Cert:\\CurrentUser\\Root", trust)
         self.assertIn("Cert:\\CurrentUser\\TrustedPublisher", trust)
         self.assertIn("ExpectedSubject", trust)
+
+    def test_variant_packaging_and_research_payload_are_controlled(self) -> None:
+        build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
+        installer = (ROOT / "installer" / "SentriFaceEdge.iss").read_text(encoding="utf-8")
+        self.assertIn('[ValidateSet("Commercial", "Research", "Both")]', build)
+        self.assertIn("scripts\\acquire_research_models.py", build)
+        self.assertIn("SentriFaceEdge-$Version-$Variant-x64", build)
+        self.assertIn("/DResearchModels", build)
+        self.assertIn("bundled-models", installer)
 
     def test_build_excludes_models_and_requires_native_runtime_components(self) -> None:
         build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
