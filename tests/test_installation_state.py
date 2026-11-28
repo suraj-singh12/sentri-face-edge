@@ -62,3 +62,11 @@ def test_compare_allows_only_operational_login_bookkeeping():
     result = compare(before, after)
     assert result["status"] == "FAIL"
     assert any("password_hash" in error for error in result["errors"])
+
+
+def test_transient_model_uploads_are_outside_preservation_scope():
+    from scripts.capture_installation_state import _file_in_snapshot_scope
+
+    assert not _file_in_snapshot_scope("models/.model-authority/uploads/upload-id/content")
+    assert not _file_in_snapshot_scope("models/.model-authority/bundles/.staging-temp/detector.onnx")
+    assert _file_in_snapshot_scope("models/.model-authority/bundles/bundle-id/detector.onnx")

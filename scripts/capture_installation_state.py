@@ -29,6 +29,17 @@ def _value(value: Any) -> Any:
     return value
 
 
+def _file_in_snapshot_scope(relative: str) -> bool:
+    if relative == "sentriface.db" or relative.startswith(("sentriface.db-", "logs/", "tmp/")):
+        return False
+    parts = relative.split("/")
+    if len(parts) >= 3 and parts[:3] == ["models", ".model-authority", "uploads"]:
+        return False
+    if len(parts) >= 4 and parts[:3] == ["models", ".model-authority", "bundles"] and parts[3].startswith(".staging-"):
+        return False
+    return True
+
+
 def capture(data_dir: Path) -> dict[str, Any]:
     data_dir = data_dir.resolve()
     database = data_dir / "sentriface.db"
@@ -71,7 +82,7 @@ def capture(data_dir: Path) -> dict[str, Any]:
     files = {}
     for path in sorted(item for item in data_dir.rglob("*") if item.is_file()):
         relative = path.relative_to(data_dir).as_posix()
-        if relative == "sentriface.db" or relative.startswith(("sentriface.db-", "logs/", "tmp/")):
+        if not _file_in_snapshot_scope(relative):
             continue
         files[relative] = {
             "size": path.stat().st_size,
