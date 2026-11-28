@@ -36,7 +36,7 @@ function Invoke-Uninstall([string]$Name) {
 
 function Save-State([string]$Name) {
     $output = Join-Path $Workspace "$Name.json"
-    & $PythonExecutable (Join-Path $Root "scripts\capture_installation_state.py") --data-dir $DataDir --output $output
+    & $PythonExecutable (Join-Path $Root "scripts\capture_installation_state.py") --data-dir $DataDir --output $output | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not capture installation state $Name" }
     return $output
 }
@@ -57,11 +57,17 @@ function Assert-Populated([string]$Snapshot) {
 function Invoke-AppBriefly([int]$Seconds = 25) {
     $exe = Join-Path $InstallDir "SentriFaceEdge.exe"
     if (-not (Test-Path -LiteralPath $exe)) { throw "Installed executable is missing: $exe" }
-    $process = Start-Process -FilePath $exe -WorkingDirectory $InstallDir -PassThru
-    Start-Sleep -Seconds $Seconds
-    & $exe --request-shutdown | Out-Null
-    Start-Sleep -Seconds 5
-    if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    $previousDataDir = $env:SENTRIFACE_DATA_DIR
+    $env:SENTRIFACE_DATA_DIR = $DataDir
+    try {
+        $process = Start-Process -FilePath $exe -WorkingDirectory $InstallDir -PassThru
+        Start-Sleep -Seconds $Seconds
+        & $exe --request-shutdown | Out-Null
+        Start-Sleep -Seconds 5
+        if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    } finally {
+        if ($null -eq $previousDataDir) { Remove-Item Env:SENTRIFACE_DATA_DIR -ErrorAction SilentlyContinue } else { $env:SENTRIFACE_DATA_DIR = $previousDataDir }
+    }
 }
 
 if (-not $SkipInitialInstall) {
@@ -74,10 +80,13 @@ Invoke-Setup $CommercialInstaller "02-repair-commercial"
 $repair = Save-State "02-after-repair"
 Compare-State $baseline $repair "repair"
 
+if (Test-Path -LiteralPath (Join-Path $DataDir "models\.model-authority\active.json")) {
+    throw "The baseline already has an active model. Use a populated synthetic library without an active model so Research first-start provisioning is genuinely tested; test no-overwrite behavior as a separate scenario."
+}
 Invoke-Setup $ResearchInstaller "03-research-transition"
 if (-not (Test-Path -LiteralPath (Join-Path $InstallDir "bundled-models\det_500m.onnx"))) { throw "Research payload is missing after transition" }
 Invoke-AppBriefly
-if (-not (Test-Path -LiteralPath (Join-Path $DataDir "models\active.json"))) { throw "Research first-start provisioning did not activate a model bundle" }
+if (-not (Test-Path -LiteralPath (Join-Path $DataDir "models\.model-authority\active.json"))) { throw "Research first-start provisioning did not activate a model bundle" }
 $research = Save-State "03-after-research"
 Compare-State $repair $research "research-transition"
 
@@ -89,6 +98,7 @@ Compare-State $research $commercial "commercial-transition"
 Invoke-Uninstall "05-uninstall"
 if (-not (Test-Path -LiteralPath (Join-Path $DataDir "sentriface.db"))) { throw "Uninstall removed the encrypted user database" }
 Invoke-Setup $CommercialInstaller "06-reinstall-commercial"
+Invoke-AppBriefly
 $reinstalled = Save-State "06-after-reinstall"
 Compare-State $commercial $reinstalled "reinstall-reconnect"
 
