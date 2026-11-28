@@ -48,6 +48,11 @@ Source: "..\packaging\windows\Remove-OfflinePolicy.ps1"; DestDir: "{app}\support
 Source: "..\build\research-models\*"; DestDir: "{app}\bundled-models"; Flags: ignoreversion
 #endif
 
+[InstallDelete]
+; The shared product identity may replace either installer variant. Remove stale
+; release-media payloads before each install; per-user model authority is untouched.
+Type: filesandordirs; Name: "{app}\bundled-models"
+
 [Icons]
 Name: "{autoprograms}\SentriFace Edge"; Filename: "{app}\{#MyExeName}"; WorkingDir: "{app}"
 Name: "{commondesktop}\SentriFace Edge"; Filename: "{app}\{#MyExeName}"; WorkingDir: "{app}"
