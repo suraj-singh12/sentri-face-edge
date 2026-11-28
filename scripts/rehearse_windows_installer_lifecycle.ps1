@@ -7,7 +7,8 @@ param(
     [string]$DataDir = (Join-Path $env:LOCALAPPDATA "SentriFace"),
     [string]$InstallDir = (Join-Path $env:ProgramFiles "SentriFace Edge"),
     [string]$Workspace = (Join-Path $env:TEMP "sentriface-installer-rehearsal"),
-    [switch]$SkipInitialInstall
+    [switch]$SkipInitialInstall,
+    [switch]$CreateSyntheticFixture
 )
 
 $ErrorActionPreference = "Stop"
@@ -75,6 +76,10 @@ function Invoke-AppBriefly([int]$Seconds = 25) {
 
 if (-not $SkipInitialInstall) {
     Invoke-Setup $CommercialInstaller "01-fresh-commercial"
+}
+if ($CreateSyntheticFixture) {
+    & $PythonExecutable (Join-Path $Root "scripts\create_synthetic_installation_fixture.py") --data-dir $DataDir | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not create the disposable synthetic fixture" }
 }
 $baseline = Save-State "01-baseline"
 Assert-Populated $baseline
