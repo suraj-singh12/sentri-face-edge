@@ -121,6 +121,7 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertIn("/DResearchModels", build)
         self.assertIn("bundled-models", installer)
         self.assertIn("HideResearchPayloadForCommercialInstall", installer)
+        self.assertIn("Result := RenameFile(Target, Source);", installer)
         self.assertIn("RestoreHiddenResearchPayload", installer)
         self.assertIn("RemoveHiddenResearchPayload", installer)
         self.assertNotIn("[InstallDelete]", installer)

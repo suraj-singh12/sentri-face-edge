@@ -160,8 +160,8 @@ begin
     exit;
   end;
   if DirExists(Target) and not DirExists(Source) then begin
-    Result := RunCommandLine('rd /s /q ' + Quoted(Target));
-    exit;
+    Result := RenameFile(Target, Source);
+    if not Result then exit;
   end;
   HiddenResearchPayload := False;
   if not DirExists(Source) then exit;
