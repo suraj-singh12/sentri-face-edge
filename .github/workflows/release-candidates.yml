@@ -53,6 +53,18 @@ jobs:
         run: python scripts/prepare_ci_installer.py
         env:
           SENTRIFACE_CI_VARIANT: Research
+      - name: Inspect installed Commercial artifact
+        if: inputs.variants != 'Research'
+        shell: powershell
+        run: |
+          powershell -NoProfile -File .\scripts\inspect_installed_variant.ps1 -Variant Commercial -Installer ".\dist\windows-x64\2.0.0\SentriFaceEdge-2.0.0-Commercial-x64.exe" -InstallDir "$env:TEMP\sentriface-commercial-inspect" -ReportPath ".\dist\windows-x64\2.0.0\installed-inspection-commercial.json"
+          exit $LASTEXITCODE
+      - name: Inspect installed Research artifact
+        if: inputs.variants != 'Commercial'
+        shell: powershell
+        run: |
+          powershell -NoProfile -File .\scripts\inspect_installed_variant.ps1 -Variant Research -Installer ".\dist\windows-x64\2.0.0\SentriFaceEdge-2.0.0-Research-x64.exe" -InstallDir "$env:TEMP\sentriface-research-inspect" -ReportPath ".\dist\windows-x64\2.0.0\installed-inspection-research.json"
+          exit $LASTEXITCODE
       - name: Upload unsigned release engineering candidates
         if: success()
         uses: actions/upload-artifact@v4
@@ -63,9 +75,10 @@ jobs:
             dist/windows-x64/2.0.0/*.sha256
             dist/windows-x64/2.0.0/*.provenance.json
             dist/windows-x64/2.0.0/artifact-inspection-*.json
+            dist/windows-x64/2.0.0/installed-inspection-*.json
             dist/windows-x64/2.0.0/dependency-inventory.json
             dist/windows-x64/2.0.0/packaged-runtime.json
             dist/windows-x64/2.0.0/checksums.sha256
-            dist/windows-x64/2.0.0/build-transcript.txt
+            dist/windows-x64/2.0.0/build.log
           retention-days: 7
           if-no-files-found: error

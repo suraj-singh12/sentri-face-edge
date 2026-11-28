@@ -422,18 +422,26 @@ try {
         }
 
         $InstallerDigest = (Get-FileHash -LiteralPath $Installer -Algorithm SHA256).Hash.ToLowerInvariant()
-        "$InstallerDigest  $(Split-Path -Leaf $Installer)" |
-            Set-Content -LiteralPath "$Installer.sha256" -Encoding ascii
+        [IO.File]::WriteAllText(
+            "$Installer.sha256",
+            "$InstallerDigest  $(Split-Path -Leaf $Installer)`n",
+            [Text.Encoding]::ASCII
+        )
     }
 
     $ChecksumPath = Join-Path $OutputRoot "checksums.sha256"
-    Get-ChildItem -LiteralPath $OutputRoot -File |
+    $ChecksumLines = @(Get-ChildItem -LiteralPath $OutputRoot -File |
         Where-Object { $_.FullName -ne $ChecksumPath -and $_.FullName -ne $BuildLog } |
         Sort-Object Name |
         ForEach-Object {
             $digest = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$digest  $($_.Name)"
-        } | Set-Content -LiteralPath $ChecksumPath -Encoding ascii
+        })
+    [IO.File]::WriteAllText(
+        $ChecksumPath,
+        (($ChecksumLines -join "`n") + "`n"),
+        [Text.Encoding]::ASCII
+    )
 
     $Succeeded = $true
     Write-Host ""

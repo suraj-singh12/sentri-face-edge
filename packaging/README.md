@@ -13,30 +13,29 @@ The Windows 11 x64 release authority requires Python 3.12, Node/npm, MSVC, and t
 .\build_release.ps1
 ```
 
-On a `release-*` preparation branch it creates an isolated Python environment
+On a release-engineering branch it creates an isolated Python environment
 from `requirements-release.lock`, uses `frontend/package-lock.json`, runs the
-backend and frontend gates, builds the standalone application and installer,
-verifies every packaged `.exe`/`.dll`/`.pyd` PE header as AMD64, exercises the
-packaged native/runtime stack, and writes checksums plus inspection,
-dependency/license, runtime, and provenance evidence under
-`dist\windows-x64\<version>\`. Without external signing inputs the installer is
-named `*-unsigned-pretag-rc.exe` and is explicitly not the canonical RC.
+backend and frontend gates, builds one standalone application binary, packages
+the requested installer variant(s), verifies every packaged `.exe`/`.dll`/`.pyd`
+PE header as AMD64, exercises the packaged native/runtime stack, performs an
+installed-artifact variant inspection, and writes LF-delimited checksums plus
+inspection, dependency/license, runtime, and provenance evidence under
+`dist\windows-x64\<version>\`. v2.0.0 Issue #5 candidates are explicitly
+unsigned and are named `SentriFaceEdge-2.0.0-Commercial-x64.exe` or
+`SentriFaceEdge-2.0.0-Research-x64.exe`; unsigned status is recorded in
+manifests and provenance rather than hidden.
 
-A production build is deliberately separate:
+Signing infrastructure is retained for a future publication decision but is not
+required for the approved v2.0.0 engineering candidates. If signing is later
+authorized, `-ProductionRelease` still requires a clean exact
+`rc-v<version>` or `release-v<version>` tag and external SignTool, an exact
+certificate thumbprint, and the expected signer subject. Those inputs sign and
+verify both the application and installer; private signing material never enters
+the repository.
 
-```powershell
-.\build_release.ps1 -ProductionRelease
-```
-
-It requires a clean exact `rc-v<version>` or `release-v<version>` tag and
-external SignTool, an exact certificate thumbprint, and the expected signer
-subject. A timestamp URL is optional for controlled-machine self-signing and
-recommended when a compatible timestamp authority is available. Those inputs
-sign and verify both the application and installer; private signing material
-never enters the repository.
-
-For controlled Windows machines, create one stable, non-exportable RSA identity
-once and explicitly trust its public certificate separately:
+For a future signed release on controlled Windows machines, create one stable,
+non-exportable RSA identity once and explicitly trust its public certificate
+separately:
 
 ```powershell
 .\packaging\windows\New-SentriFaceCodeSigningCertificate.ps1

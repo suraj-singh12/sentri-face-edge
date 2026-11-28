@@ -127,14 +127,16 @@ Unsigned CI artifacts are acceptance diagnostics only and must never be publishe
 - P14 source implementation: **COMPLETE**.
 - Windows x64 development build and packaged-runtime acceptance: **PASS**.
 - Production trust-root match (`prod-2026-01`): **PASS** (independently established).
-- Authenticode: **NOT VERIFIED**.
+- Authenticode: **INTENTIONALLY NOT VERIFIED FOR THE APPROVED v2.0.0 CANDIDATES**; signing is deferred by operator decision and must not be represented as completed.
 - Production-token test: **NOT PROVIDED**.
 - Production release readiness: **NO**.
-- P14 production release acceptance: **INCOMPLETE** until a clean exact `rc-v2.0.0` or `release-v2.0.0` build is produced, the current artifact's installer/model lifecycle gates are verified on a disposable Windows host, and executable and installer signatures are verified.
+- v2.0.0 release acceptance: **INCOMPLETE** until both exact-source unsigned Commercial/Research candidates are built, installed-artifact variant inspections pass, installer/model/data-preservation lifecycle gates are verified on a disposable Windows host, production licensing acceptance is completed separately, and the operator explicitly approves publication. Exact-tag and signing policy remain future publication decisions, not prerequisites for these engineering candidates.
 
 ## v2.0.0 installer lifecycle rehearsal harness (Issue #5)
 
 `scripts/rehearse_windows_installer_lifecycle.ps1` is the disposable-host orchestration boundary for the current artifacts. It exercises fresh Commercial installation, same-version repair, Commercial-to-Research transition, Research first-start model provisioning, Research-to-Commercial transition, uninstall with per-user data preservation, reinstall/reconnection, and optional downgrade refusal. It writes setup/uninstall logs, logical installation snapshots and comparison reports to a rehearsal workspace.
+
+`scripts/inspect_installed_variant.ps1` independently installs each unsigned artifact on the disposable CI runner, verifies the installed Commercial tree contains no ONNX/bundled payload or the installed Research tree contains exactly the two pinned models plus provenance/notice, then verifies uninstall removes the owned firewall rule. This is artifact inspection evidence only; it is not the full data-preservation rehearsal.
 
 The logical snapshots use `scripts/capture_installation_state.py` and the OS-keyring-protected SQLCipher database key. `scripts/compare_installation_snapshots.py` proves that pre-existing tables, row identities, row values and user files survive while allowing legitimate additive migration rows, operation-journal records, backups and model-authority state. This is evidence of preservation, not permission to use real operator data. The rehearsal must use only a disposable synthetic library.
 

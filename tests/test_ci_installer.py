@@ -62,13 +62,13 @@ def test_unexpected_dirty_tree_is_refused(candidate, monkeypatch, status):
     with pytest.raises(ValueError, match='Unexpected source tree'):
         mod.prepare(root)
 
-@pytest.mark.parametrize('mutation', ['missing', 'checksum', 'ambiguous', 'inspection', 'revision', 'dirty'])
+@pytest.mark.parametrize('mutation', ['missing', 'checksum', 'ambiguous', 'ambiguous-extra', 'inspection', 'revision', 'dirty'])
 def test_invalid_artifact_refused(candidate, mutation):
     root, directory, name, _ = candidate
     if mutation == 'missing': (directory / name).unlink()
     elif mutation == 'checksum': (directory / (name + '.sha256')).write_text('0'*64 + '  ' + name)
     elif mutation == 'ambiguous': (directory / 'SentriFaceEdge-2.0.0-Commercial-x64.exe').write_bytes(b'x')
-    elif mutation == 'ambiguous-extra': pass
+    elif mutation == 'ambiguous-extra': (directory / 'SentriFaceEdge-9.9.9-Commercial-x64.exe').write_bytes(b'x')
     elif mutation == 'inspection': (directory / 'artifact-inspection-commercial.json').write_text('{"status":"FAIL"}')
     else:
         path = directory / (name + '.provenance.json')
@@ -90,6 +90,12 @@ def test_workflow_gates_installer_but_not_failure_reports():
     assert 'dist/windows-x64/2.0.0/*' not in workflow
     assert workflow.count('if: always()') == 6
     assert 'exit $LASTEXITCODE' in workflow
+    assert 'inspect_installed_variant.ps1' in workflow
+    assert 'installed-inspection-commercial.json' in workflow
+    release = (ROOT / '.github/workflows/release-candidates.yml').read_text()
+    assert 'installed-inspection-*.json' in release
+    assert 'build.log' in release
+    assert 'build-transcript.txt' not in release
 
 @pytest.mark.parametrize('stage,description', [
     ('installer-evidence', 'Verify installer publication inputs'),

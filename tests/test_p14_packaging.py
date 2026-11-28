@@ -127,6 +127,13 @@ class P14PackagingContractTest(unittest.TestCase):
         self.assertNotIn("[InstallDelete]", installer)
         self.assertNotIn("ssPostInstall", installer)
         self.assertIn("'/D /C ' + Command", installer)
+        installed = (ROOT / "scripts" / "inspect_installed_variant.ps1").read_text(encoding="utf-8")
+        self.assertIn("Commercial installation contains", installed)
+        self.assertIn("Research model identity mismatch", installed)
+        self.assertIn("unins000.exe", installed)
+        self.assertIn("installed-variant-inspection", installed)
+        self.assertIn("[IO.File]::WriteAllText(", build)
+        self.assertIn('"$InstallerDigest  $(Split-Path -Leaf $Installer)`n"', build)
 
     def test_build_excludes_models_and_requires_native_runtime_components(self) -> None:
         build = (ROOT / "build_release.ps1").read_text(encoding="utf-8")
