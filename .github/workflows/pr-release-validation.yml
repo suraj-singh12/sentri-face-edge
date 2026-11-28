@@ -70,6 +70,29 @@ jobs:
             Copy-Item -Path (Join-Path $workspace "installer-lifecycle-rehearsal.json") -Destination $target -Force -ErrorAction SilentlyContinue
           }
 
+      - name: Encrypt exact installer delivery package
+        shell: powershell
+        run: |
+          $dist = "dist\windows-x64\2.0.0"
+          $zip = Join-Path $dist "exact-installer-delivery.zip"
+          $items = @(
+            (Join-Path $dist "SentriFaceEdge-2.0.0-Commercial-x64.exe"),
+            (Join-Path $dist "SentriFaceEdge-2.0.0-Research-x64.exe"),
+            (Join-Path $dist "checksums.sha256")
+          ) + @((Get-Item (Join-Path $dist "*.provenance.json")).FullName)
+          Compress-Archive -LiteralPath $items -DestinationPath $zip -Force
+          & "C:\Program Files\Git\usr\bin\openssl.exe" smime -encrypt -binary -aes256 -in $zip -out "$zip.enc" ".github\release-delivery-cert.pem"
+          if ($LASTEXITCODE -ne 0) { throw "OpenSSL delivery encryption failed" }
+          Remove-Item $zip -Force
+
+      - name: Upload encrypted exact installer delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-installer-delivery-encrypted
+          path: dist/windows-x64/2.0.0/exact-installer-delivery.zip.enc
+          retention-days: 1
+          if-no-files-found: error
+
       - name: Upload non-sensitive validation evidence
         if: always()
         uses: actions/upload-artifact@v4
