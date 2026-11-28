@@ -167,25 +167,32 @@ if ($PreviousInstaller) {
     }
 }
 
+$scenarios = New-Object System.Collections.Generic.List[string]
+if ($SkipInitialInstall) {
+    $scenarios.Add("prepopulated-installation-reused") | Out-Null
+} else {
+    $scenarios.Add("fresh-commercial-install") | Out-Null
+}
+foreach ($scenario in @(
+    "same-version-commercial-repair-before-model-activation",
+    "commercial-to-research-transition",
+    "automatic-research-model-provisioning",
+    "model-activation-and-application-start",
+    "same-version-research-repair-preserving-active-model",
+    "restart-after-research-repair",
+    "research-to-commercial-transition-preserving-active-model",
+    "uninstall-preserving-user-data",
+    "reinstall-reconnection",
+    "licensing-enforcement",
+    "offline-firewall-policy",
+    "incompatible-downgrade-refusal"
+)) { $scenarios.Add($scenario) | Out-Null }
+
 $summary = [ordered]@{
     contract = "sentriface.installer-lifecycle-rehearsal"
     contract_version = 1
     status = "PASS"
-    scenarios = @(
-        "fresh-commercial-install",
-        "same-version-commercial-repair-before-model-activation",
-        "commercial-to-research-transition",
-        "automatic-research-model-provisioning",
-        "model-activation-and-application-start",
-        "same-version-research-repair-preserving-active-model",
-        "restart-after-research-repair",
-        "research-to-commercial-transition-preserving-active-model",
-        "uninstall-preserving-user-data",
-        "reinstall-reconnection",
-        "licensing-enforcement",
-        "offline-firewall-policy",
-        "incompatible-downgrade-refusal"
-    )
+    scenarios = @($scenarios)
     not_automated = @(
         "interrupted-or-failed-installation",
         "deliberately-failed-database-migration",
