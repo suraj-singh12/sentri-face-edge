@@ -167,11 +167,11 @@ if ($PreviousInstaller) {
     }
 }
 
-$scenarios = New-Object System.Collections.Generic.List[string]
+$scenarios = @()
 if ($SkipInitialInstall) {
-    $scenarios.Add("prepopulated-installation-reused") | Out-Null
+    $scenarios += "prepopulated-installation-reused"
 } else {
-    $scenarios.Add("fresh-commercial-install") | Out-Null
+    $scenarios += "fresh-commercial-install"
 }
 foreach ($scenario in @(
     "same-version-commercial-repair-before-model-activation",
@@ -186,7 +186,7 @@ foreach ($scenario in @(
     "licensing-enforcement",
     "offline-firewall-policy",
     "incompatible-downgrade-refusal"
-)) { $scenarios.Add($scenario) | Out-Null }
+)) { $scenarios += $scenario }
 
 $summary = [ordered]@{
     contract = "sentriface.installer-lifecycle-rehearsal"
