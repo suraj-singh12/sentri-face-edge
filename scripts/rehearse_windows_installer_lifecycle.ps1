@@ -55,6 +55,38 @@ function Assert-Populated([string]$Snapshot) {
     }
 }
 
+
+function Assert-OfflinePolicy([string]$Executable) {
+    $rule = Get-NetFirewallRule -Name "SentriFaceEdge-BlockOutbound" -PolicyStore ActiveStore -ErrorAction SilentlyContinue
+    if (-not $rule) { throw "SentriFace outbound firewall rule is missing while the application is installed" }
+    $program = [Environment]::ExpandEnvironmentVariables(($rule | Get-NetFirewallApplicationFilter).Program)
+    if ([IO.Path]::GetFullPath($program) -ine [IO.Path]::GetFullPath($Executable)) {
+        throw "SentriFace outbound firewall rule is not bound to the exact installed executable"
+    }
+}
+
+function Assert-LicenseEnforcement() {
+    $base = "http://127.0.0.1:8765"
+    $page = Invoke-WebRequest -UseBasicParsing -Uri "$base/" -TimeoutSec 10
+    $match = [regex]::Match($page.Content, 'name="sentriface-session-token" content="([^"]+)"')
+    if (-not $match.Success) { throw "Could not establish a local UI session for licensing verification" }
+    $headers = @{ "X-SentriFace-Session" = $match.Groups[1].Value }
+    $webSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $loginBody = @{ username = "fixture-owner"; password = "fixture-owner-passphrase-1" } | ConvertTo-Json
+    Invoke-RestMethod -Uri "$base/api/auth/login" -Method Post -Headers $headers -WebSession $webSession -ContentType "application/json" -Body $loginBody -TimeoutSec 10 | Out-Null
+    $license = Invoke-RestMethod -Uri "$base/api/license/status" -Headers $headers -WebSession $webSession -TimeoutSec 10
+    if (-not $license.enforced -or $license.licensed) { throw "Packaged licensing is not enforced for an unlicensed installation" }
+    $model = Invoke-RestMethod -Uri "$base/api/models/status" -Headers $headers -WebSession $webSession -TimeoutSec 10
+    if (-not $model.ready -or -not $model.active_bundle) { throw "The activated model bundle is not ready after application restart" }
+    try {
+        Invoke-RestMethod -Uri "$base/api/persons" -Headers $headers -WebSession $webSession -TimeoutSec 10 | Out-Null
+        throw "Unlicensed ordinary person read unexpectedly succeeded"
+    } catch {
+        $response = $_.Exception.Response
+        if (-not $response -or [int]$response.StatusCode -ne 402) { throw }
+    }
+}
+
 function Invoke-AppBriefly([int]$Seconds = 25) {
     $exe = Join-Path $InstallDir "SentriFaceEdge.exe"
     if (-not (Test-Path -LiteralPath $exe)) { throw "Installed executable is missing: $exe" }
@@ -64,6 +96,8 @@ function Invoke-AppBriefly([int]$Seconds = 25) {
         $process = Start-Process -FilePath $exe -WorkingDirectory $InstallDir -PassThru
         Start-Sleep -Seconds $Seconds
         if (-not $process -or $process.HasExited) { throw "Installed application exited before the rehearsal could verify operation" }
+        Assert-OfflinePolicy $exe
+        Assert-LicenseEnforcement
         & $exe --request-shutdown | Out-Null
         $deadline = (Get-Date).AddSeconds(15)
         while (-not $process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
